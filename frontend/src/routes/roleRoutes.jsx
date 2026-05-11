@@ -1,0 +1,68 @@
+import { Route, Navigate } from 'react-router-dom'
+import AdminDashboard from '../pages/Admin/AdminDashboard'
+import UserManagementPage from '../pages/Admin/UserManagementPage'
+import OcrReviewPage from '../pages/Admin/OcrReviewPage'
+import AdminMasterDataPage from '../pages/Admin/AdminMasterDataPage'
+import AdminAuditLogsPage from '../pages/Admin/AdminAuditLogsPage'
+import AdminChatbotPage from '../pages/Admin/AdminChatbotPage'
+import NotificationsPage from '../pages/Admin/NotificationsPage'
+import DispatcherDashboard from '../pages/Dispatcher/DispatcherDashboard'
+import CreateJobOrderPage from '../pages/Dispatcher/CreateJobOrderPage'
+import AssignDriverVehiclePage from '../pages/Dispatcher/AssignDriverVehiclePage'
+import DeliveryMonitoringPage from '../pages/Dispatcher/DeliveryMonitoringPage'
+import DispatcherNotificationsPage from '../pages/Dispatcher/DispatcherNotificationsPage'
+import DriverDashboard from '../pages/Driver/DriverDashboard'
+import DriverJobDetailsPage from '../pages/Driver/DriverJobDetailsPage'
+import DeliveryStatusUpdatePage from '../pages/Driver/DeliveryStatusUpdatePage'
+import DocumentUploadPage from '../pages/Driver/DocumentUploadPage'
+import ManagerDashboard from '../pages/Manager/ManagerDashboard'
+import AnalyticsPage from '../pages/Manager/AnalyticsPage'
+import ReportsPage from '../pages/Manager/ReportsPage'
+import ManagerDeliveryHistoryPage from '../pages/Manager/ManagerDeliveryHistoryPage'
+import ManagerNotificationsPage from '../pages/Manager/ManagerNotificationsPage'
+import CustomerHomePage from '../pages/Customer/CustomerHomePage'
+import TrackingPage from '../pages/Customer/TrackingPage'
+import CustomerSignupPage from '../pages/Customer/CustomerSignupPage'
+import CustomerDeliveriesPage from '../pages/Customer/CustomerDeliveriesPage'
+import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
+
+export const roleRoutes = {
+  admin: [
+    <Route key="admin-home" index element={<AdminDashboard />} />,
+    <Route key="admin-ocr" path="ocr-validation" element={<OcrReviewPage />} />,
+    <Route key="admin-master" path="master-data" element={<AdminMasterDataPage />} />,
+    <Route key="admin-users" path="users" element={<UserManagementPage />} />,
+    <Route key="admin-chatbot" path="chatbot" element={<AdminChatbotPage />} />,
+    <Route key="admin-audit" path="audit-logs" element={<AdminAuditLogsPage />} />,
+    <Route key="admin-notifs" path="notifications" element={<NotificationsPage />} />,
+  ],
+  dispatcher: [
+    <Route key="dispatcher-home" index element={<DispatcherDashboard />} />,
+    <Route key="dispatcher-job" path="job-orders" element={<CreateJobOrderPage />} />,
+    <Route key="dispatcher-assign" path="dispatch-best-fit" element={<AssignDriverVehiclePage />} />,
+    <Route key="dispatcher-monitor" path="live-tracking" element={<DeliveryMonitoringPage />} />,
+    <Route key="dispatcher-notifs" path="notifications" element={<DispatcherNotificationsPage />} />,
+  ],
+  driver: [
+    <Route key="driver-home" index element={<DriverDashboard />} />,
+    <Route key="driver-job" path="jobs/:id" element={<DriverJobDetailsPage />} />,
+    <Route key="driver-status" path="status-update" element={<DeliveryStatusUpdatePage />} />,
+    <Route key="driver-docs" path="documents" element={<DocumentUploadPage />} />,
+  ],
+  manager: [
+    <Route key="manager-home" index element={<ManagerDashboard />} />,
+    <Route key="manager-analytics" path="analytics" element={<AnalyticsPage />} />,
+    <Route key="manager-history" path="delivery-history" element={<ManagerDeliveryHistoryPage />} />,
+    <Route key="manager-reports" path="reports" element={<ReportsPage />} />,
+    <Route key="manager-notifs" path="notifications" element={<ManagerNotificationsPage />} />,
+  ],
+  customer: [
+    <Route key="customer-home" index element={<CustomerHomePage />} />,
+    <Route key="customer-login" path="login" element={<Navigate to="/login" replace />} />,
+    <Route key="customer-signup" path="signup" element={<CustomerSignupPage />} />,
+    <Route key="customer-track" path="track" element={<TrackingPage />} />,
+    <Route key="customer-auth-gate" element={<ProtectedCustomerOutlet />}>
+      <Route key="customer-deliveries" path="deliveries" element={<CustomerDeliveriesPage />} />
+    </Route>,
+  ],
+}

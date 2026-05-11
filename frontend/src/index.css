@@ -1,0 +1,51 @@
+:root {
+  /* Deliverex reference UI — deep navy + clean neutrals */
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface-soft: #f8f9fa;
+  --sidebar-bg: #f1f3f5;
+  --stroke: #e2e5eb;
+  --text: #111827;
+  --muted: #6c757d;
+  --navy: #1d3557;
+  --navy-soft: #2d54b7;
+  --primary: #2d54b7;
+  --primary-dark: #1d3557;
+  --success: #16a34a;
+  --warning: #eab308;
+  --danger: #dc2626;
+  --info: #2563eb;
+  --shadow: 0 4px 24px rgba(29, 53, 87, 0.08);
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06);
+
+  font: 14px/1.55 "Inter", "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+button {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
