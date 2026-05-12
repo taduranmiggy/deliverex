@@ -7,13 +7,17 @@ use App\Models\DispatchAssignment;
 use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Vehicle;
+use App\Services\Assignment\BestFitAssignmentService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 
 class AssignmentController extends Controller
 {
-    public function __construct(private NotificationDispatcher $notificationDispatcher)
+    public function __construct(
+        private NotificationDispatcher $notificationDispatcher,
+        private BestFitAssignmentService $bestFitAssignmentService
+    )
     {
     }
 
@@ -38,6 +42,12 @@ class AssignmentController extends Controller
         $vehicle = Vehicle::findOrFail($data['vehicle_id']);
         $jobOrder = JobOrder::findOrFail($data['job_order_id']);
 
+        $recommendations = $this->bestFitAssignmentService->recommend($jobOrder);
+        $recommended = $recommendations[0] ?? null;
+        $isOverride = $recommended
+            ? ($recommended['driver_id'] !== $driver->id || $recommended['vehicle_id'] !== $vehicle->id)
+            : null;
+
         if ($driver->availability !== 'available' || $vehicle->status !== 'available') {
             return response()->json(['message' => 'Driver or vehicle not available'], 422);
         }
@@ -51,7 +61,10 @@ class AssignmentController extends Controller
             'assigned_at' => now(),
         ]);
 
-        $driver->update(['availability' => 'busy']);
+        $driver->update([
+            'availability' => 'busy',
+            'current_assignment_id' => $assignment->id,
+        ]);
         $vehicle->update(['status' => 'assigned']);
         $jobOrder->update(['status' => 'assigned']);
 
@@ -63,6 +76,8 @@ class AssignmentController extends Controller
             'job_order_id' => $jobOrder->id,
             'driver_id' => $driver->id,
             'vehicle_id' => $vehicle->id,
+            'recommended' => $recommended,
+            'override' => $isOverride,
         ], $request);
 
         return response()->json($assignment, 201);

@@ -20,7 +20,7 @@ class DocumentController extends Controller
             'assignment_id' => 'required|exists:dispatch_assignments,id',
             'type' => 'nullable|in:pod,receipt,gate_pass,weighbridge,signed_doc,other',
             'notes' => 'nullable|string',
-            'file' => 'required|file|mimes:jpg,jpeg,png,gif,webp,pdf',
+            'file' => 'required|file|mimes:jpg,jpeg,png',
         ]);
 
         $assignment = \App\Models\DispatchAssignment::findOrFail($data['assignment_id']);
@@ -40,6 +40,13 @@ class DocumentController extends Controller
             'notes' => $data['notes'] ?? null,
         ]);
 
+        if (($data['type'] ?? 'other') === 'pod') {
+            $assignment->update([
+                'pod_verified_at' => now(),
+                'pod_verified_by' => $request->user()?->id,
+            ]);
+        }
+
         $ocrResult = $this->ocrService->createPending($document);
 
         ProcessDeliveryDocumentOcr::dispatchAfterResponse($document->id);
@@ -47,6 +54,8 @@ class DocumentController extends Controller
         return response()->json([
             'document' => $document,
             'ocr_result' => $ocrResult,
+            'job_order_id' => $assignment->job_order_id,
+            'uploaded_by' => $request->user()?->id,
         ], 201);
     }
 }

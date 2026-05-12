@@ -1,20 +1,24 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { registerCustomer } from '../../api/auth'
-import useAuth from '../../hooks/useAuth'
 import '../Auth/LoginPage.css'
 
 export default function CustomerSignupPage() {
   const [error, setError] = useState('')
   const [pwError, setPwError] = useState('')
-  const { login } = useAuth()
+  const [success, setSuccess] = useState('')
   const navigate = useNavigate()
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
     setPwError('')
+    setSuccess('')
     const formData = new FormData(event.target)
+    const firstName = String(formData.get('first_name') ?? '').trim()
+    const middleName = String(formData.get('middle_name') ?? '').trim()
+    const lastName = String(formData.get('last_name') ?? '').trim()
+    const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ')
     const password = String(formData.get('password') ?? '')
     const confirmation = String(formData.get('password_confirmation') ?? '')
     if (password !== confirmation) {
@@ -24,14 +28,14 @@ export default function CustomerSignupPage() {
 
     try {
       const result = await registerCustomer({
-        name: formData.get('name'),
+        name: fullName,
         email: formData.get('email'),
         phone: formData.get('phone') || undefined,
         password,
         password_confirmation: confirmation,
       })
-      login(result.user, result.token)
-      navigate('/customer/deliveries', { replace: true })
+      setSuccess(result.message || 'Verification email sent. Please check your inbox.')
+      navigate('/login', { replace: true, state: { notice: 'Verify your email to activate your account.' } })
     } catch (err) {
       setError(err.message)
     }
@@ -49,10 +53,20 @@ export default function CustomerSignupPage() {
         </p>
 
         <form onSubmit={handleSubmit} className="auth-form-dx">
-          <label>
-            Full name
-            <input name="name" type="text" autoComplete="name" required placeholder="Maria Santos" />
-          </label>
+          <div className="auth-form-row">
+            <label>
+              First name
+              <input name="first_name" type="text" autoComplete="given-name" required placeholder="Maria" />
+            </label>
+            <label>
+              Middle name
+              <input name="middle_name" type="text" autoComplete="additional-name" placeholder="Dela" />
+            </label>
+            <label>
+              Last name
+              <input name="last_name" type="text" autoComplete="family-name" required placeholder="Santos" />
+            </label>
+          </div>
           <label>
             Email
             <input name="email" type="email" autoComplete="email" required placeholder="you@example.com" />
@@ -77,6 +91,7 @@ export default function CustomerSignupPage() {
           </label>
           {pwError ? <p className="auth-error-dx">{pwError}</p> : null}
           {error ? <p className="auth-error-dx">{error}</p> : null}
+          {success ? <p className="auth-success-dx">{success}</p> : null}
           <button className="btn-dx-login" type="submit">
             Create account
           </button>

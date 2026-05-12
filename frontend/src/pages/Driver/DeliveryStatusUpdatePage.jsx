@@ -19,6 +19,8 @@ function DeliveryStatusUpdatePage() {
       assignment_id: Number(formData.get('assignment_id')),
       status: formData.get('status'),
       notes: formData.get('notes'),
+      latitude: formData.get('latitude') ? Number(formData.get('latitude')) : undefined,
+      longitude: formData.get('longitude') ? Number(formData.get('longitude')) : undefined,
     }
 
     if (!isOnline) {
@@ -51,8 +53,24 @@ function DeliveryStatusUpdatePage() {
         </label>
         <label>
           Status
-          <input name="status" type="text" placeholder="in_progress, completed" required />
+          <select name="status" required>
+            <option value="">Select status</option>
+            <option value="assigned">Assigned</option>
+            <option value="en_route">En Route</option>
+            <option value="arrived">Arrived</option>
+            <option value="delivered">Delivered</option>
+          </select>
         </label>
+        <div className="form-grid" style={{ gap: 12 }}>
+          <label>
+            GPS Latitude (optional)
+            <input name="latitude" type="number" step="0.000001" placeholder="14.5995" />
+          </label>
+          <label>
+            GPS Longitude (optional)
+            <input name="longitude" type="number" step="0.000001" placeholder="120.9842" />
+          </label>
+        </div>
         <label>
           Notes
           <textarea name="notes" rows="3" placeholder="Optional notes" />

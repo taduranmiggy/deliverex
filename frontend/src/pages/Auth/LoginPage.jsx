@@ -108,6 +108,7 @@ function LoginPage() {
     return () => window.clearTimeout(tid)
   }, [socialNotice])
 
+
   useEffect(() => {
     const t = window.setInterval(() => {
       setSlide((s) => (s + 1) % ASIDE_SLIDES.length)
@@ -173,6 +174,7 @@ function LoginPage() {
                 {socialNotice}
               </p>
             ) : null}
+
 
             <div className="auth-split-divider">
               <span>or continue with email</span>
@@ -242,7 +244,6 @@ function LoginPage() {
               </div>
 
               {error ? <p className="auth-error-dx auth-error-split">{error}</p> : null}
-
               <button className="auth-btn-submit" type="submit">
                 Log In
               </button>

@@ -37,6 +37,7 @@ function CreateJobOrderPage() {
     const volumeRaw = formData.get('volume_m3')
     const payload = {
       customer_name: formData.get('customer_name'),
+      customer_email: formData.get('customer_email'),
       customer_contact: formData.get('customer_contact'),
       pickup_location: formData.get('pickup_location'),
       dropoff_location: formData.get('dropoff_location'),
@@ -252,6 +253,10 @@ function CreateJobOrderPage() {
           <label>
             Customer Name
             <input name="customer_name" type="text" placeholder="Customer name" required />
+          </label>
+          <label>
+            Customer Email
+            <input name="customer_email" type="email" placeholder="customer@email.com" required />
           </label>
           <label>
             Contact Number

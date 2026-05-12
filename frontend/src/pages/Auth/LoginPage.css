@@ -153,6 +153,7 @@
   line-height: 1.45;
 }
 
+
 .auth-split-divider {
   display: flex;
   align-items: center;
@@ -318,6 +319,7 @@
     filter 0.15s,
     transform 0.08s;
 }
+
 
 .auth-btn-submit:hover {
   filter: brightness(1.06);
@@ -770,6 +772,17 @@
   text-align: left;
   display: grid;
   gap: 18px;
+}
+
+.auth-form-row {
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .auth-form-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .auth-form-dx label {

@@ -56,7 +56,6 @@ class TrackingController extends Controller
                 : null,
             'timeline' => $timeline,
             'delay_flag' => $this->delayFlag($jobOrder, $latestAssignment, $latestStatus),
-            'proof_documents' => $this->publicProofDocs($latestAssignment),
         ]);
     }
 
@@ -87,22 +86,4 @@ class TrackingController extends Controller
         return now()->isAfter($jobOrder->scheduled_end);
     }
 
-    private function publicProofDocs($assignment): array
-    {
-        if (! $assignment) {
-            return [];
-        }
-
-        return $assignment->deliveryDocuments
-            ->where('type', 'pod')
-            ->values()
-            ->map(function ($doc) {
-                return [
-                    'type' => $doc->type,
-                    'uploaded_at' => $doc->created_at?->toIso8601String(),
-                    'ocr_ready' => $doc->ocrResult && $doc->ocrResult->processing_status === 'completed',
-                ];
-            })
-            ->all();
-    }
 }

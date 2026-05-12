@@ -10,6 +10,7 @@ class Driver extends Model
         'user_id',
         'license_no',
         'availability',
+        'current_assignment_id',
     ];
 
     public function user()
@@ -20,5 +21,10 @@ class Driver extends Model
     public function assignments()
     {
         return $this->hasMany(DispatchAssignment::class);
+    }
+
+    public function currentAssignment()
+    {
+        return $this->belongsTo(DispatchAssignment::class, 'current_assignment_id');
     }
 }

@@ -21,6 +21,8 @@ function DeliveryMonitoringPage() {
     }
 
     loadAssignments()
+    const interval = setInterval(loadAssignments, 15000)
+    return () => clearInterval(interval)
   }, [])
 
   const coords = useMemo(

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import DeliverexAssistantChat from '../components/DeliverexAssistantChat'
 import { IconDoc, IconClock, IconRoute } from '../components/DxIcons'
@@ -7,6 +7,8 @@ import trucksBg from '../assets/trucks-bg.jpg'
 
 export default function LandingPage() {
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [trackingCode, setTrackingCode] = useState('')
+  const navigate = useNavigate()
 
   useEffect(() => {
     document.title = 'Deliverex — Track & verify deliveries'
@@ -26,6 +28,13 @@ export default function LandingPage() {
   const goContact = () => {
     scrollTo('landing-contact')
     setAssistantOpen(false)
+  }
+
+  const handleTrackSubmit = (event) => {
+    event.preventDefault()
+    const trimmed = trackingCode.trim()
+    if (!trimmed) return
+    navigate('/track', { state: { prefillTracking: trimmed } })
   }
 
   return (
@@ -49,11 +58,39 @@ export default function LandingPage() {
             <Link to="/login" className="nav-link landing-header-login">
               Login
             </Link>
+            <Link to="/customer/signup" className="nav-link landing-header-signup">
+              Create account
+            </Link>
           </nav>
         </header>
         <div className="landing-hero-centered">
           <h1>Track and verify your deliveries with confidence.</h1>
           <p>Deliverex provides live status, ETA windows, and proof-of-delivery confirmation.</p>
+          <form className="landing-track" onSubmit={handleTrackSubmit} aria-label="Track delivery">
+            <label className="landing-track-label" htmlFor="landing-track-id">
+              Enter Job Order ID
+            </label>
+            <div className="landing-track-row">
+              <input
+                id="landing-track-id"
+                type="text"
+                name="trackingCode"
+                value={trackingCode}
+                onChange={(event) => setTrackingCode(event.target.value)}
+                placeholder="e.g. JO-2026-00421"
+                autoComplete="off"
+              />
+              <button type="submit">Track now</button>
+            </div>
+            <p className="landing-track-hint">No account needed. Just your Job Order ID.</p>
+            <button
+              type="button"
+              className="landing-track-help"
+              onClick={() => scrollTo('landing-contact')}
+            >
+              Need help finding your Job Order ID?
+            </button>
+          </form>
           <div className="landing-hero-actions">
             <button type="button" className="primary" onClick={openAssistant}>
               Open Chat to Track
@@ -129,6 +166,42 @@ export default function LandingPage() {
                 </div>
               </li>
             </ol>
+          </div>
+        </section>
+
+        <section className="landing-track-section" aria-label="Track a delivery">
+          <div className="landing-inner">
+            <div className="landing-track-panel">
+              <div>
+                <h2>Track a delivery in seconds</h2>
+                <p>Enter your Job Order ID to see live status, ETA, and proof-of-delivery updates.</p>
+              </div>
+              <form className="landing-track" onSubmit={handleTrackSubmit}>
+                <label className="landing-track-label" htmlFor="landing-track-id-inline">
+                  Job Order ID
+                </label>
+                <div className="landing-track-row">
+                  <input
+                    id="landing-track-id-inline"
+                    type="text"
+                    name="trackingCode"
+                    value={trackingCode}
+                    onChange={(event) => setTrackingCode(event.target.value)}
+                    placeholder="e.g. JO-2026-00421"
+                    autoComplete="off"
+                  />
+                  <button type="submit">Track now</button>
+                </div>
+                <p className="landing-track-hint">No account needed. Just your Job Order ID.</p>
+                <button
+                  type="button"
+                  className="landing-track-help"
+                  onClick={() => scrollTo('landing-contact')}
+                >
+                  Need help finding your Job Order ID?
+                </button>
+              </form>
+            </div>
           </div>
         </section>
       </main>

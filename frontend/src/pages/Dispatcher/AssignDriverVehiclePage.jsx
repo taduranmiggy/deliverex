@@ -7,6 +7,7 @@ import { formatJobStatus } from '../../utils/statusLabels'
 function AssignDriverVehiclePage() {
   const [jobOrders, setJobOrders] = useState([])
   const [selected, setSelected] = useState(null)
+  const [recommended, setRecommended] = useState(null)
   const [recommendations, setRecommendations] = useState([])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -37,6 +38,7 @@ function AssignDriverVehiclePage() {
       }
       try {
         const response = await getBestFit(selected.id)
+        setRecommended(response.recommended || null)
         setRecommendations(response.recommendations || [])
       } catch (err) {
         setError(err.message)
@@ -46,10 +48,17 @@ function AssignDriverVehiclePage() {
     loadBestFit()
   }, [selected])
 
-  const handleAssign = async (driverId, vehicleId) => {
+  const handleAssign = async (driverId, vehicleId, isOverride = false) => {
     if (!selected) {
       setError('Select a job order first.')
       return
+    }
+
+    if (isOverride) {
+      const ok = window.confirm('This differs from the recommended pairing. Continue with override?')
+      if (!ok) {
+        return
+      }
     }
 
     try {
@@ -69,7 +78,7 @@ function AssignDriverVehiclePage() {
     }
   }
 
-  const top = recommendations[0]
+  const top = recommended || recommendations[0]
 
   return (
     <section>
@@ -208,14 +217,18 @@ function AssignDriverVehiclePage() {
                             <span className="badge-dx badge-dx--muted">{item.score}</span>
                           </td>
                           <td>
-                            <button
-                              type="button"
-                              className="btn-dx-primary"
-                              style={{ padding: '6px 12px', fontSize: '0.75rem' }}
-                              onClick={() => handleAssign(item.driver_id, item.vehicle_id)}
-                            >
-                              Apply
-                            </button>
+                            {top && item.driver_id === top.driver_id && item.vehicle_id === top.vehicle_id ? (
+                              <span className="dx-mini-badge">Recommended</span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn-dx-primary"
+                                style={{ padding: '6px 12px', fontSize: '0.75rem' }}
+                                onClick={() => handleAssign(item.driver_id, item.vehicle_id, true)}
+                              >
+                                Override
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -241,9 +254,6 @@ function AssignDriverVehiclePage() {
                     Apply recommendation
                   </button>
                 ) : null}
-                <button type="button" className="btn-dx-secondary">
-                  Override
-                </button>
                 <button type="button" className="btn-dx-secondary">
                   Cancel
                 </button>

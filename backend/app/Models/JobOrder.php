@@ -14,6 +14,7 @@ class JobOrder extends Model
         'customer_user_id',
         'tracking_code',
         'customer_name',
+        'customer_email',
         'customer_contact',
         'pickup_location',
         'dropoff_location',

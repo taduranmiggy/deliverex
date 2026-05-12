@@ -15,12 +15,15 @@ class DispatchAssignment extends Model
         'assigned_at',
         'started_at',
         'completed_at',
+        'pod_verified_at',
+        'pod_verified_by',
     ];
 
     protected $casts = [
         'assigned_at' => 'datetime',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
+        'pod_verified_at' => 'datetime',
     ];
 
     public function jobOrder()
@@ -41,6 +44,11 @@ class DispatchAssignment extends Model
     public function assignedBy()
     {
         return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    public function podVerifiedBy()
+    {
+        return $this->belongsTo(User::class, 'pod_verified_by');
     }
 
     public function deliveryStatusLogs()

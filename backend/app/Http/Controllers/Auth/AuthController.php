@@ -5,9 +5,13 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\JobOrder;
 use App\Support\AuditLogger;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -96,20 +100,63 @@ class AuthController extends Controller
         $user = User::query()->create([
             'role_id' => $role->id,
             'name' => $data['name'],
-            'email' => $data['email'],
+            'email' => Str::lower($data['email']),
             'phone' => $data['phone'] ?? null,
             'password' => $data['password'],
-            'status' => 'active',
+            'status' => 'pending',
         ]);
 
-        $token = $user->createToken('api')->plainTextToken;
+        JobOrder::query()
+            ->whereNull('customer_user_id')
+            ->where('customer_email', $user->email)
+            ->update(['customer_user_id' => $user->id]);
+
+        $user->sendEmailVerificationNotification();
 
         AuditLogger::record($user, 'auth.register_customer', User::class, $user->id, [], $request);
 
         return response()->json([
-            'token' => $token,
+            'message' => 'Verification email sent. Please verify your email to activate your account.',
             'user' => $user->load('role'),
         ], 201);
+    }
+
+    public function verifyEmail(Request $request, int $id, string $hash)
+    {
+        $user = User::query()->findOrFail($id);
+
+        if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
+            throw ValidationException::withMessages([
+                'email' => ['Invalid verification link.'],
+            ]);
+        }
+
+        if (! $user->hasVerifiedEmail()) {
+            $user->markEmailAsVerified();
+            $user->forceFill(['status' => 'active'])->save();
+            event(new Verified($user));
+        }
+
+        return response()->json([
+            'message' => 'Email verified successfully. You can now log in.',
+        ]);
+    }
+
+    public function resendVerification(Request $request)
+    {
+        $payload = $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $user = User::query()->where('email', $payload['email'])->first();
+
+        if ($user && ! $user->hasVerifiedEmail()) {
+            $user->sendEmailVerificationNotification();
+        }
+
+        return response()->json([
+            'message' => 'If the email exists, a verification link has been sent.',
+        ]);
     }
 
     public function logout(Request $request)

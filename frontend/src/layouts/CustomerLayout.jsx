@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { NavLink, Link, Outlet } from 'react-router-dom'
 
 import useAuth from '../hooks/useAuth'
@@ -5,6 +7,8 @@ import useAuth from '../hooks/useAuth'
 
 
 function CustomerLayout() {
+
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   const { isAuthenticated, role, logout } = useAuth()
 
@@ -14,7 +18,21 @@ function CustomerLayout() {
 
   const handleLogout = async () => {
 
+    setIsMenuOpen(false)
+
     await logout()
+
+  }
+
+  const handleNavToggle = () => {
+
+    setIsMenuOpen((current) => !current)
+
+  }
+
+  const handleNavClick = () => {
+
+    setIsMenuOpen(false)
 
   }
 
@@ -24,29 +42,75 @@ function CustomerLayout() {
 
     <div>
 
-      <header className="card" style={{ margin: '24px 32px', display: 'flex', justifyContent: 'space-between' }}>
+      <header className="customer-shell">
 
-        <Link to="/customer" className="brand">
+        <div className="customer-shell__brand">
 
-          Deliverex
+          <Link to="/customer" className="brand">
 
-        </Link>
+            Deliverex
 
-        <nav className="inline" aria-label="Customer navigation">
+          </Link>
 
-          <NavLink end to="/customer">
+          <button
+
+            type="button"
+
+            className="customer-nav-toggle"
+
+            aria-expanded={isMenuOpen}
+
+            aria-controls="customer-nav"
+
+            onClick={handleNavToggle}
+
+          >
+
+            Menu
+
+          </button>
+
+        </div>
+
+        <nav
+
+          id="customer-nav"
+
+          className={`customer-nav ${isMenuOpen ? 'customer-nav--open' : ''}`}
+
+          aria-label="Customer navigation"
+
+        >
+
+          <NavLink end to="/customer" className="customer-nav-link" onClick={handleNavClick}>
 
             Home
 
           </NavLink>
 
-          <NavLink to="/customer/track">Track delivery</NavLink>
+          <NavLink to="/customer/track" className="customer-nav-link" onClick={handleNavClick}>
+
+            Track delivery
+
+          </NavLink>
 
           {isCustomer ? (
 
             <>
 
-              <NavLink to="/customer/deliveries">My deliveries</NavLink>
+              <NavLink
+
+                to="/customer/deliveries"
+
+                className="customer-nav-link"
+
+                onClick={handleNavClick}
+
+              >
+
+                My deliveries
+
+              </NavLink>
 
               <button
 
@@ -54,7 +118,7 @@ function CustomerLayout() {
 
                 onClick={handleLogout}
 
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0.5rem' }}
+                className="customer-nav-link customer-nav-link--button"
 
               >
 
@@ -68,9 +132,25 @@ function CustomerLayout() {
 
             <>
 
-              <NavLink to="/customer/signup">Create account</NavLink>
+              <NavLink
 
-              <NavLink to="/login">Sign in</NavLink>
+                to="/customer/signup"
+
+                className="customer-nav-link"
+
+                onClick={handleNavClick}
+
+              >
+
+                Create account
+
+              </NavLink>
+
+              <NavLink to="/login" className="customer-nav-link" onClick={handleNavClick}>
+
+                Sign in
+
+              </NavLink>
 
             </>
 

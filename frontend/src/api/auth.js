@@ -19,6 +19,13 @@ export async function getProfile() {
   return apiRequest('/auth/me')
 }
 
+export async function resendVerification(payload) {
+  return apiRequest('/auth/verify/resend', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function logout() {
   return apiRequest('/auth/logout', {
     method: 'POST',

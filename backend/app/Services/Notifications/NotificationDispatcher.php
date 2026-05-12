@@ -34,4 +34,46 @@ class NotificationDispatcher
             'You have been assigned job '.$code.'. Open the driver app for route and status updates.'
         );
     }
+
+    public function statusUpdated(DispatchAssignment $assignment, string $status): void
+    {
+        $assignment->loadMissing('assignedBy', 'jobOrder');
+        $job = $assignment->jobOrder;
+        $code = $job?->tracking_code ?? (string) $job?->id;
+
+        $this->notifyUser(
+            $assignment->assignedBy,
+            'Delivery status update',
+            'Job '.$code.' updated to '.$status.'.'
+        );
+
+        if ($job && $job->customerAccount) {
+            $this->notifyUser(
+                $job->customerAccount,
+                'Delivery status update',
+                'Your delivery '.$code.' is now '.$status.'.'
+            );
+        }
+    }
+
+    public function deliveryCompleted(DispatchAssignment $assignment): void
+    {
+        $assignment->loadMissing('assignedBy', 'jobOrder');
+        $job = $assignment->jobOrder;
+        $code = $job?->tracking_code ?? (string) $job?->id;
+
+        $this->notifyUser(
+            $assignment->assignedBy,
+            'Delivery completed',
+            'Job '.$code.' has been completed.'
+        );
+
+        if ($job && $job->customerAccount) {
+            $this->notifyUser(
+                $job->customerAccount,
+                'Delivery completed',
+                'Your delivery '.$code.' is completed. Proof of delivery is available if provided.'
+            );
+        }
+    }
 }

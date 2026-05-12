@@ -35,22 +35,18 @@ class PortalController extends Controller
                 ? $assignment->deliveryStatusLogs->first()
                 : null;
             $status = $latestStatus?->status ?? $job->status;
+            $statusAt = $latestStatus?->created_at?->toIso8601String();
 
             $documents = [];
-            if ($assignment) {
-                foreach ($assignment->deliveryDocuments as $doc) {
+            $isCompleted = strtolower((string) $status) === 'completed';
+            if ($assignment && $isCompleted) {
+                foreach ($assignment->deliveryDocuments->where('type', 'pod') as $doc) {
                     $documents[] = [
                         'id' => $doc->id,
                         'type' => $doc->type,
                         'url' => Storage::disk('public')->url($doc->file_path),
                         'uploaded_at' => $doc->created_at?->toIso8601String(),
-                        'ocr' => $doc->ocrResult ? [
-                            'processing_status' => $doc->ocrResult->processing_status,
-                            'extracted_preview' => $doc->ocrResult->extracted_text
-                                ? mb_substr($doc->ocrResult->extracted_text, 0, 280)
-                                : null,
-                            'engine' => $doc->ocrResult->engine,
-                        ] : null,
+                        'ocr_status' => $doc->ocrResult?->processing_status,
                     ];
                 }
             }
@@ -59,6 +55,7 @@ class PortalController extends Controller
                 'id' => $job->id,
                 'tracking_code' => $job->tracking_code,
                 'status' => $status,
+                'status_at' => $statusAt,
                 'pickup_location' => $job->pickup_location,
                 'dropoff_location' => $job->dropoff_location,
                 'customer_contact' => $job->customer_contact,

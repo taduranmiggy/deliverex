@@ -14,9 +14,11 @@ class BestFitController extends Controller
 
     public function show(JobOrder $jobOrder)
     {
+        $recommendations = $this->service->recommend($jobOrder);
         return response()->json([
             'job_order_id' => $jobOrder->id,
-            'recommendations' => $this->service->recommend($jobOrder),
+            'recommended' => $recommendations[0] ?? null,
+            'recommendations' => $recommendations,
         ]);
     }
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import { trackDelivery } from '../../api/customer'
 
@@ -10,6 +10,9 @@ function TrackingPage() {
   const [error, setError] = useState('')
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [pollKey, setPollKey] = useState(null)
+  const lastUpdate = Array.isArray(result?.timeline) && result.timeline.length > 0
+    ? result.timeline[result.timeline.length - 1]?.at
+    : null
 
   useEffect(() => {
     const prefill = typeof location.state?.prefillTracking === 'string' ? location.state.prefillTracking.trim() : ''
@@ -54,79 +57,150 @@ function TrackingPage() {
   }, [pollKey, loadTrack])
 
   return (
-    <section>
-      <header className="page-header">
+    <section className="tracking-page" aria-labelledby="tracking-title">
+      <header className="tracking-header">
         <div className="header-stack">
-          <h1>Customer Tracking</h1>
-          <p>View masked delivery status, ETA, timeline, and proof-of-delivery signals.</p>
+          <p className="tracking-eyebrow">Customer Tracking</p>
+          <h1 id="tracking-title">Track your delivery</h1>
+          <p>View masked delivery status, ETA, and proof-of-delivery signals with your Job Order ID.</p>
+        </div>
+        <div className="tracking-header-aside">
+          <Link className="tracking-back" to="/">
+            Home
+          </Link>
+          <span className="tracking-badge">No account required</span>
+          <span className="tracking-badge tracking-badge--muted">Support: (+63) 917-123-4567</span>
         </div>
       </header>
-      {error && <p className="notice error">{error}</p>}
-      <div className="split">
-        <div className="card form-grid">
-          <label>
+
+      {error && (
+        <p className="notice error tracking-notice" role="alert">
+          {error}
+        </p>
+      )}
+
+      <div className="tracking-grid">
+        <form
+          className="tracking-card tracking-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            handleTrack()
+          }}
+          aria-label="Track a delivery"
+        >
+          <label className="tracking-label" htmlFor="tracking-id">
             Tracking ID
+          </label>
+          <div className="tracking-input-row">
             <input
+              id="tracking-id"
               type="text"
               placeholder="Enter tracking ID"
               value={code}
               onChange={(event) => setCode(event.target.value)}
+              aria-describedby="tracking-help"
+              aria-invalid={Boolean(error)}
+              autoComplete="off"
             />
-          </label>
-          <button type="button" className="btn primary" onClick={handleTrack}>
-            Track Delivery
-          </button>
-          <button type="button" className="btn ghost" onClick={() => setAssistantOpen(true)}>
-            Open Chatbot
-          </button>
-          {pollKey && <p className="notice" style={{ margin: 0 }}>Auto-refresh every 15 seconds.</p>}
-        </div>
-        <div className="card">
-          <h3>Status</h3>
-          {result ? (
-            <div className="stack">
+            <button type="submit" className="btn primary">
+              Track delivery
+            </button>
+          </div>
+          <div className="tracking-actions">
+            <button type="button" className="btn ghost" onClick={() => setAssistantOpen(true)}>
+              Open assistant
+            </button>
+            {pollKey && (
+              <span className="tracking-pill" role="status">
+                Auto-refresh every 15 seconds
+              </span>
+            )}
+          </div>
+          <p className="tracking-hint" id="tracking-help">
+            Example: JO-2026-00432
+          </p>
+        </form>
+
+        <div className="tracking-card tracking-status" aria-live="polite">
+          <div className="tracking-status-header">
+            <div>
+              <h2>Status overview</h2>
+              <p>Latest updates from dispatch and delivery logs.</p>
+            </div>
+            <span className="tracking-pill tracking-pill--muted">
+              Last update: {lastUpdate ? new Date(lastUpdate).toLocaleString() : '—'}
+            </span>
+          </div>
+
+          {!result ? (
+            <p className="tracking-empty">Enter a tracking ID to view status.</p>
+          ) : (
+            <div className="tracking-stack">
               {result.delay_flag ? (
-                <p className="notice error" style={{ marginTop: 0 }}>
+                <div className="tracking-alert" role="status">
                   This delivery appears past the scheduled window. Our team may contact you with an update.
-                </p>
+                </div>
               ) : null}
-              <p><strong>Status:</strong> {result.status}</p>
-              <p><strong>ETA:</strong> {result.eta_window}</p>
-              <p>
-                <strong>Approximate location:</strong>{' '}
-                {result.approximate_location
-                  ? `${result.approximate_location.lat}, ${result.approximate_location.lng}`
-                  : 'Unavailable'}
-              </p>
-              {Array.isArray(result.proof_documents) && result.proof_documents.length > 0 ? (
+
+              <div className="tracking-metrics">
                 <div>
-                  <strong>Proof of delivery</strong>
-                  <ul style={{ margin: '8px 0 0', paddingLeft: '1.1rem' }}>
+                  <span>Status</span>
+                  <strong>{result.status ?? '—'}</strong>
+                </div>
+                <div>
+                  <span>ETA</span>
+                  <strong>{result.eta_window ?? '—'}</strong>
+                </div>
+                <div>
+                  <span>Approx. location</span>
+                  <strong>
+                    {result.approximate_location
+                      ? `${result.approximate_location.lat}, ${result.approximate_location.lng}`
+                      : 'Unavailable'}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="tracking-section">
+                <h3>Proof of delivery</h3>
+                {Array.isArray(result.proof_documents) && result.proof_documents.length > 0 ? (
+                  <ul className="tracking-docs">
                     {result.proof_documents.map((p, i) => (
                       <li key={i}>
-                        {p.type} — uploaded {p.uploaded_at ? new Date(p.uploaded_at).toLocaleString() : '—'}
-                        {p.ocr_ready ? ' (verified text available to operations)' : ' (processing)'}
+                        <span>{p.type}</span>
+                        <span>
+                          Uploaded {p.uploaded_at ? new Date(p.uploaded_at).toLocaleString() : '—'}
+                        </span>
+                        <span>{p.ocr_ready ? 'Processing complete' : 'Processing'}</span>
                       </li>
                     ))}
                   </ul>
-                </div>
-              ) : null}
+                ) : (
+                  <p className="tracking-muted">
+                    Proof of delivery documents are available after completion for authenticated users.
+                  </p>
+                )}
+              </div>
+
               {Array.isArray(result.timeline) && result.timeline.length > 0 ? (
-                <div style={{ marginTop: 12 }}>
-                  <strong>Timeline</strong>
-                  <ul style={{ margin: '8px 0 0', paddingLeft: '1.1rem', fontSize: '0.875rem' }}>
+                <div className="tracking-section">
+                  <h3>Timeline</h3>
+                  <ul className="tracking-timeline">
                     {result.timeline.map((row, i) => (
                       <li key={i}>
-                        {row.at ? new Date(row.at).toLocaleString() : '—'} — {row.status}
-                        {row.notes ? ` (${row.notes})` : ''}
+                        <div className="tracking-time">
+                          {row.at ? new Date(row.at).toLocaleString() : '—'}
+                        </div>
+                        <div>
+                          <strong>{row.status}</strong>
+                          {row.notes ? <span className="tracking-note">{row.notes}</span> : null}
+                        </div>
                       </li>
                     ))}
                   </ul>
                 </div>
               ) : null}
             </div>
-          ) : (
-            <p>Enter a tracking ID to view status.</p>
           )}
         </div>
       </div>

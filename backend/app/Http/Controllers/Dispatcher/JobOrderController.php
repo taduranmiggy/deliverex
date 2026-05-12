@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Dispatcher;
 
 use App\Http\Controllers\Controller;
 use App\Models\JobOrder;
+use App\Models\User;
 use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -24,6 +25,7 @@ class JobOrderController extends Controller
     {
         $data = $request->validate([
             'customer_name' => 'required|string|max:120',
+            'customer_email' => 'required|email|max:255',
             'customer_contact' => 'nullable|string|max:50',
             'pickup_location' => 'required|string',
             'dropoff_location' => 'required|string',
@@ -37,7 +39,15 @@ class JobOrderController extends Controller
             'priority' => 'nullable|in:low,normal,high,urgent',
         ]);
 
+        $normalizedEmail = Str::lower($data['customer_email']);
+        $customerAccount = User::query()
+            ->where('email', $normalizedEmail)
+            ->whereHas('role', fn ($q) => $q->where('name', 'customer'))
+            ->first();
+
         $data['created_by'] = $request->user()?->id;
+        $data['customer_email'] = $normalizedEmail;
+        $data['customer_user_id'] = $customerAccount?->id;
         $data['tracking_code'] = strtoupper(Str::random(10));
         $data['status'] = 'pending';
         $data['priority'] = $data['priority'] ?? 'normal';
@@ -55,6 +65,7 @@ class JobOrderController extends Controller
     {
         $data = $request->validate([
             'customer_name' => 'sometimes|string|max:120',
+            'customer_email' => 'sometimes|email|max:255',
             'customer_contact' => 'nullable|string|max:50',
             'pickup_location' => 'sometimes|string',
             'dropoff_location' => 'sometimes|string',
@@ -68,6 +79,16 @@ class JobOrderController extends Controller
             'priority' => 'nullable|in:low,normal,high,urgent',
             'status' => 'nullable|in:pending,assigned,in_progress,completed,cancelled',
         ]);
+
+        if (array_key_exists('customer_email', $data)) {
+            $normalizedEmail = Str::lower($data['customer_email']);
+            $customerAccount = User::query()
+                ->where('email', $normalizedEmail)
+                ->whereHas('role', fn ($q) => $q->where('name', 'customer'))
+                ->first();
+            $data['customer_email'] = $normalizedEmail;
+            $data['customer_user_id'] = $customerAccount?->id;
+        }
 
         $jobOrder->update($data);
 

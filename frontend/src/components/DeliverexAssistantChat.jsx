@@ -6,16 +6,6 @@ import { IconCheckSmall, IconDocOutline, IconMail, IconPhone } from './DxIcons'
 const SUPPORT_EMAIL = 'support@deliverex.ph'
 const SUPPORT_PHONE = '(+63) 917-123-4567'
 
-const MOCK_DETAIL = {
-  client: 'Maria Santos',
-  material: 'Cement - 50 bags',
-  origin: 'Quezon City Depot',
-  destination: 'Makati Construction Site',
-  driver: 'Juan Dela Cruz',
-  vehicle: 'Isuzu GIGA 10W',
-  amount: '₱12,450.00',
-}
-
 const MOCK_TRACKING = {
   'DLX2026-001': {
     tracking_code: 'DLX2026-001',
@@ -26,8 +16,8 @@ const MOCK_TRACKING = {
     proofLabel: 'Not yet available',
     updateLine: 'Driver departed from depot at 9:45 AM.',
     approximate_location: null,
-    detail: MOCK_DETAIL,
-    showDemoMapUnavailable: true,
+    detail: null,
+    showDemoMapUnavailable: false,
   },
 }
 
@@ -90,8 +80,8 @@ async function lookupTracking(raw) {
       updateLine:
         fallbackMock?.updateLine ?? `Latest status recorded: ${String(api.status ?? 'unknown')}.`,
       approximate_location: api.approximate_location,
-      detail: fallbackMock?.detail ?? null,
-      showDemoMapUnavailable: !api.approximate_location && Boolean(fallbackMock?.detail),
+      detail: null,
+      showDemoMapUnavailable: false,
     }
   } catch {
     const mock = MOCK_TRACKING[code]
@@ -126,8 +116,6 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
   const [messages, setMessages] = useState([])
   const [quickShown, setQuickShown] = useState(true)
   const [awaitTrackId, setAwaitTrackId] = useState(false)
-  /** Message ids whose job-detail panel is collapsed (hidden). */
-  const [trackingDetailHidden, setTrackingDetailHidden] = useState(() => new Set())
 
   const scrollRef = useRef(null)
 
@@ -151,13 +139,12 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
         role: 'assistant',
         content: [
           'text',
-          'Hello! I can help you check delivery status, ETA windows, and proof-of-delivery information.',
+          'Hello! I can help you track deliveries by Job Order ID and answer general Deliverex questions.',
         ],
       },
     ])
     setQuickShown(true)
     setAwaitTrackId(false)
-    setTrackingDetailHidden(new Set())
   }, [])
 
   useEffect(() => {
@@ -172,7 +159,6 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
       setAwaitTrackId(false)
       setMinimized(false)
       setAssistantExpanded(false)
-      setTrackingDetailHidden(new Set())
     }
   }, [open])
 
@@ -201,6 +187,15 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
       if (label === 'Contact Support') {
         pushAssistant(['text', 'You can reach our support team at:'])
         pushAssistant(['contact'])
+        return
+      }
+      if (label === 'Create account') {
+        pushAssistant(['links', { text: 'Create a Deliverex account', href: '/customer/signup' }])
+        return
+      }
+      if (label === 'Log in') {
+        pushAssistant(['links', { text: 'Log in to Deliverex', href: '/login' }])
+        return
       }
     },
     [pushAssistant, pushUser],
@@ -245,6 +240,25 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
         return
       }
 
+      if (/account|login|sign\s*in|register|signup|sign\s*up/.test(lower)) {
+        pushAssistant([
+          'text',
+          'For account-specific access, please log in or create an account.',
+        ])
+        pushAssistant(['links', { text: 'Log in', href: '/login' }])
+        pushAssistant(['links', { text: 'Create account', href: '/customer/signup' }])
+        return
+      }
+
+      if (/transaction|invoice|billing|payment|history|records/.test(lower)) {
+        pushAssistant([
+          'text',
+          'I cannot access account records here. Please log in to view transactions and delivery history.',
+        ])
+        pushAssistant(['links', { text: 'Log in', href: '/login' }])
+        return
+      }
+
       pushAssistant([
         'text',
         'Choose a quick action below, or type “Track” to look up a delivery.',
@@ -253,15 +267,6 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     },
     [awaitTrackId, dispatchQuickAction, pushAssistant, pushUser],
   )
-
-  const toggleJobDetailsCollapsed = (id) => {
-    setTrackingDetailHidden((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
 
   const renderMessage = (row) => {
     if (row.role === 'user') {
@@ -314,17 +319,21 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
       )
     }
 
+    if (kind === 'links') {
+      return (
+        <div key={row.id} className="dx-msg-row dx-msg-row--bot">
+          <div className="dx-msg-ava" aria-hidden>
+            D
+          </div>
+          <div className="dx-msg-bubble">
+            <a href={body.href}>{body.text}</a>
+          </div>
+        </div>
+      )
+    }
+
     if (kind === 'tracking_card') {
       const d = body
-      const hasJobDetails = Boolean(d.detail)
-      const detailsPanelOpen = hasJobDetails && !trackingDetailHidden.has(row.id)
-
-      const coords = d.approximate_location
-      const hasCoords =
-        coords &&
-        typeof coords.lat === 'number' &&
-        typeof coords.lng === 'number' &&
-        !Number.isNaN(coords.lat)
 
       const copyCode = async () => {
         try {
@@ -334,135 +343,37 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
         }
       }
 
-      const bubbleClass = hasJobDetails ? 'dx-msg-bubble dx-msg-bubble--job-sheet' : 'dx-msg-bubble'
+      const bubbleClass = 'dx-msg-bubble'
 
       return (
         <div key={row.id} className="dx-msg-row dx-msg-row--bot dx-msg-row--tracking">
           <div className="dx-msg-ava" aria-hidden>
             D
           </div>
-          <div className={bubbleClass} style={hasJobDetails ? { maxWidth: '94%' } : { maxWidth: '92%' }}>
-            <div className={hasJobDetails ? 'dx-track-card dx-track-card--stacked' : 'dx-track-card'}>
-              {hasJobDetails ? (
-                <>
-                  <div className="dx-track-summary">
-                    <strong>Tracking result</strong>
-                    <span className={`badge-dx ${d.badgeClass}`}>{d.badgeLabel}</span>
-                    <div className="dx-track-meta">
-                      <div>
-                        <span>ETA Window</span>
-                        <br />
-                        <strong>{d.eta_window}</strong>
-                      </div>
-                      <div className="dx-pod-row">
-                        <span>Proof of delivery</span>
-                        <span
-                          className={`dx-pod-glyph${d.proofAvailable ? ' dx-pod-glyph--ok' : ''}`}
-                          aria-hidden
-                        >
-                          {d.proofAvailable ? <IconCheckSmall /> : <IconDocOutline />}
-                        </span>
-                        <strong>{d.proofLabel}</strong>
-                      </div>
-                      <p style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                        {d.updateLine}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="dx-job-delivery-wrap">
-                    {detailsPanelOpen ? (
-                      <>
-                        <p className="dx-job-delivery-title">Job delivery details</p>
-                        <div className="dx-job-kv-list">
-                          <div className="dx-job-kv-row">
-                            <span className="dx-job-kv-label">Client</span>
-                            <span className="dx-job-kv-value">{d.detail.client}</span>
-                          </div>
-                          <div className="dx-job-kv-row">
-                            <span className="dx-job-kv-label">Material</span>
-                            <span className="dx-job-kv-value">{d.detail.material}</span>
-                          </div>
-                          <div className="dx-job-kv-row">
-                            <span className="dx-job-kv-label">Origin</span>
-                            <span className="dx-job-kv-value">{d.detail.origin}</span>
-                          </div>
-                          <div className="dx-job-kv-row">
-                            <span className="dx-job-kv-label">Destination</span>
-                            <span className="dx-job-kv-value">{d.detail.destination}</span>
-                          </div>
-                          <div className="dx-job-kv-row">
-                            <span className="dx-job-kv-label">Driver</span>
-                            <span className="dx-job-kv-value">{d.detail.driver}</span>
-                          </div>
-                          <div className="dx-job-kv-row">
-                            <span className="dx-job-kv-label">Vehicle</span>
-                            <span className="dx-job-kv-value">{d.detail.vehicle}</span>
-                          </div>
-                          <div className="dx-job-kv-row dx-job-kv-row--amount">
-                            <span className="dx-job-kv-label">Amount</span>
-                            <span className="dx-job-kv-value">{d.detail.amount}</span>
-                          </div>
-                        </div>
-
-                        {hasCoords ? (
-                          <div className="dx-map-mini dx-map-mini--coords">
-                            Approx. {coords.lat}, {coords.lng}
-                          </div>
-                        ) : (
-                          <div className="dx-map-mini" role="status">
-                            <svg
-                              className="dx-map-pin-icon"
-                              width="22"
-                              height="22"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              aria-hidden
-                            >
-                              <path d="M12 21s-6-5.35-6-10a6 6 0 1 1 12 0c0 4.65-6 10-6 10z" />
-                              <circle cx="12" cy="11" r="2.2" fill="currentColor" stroke="none" />
-                            </svg>
-                            <span>Location unavailable</span>
-                          </div>
-                        )}
-                      </>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="dx-hide-details"
-                      onClick={() => toggleJobDetailsCollapsed(row.id)}
-                    >
-                      {detailsPanelOpen ? 'Hide Details' : 'Delivery details'}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <strong>Tracking result</strong>
-                  <span className={`badge-dx ${d.badgeClass}`}>{d.badgeLabel}</span>
-                  <div className="dx-track-meta">
-                    <div>
-                      <span>ETA Window</span>
-                      <br />
-                      <strong>{d.eta_window}</strong>
-                    </div>
-                    <div className="dx-pod-row">
-                      <span>Proof of delivery</span>
-                      <span
-                        className={`dx-pod-glyph${d.proofAvailable ? ' dx-pod-glyph--ok' : ''}`}
-                        aria-hidden
-                      >
-                        {d.proofAvailable ? <IconCheckSmall /> : <IconDocOutline />}
-                      </span>
-                      <strong>{d.proofLabel}</strong>
-                    </div>
-                    <p style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                      {d.updateLine}
-                    </p>
-                  </div>
-                </>
-              )}
+          <div className={bubbleClass} style={{ maxWidth: '92%' }}>
+            <div className="dx-track-card">
+              <strong>Tracking result</strong>
+              <span className={`badge-dx ${d.badgeClass}`}>{d.badgeLabel}</span>
+              <div className="dx-track-meta">
+                <div>
+                  <span>ETA Window</span>
+                  <br />
+                  <strong>{d.eta_window}</strong>
+                </div>
+                <div className="dx-pod-row">
+                  <span>Proof of delivery</span>
+                  <span
+                    className={`dx-pod-glyph${d.proofAvailable ? ' dx-pod-glyph--ok' : ''}`}
+                    aria-hidden
+                  >
+                    {d.proofAvailable ? <IconCheckSmall /> : <IconDocOutline />}
+                  </span>
+                  <strong>{d.proofLabel}</strong>
+                </div>
+                <p style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: '0.8125rem' }}>
+                  {d.updateLine}
+                </p>
+              </div>
 
               <div className="dx-track-copy">
                 <span />
@@ -591,6 +502,20 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
                       onClick={() => dispatchQuickAction('Contact Support')}
                     >
                       Contact Support
+                    </button>
+                    <button
+                      type="button"
+                      className="dx-msg-quick"
+                      onClick={() => dispatchQuickAction('Create account')}
+                    >
+                      Create account
+                    </button>
+                    <button
+                      type="button"
+                      className="dx-msg-quick"
+                      onClick={() => dispatchQuickAction('Log in')}
+                    >
+                      Log in
                     </button>
                   </div>
                 ) : null}

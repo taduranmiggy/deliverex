@@ -27,6 +27,11 @@ Route::post('/auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:10,1');
 Route::post('/auth/register/customer', [AuthController::class, 'registerCustomer'])
     ->middleware('throttle:10,1');
+Route::get('/auth/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
+    ->middleware('signed')
+    ->name('verification.verify');
+Route::post('/auth/verify/resend', [AuthController::class, 'resendVerification'])
+    ->middleware('throttle:6,1');
 
 Route::get('/customer/track/{trackingCode}', [CustomerTrackingController::class, 'show']);
 Route::post('/customer/inquiry', [InquiryController::class, 'store']);
@@ -88,7 +93,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/analytics', [AnalyticsController::class, 'index']);
     });
 
-    Route::middleware('role:admin|dispatcher|manager')->group(function () {
+    Route::middleware('role:admin|dispatcher')->group(function () {
         Route::get('/tracking/{assignment}', [GpsTrackingController::class, 'show']);
         Route::post('/ocr/process/{document}', [OcrController::class, 'process']);
     });
