@@ -1,153 +1,132 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { fetchAnalytics } from '../../api/manager'
-import { IconPackage, IconStar, IconTrendingUp } from '../../components/DxIcons'
+import { DataTable, EmptyState, FilterSelect, PageHeader, SectionCard, StatCard, StatusBadge } from '../../components/ui'
+import { BarChart3, Car, CheckCircle2, Clock, TrendingDown, Users } from 'lucide-react'
 
-const DRIVER_ROWS = [
-  { name: 'Miguel Reyes', deliveries: 18, ot: '95%', rev: '₱245,000' },
-  { name: 'Juan Dela Cruz', deliveries: 16, ot: '93%', rev: '₱218,500' },
-  { name: 'Carlo Mendoza', deliveries: 12, ot: '90%', rev: '₱186,400' },
-]
-
-const MATERIAL_ROWS = [
-  { mat: 'Gravel', orders: 18, vol: '180 tons', rev: '₱245,000' },
-  { mat: 'Sand', orders: 14, vol: '98 tons', rev: '₱168,000' },
-  { mat: 'Cement', orders: 9, vol: '42 tons', rev: '₱124,500' },
-]
+function BarChart({ data }) {
+  if (!data || data.length === 0) return <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.875rem' }}>No data for selected period.</p>
+  const max = Math.max(...data.map((d) => d.count), 1)
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 120, paddingBottom: 28, position: 'relative' }}>
+      {data.map((d) => (
+        <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
+          <div title={`${d.count} on ${d.date}`} style={{ width: '100%', minHeight: 4, height: `${Math.max(4, Math.round((d.count / max) * 88))}px`, background: 'linear-gradient(180deg, #3b82f6, #1e40af)', borderRadius: '4px 4px 0 0' }} />
+          <span style={{ position: 'absolute', bottom: 0, fontSize: '0.65rem', color: 'var(--muted)', transform: 'translateX(-50%)', left: '50%', whiteSpace: 'nowrap' }}>
+            {new Date(d.date).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function AnalyticsPage() {
-  const [error, setError] = useState('')
+  const today = new Date()
+  const [from, setFrom]     = useState(new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10))
+  const [to, setTo]         = useState(today.toISOString().slice(0, 10))
+  const [status, setStatus] = useState('')
+  const [data, setData]     = useState(null)
+  const [error, setError]   = useState('')
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    const loadAnalytics = async () => {
-      try {
-        await fetchAnalytics()
-      } catch (err) {
-        setError(err.message)
-      }
-    }
-
-    loadAnalytics()
+  const load = useCallback(async (params) => {
+    setLoading(true); setError('')
+    try { setData(await fetchAnalytics(params)) }
+    catch (err) { setError(err.message) }
+    finally { setLoading(false) }
   }, [])
 
+  useEffect(() => { load({ from, to }) }, []) // eslint-disable-line
+
+  const s = data?.summary ?? {}
+  const fleet = data?.fleet ?? {}
+  const drivers = data?.drivers ?? []
+
   return (
-    <section>
-      <header className="page-header">
-        <div className="header-stack">
-          <h1>Analytics</h1>
-          <p>Deep insights into operations</p>
-        </div>
-      </header>
+    <>
+      <PageHeader title="Analytics" subtitle="Deep insights into operations" />
       {error && <p className="notice error">{error}</p>}
 
-      <div className="dx-panel">
-        <div className="inline" style={{ flexWrap: 'wrap', gap: 16, alignItems: 'flex-end', width: '100%' }}>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 600, fontSize: '0.8125rem' }}>Date From</span>
-            <input type="date" defaultValue="2026-02-01" />
-          </label>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 600, fontSize: '0.8125rem' }}>Date To</span>
-            <input type="date" defaultValue="2026-02-28" />
-          </label>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 600, fontSize: '0.8125rem' }}>Client</span>
-            <select style={{ minWidth: 160 }}>
-              <option>All clients</option>
-            </select>
-          </label>
-          <button type="button" className="btn-dx-primary" style={{ marginLeft: 'auto' }}>
-            Apply Filters
-          </button>
-        </div>
+      {/* Filters */}
+      <div className="dx-panel" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-end', marginBottom: 20 }}>
+        <label style={{ display: 'grid', gap: 5, fontWeight: 600, fontSize: '0.8125rem' }}>
+          From <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: '9px 12px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
+        </label>
+        <label style={{ display: 'grid', gap: 5, fontWeight: 600, fontSize: '0.8125rem' }}>
+          To <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ padding: '9px 12px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
+        </label>
+        <FilterSelect value={status} onChange={setStatus} label="Status" options={[
+          { value: '', label: 'All statuses' }, { value: 'completed', label: 'Completed' },
+          { value: 'in_progress', label: 'In Progress' }, { value: 'pending', label: 'Pending' }, { value: 'cancelled', label: 'Cancelled' },
+        ]} />
+        <button type="button" className="btn-dx-primary" style={{ marginLeft: 'auto', alignSelf: 'flex-end' }}
+          onClick={() => load({ from, to, status: status || undefined })} disabled={loading}>
+          {loading ? 'Loading…' : 'Apply Filters'}
+        </button>
       </div>
 
-      <div className="dx-stat-row" style={{ marginTop: 16 }}>
-        <div className="dx-stat-card">
-          <div className="dx-stat-card__icon" aria-hidden="true">
-            <IconStar />
-          </div>
-          <div className="dx-stat-card__meta">
-            <div className="dx-stat-card__label">Top Driver</div>
-            <div className="dx-stat-card__value" style={{ fontSize: '1rem' }}>
-              Miguel Reyes
+      {/* Summary stats */}
+      <div className="dx-stat-row">
+        <StatCard label="Total Jobs"    value={s.total      ?? '—'} icon={BarChart3}     iconVariant="default" />
+        <StatCard label="Completed"     value={s.completed  ?? '—'} icon={CheckCircle2}  iconVariant="green" />
+        <StatCard label="In Progress"   value={s.in_progress ?? '—'} icon={Clock}        iconVariant="purple" />
+        <StatCard label="Delayed"       value={s.delayed    ?? '—'} icon={TrendingDown}  iconVariant={s.delayed > 0 ? 'red' : 'green'} />
+        <StatCard label="Fleet Util."   value={fleet.utilization_pct != null ? `${fleet.utilization_pct}%` : '—'} icon={Car} iconVariant="orange" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, marginBottom: 20 }}>
+        <SectionCard title="Daily Completed Deliveries">
+          <BarChart data={data?.daily_stats} />
+        </SectionCard>
+        <SectionCard title="Fleet Overview">
+          {[
+            { label: 'Available',   value: fleet.available,    color: 'var(--color-success)' },
+            { label: 'Assigned',    value: fleet.assigned,     color: 'var(--color-primary)' },
+            { label: 'Maintenance', value: fleet.maintenance,  color: 'var(--color-warning)' },
+            { label: 'Total',       value: fleet.total,        color: 'var(--muted)' },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--stroke)', fontSize: '0.875rem' }}>
+              <span style={{ color: 'var(--muted)' }}>{label}</span>
+              <strong style={{ color }}>{value ?? '—'}</strong>
             </div>
-            <div className="dx-kpi-delta dx-kpi-delta--up">95% on-time rate</div>
-          </div>
-        </div>
-        <div className="dx-stat-card">
-          <div className="dx-stat-card__icon" aria-hidden="true">
-            <IconPackage />
-          </div>
-          <div className="dx-stat-card__meta">
-            <div className="dx-stat-card__label">Most Requested Material</div>
-            <div className="dx-stat-card__value">Gravel</div>
-            <div className="dx-kpi-delta dx-kpi-delta--up">35% of total orders</div>
-          </div>
-        </div>
-        <div className="dx-stat-card">
-          <div className="dx-stat-card__icon" aria-hidden="true">
-            <IconTrendingUp />
-          </div>
-          <div className="dx-stat-card__meta">
-            <div className="dx-stat-card__label">Growth Trend</div>
-            <div className="dx-stat-card__value">+12.5%</div>
-            <div className="dx-kpi-delta dx-kpi-delta--up">vs. last month</div>
-          </div>
-        </div>
+          ))}
+        </SectionCard>
       </div>
 
-      <div className="dx-panel" style={{ marginTop: 16 }}>
-        <h3 className="dx-panel-title">Driver Performance</h3>
-        <div className="dx-data-table-wrap">
-          <table className="dx-data-table">
-            <thead>
-              <tr>
-                <th>Driver</th>
-                <th>Total Deliveries</th>
-                <th>On-Time Rate</th>
-                <th>Revenue Generated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DRIVER_ROWS.map((row) => (
-                <tr key={row.name}>
-                  <td>{row.name}</td>
-                  <td>{row.deliveries}</td>
-                  <td>{row.ot}</td>
-                  <td>{row.rev}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="dx-panel" style={{ marginTop: 16 }}>
-        <h3 className="dx-panel-title">Material Analysis</h3>
-        <div className="dx-data-table-wrap">
-          <table className="dx-data-table">
-            <thead>
-              <tr>
-                <th>Material</th>
-                <th>Orders</th>
-                <th>Total Volume</th>
-                <th>Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MATERIAL_ROWS.map((row) => (
-                <tr key={row.mat}>
-                  <td>{row.mat}</td>
-                  <td>{row.orders}</td>
-                  <td>{row.vol}</td>
-                  <td>{row.rev}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+      <SectionCard title="Driver Performance">
+        <DataTable
+          headers={['Driver', 'Total Jobs', 'Completed', 'On-Time Rate', 'Availability']}
+          loading={loading}
+          empty={<EmptyState icon={Users} title="No driver data" message="No drivers found for the selected period." />}
+        >
+          {drivers.length > 0 && drivers.map((d) => (
+            <tr key={d.id}>
+              <td>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div className="topbar-avatar" style={{ width: 30, height: 30, fontSize: '0.7rem', borderRadius: 8 }}>
+                    {d.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <span style={{ fontWeight: 600 }}>{d.name}</span>
+                </div>
+              </td>
+              <td>{d.total}</td>
+              <td>{d.completed}</td>
+              <td>
+                {d.on_time_pct != null ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1, height: 6, borderRadius: 99, background: 'var(--slate-200)', maxWidth: 80 }}>
+                      <div style={{ height: '100%', borderRadius: 99, width: `${d.on_time_pct}%`, background: d.on_time_pct >= 90 ? 'var(--color-success)' : d.on_time_pct >= 75 ? 'var(--color-warning)' : 'var(--color-error)' }} />
+                    </div>
+                    <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>{d.on_time_pct}%</span>
+                  </div>
+                ) : '—'}
+              </td>
+              <td><StatusBadge status={d.availability} /></td>
+            </tr>
+          ))}
+        </DataTable>
+      </SectionCard>
+    </>
   )
 }
 

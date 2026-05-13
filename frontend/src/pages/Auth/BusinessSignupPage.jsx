@@ -14,7 +14,7 @@ function BusinessSignupPage() {
   return (
     <section className="auth-page auth-page--dx">
       <div className="auth-card auth-card--dx auth-card--signup">
-        <Link to="/login" className="auth-back-home">
+        <Link to="/customer" className="auth-back-home">
           <IconChevronLeft />
           Back to login
         </Link>

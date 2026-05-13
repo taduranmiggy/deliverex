@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react'
 import { createAssignment, fetchJobOrders, getBestFit } from '../../api/dispatcher'
 import { IconCheckSmall, IconRouteArrow } from '../../components/DxIcons'
-import { formatDemoPhp, formatJobPublicId } from '../../utils/formatPhp'
+import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus } from '../../utils/statusLabels'
 
 function AssignDriverVehiclePage() {
-  const [jobOrders, setJobOrders] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [recommended, setRecommended] = useState(null)
+  const [jobOrders, setJobOrders]       = useState([])
+  const [selected, setSelected]         = useState(null)
+  const [recommended, setRecommended]   = useState(null)
   const [recommendations, setRecommendations] = useState([])
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const [loading, setLoading]           = useState(false)
+  const [message, setMessage]           = useState('')
+  const [error, setError]               = useState('')
 
   useEffect(() => {
-    const loadOrders = async () => {
+    const load = async () => {
       try {
-        const response = await fetchJobOrders(1)
-        const pending = (response.data || []).filter((item) => item.status === 'pending')
+        const res = await fetchJobOrders(1)
+        const pending = (res.data || []).filter((item) => item.status === 'pending')
         setJobOrders(pending)
         setSelected((prev) => {
           if (prev && pending.some((p) => p.id === prev.id)) return prev
@@ -26,51 +27,31 @@ function AssignDriverVehiclePage() {
         setError(err.message)
       }
     }
-
-    loadOrders()
+    load()
   }, [])
 
   useEffect(() => {
-    const loadBestFit = async () => {
-      if (!selected) {
-        setRecommendations([])
-        return
-      }
-      try {
-        const response = await getBestFit(selected.id)
-        setRecommended(response.recommended || null)
-        setRecommendations(response.recommendations || [])
-      } catch (err) {
-        setError(err.message)
-      }
-    }
-
-    loadBestFit()
+    if (!selected) { setRecommendations([]); setRecommended(null); return }
+    setLoading(true)
+    getBestFit(selected.id)
+      .then((res) => {
+        setRecommended(res.recommended || null)
+        setRecommendations(res.recommendations || [])
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
   }, [selected])
 
   const handleAssign = async (driverId, vehicleId, isOverride = false) => {
-    if (!selected) {
-      setError('Select a job order first.')
-      return
-    }
-
-    if (isOverride) {
-      const ok = window.confirm('This differs from the recommended pairing. Continue with override?')
-      if (!ok) {
-        return
-      }
-    }
-
+    if (!selected) { setError('Select a job order first.'); return }
+    if (isOverride && !window.confirm('This differs from the recommended pairing. Continue with override?')) return
+    setError('')
+    setMessage('')
     try {
-      await createAssignment({
-        job_order_id: selected.id,
-        driver_id: driverId,
-        vehicle_id: vehicleId,
-      })
+      await createAssignment({ job_order_id: selected.id, driver_id: driverId, vehicle_id: vehicleId })
       setMessage('Assignment created and driver notified.')
-      setError('')
-      const response = await fetchJobOrders(1)
-      const pending = (response.data || []).filter((item) => item.status === 'pending')
+      const res = await fetchJobOrders(1)
+      const pending = (res.data || []).filter((item) => item.status === 'pending')
       setJobOrders(pending)
       setSelected(pending[0] ?? null)
     } catch (err) {
@@ -89,25 +70,20 @@ function AssignDriverVehiclePage() {
         </div>
       </header>
       {message && <p className="notice">{message}</p>}
-      {error && <p className="notice error">{error}</p>}
+      {error   && <p className="notice error">{error}</p>}
 
       <div className="dx-split-bestfit">
         <div>
           <div className="dx-panel" style={{ marginBottom: 12 }}>
-            <p style={{ margin: '0 0 10px', color: 'var(--muted)', fontSize: '0.875rem' }}>
-              <strong style={{ color: 'var(--navy)' }}>{jobOrders.length}</strong>{' '}
-              jobs pending assignment
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.875rem' }}>
+              <strong style={{ color: 'var(--navy)' }}>{jobOrders.length}</strong> jobs pending assignment
             </p>
           </div>
           {jobOrders.length === 0 && (
-            <div className="dx-panel">
-              <p style={{ margin: 0, color: 'var(--muted)' }}>No unassigned jobs.</p>
-            </div>
+            <div className="dx-panel"><p style={{ margin: 0, color: 'var(--muted)' }}>No unassigned jobs.</p></div>
           )}
           {jobOrders.map((order) => (
-            <button
-              key={order.id}
-              type="button"
+            <button key={order.id} type="button"
               className={`dx-job-card ${selected?.id === order.id ? 'dx-job-card--selected' : ''}`}
               onClick={() => setSelected(order)}
             >
@@ -119,19 +95,17 @@ function AssignDriverVehiclePage() {
               <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.8125rem' }}>
                 {order.vehicle_type_required ?? 'Load'} · {order.vehicle_capacity_required ?? '—'}
               </p>
-              <p
-                className="dx-route-inline"
-                style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: '0.8125rem' }}
-              >
+              <p className="dx-route-inline" style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: '0.8125rem' }}>
                 <span>{order.pickup_location}</span>
-                <span className="dx-route-inline__arrow" aria-hidden="true">
-                  <IconRouteArrow />
-                </span>
+                <span className="dx-route-inline__arrow" aria-hidden><IconRouteArrow /></span>
                 <span>{order.dropoff_location}</span>
               </p>
-              <p style={{ margin: '8px 0 0', fontWeight: 600, color: 'var(--navy)' }}>
-                {formatDemoPhp(order.id)}
-              </p>
+              {order.scheduled_start && (
+                <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>
+                  {new Date(order.scheduled_start).toLocaleString()}
+                  {order.scheduled_end ? ` — ${new Date(order.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                </p>
+              )}
             </button>
           ))}
         </div>
@@ -140,121 +114,107 @@ function AssignDriverVehiclePage() {
           <h3 className="dx-panel-title">Recommendation Panel</h3>
           {!selected ? (
             <p style={{ color: 'var(--muted)' }}>Select a job to view recommendations.</p>
+          ) : loading ? (
+            <p style={{ color: 'var(--muted)' }}>Analyzing available resources…</p>
           ) : (
             <>
               <div className="dx-kv" style={{ marginBottom: 14 }}>
-                <span>Material</span>
-                <strong>{selected.vehicle_type_required ?? '—'}</strong>
+                <span>Vehicle required</span>
+                <strong>{[selected.vehicle_type_required, selected.vehicle_capacity_required].filter(Boolean).join(' · ') || '—'}</strong>
               </div>
               <div className="dx-kv" style={{ marginBottom: 14 }}>
-                <span>Volume / Weight</span>
-                <strong>{selected.vehicle_capacity_required ?? '—'}</strong>
+                <span>Payload</span>
+                <strong>
+                  {[selected.weight_kg ? `${selected.weight_kg} kg` : null, selected.volume_m3 ? `${selected.volume_m3} m³` : null]
+                    .filter(Boolean).join(' · ') || '—'}
+                </strong>
               </div>
-              <div className="dx-kv" style={{ marginBottom: 14 }}>
-                <span>Time window</span>
-                <strong>4:30 PM</strong>
-              </div>
+              {selected.scheduled_end && (
+                <div className="dx-kv" style={{ marginBottom: 14 }}>
+                  <span>Deadline</span>
+                  <strong>{new Date(selected.scheduled_end).toLocaleString()}</strong>
+                </div>
+              )}
 
-              {top && (
+              {top ? (
                 <>
                   <div className="dx-bestfit-banner" role="status">
-                    <span className="dx-bestfit-banner__icon" aria-hidden="true">
-                      <IconCheckSmall />
-                    </span>
+                    <span className="dx-bestfit-banner__icon" aria-hidden><IconCheckSmall /></span>
                     Recommended assignment
                   </div>
                   <div className="dx-kv" style={{ marginBottom: 8 }}>
-                    <span>Recommended vehicle</span>
-                    <strong>
-                      {(top.vehicle_plate || 'ABC-1234') +
-                        ` — ${top.vehicle_type || 'Heavy truck'} (capacity match)`}
-                    </strong>
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <span className="dx-mini-badge">Capacity match</span>
-                    <span className="dx-mini-badge">Available</span>
-                  </div>
-                  <div className="dx-kv" style={{ marginBottom: 8 }}>
-                    <span>Recommended driver</span>
+                    <span>Driver</span>
                     <strong>{top.driver_name}</strong>
                   </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <span className="dx-mini-badge">High on-time</span>
-                    <span className="dx-mini-badge">Nearest pickup</span>
-                    <span className="dx-mini-badge">Available now</span>
+                  <div className="dx-kv" style={{ marginBottom: 12 }}>
+                    <span>Vehicle</span>
+                    <strong>
+                      {top.vehicle_plate}
+                      {top.vehicle_type ? ` — ${top.vehicle_type}` : ''}
+                      {top.vehicle_capacity ? ` (${top.vehicle_capacity})` : ''}
+                    </strong>
                   </div>
+
+                  {/* Dynamic BestFit reasons */}
+                  {Array.isArray(top.reasons) && top.reasons.length > 0 && (
+                    <div className="dx-why-box">
+                      <strong>Why this assignment?</strong>
+                      <ul>
+                        {top.reasons.map((r, i) => <li key={i}>{r}</li>)}
+                      </ul>
+                    </div>
+                  )}
                 </>
+              ) : (
+                <div className="dx-why-box">
+                  <strong>No recommendations</strong>
+                  <p style={{ margin: '8px 0 0', color: 'var(--muted)', fontSize: '0.875rem' }}>
+                    No available drivers or vehicles match the requirements. Check fleet availability in Master Data.
+                  </p>
+                </div>
               )}
 
-              <div className="dx-why-box">
-                <strong>Why this assignment?</strong>
-                <ul>
-                  <li>Vehicle capacity exceeds required load.</li>
-                  <li>Driver maintains strong on-time performance.</li>
-                  <li>Shortest estimated distance from pickup.</li>
-                  <li>Fits requested time window.</li>
-                </ul>
-              </div>
-
-              <div style={{ marginTop: 14 }}>
-                <strong style={{ fontSize: '0.875rem' }}>Other matches</strong>
-                <div className="dx-data-table-wrap" style={{ marginTop: 8 }}>
-                  <table className="dx-data-table">
-                    <thead>
-                      <tr>
-                        <th>Driver</th>
-                        <th>Vehicle</th>
-                        <th>Score</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(recommendations.length ? recommendations : []).map((item) => (
-                        <tr key={`${item.driver_id}-${item.vehicle_id}`}>
-                          <td>{item.driver_name}</td>
-                          <td>{item.vehicle_plate}</td>
-                          <td>
-                            <span className="badge-dx badge-dx--muted">{item.score}</span>
-                          </td>
-                          <td>
-                            {top && item.driver_id === top.driver_id && item.vehicle_id === top.vehicle_id ? (
-                              <span className="dx-mini-badge">Recommended</span>
-                            ) : (
-                              <button
-                                type="button"
-                                className="btn-dx-primary"
-                                style={{ padding: '6px 12px', fontSize: '0.75rem' }}
-                                onClick={() => handleAssign(item.driver_id, item.vehicle_id, true)}
-                              >
-                                Override
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                      {recommendations.length === 0 && selected && (
-                        <tr>
-                          <td colSpan={4} style={{ color: 'var(--muted)' }}>
-                            No recommendations returned yet.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+              {recommendations.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <strong style={{ fontSize: '0.875rem' }}>All matches</strong>
+                  <div className="dx-data-table-wrap" style={{ marginTop: 8 }}>
+                    <table className="dx-data-table">
+                      <thead><tr><th>Driver</th><th>Vehicle</th><th>Score</th><th /></tr></thead>
+                      <tbody>
+                        {recommendations.map((item) => {
+                          const isTop = top && item.driver_id === top.driver_id && item.vehicle_id === top.vehicle_id
+                          return (
+                            <tr key={`${item.driver_id}-${item.vehicle_id}`}>
+                              <td>{item.driver_name}</td>
+                              <td>{item.vehicle_plate}</td>
+                              <td><span className="badge-dx badge-dx--muted">{item.score}</span></td>
+                              <td>
+                                {isTop ? (
+                                  <span className="dx-mini-badge">Recommended</span>
+                                ) : (
+                                  <button type="button" className="btn-dx-primary"
+                                    style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                                    onClick={() => handleAssign(item.driver_id, item.vehicle_id, true)}>
+                                    Override
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="dx-action-row">
-                {top ? (
-                  <button
-                    type="button"
-                    className="btn-dx-primary"
-                    onClick={() => handleAssign(top.driver_id, top.vehicle_id)}
-                  >
+                {top && (
+                  <button type="button" className="btn-dx-primary" onClick={() => handleAssign(top.driver_id, top.vehicle_id)}>
                     Apply recommendation
                   </button>
-                ) : null}
-                <button type="button" className="btn-dx-secondary">
+                )}
+                <button type="button" className="btn-dx-secondary" onClick={() => setSelected(null)}>
                   Cancel
                 </button>
               </div>

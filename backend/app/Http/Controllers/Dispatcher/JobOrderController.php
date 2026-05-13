@@ -24,33 +24,33 @@ class JobOrderController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'customer_name' => 'required|string|max:120',
-            'customer_email' => 'required|email|max:255',
-            'customer_contact' => 'nullable|string|max:50',
-            'pickup_location' => 'required|string',
-            'dropoff_location' => 'required|string',
-            'job_requirements' => 'nullable|string',
-            'vehicle_type_required' => 'nullable|string|max:80',
+            'customer_name'             => 'required|string|max:120',
+            'customer_email'            => 'required|email|max:255',
+            'customer_contact'          => 'nullable|string|max:50',
+            'pickup_location'           => 'required|string',
+            'dropoff_location'          => 'required|string',
+            'job_requirements'          => 'nullable|string',
+            'vehicle_type_required'     => 'nullable|string|max:80',
             'vehicle_capacity_required' => 'nullable|string|max:80',
-            'weight_kg' => 'nullable|numeric|min:0',
-            'volume_m3' => 'nullable|numeric|min:0',
-            'scheduled_start' => 'nullable|date',
-            'scheduled_end' => 'nullable|date|after_or_equal:scheduled_start',
-            'priority' => 'nullable|in:low,normal,high,urgent',
+            'weight_kg'                 => 'nullable|numeric|min:0',
+            'volume_m3'                 => 'nullable|numeric|min:0',
+            'scheduled_start'           => 'nullable|date',
+            'scheduled_end'             => 'nullable|date|after_or_equal:scheduled_start',
+            'priority'                  => 'nullable|in:low,normal,high,urgent',
         ]);
 
-        $normalizedEmail = Str::lower($data['customer_email']);
-        $customerAccount = User::query()
+        $normalizedEmail  = Str::lower($data['customer_email']);
+        $customerAccount  = User::query()
             ->where('email', $normalizedEmail)
             ->whereHas('role', fn ($q) => $q->where('name', 'customer'))
             ->first();
 
-        $data['created_by'] = $request->user()?->id;
-        $data['customer_email'] = $normalizedEmail;
-        $data['customer_user_id'] = $customerAccount?->id;
-        $data['tracking_code'] = strtoupper(Str::random(10));
-        $data['status'] = 'pending';
-        $data['priority'] = $data['priority'] ?? 'normal';
+        $data['created_by']        = $request->user()?->id;
+        $data['customer_email']    = $normalizedEmail;
+        $data['customer_user_id']  = $customerAccount?->id;
+        $data['tracking_code']     = strtoupper(Str::random(10));
+        $data['status']            = 'pending';
+        $data['priority']          = $data['priority'] ?? 'normal';
 
         $jobOrder = JobOrder::create($data);
 
@@ -64,20 +64,20 @@ class JobOrderController extends Controller
     public function update(Request $request, JobOrder $jobOrder)
     {
         $data = $request->validate([
-            'customer_name' => 'sometimes|string|max:120',
-            'customer_email' => 'sometimes|email|max:255',
-            'customer_contact' => 'nullable|string|max:50',
-            'pickup_location' => 'sometimes|string',
-            'dropoff_location' => 'sometimes|string',
-            'job_requirements' => 'nullable|string',
-            'vehicle_type_required' => 'nullable|string|max:80',
+            'customer_name'             => 'sometimes|string|max:120',
+            'customer_email'            => 'sometimes|email|max:255',
+            'customer_contact'          => 'nullable|string|max:50',
+            'pickup_location'           => 'sometimes|string',
+            'dropoff_location'          => 'sometimes|string',
+            'job_requirements'          => 'nullable|string',
+            'vehicle_type_required'     => 'nullable|string|max:80',
             'vehicle_capacity_required' => 'nullable|string|max:80',
-            'weight_kg' => 'nullable|numeric|min:0',
-            'volume_m3' => 'nullable|numeric|min:0',
-            'scheduled_start' => 'nullable|date',
-            'scheduled_end' => 'nullable|date|after_or_equal:scheduled_start',
-            'priority' => 'nullable|in:low,normal,high,urgent',
-            'status' => 'nullable|in:pending,assigned,in_progress,completed,cancelled',
+            'weight_kg'                 => 'nullable|numeric|min:0',
+            'volume_m3'                 => 'nullable|numeric|min:0',
+            'scheduled_start'           => 'nullable|date',
+            'scheduled_end'             => 'nullable|date|after_or_equal:scheduled_start',
+            'priority'                  => 'nullable|in:low,normal,high,urgent',
+            'status'                    => 'nullable|in:pending,assigned,in_progress,arrived,completed,cancelled',
         ]);
 
         if (array_key_exists('customer_email', $data)) {
@@ -86,7 +86,7 @@ class JobOrderController extends Controller
                 ->where('email', $normalizedEmail)
                 ->whereHas('role', fn ($q) => $q->where('name', 'customer'))
                 ->first();
-            $data['customer_email'] = $normalizedEmail;
+            $data['customer_email']   = $normalizedEmail;
             $data['customer_user_id'] = $customerAccount?->id;
         }
 
@@ -94,6 +94,23 @@ class JobOrderController extends Controller
 
         AuditLogger::record($request->user(), 'job_order.updated', JobOrder::class, $jobOrder->id, [], $request);
 
-        return response()->json($jobOrder);
+        return response()->json($jobOrder->fresh()->load('creator', 'assignments.driver.user', 'assignments.vehicle'));
+    }
+
+    public function destroy(Request $request, JobOrder $jobOrder)
+    {
+        // Only allow deleting jobs that aren't actively in progress
+        if (in_array($jobOrder->status, ['in_progress', 'arrived'], true)) {
+            return response()->json(['message' => 'Cannot delete a job that is currently in progress.'], 422);
+        }
+
+        AuditLogger::record($request->user(), 'job_order.deleted', JobOrder::class, $jobOrder->id, [
+            'tracking_code' => $jobOrder->tracking_code,
+            'status'        => $jobOrder->status,
+        ], $request);
+
+        $jobOrder->delete();
+
+        return response()->json(['message' => 'Job order deleted.']);
     }
 }

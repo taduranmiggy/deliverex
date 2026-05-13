@@ -4,10 +4,15 @@ export function fetchManagerDashboard() {
   return apiRequest('/manager/dashboard')
 }
 
-export function fetchAnalytics() {
-  return apiRequest('/manager/analytics')
+export function fetchAnalytics(params = {}) {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
+  ).toString()
+  return apiRequest(`/manager/analytics${qs ? '?' + qs : ''}`)
 }
 
-export function fetchReports(page = 1) {
-  return apiRequest(`/manager/reports?page=${page}`)
+export function fetchReports(page = 1, status = '') {
+  const qs = new URLSearchParams({ page })
+  if (status) qs.set('status', status)
+  return apiRequest(`/manager/reports?${qs.toString()}`)
 }

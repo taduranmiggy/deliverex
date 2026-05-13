@@ -1,247 +1,164 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { sendInquiry } from '../api/customer'
 import DeliverexAssistantChat from '../components/DeliverexAssistantChat'
-import { IconDoc, IconClock, IconRoute } from '../components/DxIcons'
-import './LandingPage.css'
-import trucksBg from '../assets/trucks-bg.jpg'
+import { ArrowRight, CheckCircle2, Clock, Map, MessageSquare, Package, Search, Shield, Truck, X } from 'lucide-react'
 
-export default function LandingPage() {
-  const [assistantOpen, setAssistantOpen] = useState(false)
-  const [trackingCode, setTrackingCode] = useState('')
+function LandingPage() {
   const navigate = useNavigate()
+  const [trackCode, setTrackCode]     = useState('')
+  const [chatOpen, setChatOpen]       = useState(false)
+  const [contactOpen, setContactOpen] = useState(false)
+  const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
+  const [contactSent, setContactSent] = useState(false)
+  const [contactError, setContactError] = useState('')
+  const [sending, setSending]         = useState(false)
 
-  useEffect(() => {
-    document.title = 'Deliverex — Track & verify deliveries'
-    return () => {
-      document.title = 'Deliverex'
-    }
-  }, [])
-
-  const scrollTo = (hash) => {
-    const id = hash.replace('#', '')
-    const el = document.getElementById(id)
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const handleTrack = (e) => {
+    e.preventDefault()
+    if (trackCode.trim()) navigate('/track', { state: { prefillTracking: trackCode.trim() } })
   }
 
-  const openAssistant = () => setAssistantOpen(true)
-
-  const goContact = () => {
-    scrollTo('landing-contact')
-    setAssistantOpen(false)
-  }
-
-  const handleTrackSubmit = (event) => {
-    event.preventDefault()
-    const trimmed = trackingCode.trim()
-    if (!trimmed) return
-    navigate('/track', { state: { prefillTracking: trimmed } })
+  const set = (k) => (e) => setContactForm((f) => ({ ...f, [k]: e.target.value }))
+  const handleContact = async (e) => {
+    e.preventDefault(); setSending(true); setContactError('')
+    try { await sendInquiry(contactForm); setContactSent(true) }
+    catch (err) { setContactError(err.message) }
+    finally { setSending(false) }
   }
 
   return (
-    <>
-      <div className="landing-hero-shell" style={{ backgroundImage: `url(${trucksBg})` }}>
-        <header className="landing-header">
-          <Link to="/" className="landing-brand-link">
-            <div className="brand">Deliverex</div>
-          </Link>
-          <nav>
-            <button
-              type="button"
-              className="nav-link ghost"
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            >
-              Home
-            </button>
-            <button type="button" className="nav-link ghost" onClick={() => scrollTo('landing-contact')}>
-              Contact
-            </button>
-            <Link to="/login" className="nav-link landing-header-login">
-              Login
-            </Link>
-            <Link to="/customer/signup" className="nav-link landing-header-signup">
-              Create account
-            </Link>
-          </nav>
-        </header>
-        <div className="landing-hero-centered">
-          <h1>Track and verify your deliveries with confidence.</h1>
-          <p>Deliverex provides live status, ETA windows, and proof-of-delivery confirmation.</p>
-          <form className="landing-track" onSubmit={handleTrackSubmit} aria-label="Track delivery">
-            <label className="landing-track-label" htmlFor="landing-track-id">
-              Enter Job Order ID
-            </label>
-            <div className="landing-track-row">
-              <input
-                id="landing-track-id"
-                type="text"
-                name="trackingCode"
-                value={trackingCode}
-                onChange={(event) => setTrackingCode(event.target.value)}
-                placeholder="e.g. JO-2026-00421"
-                autoComplete="off"
-              />
-              <button type="submit">Track now</button>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+      {/* Navbar */}
+      <nav style={{ background: 'var(--surface)', borderBottom: '1px solid var(--stroke)', position: 'sticky', top: 0, zIndex: 100, boxShadow: 'var(--shadow-xs)' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 0 }}>
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 'auto', textDecoration: 'none' }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'grid', placeItems: 'center' }}>
+              <Truck size={18} color="#fff" />
             </div>
-            <p className="landing-track-hint">No account needed. Just your Job Order ID.</p>
-            <button
-              type="button"
-              className="landing-track-help"
-              onClick={() => scrollTo('landing-contact')}
-            >
-              Need help finding your Job Order ID?
+            <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text)', letterSpacing: '-0.03em' }}>Deliverex</span>
+          </Link>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Link to="/track" className="btn-dx-secondary btn-sm">Track Delivery</Link>
+            <Link to="/customer" className="btn-dx-secondary btn-sm">Customer Portal</Link>
+            <Link to="/login" className="btn-dx-primary btn-sm">Sign in <ArrowRight size={13} /></Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <section style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 45%, #2563eb 100%)', padding: 'clamp(60px, 10vw, 120px) 24px', textAlign: 'center', color: '#fff' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.1)', borderRadius: 99, padding: '5px 16px', fontSize: '0.8125rem', fontWeight: 600, marginBottom: 24, backdropFilter: 'blur(10px)' }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80' }} />
+            Trusted logistics tracking for construction & site services
+          </div>
+          <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.12, marginBottom: 20, color: '#fff' }}>
+            Track and verify your<br />site deliveries with confidence.
+          </h1>
+          <p style={{ fontSize: 'clamp(1rem, 2vw, 1.2rem)', color: 'rgba(255,255,255,0.75)', maxWidth: 520, margin: '0 auto 40px', lineHeight: 1.65 }}>
+            Deliverex provides live status, ETA windows, and proof-of-delivery confirmation for every shipment.
+          </p>
+
+          <form onSubmit={handleTrack} style={{ display: 'flex', gap: 10, maxWidth: 520, margin: '0 auto 20px', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 240 }}>
+              <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.5)', pointerEvents: 'none' }} />
+              <input value={trackCode} onChange={(e) => setTrackCode(e.target.value)}
+                placeholder="Enter tracking ID…"
+                style={{ width: '100%', padding: '14px 14px 14px 42px', borderRadius: 14, border: '1.5px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '1rem', backdropFilter: 'blur(10px)', outline: 'none' }}
+              />
+            </div>
+            <button type="submit" className="btn-dx-primary" style={{ padding: '14px 28px', borderRadius: 14, background: '#fff', color: '#1e3a8a', border: 'none', fontWeight: 800, fontSize: '1rem' }}>
+              Track Now
             </button>
           </form>
-          <div className="landing-hero-actions">
-            <button type="button" className="primary" onClick={openAssistant}>
-              Open Chat to Track
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8125rem' }}>No account required · Example: XKFP2NQRLA</p>
+
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 28, flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => setChatOpen(true)} className="btn-dx-secondary" style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff' }}>
+              <MessageSquare size={15} /> Open Assistant
             </button>
-            <button type="button" className="secondary" onClick={goContact}>
+            <button type="button" onClick={() => setContactOpen(true)} className="btn-dx-secondary" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.75)' }}>
               Contact Support
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
-      <main className="landing-main">
-        <section id="landing-features" className="landing-features">
-          <div className="landing-inner">
-            <div className="landing-feature-cards">
-              <article className="landing-feature-card">
-                <div className="landing-feature-icon" aria-hidden>
-                  <IconRoute />
-                </div>
-                <h3>Real-Time Status</h3>
-                <p>Live updates from dispatch to delivery completion.</p>
-              </article>
-              <article className="landing-feature-card">
-                <div className="landing-feature-icon landing-feature-clock" aria-hidden>
-                  <IconClock />
-                </div>
-                <h3>ETA Windows</h3>
-                <p>Accurate arrival time estimates for better planning.</p>
-              </article>
-              <article className="landing-feature-card">
-                <div className="landing-feature-icon" aria-hidden>
-                  <IconDoc />
-                </div>
-                <h3>Proof of Delivery</h3>
-                <p>Digital confirmation and documentation for every delivery.</p>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <section className="landing-how-wrap">
-          <div className="landing-inner">
-            <h2 className="landing-how-title">How It Works</h2>
-            <ol className="landing-how-steps">
-              <li>
-                <span className="landing-step-num">1</span>
-                <div>
-                  <strong>Get your Tracking ID from your provider.</strong>
-                  <p>
-                    Your tracking ID is provided by the delivery coordinator or appears on your
-                    delivery documentation.
-                  </p>
-                </div>
-              </li>
-              <li>
-                <span className="landing-step-num">2</span>
-                <div>
-                  <strong>Open the Chat and enter your ID.</strong>
-                  <p>
-                    Click the chat button and follow the prompts to enter your tracking ID for
-                    instant lookup.
-                  </p>
-                </div>
-              </li>
-              <li>
-                <span className="landing-step-num">3</span>
-                <div>
-                  <strong>View status / ETA / PoD and optional details.</strong>
-                  <p>
-                    Get real-time status updates, estimated arrival windows, and proof-of-delivery
-                    information.
-                  </p>
-                </div>
-              </li>
-            </ol>
-          </div>
-        </section>
-
-        <section className="landing-track-section" aria-label="Track a delivery">
-          <div className="landing-inner">
-            <div className="landing-track-panel">
-              <div>
-                <h2>Track a delivery in seconds</h2>
-                <p>Enter your Job Order ID to see live status, ETA, and proof-of-delivery updates.</p>
+      {/* Features */}
+      <section style={{ maxWidth: 1280, margin: '-32px auto 0', padding: '0 24px 80px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20, marginBottom: 48 }}>
+          {[
+            { Icon: Map,          title: 'Real-Time Status',      desc: 'Live updates from dispatch to delivery completion with GPS tracking.' },
+            { Icon: Clock,        title: 'ETA Windows',           desc: 'Accurate arrival estimates and schedule management for better planning.' },
+            { Icon: Package,      title: 'Proof of Delivery',     desc: 'Digital confirmation and documents for every delivery, with OCR processing.' },
+            { Icon: Shield,       title: 'Secure & Reliable',     desc: 'Role-based access ensures the right people see the right information.' },
+            { Icon: CheckCircle2, title: 'Best-Fit Assignment',   desc: 'AI-powered vehicle and driver assignment for optimal fleet utilization.' },
+            { Icon: Truck,        title: 'Fleet Management',      desc: 'Complete fleet visibility for dispatchers, managers, and administrators.' },
+          ].map(({ Icon, title, desc }) => (
+            <div key={title} className="card" style={{ background: 'var(--surface)' }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--color-primary-light)', display: 'grid', placeItems: 'center', marginBottom: 16 }}>
+                <Icon size={24} style={{ color: 'var(--color-primary)' }} />
               </div>
-              <form className="landing-track" onSubmit={handleTrackSubmit}>
-                <label className="landing-track-label" htmlFor="landing-track-id-inline">
-                  Job Order ID
-                </label>
-                <div className="landing-track-row">
-                  <input
-                    id="landing-track-id-inline"
-                    type="text"
-                    name="trackingCode"
-                    value={trackingCode}
-                    onChange={(event) => setTrackingCode(event.target.value)}
-                    placeholder="e.g. JO-2026-00421"
-                    autoComplete="off"
-                  />
-                  <button type="submit">Track now</button>
-                </div>
-                <p className="landing-track-hint">No account needed. Just your Job Order ID.</p>
-                <button
-                  type="button"
-                  className="landing-track-help"
-                  onClick={() => scrollTo('landing-contact')}
-                >
-                  Need help finding your Job Order ID?
-                </button>
-              </form>
+              <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 8 }}>{title}</p>
+              <p style={{ color: 'var(--muted)', fontSize: '0.875rem', lineHeight: 1.6 }}>{desc}</p>
             </div>
-          </div>
-        </section>
-      </main>
+          ))}
+        </div>
 
-      <DeliverexAssistantChat open={assistantOpen} onOpenChange={setAssistantOpen} />
-
-      <footer id="landing-contact" className="landing-footer">
-        <div className="landing-footer-inner">
-          <div>
-            <h4 className="landing-footer-heading">Contact</h4>
-            <p>
-              <a href="mailto:support@deliverex.ph">support@deliverex.ph</a>
-            </p>
-            <p>
-              <a href="tel:+639171234567">(+63) 917-123-4567</a>
-            </p>
-          </div>
-          <div>
-            <h4 className="landing-footer-heading">Legal</h4>
-            <p>
-              <button type="button" className="landing-footer-btn" onClick={() => alert('Privacy policy placeholder')}>
-                Privacy Policy
-              </button>
-            </p>
-            <p>
-              <button type="button" className="landing-footer-btn" onClick={() => alert('Terms of service placeholder')}>
-                Terms of Service
-              </button>
-            </p>
-          </div>
-          <div>
-            <h4 className="landing-footer-heading">About</h4>
-            <p className="landing-footer-about">
-              Deliverex Logistics – Providential B2B Site Preparation Services.
-            </p>
+        {/* CTA */}
+        <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', borderRadius: 24, padding: '60px 24px', border: '1px solid var(--blue-200)' }}>
+          <h2 style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)', fontWeight: 900, letterSpacing: '-0.03em', marginBottom: 12 }}>Ready to manage your logistics?</h2>
+          <p style={{ color: 'var(--muted)', fontSize: '1.0625rem', maxWidth: 480, margin: '0 auto 32px', lineHeight: 1.6 }}>Sign in to your role dashboard or create a customer account to start tracking deliveries.</p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link to="/login" className="btn-dx-primary btn-lg">Staff Login <ArrowRight size={16} /></Link>
+            <Link to="/customer/signup" className="btn-dx-secondary btn-lg">Create Customer Account</Link>
+            <Link to="/driver/login" className="btn-dx-secondary btn-lg">Driver Login</Link>
           </div>
         </div>
-        <div className="landing-footer-rule" />
-        <p className="landing-footer-copy">© 2026 Deliverex. All rights reserved.</p>
+      </section>
+
+      {/* Footer */}
+      <footer style={{ background: 'var(--slate-800)', color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '24px', fontSize: '0.8125rem' }}>
+        Deliverex Logistics · Providential 628 Site Preparation Services
       </footer>
-    </>
+
+      {/* Contact modal */}
+      {contactOpen && (
+        <div className="dx-modal-backdrop" onClick={() => setContactOpen(false)}>
+          <div className="dx-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="dx-modal-header">
+              <h2>Contact Support</h2>
+              <button type="button" className="dx-modal-close" onClick={() => setContactOpen(false)}><X size={18} /></button>
+            </div>
+            <div style={{ padding: '20px 28px 28px' }}>
+              {contactSent ? (
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                  <CheckCircle2 size={40} style={{ color: 'var(--color-success)', margin: '0 auto 16px' }} />
+                  <p style={{ fontWeight: 700, fontSize: '1.0625rem', marginBottom: 8 }}>Message sent!</p>
+                  <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginBottom: 20 }}>Our team will follow up shortly.</p>
+                  <button type="button" className="btn-dx-primary" onClick={() => { setContactOpen(false); setContactSent(false) }}>Close</button>
+                </div>
+              ) : (
+                <form className="form-grid" style={{ gridTemplateColumns: '1fr' }} onSubmit={handleContact}>
+                  <label>Name <input required value={contactForm.name} onChange={set('name')} placeholder="Your full name" /></label>
+                  <label>Email <input required type="email" value={contactForm.email} onChange={set('email')} placeholder="you@example.com" /></label>
+                  <label>Message <textarea required rows={4} value={contactForm.message} onChange={set('message')} placeholder="How can we help?" /></label>
+                  {contactError && <p className="notice error" style={{ margin: 0 }}>{contactError}</p>}
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button type="submit" className="btn-dx-primary" disabled={sending}>{sending ? 'Sending…' : 'Send message'}</button>
+                    <button type="button" className="btn-dx-secondary" onClick={() => setContactOpen(false)}>Cancel</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DeliverexAssistantChat open={chatOpen} onOpenChange={setChatOpen} />
+    </div>
   )
 }
+
+export default LandingPage

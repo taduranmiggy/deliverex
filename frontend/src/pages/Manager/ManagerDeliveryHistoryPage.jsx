@@ -1,131 +1,73 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { fetchReports } from '../../api/manager'
-import { formatDemoPhp, formatJobPublicId } from '../../utils/formatPhp'
-import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
+import { DataTable, EmptyState, FilterSelect, PageHeader, SectionCard, StatusBadge } from '../../components/ui'
+import { History } from 'lucide-react'
 
 function ManagerDeliveryHistoryPage() {
   const [history, setHistory] = useState([])
-  const [error, setError] = useState('')
+  const [error, setError]     = useState('')
+  const [loading, setLoading] = useState(false)
+  const [page, setPage]       = useState(1)
+  const [meta, setMeta]       = useState({ last_page: 1, total: 0 })
+  const [status, setStatus]   = useState('')
 
-  useEffect(() => {
-    const loadHistory = async () => {
-      try {
-        const response = await fetchReports(1)
-        setHistory(response.data || [])
-      } catch (err) {
-        setError(err.message)
-      }
-    }
-
-    loadHistory()
+  const load = useCallback(async (p = 1, s = '') => {
+    setLoading(true); setError('')
+    try {
+      const res = await fetchReports(p, s)
+      setHistory(res.data || [])
+      setMeta({ last_page: res.last_page ?? 1, total: res.total ?? 0 })
+    } catch (err) { setError(err.message) }
+    finally { setLoading(false) }
   }, [])
 
-  const rendered = history.length ? history : null
+  useEffect(() => { load(page, status) }, [page]) // eslint-disable-line
 
   return (
-    <section>
-      <header className="page-header">
-        <div className="header-stack">
-          <h1>Delivery History</h1>
-          <p>Complete history of all deliveries</p>
-        </div>
-      </header>
+    <>
+      <PageHeader title="Delivery History" subtitle={`Complete history of all deliveries${meta.total > 0 ? ` · ${meta.total} records` : ''}`} />
       {error && <p className="notice error">{error}</p>}
-      <div className="dx-panel" style={{ padding: 0 }}>
-        <div className="dx-data-table-wrap">
-          <table className="dx-data-table">
-            <thead>
-              <tr>
-                <th>Job ID</th>
-                <th>Client</th>
-                <th>Driver</th>
-                <th>Vehicle</th>
-                <th>Status</th>
-                <th>Completed</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rendered && rendered.map((item) => {
-                const jid = item.job_order_id ?? item.job_order?.id
-                const done = ['completed'].includes(String(item.status || '').toLowerCase())
-                return (
-                  <tr key={item.id}>
-                    <td>{jid ? formatJobPublicId(jid, 2024) : formatJobPublicId(item.id, 2024)}</td>
-                    <td>{item.job_order?.customer_name ?? '—'}</td>
-                    <td>{item.driver?.user?.name ?? '—'}</td>
-                    <td>{item.vehicle?.plate_no ?? '—'}</td>
-                    <td>
-                      <span className={jobStatusBadgeClass(item.status)}>
-                        {formatJobStatus(item.status)}
-                      </span>
-                    </td>
-                    <td>
-                      {done && item.updated_at
-                        ? new Date(item.updated_at).toLocaleString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })
-                        : '—'}
-                    </td>
-                    <td>{formatDemoPhp(jid ?? item.id)}</td>
-                  </tr>
-                )
-              })}
-              {!rendered && MOCK_ROWS.map((row) => (
-                <tr key={row.jobId}>
-                  <td>{row.jobId}</td>
-                  <td>{row.client}</td>
-                  <td>{row.driver}</td>
-                  <td>{row.vehicle}</td>
-                  <td>
-                    <span className={jobStatusBadgeClass(row.statusSlug)}>{row.statusLabel}</span>
-                  </td>
-                  <td>{row.completed}</td>
-                  <td>{row.amount}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+      <div className="dx-panel">
+        <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <FilterSelect value={status} onChange={(v) => { setStatus(v); setPage(1); load(1, v) }} label="Status" options={[
+            { value: '', label: 'All statuses' }, { value: 'completed', label: 'Completed' },
+            { value: 'in_progress', label: 'In Progress' }, { value: 'assigned', label: 'Assigned' }, { value: 'cancelled', label: 'Cancelled' },
+          ]} />
         </div>
+
+        <DataTable
+          headers={['Assignment', 'Client', 'Driver', 'Vehicle', 'Status', 'Assigned', 'Completed']}
+          loading={loading}
+          empty={<EmptyState icon={History} title="No deliveries found" message="Try adjusting the status filter." />}
+        >
+          {history.length > 0 && history.map((item) => (
+            <tr key={item.id}>
+              <td style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8125rem', color: 'var(--muted)' }}>#{item.id}</td>
+              <td style={{ fontWeight: 600 }}>{item.job_order?.customer_name ?? '—'}</td>
+              <td>{item.driver?.user?.name ?? '—'}</td>
+              <td style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{item.vehicle?.plate_no ?? '—'}</td>
+              <td><StatusBadge status={item.status} /></td>
+              <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+                {item.assigned_at ? new Date(item.assigned_at).toLocaleDateString() : '—'}
+              </td>
+              <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+                {item.completed_at ? new Date(item.completed_at).toLocaleDateString() : '—'}
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+
+        {meta.last_page > 1 && (
+          <div className="dx-pagination">
+            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
+            <span>Page {page} / {meta.last_page}</span>
+            <button disabled={page >= meta.last_page} onClick={() => setPage((p) => p + 1)}>Next</button>
+          </div>
+        )}
       </div>
-    </section>
+    </>
   )
 }
-
-const MOCK_ROWS = [
-  {
-    jobId: 'J-2024-001',
-    client: 'Maria Santos',
-    driver: 'Juan Dela Cruz',
-    vehicle: 'ABC-1234',
-    statusSlug: 'in_progress',
-    statusLabel: 'En Route',
-    completed: '—',
-    amount: '₱12,450.00',
-  },
-  {
-    jobId: 'J-2024-002',
-    client: 'Jose Ramirez',
-    driver: '—',
-    vehicle: '—',
-    statusSlug: 'pending',
-    statusLabel: 'Pending',
-    completed: '—',
-    amount: '₱8,500.00',
-  },
-  {
-    jobId: 'J-2024-003',
-    client: 'Ana Gomez',
-    driver: 'Miguel Reyes',
-    vehicle: 'XYZ-5678',
-    statusSlug: 'completed',
-    statusLabel: 'Completed',
-    completed: 'Feb 20, 10:45 AM',
-    amount: '₱21,750.00',
-  },
-]
 
 export default ManagerDeliveryHistoryPage

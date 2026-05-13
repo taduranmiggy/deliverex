@@ -1,47 +1,124 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { fetchDriverAssignment } from '../../api/driver'
+import { StatusBadge } from '../../components/ui'
+import { ArrowLeft, Calendar, Car, ClipboardList, FileUp, MapPin } from 'lucide-react'
 
 function DriverJobDetailsPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const [assignment, setAssignment] = useState(null)
-  const [error, setError] = useState('')
+  const [error, setError]           = useState('')
 
   useEffect(() => {
-    const loadAssignment = async () => {
-      try {
-        const response = await fetchDriverAssignment(id)
-        setAssignment(response)
-      } catch (err) {
-        setError(err.message)
-      }
-    }
-
-    if (id) {
-      loadAssignment()
-    }
+    if (!id) return
+    fetchDriverAssignment(id)
+      .then((res) => setAssignment(res))
+      .catch((err) => setError(err.message))
   }, [id])
 
+  const job = assignment?.job_order
+  const logs = [...(assignment?.delivery_status_logs ?? [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+  const isActive = assignment && !['completed', 'cancelled'].includes(assignment.status)
+
   return (
-    <section className="page">
-      <header className="page-header">
+    <section className="driver-page">
+      <button type="button" className="driver-back-btn" onClick={() => navigate('/driver')}>
+        <ArrowLeft size={16} /> Back to jobs
+      </button>
+
+      <div className="driver-page-header">
         <h1>Job Details</h1>
-        <p>Review delivery instructions, ETA, and status timeline.</p>
-        {error && <p className="error">{error}</p>}
-      </header>
-      <div className="card">
-        <h3>Job Overview</h3>
-        {assignment ? (
-          <div className="stack">
-            <p><strong>Assignment:</strong> {assignment.id}</p>
-            <p><strong>Status:</strong> {assignment.status}</p>
-            <p><strong>Pickup:</strong> {assignment.job_order?.pickup_location}</p>
-            <p><strong>Drop-off:</strong> {assignment.job_order?.dropoff_location}</p>
-          </div>
-        ) : (
-          <p>Loading assignment details...</p>
-        )}
+        {assignment && <StatusBadge status={assignment.status} />}
       </div>
+
+      {error && <p className="driver-error">{error}</p>}
+      {!assignment && !error && (
+        <div className="driver-card" style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px' }}>
+          Loading…
+        </div>
+      )}
+
+      {assignment && (
+        <>
+          {/* Route card */}
+          <div className="driver-card">
+            <p className="driver-card-title"><MapPin size={12} style={{ display: 'inline', marginRight: 4 }} /> Route</p>
+            <div className="driver-kv"><span>Pickup</span><strong>{job?.pickup_location ?? '—'}</strong></div>
+            <div className="driver-kv"><span>Drop-off</span><strong>{job?.dropoff_location ?? '—'}</strong></div>
+            {job?.scheduled_start && (
+              <div className="driver-kv">
+                <span><Calendar size={12} style={{ display: 'inline', marginRight: 4 }} />Schedule</span>
+                <strong style={{ fontSize: '0.875rem' }}>
+                  {new Date(job.scheduled_start).toLocaleString()}
+                  {job.scheduled_end ? ` → ${new Date(job.scheduled_end).toLocaleString()}` : ''}
+                </strong>
+              </div>
+            )}
+            <div className="driver-kv">
+              <span>Priority</span>
+              <strong style={{ textTransform: 'capitalize' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 99, fontSize: '0.8125rem', background: job?.priority === 'urgent' ? 'var(--color-error-light)' : job?.priority === 'high' ? 'var(--color-warning-light)' : 'var(--slate-100)', color: job?.priority === 'urgent' ? 'var(--color-error)' : job?.priority === 'high' ? 'var(--color-warning)' : 'var(--muted)' }}>
+                  {job?.priority ?? '—'}
+                </span>
+              </strong>
+            </div>
+          </div>
+
+          {/* Vehicle */}
+          {assignment.vehicle && (
+            <div className="driver-card">
+              <p className="driver-card-title"><Car size={12} style={{ display: 'inline', marginRight: 4 }} /> Vehicle</p>
+              <div className="driver-kv"><span>Plate</span><strong style={{ fontFamily: 'monospace' }}>{assignment.vehicle.plate_no}</strong></div>
+              <div className="driver-kv"><span>Type</span><strong>{assignment.vehicle.type}</strong></div>
+              {assignment.vehicle.capacity && <div className="driver-kv"><span>Capacity</span><strong>{assignment.vehicle.capacity}</strong></div>}
+            </div>
+          )}
+
+          {/* Special instructions */}
+          {job?.job_requirements && (
+            <div className="driver-card">
+              <p className="driver-card-title"><ClipboardList size={12} style={{ display: 'inline', marginRight: 4 }} /> Special Instructions</p>
+              <p className="driver-requirements">{job.job_requirements}</p>
+            </div>
+          )}
+
+          {/* Timeline */}
+          {logs.length > 0 && (
+            <div className="driver-card">
+              <p className="driver-card-title">Delivery Timeline</p>
+              <ol className="driver-timeline">
+                {logs.map((log, i) => (
+                  <li key={i} className="driver-timeline-item">
+                    <div className="driver-timeline-dot" style={{ background: log.status === 'completed' ? 'var(--color-success)' : 'var(--color-primary)' }} />
+                    <div>
+                      <StatusBadge status={log.status} />
+                      {log.notes && <span className="driver-timeline-note">{log.notes}</span>}
+                      <div className="driver-timeline-time">{log.created_at ? new Date(log.created_at).toLocaleString() : '—'}</div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {/* Actions */}
+          {isActive && (
+            <div className="driver-sticky-actions">
+              <button type="button" className="driver-btn-primary"
+                style={{ background: 'var(--color-primary)', color: '#fff', borderColor: 'var(--color-primary)', flex: 1 }}
+                onClick={() => navigate('/driver/status-update', { state: { assignmentId: assignment.id } })}>
+                Update Status
+              </button>
+              <button type="button" className="driver-btn-secondary"
+                style={{ background: 'var(--surface)', color: 'var(--slate-700)', border: '1.5px solid var(--stroke)', flex: 1, justifyContent: 'center' }}
+                onClick={() => navigate('/driver/documents', { state: { assignmentId: assignment.id } })}>
+                <FileUp size={16} /> Upload Docs
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </section>
   )
 }

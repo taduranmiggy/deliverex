@@ -11,6 +11,7 @@ import CreateJobOrderPage from '../pages/Dispatcher/CreateJobOrderPage'
 import AssignDriverVehiclePage from '../pages/Dispatcher/AssignDriverVehiclePage'
 import DeliveryMonitoringPage from '../pages/Dispatcher/DeliveryMonitoringPage'
 import DispatcherNotificationsPage from '../pages/Dispatcher/DispatcherNotificationsPage'
+import InquiriesPage from '../pages/Dispatcher/InquiriesPage'
 import DriverDashboard from '../pages/Driver/DriverDashboard'
 import DriverJobDetailsPage from '../pages/Driver/DriverJobDetailsPage'
 import DeliveryStatusUpdatePage from '../pages/Driver/DeliveryStatusUpdatePage'
@@ -39,6 +40,7 @@ export const roleRoutes = {
   dispatcher: [
     <Route key="dispatcher-home" index element={<DispatcherDashboard />} />,
     <Route key="dispatcher-job" path="job-orders" element={<CreateJobOrderPage />} />,
+    <Route key="dispatcher-inquiries" path="inquiries" element={<InquiriesPage />} />,
     <Route key="dispatcher-assign" path="dispatch-best-fit" element={<AssignDriverVehiclePage />} />,
     <Route key="dispatcher-monitor" path="live-tracking" element={<DeliveryMonitoringPage />} />,
     <Route key="dispatcher-notifs" path="notifications" element={<DispatcherNotificationsPage />} />,

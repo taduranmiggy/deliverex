@@ -1,126 +1,101 @@
 import { useEffect, useState } from 'react'
-import { fetchDrivers, fetchOcrQueue, fetchUsers, fetchVehicles } from '../../api/admin'
-import { IconAlertCircleOutline, IconClock, IconDocOutline } from '../../components/DxIcons'
+import { fetchAuditLogs, fetchDrivers, fetchOcrQueue, fetchUsers, fetchVehicles } from '../../api/admin'
+import { EmptyState, PageHeader, SectionCard, StatCard } from '../../components/ui'
+import { Car, Code, FileSearch, Users } from 'lucide-react'
 
 function AdminDashboard() {
-  const [summary, setSummary] = useState({ users: 0, drivers: 0, vehicles: 0, ocr: 0 })
-  const [error, setError] = useState('')
+  const [summary, setSummary]   = useState({ users: 0, drivers: 0, vehicles: 0, ocr: 0 })
+  const [activity, setActivity] = useState([])
+  const [error, setError]       = useState('')
 
   useEffect(() => {
-    const loadSummary = async () => {
+    const load = async () => {
       try {
-        const [users, drivers, vehicles, ocr] = await Promise.all([
+        const [users, drivers, vehicles, ocr, logs] = await Promise.all([
           fetchUsers(1),
           fetchDrivers(1),
           fetchVehicles(1),
-          fetchOcrQueue(1),
+          fetchOcrQueue(1, 'waiting'),
+          fetchAuditLogs({ per_page: 8 }).catch(() => ({ data: [] })),
         ])
         setSummary({
-          users: users.total ?? users.data?.length ?? 0,
-          drivers: drivers.total ?? drivers.data?.length ?? 0,
+          users:    users.total    ?? users.data?.length    ?? 0,
+          drivers:  drivers.total  ?? drivers.data?.length  ?? 0,
           vehicles: vehicles.total ?? vehicles.data?.length ?? 0,
-          ocr: ocr.total ?? ocr.data?.length ?? 0,
+          ocr:      ocr.total      ?? ocr.data?.length      ?? 0,
         })
-      } catch (err) {
-        setError(err.message)
-      }
+        setActivity(logs.data || [])
+      } catch (err) { setError(err.message) }
     }
-
-    loadSummary()
+    load()
   }, [])
 
-  const bars = [
-    { h: '28%', label: 'Mon' },
-    { h: '40%', label: 'Tue' },
-    { h: '35%', label: 'Wed' },
-    { h: '68%', label: 'Thu' },
-    { h: '45%', label: 'Fri' },
-  ]
+  const MODULE_COLORS = {
+    'Auth': 'var(--color-info)', 'Job Orders': 'var(--color-primary)',
+    'Dispatch': 'var(--color-warning)', 'OCR Validation': 'var(--color-purple)',
+    'Delivery': 'var(--color-success)', 'Inquiries': 'var(--color-orange)',
+  }
 
   return (
-    <section>
-      <header className="page-header">
-        <div className="header-stack">
-          <h1>Admin Dashboard</h1>
-          <p>OCR validation and system overview</p>
-        </div>
-      </header>
+    <>
+      <PageHeader title="Admin Dashboard" subtitle="OCR validation and system overview" />
       {error && <p className="notice error">{error}</p>}
 
       <div className="dx-stat-row">
-        <div className="dx-stat-card">
-          <div className="dx-stat-card__icon" aria-hidden="true">
-            <IconDocOutline />
-          </div>
-          <div className="dx-stat-card__meta">
-            <div className="dx-stat-card__label">Docs Awaiting Validation</div>
-            <div className="dx-stat-card__value">{summary.ocr}</div>
-          </div>
-        </div>
-        <div className="dx-stat-card">
-          <div className="dx-stat-card__icon" aria-hidden="true">
-            <IconClock />
-          </div>
-          <div className="dx-stat-card__meta">
-            <div className="dx-stat-card__label">Avg Validation Time</div>
-            <div className="dx-stat-card__value">2.5 min</div>
-          </div>
-        </div>
-        <div className="dx-stat-card">
-          <div className="dx-stat-card__icon" aria-hidden="true">
-            <IconAlertCircleOutline />
-          </div>
-          <div className="dx-stat-card__meta">
-            <div className="dx-stat-card__label">Rejected Today</div>
-            <div className="dx-stat-card__value">3</div>
-          </div>
-        </div>
+        <StatCard label="Docs Awaiting Review" value={summary.ocr}   icon={FileSearch} iconVariant={summary.ocr > 0 ? 'yellow' : 'green'} />
+        <StatCard label="Total Users"          value={summary.users}    icon={Users}      iconVariant="default" />
+        <StatCard label="Active Drivers"       value={summary.drivers}  icon={Users}      iconVariant="green" />
+        <StatCard label="Fleet Vehicles"       value={summary.vehicles} icon={Car}        iconVariant="purple" />
       </div>
 
-      <div className="dx-panel">
-        <h2 className="dx-panel-title">Documents per Day</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ flex: 1 }}>
-            <div className="dx-bar-chart">
-              {bars.map((b) => (
-                <div
-                  key={b.label}
-                  className="dx-bar"
-                  style={{ height: b.h }}
-                  title={`${b.label}`}
-                  role="presentation"
-                />
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 8, padding: '8px 20px 0' }}>
-              {bars.map((b) => (
-                <span key={`l-${b.label}`} className="dx-bar-label">
-                  {b.label}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20, alignItems: 'flex-start' }}>
+        <SectionCard title="Recent System Activity">
+          {activity.length === 0 ? (
+            <EmptyState icon={Code} title="No activity recorded" message="Audit entries will appear here as actions are taken." />
+          ) : (
+            activity.map((log) => (
+              <div key={log.id} className="dx-activity-item">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: MODULE_COLORS[log.module] ?? 'var(--muted)', flexShrink: 0 }} />
+                  <div>
+                    <p style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: 2 }}>
+                      {log.action.replace(/\./g, ' › ')}
+                    </p>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                      {log.details}
+                    </p>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <p className="dx-activity-time">{log.user ?? 'System'}</p>
+                  <p className="dx-activity-time">{log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}</p>
+                </div>
+              </div>
+            ))
+          )}
+        </SectionCard>
 
-      <div className="dx-panel">
-        <h2 className="dx-panel-title">Recent Activity</h2>
-        <div className="dx-panel" style={{ padding: 0, boxShadow: 'none', border: 'none' }}>
-          <div className="dx-activity-item">
-            <span>OCR document validated</span>
-            <span className="dx-activity-time">Maria Santos · 5 mins ago</span>
-          </div>
-          <div className="dx-activity-item">
-            <span>New user created</span>
-            <span className="dx-activity-time">Maria Santos · 1 hour ago</span>
-          </div>
-          <div className="dx-activity-item">
-            <span>Vehicle maintenance updated</span>
-            <span className="dx-activity-time">Maria Santos · 2 hours ago</span>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <SectionCard title="Quick Navigation">
+            {[
+              { label: 'OCR Validation Queue', to: '/admin/ocr-validation', count: summary.ocr, urgent: summary.ocr > 0 },
+              { label: 'User Management', to: '/admin/users', count: summary.users },
+              { label: 'Master Data', to: '/admin/master-data', count: null },
+              { label: 'Audit Logs', to: '/admin/audit-logs', count: null },
+            ].map(({ label, to, count, urgent }) => (
+              <a key={to} href={to} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--stroke)', color: 'var(--text)', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500 }}>
+                <span>{label}</span>
+                {count != null && (
+                  <span style={{ padding: '2px 8px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 700, background: urgent ? 'var(--color-warning-light)' : 'var(--slate-100)', color: urgent ? 'var(--color-warning)' : 'var(--muted)' }}>
+                    {count}
+                  </span>
+                )}
+              </a>
+            ))}
+          </SectionCard>
         </div>
       </div>
-    </section>
+    </>
   )
 }
 

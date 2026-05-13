@@ -45,7 +45,7 @@ function DriverLoginPage() {
   return (
     <section className="driver-login-page">
       <div className="driver-login-card">
-        <Link to="/" className="driver-back-home">
+        <Link to="/customer" className="driver-back-home">
           <IconChevronLeft />
           Back to home
         </Link>

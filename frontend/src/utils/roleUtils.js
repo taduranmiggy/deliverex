@@ -11,6 +11,6 @@ export function roleHome(role) {
     case 'customer':
       return '/customer'
     default:
-      return '/'
+      return '/customer'
   }
 }

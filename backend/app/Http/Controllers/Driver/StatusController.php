@@ -22,14 +22,14 @@ class StatusController extends Controller
     {
         $data = $request->validate([
             'assignment_id' => 'required|exists:dispatch_assignments,id',
-            'status' => 'required|string|max:80',
-            'notes' => 'nullable|string',
-            'latitude' => 'nullable|numeric',
-            'longitude' => 'nullable|numeric',
+            'status'        => 'required|string|max:80',
+            'notes'         => 'nullable|string',
+            'latitude'      => 'nullable|numeric',
+            'longitude'     => 'nullable|numeric',
         ]);
 
         $assignment = DispatchAssignment::findOrFail($data['assignment_id']);
-        $driverId = $request->user()?->driver?->id;
+        $driverId   = $request->user()?->driver?->id;
 
         if ($assignment->driver_id !== $driverId) {
             return response()->json(['message' => 'Forbidden'], 403);
@@ -40,11 +40,18 @@ class StatusController extends Controller
             return response()->json(['message' => 'Invalid status stage'], 422);
         }
 
+        // Prevent backwards transitions
+        if (! $this->isValidTransition($assignment->status, $status)) {
+            return response()->json([
+                'message' => "Cannot transition from '{$assignment->status}' to '{$status}'.",
+            ], 422);
+        }
+
         DeliveryStatusLog::create([
             'assignment_id' => $assignment->id,
-            'status' => $status,
-            'notes' => $data['notes'] ?? null,
-            'created_at' => now(),
+            'status'        => $status,
+            'notes'         => $data['notes'] ?? null,
+            'created_at'    => now(),
         ]);
 
         $assignment->update(['status' => $status]);
@@ -53,9 +60,9 @@ class StatusController extends Controller
         if ($data['latitude'] !== null && $data['longitude'] !== null) {
             TrackingLog::create([
                 'assignment_id' => $assignment->id,
-                'latitude' => $data['latitude'],
-                'longitude' => $data['longitude'],
-                'captured_at' => now(),
+                'latitude'      => $data['latitude'],
+                'longitude'     => $data['longitude'],
+                'captured_at'   => now(),
             ]);
         }
 
@@ -63,14 +70,19 @@ class StatusController extends Controller
             $assignment->update(['started_at' => now()]);
         }
 
+        // Propagate arrived to job order
+        if ($status === 'arrived') {
+            $assignment->jobOrder?->update(['status' => 'arrived']);
+        }
+
         if (in_array($status, ['completed', 'cancelled'], true)) {
             if ($status === 'completed') {
                 $assignment->update(['completed_at' => now()]);
             }
-            $driver = Driver::find($assignment->driver_id);
+            $driver  = Driver::find($assignment->driver_id);
             $vehicle = Vehicle::find($assignment->vehicle_id);
             $driver?->update([
-                'availability' => 'available',
+                'availability'          => 'available',
                 'current_assignment_id' => null,
             ]);
             $vehicle?->update(['status' => 'available']);
@@ -87,32 +99,51 @@ class StatusController extends Controller
             $this->notificationDispatcher->notifyUser(
                 $assignment->assignedBy,
                 'Delivery delay alert',
-                'Job '.$code.' is past its scheduled window. Please review.'
+                'Job ' . $code . ' is past its scheduled window. Please review.'
             );
             AuditLogger::record($request->user(), 'delivery.delay_alert', DispatchAssignment::class, $assignment->id, [
                 'job_order_id' => $assignment->job_order_id,
-                'status' => $status,
+                'status'       => $status,
             ], $request);
         }
 
-        return response()->json(['message' => 'Status updated']);
+        return response()->json(['message' => 'Status updated', 'status' => $status]);
     }
 
     private function normalizeStatus(string $status): ?string
     {
         $value = strtolower(trim($status));
-        $map = [
-            'assigned' => 'assigned',
-            'en_route' => 'in_progress',
-            'en route' => 'in_progress',
+        $map   = [
+            'assigned'    => 'assigned',
+            'dispatched'  => 'assigned',
+            'en_route'    => 'in_progress',
+            'en route'    => 'in_progress',
             'in_progress' => 'in_progress',
-            'arrived' => 'arrived',
-            'delivered' => 'completed',
-            'completed' => 'completed',
-            'cancelled' => 'cancelled',
+            'arrived'     => 'arrived',
+            'delivered'   => 'completed',
+            'completed'   => 'completed',
+            'cancelled'   => 'cancelled',
         ];
 
         return $map[$value] ?? null;
+    }
+
+    /** Prevent nonsensical backward transitions. */
+    private function isValidTransition(string $current, string $next): bool
+    {
+        $order = [
+            'assigned'   => 1,
+            'in_progress'=> 2,
+            'arrived'    => 3,
+            'completed'  => 4,
+            'cancelled'  => 4,
+        ];
+
+        $currentRank = $order[$current] ?? 0;
+        $nextRank    = $order[$next]    ?? 0;
+
+        // Allow re-sending the same status (idempotent), or advancing forward, or cancelling at any stage.
+        return $next === 'cancelled' || $nextRank >= $currentRank;
     }
 
     private function isDelay(DispatchAssignment $assignment): bool

@@ -2,13 +2,27 @@ import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { IconLogout } from './DxIcons'
 
-function LogoutButton() {
+function LogoutButton({ compact = false }) {
   const { logout } = useAuth()
   const navigate = useNavigate()
 
   const handleLogout = async () => {
     await logout()
     navigate('/login', { replace: true })
+  }
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        className="driver-nav-logout-btn"
+        onClick={handleLogout}
+        aria-label="Log out"
+        title="Log out"
+      >
+        <IconLogout />
+      </button>
+    )
   }
 
   return (
