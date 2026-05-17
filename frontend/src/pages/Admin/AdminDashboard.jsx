@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { fetchAuditLogs, fetchDrivers, fetchOcrQueue, fetchUsers, fetchVehicles } from '../../api/admin'
 import { EmptyState, PageHeader, SectionCard, StatCard } from '../../components/ui'
 import { Car, Code, FileSearch, Users } from 'lucide-react'
@@ -82,15 +83,17 @@ function AdminDashboard() {
               { label: 'User Management', to: '/admin/users', count: summary.users },
               { label: 'Master Data', to: '/admin/master-data', count: null },
               { label: 'Audit Logs', to: '/admin/audit-logs', count: null },
+              { label: 'Chatbot Management', to: '/admin/chatbot', count: null },
+              { label: 'Notifications', to: '/admin/notifications', count: null },
             ].map(({ label, to, count, urgent }) => (
-              <a key={to} href={to} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--stroke)', color: 'var(--text)', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500 }}>
+              <Link key={to} to={to} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--stroke)', color: 'var(--text)', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500 }}>
                 <span>{label}</span>
                 {count != null && (
                   <span style={{ padding: '2px 8px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 700, background: urgent ? 'var(--color-warning-light)' : 'var(--slate-100)', color: urgent ? 'var(--color-warning)' : 'var(--muted)' }}>
                     {count}
                   </span>
                 )}
-              </a>
+              </Link>
             ))}
           </SectionCard>
         </div>

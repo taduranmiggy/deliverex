@@ -101,7 +101,7 @@ function DriverLoginPage() {
           <button
             type="button"
             className="driver-forgot"
-            onClick={() => alert('Password recovery is not wired yet.')}
+            onClick={() => alert('Contact your dispatcher or admin to reset your password.')}
           >
             Forgot Password?
           </button>
@@ -118,7 +118,7 @@ function DriverLoginPage() {
           <div className="driver-demo-line">
             Email: driver@deliverex.ph
             <br />
-            Password: password
+            Password: driver123
           </div>
         </div>
 

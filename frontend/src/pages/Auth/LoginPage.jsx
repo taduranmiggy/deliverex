@@ -280,13 +280,13 @@ function LoginPage() {
 
             <div className="auth-demo-dx auth-demo-split">
               <strong>Demo credentials:</strong>
-              <div>Dispatcher: dispatcher@deliverex.com / dispatcher123</div>
               <div>Admin: admin@deliverex.com / admin123</div>
+              <div>Dispatcher: dispatcher@deliverex.com / dispatcher123</div>
               <div>Manager: manager@deliverex.com / manager123</div>
               <div>Customer: customer@deliverex.com / customer123</div>
               <div className="auth-demo-driver">
                 <Link to="/driver/login" className="auth-driver-login-link">
-                  Driver mobile login
+                  Driver login (driver@deliverex.ph / driver123)
                   <IconChevronRight />
                 </Link>
               </div>

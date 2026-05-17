@@ -14,7 +14,7 @@ function CustomerHomePage() {
   const [chatOpen, setChatOpen] = useState(false)
   const [trackCode, setTrackCode] = useState('')
   const [contactOpen, setContactOpen] = useState(false)
-  const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
+  const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', pickup_location: '', dropoff_location: '', message: '' })
   const [contactSent, setContactSent] = useState(false)
   const [contactError, setContactError] = useState('')
   const [sending, setSending] = useState(false)
@@ -173,13 +173,16 @@ function CustomerHomePage() {
                     <button type="button" className="btn-dx-primary" style={{ marginTop: 20 }} onClick={() => { setContactOpen(false); setContactSent(false) }}>Close</button>
                   </div>
                 ) : (
-                  <form className="form-grid" style={{ gridTemplateColumns: '1fr' }} onSubmit={handleContact}>
-                    <label>Name <input required value={contactForm.name} onChange={set('name')} placeholder="Your name" /></label>
+                  <form className="form-grid" style={{ gridTemplateColumns: '1fr 1fr' }} onSubmit={handleContact}>
+                    <label style={{ gridColumn: '1 / -1' }}>Name <input required value={contactForm.name} onChange={set('name')} placeholder="Your name" /></label>
                     <label>Email <input required type="email" value={contactForm.email} onChange={set('email')} placeholder="you@example.com" /></label>
-                    <label>Message <textarea required rows={4} value={contactForm.message} onChange={set('message')} placeholder="How can we help?" /></label>
-                    {contactError && <p className="notice error" style={{ margin: 0 }}>{contactError}</p>}
-                    <div style={{ display: 'flex', gap: 10 }}>
-                      <button type="submit" className="btn-dx-primary" disabled={sending}>{sending ? 'Sending…' : 'Send message'}</button>
+                    <label>Phone <input type="tel" value={contactForm.phone} onChange={set('phone')} placeholder="+63 9XX XXX XXXX" /></label>
+                    <label>Pickup Location <input value={contactForm.pickup_location} onChange={set('pickup_location')} placeholder="Where should we pick up?" /></label>
+                    <label>Drop-off Location <input value={contactForm.dropoff_location} onChange={set('dropoff_location')} placeholder="Where to deliver?" /></label>
+                    <label style={{ gridColumn: '1 / -1' }}>Message <textarea required rows={3} value={contactForm.message} onChange={set('message')} placeholder="Tell us about your delivery needs…" /></label>
+                    {contactError && <p className="notice error" style={{ margin: 0, gridColumn: '1 / -1' }}>{contactError}</p>}
+                    <div style={{ display: 'flex', gap: 10, gridColumn: '1 / -1' }}>
+                      <button type="submit" className="btn-dx-primary" disabled={sending}>{sending ? 'Sending…' : 'Send Inquiry'}</button>
                       <button type="button" className="btn-dx-secondary" onClick={() => setContactOpen(false)}>Cancel</button>
                     </div>
                   </form>

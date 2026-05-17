@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { fetchDriverAssignment } from '../../api/driver'
 import { StatusBadge } from '../../components/ui'
-import { ArrowLeft, Calendar, Car, ClipboardList, FileUp, MapPin } from 'lucide-react'
+import { formatJobPublicId } from '../../utils/formatPhp'
+import { ArrowLeft, Calendar, Car, ClipboardList, FileUp, MapPin, User } from 'lucide-react'
 
 function DriverJobDetailsPage() {
   const { id } = useParams()
@@ -28,7 +29,12 @@ function DriverJobDetailsPage() {
       </button>
 
       <div className="driver-page-header">
-        <h1>Job Details</h1>
+        <div>
+          <h1>Job Details</h1>
+          {assignment?.job_order_id && (
+            <p className="driver-page-sub" style={{ fontFamily: 'monospace' }}>{formatJobPublicId(assignment.job_order_id)}</p>
+          )}
+        </div>
         {assignment && <StatusBadge status={assignment.status} />}
       </div>
 
@@ -41,6 +47,22 @@ function DriverJobDetailsPage() {
 
       {assignment && (
         <>
+          {/* Client */}
+          {job?.customer_name && (
+            <div className="driver-card" style={{ background: 'linear-gradient(135deg, var(--color-primary), #1d4ed8)', color: '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'grid', placeItems: 'center' }}>
+                  <User size={20} color="#fff" />
+                </div>
+                <div>
+                  <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', margin: 0 }}>Client</p>
+                  <p style={{ fontWeight: 700, fontSize: '1rem', margin: 0, color: '#fff' }}>{job.customer_name}</p>
+                  {job.customer_contact && <p style={{ fontSize: '0.8125rem', color: 'rgba(255,255,255,0.75)', margin: 0 }}>{job.customer_contact}</p>}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Route card */}
           <div className="driver-card">
             <p className="driver-card-title"><MapPin size={12} style={{ display: 'inline', marginRight: 4 }} /> Route</p>

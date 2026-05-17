@@ -3,7 +3,55 @@ import { Link, useLocation } from 'react-router-dom'
 import { trackDelivery } from '../../api/customer'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import { StatusBadge } from '../../components/ui'
-import { AlertTriangle, Clock, MapPin, MessageSquare, RefreshCw, Search } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, MessageSquare, Package, RefreshCw, Search, Truck } from 'lucide-react'
+
+const DELIVERY_STEPS = [
+  { key: 'pending',     label: 'Order Created',  icon: Package },
+  { key: 'assigned',    label: 'Assigned',        icon: CheckCircle2 },
+  { key: 'in_progress', label: 'En Route',        icon: Truck },
+  { key: 'arrived',     label: 'Arrived',         icon: MapPin },
+  { key: 'completed',   label: 'Delivered',       icon: CheckCircle2 },
+]
+
+const STATUS_STEP_INDEX = {
+  pending: 0, assigned: 1, in_progress: 2, arrived: 3, completed: 4, cancelled: -1,
+}
+
+function DeliveryProgressBar({ status }) {
+  const currentIdx = STATUS_STEP_INDEX[status] ?? 0
+  if (status === 'cancelled') {
+    return (
+      <div style={{ padding: '16px 20px', borderRadius: 12, background: 'var(--color-error-light, #fef2f2)', border: '1px solid var(--color-error-mid, #fca5a5)', color: 'var(--color-error)', fontWeight: 600, fontSize: '0.875rem', textAlign: 'center' }}>
+        This delivery has been cancelled.
+      </div>
+    )
+  }
+  return (
+    <div style={{ padding: '20px 4px 8px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, position: 'relative' }}>
+        {DELIVERY_STEPS.map((step, idx) => {
+          const done    = idx < currentIdx
+          const active  = idx === currentIdx
+          const future  = idx > currentIdx
+          const Icon    = step.icon
+          return (
+            <div key={step.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+              {idx < DELIVERY_STEPS.length - 1 && (
+                <div style={{ position: 'absolute', top: 18, left: '50%', right: '-50%', height: 3, background: done ? 'var(--color-primary)' : 'var(--slate-200)', borderRadius: 2, zIndex: 0, transition: 'background 0.4s' }} />
+              )}
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: done || active ? 'var(--color-primary)' : 'var(--slate-200)', display: 'grid', placeItems: 'center', zIndex: 1, position: 'relative', flexShrink: 0, boxShadow: active ? '0 0 0 4px rgba(37,99,235,0.18)' : 'none', transition: 'all 0.3s' }}>
+                <Icon size={16} color={done || active ? '#fff' : 'var(--muted)'} />
+              </div>
+              <span style={{ fontSize: '0.7rem', fontWeight: active ? 700 : 500, color: active ? 'var(--color-primary)' : future ? 'var(--muted)' : 'var(--text)', marginTop: 8, textAlign: 'center', lineHeight: 1.3 }}>
+                {step.label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 function TrackingPage() {
   const location = useLocation()
@@ -129,6 +177,9 @@ function TrackingPage() {
             </div>
           ) : (
             <div className="tracking-stack">
+              {/* Progress bar */}
+              <DeliveryProgressBar status={result.status} />
+
               {/* Delay alert */}
               {result.delay_flag && (
                 <div className="tracking-alert" role="alert">
@@ -148,11 +199,19 @@ function TrackingPage() {
                   <strong style={{ fontSize: '0.875rem' }}>{result.eta_window ?? '—'}</strong>
                 </div>
                 <div>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><MapPin size={12} /> Location</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><MapPin size={12} /> Last Location</span>
                   <strong style={{ fontSize: '0.875rem' }}>
-                    {result.approximate_location
-                      ? `${result.approximate_location.lat}, ${result.approximate_location.lng}`
-                      : 'Unavailable'}
+                    {result.approximate_location ? (
+                      <a
+                        href={`https://maps.google.com/?q=${result.approximate_location.lat},${result.approximate_location.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      >
+                        {result.approximate_location.lat}, {result.approximate_location.lng}
+                        <ExternalLink size={11} />
+                      </a>
+                    ) : 'Unavailable'}
                   </strong>
                 </div>
               </div>

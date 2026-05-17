@@ -60,7 +60,7 @@ class DatabaseSeeder extends Seeder
             [
                 'role_id' => $driverRole?->id,
                 'name' => 'Demo Driver',
-                'password' => Hash::make('password'),
+                'password' => Hash::make('driver123'),
                 'status' => 'active',
             ]
         );
@@ -73,6 +73,9 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        $this->call(DemoDataSeeder::class);
+        $this->call([
+            DemoDataSeeder::class,
+            DispatchDemoSeeder::class,
+        ]);
     }
 }

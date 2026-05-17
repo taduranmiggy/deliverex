@@ -8,7 +8,7 @@ export function formatDemoPhp(seed) {
   }).format(amount)
 }
 
-export function formatJobPublicId(orderId, year = 2026) {
+export function formatJobPublicId(orderId, year = new Date().getFullYear()) {
   const num = Number(orderId) || 0
   return `J-${year}-${String(num).padStart(3, '0')}`
 }
