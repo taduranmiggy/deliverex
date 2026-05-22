@@ -1,15 +1,31 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { createJobOrder, deleteJobOrder, fetchJobOrders, updateJobOrder } from '../../api/dispatcher'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
+import {
+  firstScheduleError,
+  minDatetimeLocalValue,
+  PAST_SCHEDULE_MESSAGE,
+  validateJobSchedule,
+} from '../../utils/scheduleValidation'
+
+const DELIVERY_TYPES = [
+  { value: '', label: '— Select type —' },
+  { value: 'materials', label: 'Materials / Aggregates' },
+  { value: 'equipment', label: 'Equipment' },
+  { value: 'general_cargo', label: 'General Cargo' },
+  { value: 'site_transfer', label: 'Site Transfer' },
+]
 
 const BLANK = {
   customer_name: '', customer_email: '', customer_contact: '',
   pickup_location: '', dropoff_location: '',
+  delivery_type: '',
   vehicle_type_required: '', vehicle_capacity_required: '',
   weight_kg: '', volume_m3: '',
   scheduled_start: '', scheduled_end: '',
-  priority: 'normal', job_requirements: '',
+  priority: 'normal', job_requirements: '', notes: '',
 }
 
 function JobOrderForm({ initial, onSaved, onCancel }) {
@@ -20,6 +36,7 @@ function JobOrderForm({ initial, onSaved, onCancel }) {
     customer_contact: initial.customer_contact ?? '',
     pickup_location: initial.pickup_location ?? '',
     dropoff_location: initial.dropoff_location ?? '',
+    delivery_type: initial.delivery_type ?? '',
     vehicle_type_required: initial.vehicle_type_required ?? '',
     vehicle_capacity_required: initial.vehicle_capacity_required ?? '',
     weight_kg: initial.weight_kg ?? '',
@@ -28,16 +45,41 @@ function JobOrderForm({ initial, onSaved, onCancel }) {
     scheduled_end: initial.scheduled_end ? new Date(initial.scheduled_end).toISOString().slice(0, 16) : '',
     priority: initial.priority ?? 'normal',
     job_requirements: initial.job_requirements ?? '',
+    notes: initial.notes ?? '',
   } : BLANK)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [saving, setSaving] = useState(false)
+  const scheduleMin = minDatetimeLocalValue()
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const set = (k) => (e) => {
+    setForm((f) => ({ ...f, [k]: e.target.value }))
+    if (fieldErrors[k]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev }
+        delete next[k]
+        return next
+      })
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSaving(true)
     setError('')
+    setFieldErrors({})
+
+    const scheduleErrors = validateJobSchedule({
+      scheduled_start: form.scheduled_start,
+      scheduled_end: form.scheduled_end,
+    })
+    if (Object.keys(scheduleErrors).length > 0) {
+      setFieldErrors(scheduleErrors)
+      setError(firstScheduleError(scheduleErrors) || PAST_SCHEDULE_MESSAGE)
+      setSaving(false)
+      return
+    }
+
     const payload = {
       ...form,
       weight_kg: form.weight_kg !== '' ? Number(form.weight_kg) : null,
@@ -67,12 +109,47 @@ function JobOrderForm({ initial, onSaved, onCancel }) {
       <label>Contact Number <input name="customer_contact" value={form.customer_contact} onChange={set('customer_contact')} /></label>
       <label>Pickup Location <input name="pickup_location" required value={form.pickup_location} onChange={set('pickup_location')} /></label>
       <label>Drop-off Location <input name="dropoff_location" required value={form.dropoff_location} onChange={set('dropoff_location')} /></label>
+      <label>Delivery Type
+        <select name="delivery_type" value={form.delivery_type} onChange={set('delivery_type')}>
+          {DELIVERY_TYPES.map((t) => <option key={t.value || 'none'} value={t.value}>{t.label}</option>)}
+        </select>
+      </label>
       <label>Vehicle Type <input name="vehicle_type_required" placeholder="Dump Truck, Flatbed…" value={form.vehicle_type_required} onChange={set('vehicle_type_required')} /></label>
       <label>Vehicle Capacity <input name="vehicle_capacity_required" placeholder="10T, 5T…" value={form.vehicle_capacity_required} onChange={set('vehicle_capacity_required')} /></label>
       <label>Weight (kg) <input name="weight_kg" type="number" step="0.01" min="0" value={form.weight_kg} onChange={set('weight_kg')} /></label>
       <label>Volume (m³) <input name="volume_m3" type="number" step="0.001" min="0" value={form.volume_m3} onChange={set('volume_m3')} /></label>
-      <label>Scheduled start <input name="scheduled_start" type="datetime-local" value={form.scheduled_start} onChange={set('scheduled_start')} /></label>
-      <label>Scheduled end <input name="scheduled_end" type="datetime-local" value={form.scheduled_end} onChange={set('scheduled_end')} /></label>
+      <label>
+        Scheduled start (pickup / job start)
+        <input
+          name="scheduled_start"
+          type="datetime-local"
+          min={scheduleMin}
+          value={form.scheduled_start}
+          onChange={set('scheduled_start')}
+          aria-invalid={fieldErrors.scheduled_start ? 'true' : undefined}
+        />
+        {fieldErrors.scheduled_start ? (
+          <span className="notice error" style={{ display: 'block', marginTop: 6, fontSize: '0.8125rem' }}>
+            {fieldErrors.scheduled_start}
+          </span>
+        ) : null}
+      </label>
+      <label>
+        Scheduled end (delivery window)
+        <input
+          name="scheduled_end"
+          type="datetime-local"
+          min={form.scheduled_start || scheduleMin}
+          value={form.scheduled_end}
+          onChange={set('scheduled_end')}
+          aria-invalid={fieldErrors.scheduled_end ? 'true' : undefined}
+        />
+        {fieldErrors.scheduled_end ? (
+          <span className="notice error" style={{ display: 'block', marginTop: 6, fontSize: '0.8125rem' }}>
+            {fieldErrors.scheduled_end}
+          </span>
+        ) : null}
+      </label>
       <label>Priority
         <select name="priority" value={form.priority} onChange={set('priority')}>
           <option value="low">Low</option>
@@ -83,7 +160,11 @@ function JobOrderForm({ initial, onSaved, onCancel }) {
       </label>
       <label style={{ gridColumn: '1 / -1' }}>
         Job Requirements
-        <textarea name="job_requirements" rows="3" placeholder="Special instructions…" value={form.job_requirements} onChange={set('job_requirements')} />
+        <textarea name="job_requirements" rows="2" placeholder="Permits, handling, site access…" value={form.job_requirements} onChange={set('job_requirements')} />
+      </label>
+      <label style={{ gridColumn: '1 / -1' }}>
+        Notes
+        <textarea name="notes" rows="2" placeholder="Internal dispatcher notes…" value={form.notes} onChange={set('notes')} />
       </label>
       {error && <p className="notice error" style={{ gridColumn: '1 / -1' }}>{error}</p>}
       <div style={{ display: 'flex', gap: 10, gridColumn: '1 / -1' }}>
@@ -209,6 +290,9 @@ function CreateJobOrderPage() {
                 <div className="dx-kv"><span>Client</span><strong>{selected.customer_name}</strong></div>
                 <div className="dx-kv"><span>Contact</span><strong>{selected.customer_contact ?? selected.customer_email}</strong></div>
                 <div className="dx-kv"><span>Route</span><strong>{selected.pickup_location} → {selected.dropoff_location}</strong></div>
+                {selected.delivery_type && (
+                  <div className="dx-kv"><span>Delivery type</span><strong style={{ textTransform: 'capitalize' }}>{String(selected.delivery_type).replace(/_/g, ' ')}</strong></div>
+                )}
                 <div className="dx-kv"><span>Vehicle req.</span>
                   <strong>{[selected.vehicle_type_required, selected.vehicle_capacity_required].filter(Boolean).join(' — ') || '—'}</strong>
                 </div>
@@ -231,11 +315,20 @@ function CreateJobOrderPage() {
                     <span>Requirements</span><strong>{selected.job_requirements}</strong>
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                   <button type="button" className="btn-dx-secondary" style={{ fontSize: '0.8rem', padding: '6px 12px' }}
                     onClick={() => setFormMode({ order: selected })}>
                     Edit
                   </button>
+                  {selected.status === 'pending' && (
+                    <Link
+                      to="/dispatcher/dispatch-best-fit"
+                      className="btn-dx-primary"
+                      style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+                    >
+                      Dispatch
+                    </Link>
+                  )}
                   {['pending', 'cancelled'].includes(selected.status) && (
                     <button type="button" style={{ fontSize: '0.8rem', padding: '6px 12px', color: 'var(--error, #dc2626)', border: '1px solid currentColor', borderRadius: 8, background: 'none', cursor: 'pointer' }}
                       onClick={() => handleDelete(selected)}>

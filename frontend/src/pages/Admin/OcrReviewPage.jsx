@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchOcrQueue, validateOcr } from '../../api/admin'
+import { fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, validateOcr } from '../../api/admin'
 import { EmptyState, PageHeader, StatusBadge } from '../../components/ui'
-import { Check, FileSearch, Flag, X } from 'lucide-react'
+import { Check, FileSearch, Flag, RefreshCw, X } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 
 const FILTER_TABS = [
@@ -17,32 +17,46 @@ const STATUS_MAP = {
   completed:    { cls: 'badge-dx badge-dx--enroute',     label: 'Waiting Review' },
   needs_review: { cls: 'badge-dx badge-dx--reviewing',   label: 'Flagged' },
   validated:    { cls: 'badge-dx badge-dx--validated',   label: 'Validated' },
-  failed:       { cls: 'badge-dx badge-dx--failed',      label: 'Rejected' },
+  failed:       { cls: 'badge-dx badge-dx--failed',      label: 'Failed' },
 }
 
 function OcrReviewPage() {
-  const [queue, setQueue]     = useState([])
-  const [error, setError]     = useState('')
-  const [msg, setMsg]         = useState('')
-  const [selected, setSelected] = useState(null)
-  const [tab, setTab]         = useState('all')
-  const [corrected, setCorrected]     = useState('')
+  const [queue, setQueue]           = useState([])
+  const [error, setError]           = useState('')
+  const [msg, setMsg]               = useState('')
+  const [selected, setSelected]     = useState(null)
+  const [tab, setTab]               = useState('all')
+  const [corrected, setCorrected]   = useState('')
   const [rejectReason, setRejectReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [previewError, setPreviewError] = useState('')
 
   const load = useCallback(async (filter = 'all') => {
-    setLoading(true); setError('')
+    setLoading(true)
+    setError('')
     try {
       const res = await fetchOcrQueue(1, filter)
       const data = res.data || []
       setQueue(data)
       setSelected((prev) => data.find((d) => d.id === prev?.id) ?? data[0] ?? null)
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load(tab) }, [tab]) // eslint-disable-line
+
+  // Auto-refresh while items are processing
+  useEffect(() => {
+    const needsPoll = queue.some((q) => ['pending', 'processing'].includes(q.processing_status))
+    if (!needsPoll) return undefined
+    const iv = setInterval(() => load(tab), 4000)
+    return () => clearInterval(iv)
+  }, [queue, tab, load])
 
   useEffect(() => {
     if (selected) {
@@ -51,32 +65,88 @@ function OcrReviewPage() {
     }
   }, [selected])
 
+  const documentId = selected?.document_id ?? selected?.document?.id
+
+  useEffect(() => {
+    let revoked = null
+    setPreviewError('')
+    setPreviewUrl(null)
+
+    if (!documentId) return undefined
+
+    let cancelled = false
+    fetchDocumentPreviewBlob(documentId)
+      .then((blob) => {
+        if (cancelled) return
+        const url = URL.createObjectURL(blob)
+        revoked = url
+        setPreviewUrl(url)
+      })
+      .catch((err) => {
+        if (!cancelled) setPreviewError(err.message)
+      })
+
+    return () => {
+      cancelled = true
+      if (revoked) URL.revokeObjectURL(revoked)
+    }
+  }, [documentId])
+
   const handleAction = async (action) => {
     if (!selected) return
-    setSubmitting(true); setMsg(''); setError('')
+    setSubmitting(true)
+    setMsg('')
+    setError('')
     try {
       await validateOcr(selected.id, {
         action,
         corrected_text: action === 'approve' ? corrected : undefined,
         reject_reason:  action !== 'approve' ? rejectReason : undefined,
       })
-      setMsg({ approve: '✓ Document approved.', reject: 'Document rejected.', flag: 'Document flagged for review.' }[action])
+      setMsg({ approve: 'Document approved.', reject: 'Document rejected.', flag: 'Document flagged for review.' }[action])
       load(tab)
-    } catch (err) { setError(err.message) }
-    finally { setSubmitting(false) }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleReprocess = async () => {
+    if (!documentId) return
+    setSubmitting(true)
+    setMsg('')
+    setError('')
+    try {
+      await reprocessOcr(documentId)
+      setMsg('OCR reprocessed. Results will refresh shortly.')
+      await load(tab)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const getBadge = (item) => STATUS_MAP[item.processing_status] ?? { cls: 'badge-dx badge-dx--muted', label: item.processing_status ?? '—' }
-  const storageBase = (import.meta.env.VITE_API_URL ?? '').replace('/api', '')
+
+  const canReprocess = selected && ['pending', 'processing', 'failed', 'completed'].includes(selected.processing_status)
+  const isStub = selected?.engine === 'stub'
 
   return (
     <>
-      <PageHeader title="OCR Validation" subtitle="Review and validate scanned delivery documents" />
+      <PageHeader title="OCR Validation" subtitle="Review scanned delivery documents and validate extracted text" />
       {error && <p className="notice error">{error}</p>}
       {msg   && <p className="notice">{msg}</p>}
 
+      {isStub && (
+        <p className="notice" style={{ marginBottom: 16 }}>
+          Tesseract OCR is not installed on the server. Install it, then click <strong>Reprocess OCR</strong>.
+          See <code>DEFENSE_SETUP.md</code> for Windows install steps.
+        </p>
+      )}
+
       <div className="dx-ocr-grid">
-        {/* Queue list */}
         <div className="dx-panel" style={{ marginBottom: 0 }}>
           <div className="dx-ocr-tabs">
             {FILTER_TABS.map((t) => (
@@ -103,6 +173,7 @@ function OcrReviewPage() {
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--subtle)', marginTop: 3, textTransform: 'capitalize' }}>
                     {item.document?.type ?? 'document'}
+                    {item.engine ? ` · ${item.engine}` : ''}
                   </div>
                 </button>
               )
@@ -110,30 +181,30 @@ function OcrReviewPage() {
           }
         </div>
 
-        {/* Image preview */}
         <div className="dx-panel" style={{ marginBottom: 0 }}>
           <h3 className="dx-panel-title">Document Preview</h3>
           <div className="dx-preview-pane" style={{ minHeight: 280 }}>
-            {selected?.document?.file_path ? (
+            {previewUrl ? (
               <img
-                src={`${storageBase}/storage/${selected.document.file_path}`}
+                src={previewUrl}
                 alt="Document preview"
                 style={{ maxWidth: '100%', maxHeight: 360, borderRadius: 12, objectFit: 'contain', boxShadow: 'var(--shadow-md)' }}
               />
+            ) : previewError ? (
+              <p className="notice error" style={{ margin: 0, fontSize: '0.875rem' }}>{previewError}</p>
+            ) : documentId ? (
+              <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>Loading preview…</p>
             ) : (
               <>
                 <FileSearch size={48} style={{ opacity: 0.2 }} />
-                <p style={{ fontSize: '0.875rem' }}>
-                  {selected ? `DOC-${String(selected.id).padStart(3, '0')}` : 'Select a document to preview'}
-                </p>
+                <p style={{ fontSize: '0.875rem' }}>Select a document to preview</p>
               </>
             )}
           </div>
         </div>
 
-        {/* Review panel */}
         <div className="dx-panel" style={{ marginBottom: 0 }}>
-          <h3 className="dx-panel-title">Extracted Fields</h3>
+          <h3 className="dx-panel-title">Extracted Text</h3>
           {!selected ? (
             <EmptyState icon={FileSearch} title="No document selected" message="Select a document from the queue to review." />
           ) : (
@@ -151,21 +222,29 @@ function OcrReviewPage() {
                 <label>Engine / Status
                   <input type="text" readOnly value={[selected.engine, selected.processing_status].filter(Boolean).join(' · ') || '—'} />
                 </label>
+                <label>Confidence
+                  <input type="text" readOnly
+                    value={selected.confidence_score != null
+                      ? `${Math.round(Number(selected.confidence_score) * 100)}%`
+                      : '—'}
+                  />
+                </label>
               </div>
               <label>Extracted / Corrected text
-                <textarea rows={5} value={corrected} onChange={(e) => setCorrected(e.target.value)} placeholder="Extracted or corrected text…" />
+                <textarea rows={8} value={corrected} onChange={(e) => setCorrected(e.target.value)} placeholder="Edit extracted text before approving…" />
               </label>
               {selected.processing_status !== 'validated' && (
                 <label>Reject / flag reason <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span>
                   <textarea rows={2} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection or flag…" />
                 </label>
               )}
-              {selected.error_message && (
+              {selected.error_message && selected.processing_status === 'failed' && (
                 <p className="notice error" style={{ margin: 0 }}>{selected.error_message}</p>
               )}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button className="btn-dx-primary" type="button" disabled={submitting} onClick={() => handleAction('approve')}
-                  style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)' }}>
+                <button className="btn-dx-primary" type="button" disabled={submitting || selected.processing_status !== 'completed'} onClick={() => handleAction('approve')}
+                  style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                  title={selected.processing_status !== 'completed' ? 'Wait until OCR completes' : 'Save validated record'}>
                   <Check size={15} /> Approve
                 </button>
                 <button className="btn-dx-secondary" type="button" disabled={submitting} onClick={() => handleAction('reject')}
@@ -174,6 +253,14 @@ function OcrReviewPage() {
                 </button>
                 <button className="btn-dx-secondary" type="button" disabled={submitting} onClick={() => handleAction('flag')}>
                   <Flag size={15} /> Flag
+                </button>
+                {canReprocess && (
+                  <button className="btn-dx-secondary" type="button" disabled={submitting} onClick={handleReprocess}>
+                    <RefreshCw size={15} /> Reprocess OCR
+                  </button>
+                )}
+                <button className="btn-dx-secondary" type="button" disabled={loading} onClick={() => load(tab)}>
+                  <RefreshCw size={15} /> Refresh
                 </button>
               </div>
             </div>

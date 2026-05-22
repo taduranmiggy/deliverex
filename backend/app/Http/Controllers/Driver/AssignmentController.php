@@ -4,17 +4,18 @@ namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
 use App\Models\DispatchAssignment;
+use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 
 class AssignmentController extends Controller
 {
     public function index(Request $request)
     {
-        $driverId = $request->user()?->driver?->id;
+        $driver = DriverAccount::require($request->user());
 
         return response()->json(
             DispatchAssignment::with('jobOrder', 'vehicle')
-                ->where('driver_id', $driverId)
+                ->where('driver_id', $driver->id)
                 ->latest()
                 ->paginate(20)
         );
@@ -22,9 +23,9 @@ class AssignmentController extends Controller
 
     public function show(DispatchAssignment $assignment)
     {
-        $driverId = auth()->user()?->driver?->id;
+        $driver = DriverAccount::require(auth()->user());
 
-        if ($assignment->driver_id !== $driverId) {
+        if ($assignment->driver_id !== $driver->id) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 

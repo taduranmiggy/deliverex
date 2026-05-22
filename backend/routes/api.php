@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\DocumentFileController;
 use App\Http\Controllers\Admin\AuditLogsController;
 use App\Http\Controllers\Admin\DriverController as AdminDriverController;
 use App\Http\Controllers\Admin\OcrReviewController;
@@ -12,14 +13,17 @@ use App\Http\Controllers\Customer\PortalController as CustomerPortalController;
 use App\Http\Controllers\Customer\TrackingController as CustomerTrackingController;
 use App\Http\Controllers\Dispatcher\AssignmentController as DispatcherAssignmentController;
 use App\Http\Controllers\Dispatcher\BestFitController;
+use App\Http\Controllers\Dispatcher\CalendarController;
 use App\Http\Controllers\Dispatcher\JobOrderController;
 use App\Http\Controllers\Driver\AssignmentController as DriverAssignmentController;
+use App\Http\Controllers\Driver\ProfileController as DriverProfileController;
 use App\Http\Controllers\Driver\DocumentController as DriverDocumentController;
 use App\Http\Controllers\Driver\StatusController as DriverStatusController;
 use App\Http\Controllers\Driver\TrackingController as DriverTrackingController;
 use App\Http\Controllers\Gps\TrackingController as GpsTrackingController;
 use App\Http\Controllers\Manager\AnalyticsController;
 use App\Http\Controllers\Manager\DashboardController;
+use App\Http\Controllers\Manager\FleetController;
 use App\Http\Controllers\Manager\ReportsController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Ocr\OcrController;
@@ -90,8 +94,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{inquiry}',            [InquiryController::class, 'destroy']);
     });
 
-    // ─── Dispatcher ───────────────────────────────────────────────────────────
-    Route::middleware('role:dispatcher')->prefix('dispatch')->group(function () {
+    // ─── Dispatcher + Admin: job orders & fleet dispatch ─────────────────────
+    Route::middleware('role:admin|dispatcher')->prefix('dispatch')->group(function () {
         Route::get('/job-orders',                    [JobOrderController::class, 'index']);
         Route::get('/job-orders/{jobOrder}',         [JobOrderController::class, 'show']);
         Route::post('/job-orders',                   [JobOrderController::class, 'store']);
@@ -102,10 +106,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/assignments',                  [DispatcherAssignmentController::class, 'store']);
 
         Route::get('/best-fit/{jobOrder}',           [BestFitController::class, 'show']);
+        Route::get('/calendar',                      [CalendarController::class, 'index']);
     });
 
     // ─── Driver ───────────────────────────────────────────────────────────────
     Route::middleware('role:driver')->prefix('driver')->group(function () {
+        Route::get('/profile',                             [DriverProfileController::class, 'show']);
         Route::get('/assignments',                         [DriverAssignmentController::class, 'index']);
         Route::get('/assignments/{assignment}',            [DriverAssignmentController::class, 'show']);
         Route::post('/status',                             [DriverStatusController::class, 'store']);
@@ -118,11 +124,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/dashboard',  [DashboardController::class, 'index']);
         Route::get('/reports',    [ReportsController::class, 'index']);
         Route::get('/analytics',  [AnalyticsController::class, 'index']);
+        Route::get('/active-deliveries', [FleetController::class, 'index']);
     });
 
-    // ─── Admin + Dispatcher: GPS tracking view & OCR reprocess ───────────────
-    Route::middleware('role:admin|dispatcher')->group(function () {
+    // ─── Admin + Dispatcher + Manager: GPS tracking view & OCR reprocess ─────
+    Route::middleware('role:admin|dispatcher|manager')->group(function () {
         Route::get('/tracking/{assignment}',             [GpsTrackingController::class, 'show']);
+    });
+
+    Route::middleware('role:admin|dispatcher')->group(function () {
         Route::post('/ocr/process/{document}',           [OcrController::class, 'process']);
+        Route::get('/documents/{document}/file',         [DocumentFileController::class, 'show']);
     });
 });

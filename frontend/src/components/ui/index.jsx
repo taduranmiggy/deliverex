@@ -50,6 +50,7 @@ const BADGE_MAP = {
   arrived:     'badge-dx badge-dx--arrived',
   completed:   'badge-dx badge-dx--completed',
   cancelled:   'badge-dx badge-dx--cancelled',
+  delayed:     'badge-dx badge-dx--pending',
   // User/driver
   active:      'badge-dx badge-dx--user-active',
   inactive:    'badge-dx badge-dx--user-inactive',

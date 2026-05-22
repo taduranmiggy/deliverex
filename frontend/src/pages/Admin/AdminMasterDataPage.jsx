@@ -30,7 +30,7 @@ function VehicleModal({ vehicle, onClose, onSaved }) {
           <label style={{ gridColumn: '1/-1' }}>Plate number <input required value={form.plate_no} onChange={set('plate_no')} placeholder="ABC-1234" /></label>
           <label style={{ gridColumn: '1/-1' }}>Type / Make <input required value={form.type} onChange={set('type')} placeholder="Dump Truck, Flatbed…" /></label>
           <label>Capacity label <input value={form.capacity} onChange={set('capacity')} placeholder="10T" /></label>
-          <label>Status <select value={form.status} onChange={set('status')}><option value="available">Available</option><option value="assigned">Assigned</option><option value="maintenance">Maintenance</option></select></label>
+          <label>Status <select value={form.status} onChange={set('status')}><option value="available">Available</option><option value="assigned">Assigned</option><option value="maintenance">Maintenance</option><option value="unavailable">Unavailable</option></select></label>
           <label>Max weight (kg) <input type="number" min="0" step="0.01" value={form.max_weight_kg} onChange={set('max_weight_kg')} /></label>
           <label>Max volume (m³) <input type="number" min="0" step="0.001" value={form.max_volume_m3} onChange={set('max_volume_m3')} /></label>
           {error && <p className="notice error" style={{ margin: 0, gridColumn: '1/-1' }}>{error}</p>}
@@ -124,6 +124,7 @@ function AdminMasterDataPage() {
     available:   'badge-dx badge-dx--available',
     assigned:    'badge-dx badge-dx--dispatched',
     maintenance: 'badge-dx badge-dx--maintenance',
+    unavailable: 'badge-dx badge-dx--cancelled',
   }[s] ?? 'badge-dx badge-dx--muted')
 
   const filteredV = vehicles.filter((v) => !search || v.plate_no?.toLowerCase().includes(search.toLowerCase()) || v.type?.toLowerCase().includes(search.toLowerCase()))

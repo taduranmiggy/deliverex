@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Dispatcher;
 
 use App\Http\Controllers\Controller;
+use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Support\AuditLogger;
+use App\Support\JobOrderScheduleValidator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -29,7 +32,9 @@ class JobOrderController extends Controller
             'customer_contact'          => 'nullable|string|max:50',
             'pickup_location'           => 'required|string',
             'dropoff_location'          => 'required|string',
+            'delivery_type'             => 'nullable|string|max:80',
             'job_requirements'          => 'nullable|string',
+            'notes'                     => 'nullable|string',
             'vehicle_type_required'     => 'nullable|string|max:80',
             'vehicle_capacity_required' => 'nullable|string|max:80',
             'weight_kg'                 => 'nullable|numeric|min:0',
@@ -38,6 +43,8 @@ class JobOrderController extends Controller
             'scheduled_end'             => 'nullable|date|after_or_equal:scheduled_start',
             'priority'                  => 'nullable|in:low,normal,high,urgent',
         ]);
+
+        JobOrderScheduleValidator::validatePayload($data);
 
         $normalizedEmail  = Str::lower($data['customer_email']);
         $customerAccount  = User::query()
@@ -69,7 +76,9 @@ class JobOrderController extends Controller
             'customer_contact'          => 'nullable|string|max:50',
             'pickup_location'           => 'sometimes|string',
             'dropoff_location'          => 'sometimes|string',
+            'delivery_type'             => 'nullable|string|max:80',
             'job_requirements'          => 'nullable|string',
+            'notes'                     => 'nullable|string',
             'vehicle_type_required'     => 'nullable|string|max:80',
             'vehicle_capacity_required' => 'nullable|string|max:80',
             'weight_kg'                 => 'nullable|numeric|min:0',
@@ -79,6 +88,8 @@ class JobOrderController extends Controller
             'priority'                  => 'nullable|in:low,normal,high,urgent',
             'status'                    => 'nullable|in:pending,assigned,in_progress,arrived,completed,cancelled',
         ]);
+
+        JobOrderScheduleValidator::validatePayload($data);
 
         if (array_key_exists('customer_email', $data)) {
             $normalizedEmail = Str::lower($data['customer_email']);
@@ -102,6 +113,14 @@ class JobOrderController extends Controller
         // Only allow deleting jobs that aren't actively in progress
         if (in_array($jobOrder->status, ['in_progress', 'arrived'], true)) {
             return response()->json(['message' => 'Cannot delete a job that is currently in progress.'], 422);
+        }
+
+        // Free any driver/vehicle that was assigned to this job order
+        foreach ($jobOrder->assignments()->whereIn('status', ['assigned', 'in_progress', 'arrived'])->get() as $assignment) {
+            Driver::where('id', $assignment->driver_id)
+                ->update(['availability' => 'available', 'current_assignment_id' => null]);
+            Vehicle::where('id', $assignment->vehicle_id)
+                ->update(['status' => 'available']);
         }
 
         AuditLogger::record($request->user(), 'job_order.deleted', JobOrder::class, $jobOrder->id, [

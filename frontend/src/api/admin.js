@@ -1,5 +1,20 @@
 import { apiRequest } from './client'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+
+/** Fetch document image with auth — use with URL.createObjectURL for <img src>. */
+export async function fetchDocumentPreviewBlob(documentId) {
+  const token = localStorage.getItem('deliverex_token')
+  const response = await fetch(`${API_URL}/documents/${documentId}/file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.message || 'Could not load document preview. Run php artisan storage:link on the server.')
+  }
+  return response.blob()
+}
+
 // ─── Fetch (list) ─────────────────────────────────────────────────────────────
 export function fetchUsers(page = 1)       { return apiRequest(`/admin/users?page=${page}`) }
 export function fetchDrivers(page = 1)     { return apiRequest(`/admin/drivers?page=${page}`) }
@@ -33,6 +48,9 @@ export function deleteVehicle(id)          { return apiRequest(`/admin/vehicles/
 // ─── OCR ──────────────────────────────────────────────────────────────────────
 export function validateOcr(id, payload)   {
   return apiRequest(`/admin/ocr/${id}/validate`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+export function reprocessOcr(documentId)  {
+  return apiRequest(`/ocr/process/${documentId}`, { method: 'POST' })
 }
 
 // ─── Inquiries ────────────────────────────────────────────────────────────────

@@ -3,12 +3,13 @@ import useAuth from '../hooks/useAuth'
 import { IconLogout } from './DxIcons'
 
 function LogoutButton({ compact = false }) {
-  const { logout } = useAuth()
+  const { logout, role } = useAuth()
   const navigate = useNavigate()
 
   const handleLogout = async () => {
+    const loginPath = role === 'driver' ? '/driver/login' : '/login'
     await logout()
-    navigate('/login', { replace: true })
+    navigate(loginPath, { replace: true })
   }
 
   if (compact) {

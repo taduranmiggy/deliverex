@@ -10,8 +10,15 @@ class TrackingController extends Controller
 {
     public function show(string $trackingCode)
     {
+        $normalized = strtoupper(trim($trackingCode));
+
+        // Prevent demo seeder records from being visible on the public tracking page
+        if (str_starts_with($normalized, 'DEMO-')) {
+            abort(404);
+        }
+
         $jobOrder = JobOrder::query()
-            ->where('tracking_code', strtoupper(trim($trackingCode)))
+            ->where('tracking_code', $normalized)
             ->firstOrFail();
 
         $latestAssignment = $jobOrder->assignments()

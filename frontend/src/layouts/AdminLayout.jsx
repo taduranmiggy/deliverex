@@ -12,6 +12,8 @@ const navCls = ({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`
 
 const NAV = [
   { to: '/admin',            label: 'Dashboard',         Icon: LayoutDashboard, end: true },
+  { to: '/admin/job-orders',     label: 'Job Orders',      Icon: ClipboardList },
+  { to: '/admin/dispatch-best-fit', label: 'Fleet Dispatch', Icon: Shield },
   { to: '/admin/ocr-validation', label: 'OCR Validation', Icon: FileSearch },
   { to: '/admin/master-data',    label: 'Master Data',    Icon: Settings },
   { to: '/admin/users',          label: 'Users & Roles',  Icon: Users },

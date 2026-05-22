@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -28,8 +29,13 @@ class UserController extends Controller
         $data['password'] = Hash::make($data['password']);
 
         $user = User::create($data);
+        $user->load('role');
 
-        return response()->json($user->load('role'), 201);
+        if ($user->role?->name === 'driver') {
+            DriverAccount::resolve($user);
+        }
+
+        return response()->json($user->load('role', 'driver'), 201);
     }
 
     public function update(Request $request, User $user)

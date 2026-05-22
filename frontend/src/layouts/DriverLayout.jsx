@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import LogoutButton from '../components/LogoutButton'
 import useAuth from '../hooks/useAuth'
-import { ClipboardCheck, FileUp, Truck, LogOut } from 'lucide-react'
+import { ClipboardCheck, FileUp, Truck, User } from 'lucide-react'
 
 const navCls = ({ isActive }) => `driver-nav-link${isActive ? ' driver-nav-link--active' : ''}`
 
@@ -40,16 +40,22 @@ function DriverLayout() {
             <FileUp size={17} aria-hidden />
             <span>Upload Documents</span>
           </NavLink>
+          <NavLink to="/driver/profile" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
+            <User size={17} aria-hidden />
+            <span>My Profile</span>
+          </NavLink>
         </nav>
 
         <div className="profile">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <div className="topbar-avatar" style={{ flexShrink: 0 }}>{initials}</div>
-            <div style={{ minWidth: 0 }}>
-              <strong>{user?.name ?? 'Driver'}</strong>
-              <span>{user?.email ?? ''}</span>
+          <NavLink to="/driver/profile" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <div className="topbar-avatar" style={{ flexShrink: 0 }}>{initials}</div>
+              <div style={{ minWidth: 0 }}>
+                <strong>{user?.name ?? 'Driver'}</strong>
+                <span>{user?.email ?? ''}</span>
+              </div>
             </div>
-          </div>
+          </NavLink>
           <LogoutButton />
         </div>
       </aside>
@@ -73,9 +79,10 @@ function DriverLayout() {
           <FileUp size={22} aria-hidden />
           <span>Docs</span>
         </NavLink>
-        <div className="driver-nav-logout">
-          <LogoutButton compact />
-        </div>
+        <NavLink to="/driver/profile" className={navCls}>
+          <User size={22} aria-hidden />
+          <span>Profile</span>
+        </NavLink>
       </nav>
     </div>
   )

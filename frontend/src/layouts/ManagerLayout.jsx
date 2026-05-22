@@ -3,7 +3,7 @@ import ChatFab from '../components/ChatFab'
 import LogoutButton from '../components/LogoutButton'
 import useAuth from '../hooks/useAuth'
 import {
-  BarChart3, Bell, History, LayoutDashboard, TrendingUp,
+  BarChart3, Bell, History, LayoutDashboard, MapPin, TrendingUp,
 } from 'lucide-react'
 
 const navCls = ({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`
@@ -13,6 +13,7 @@ const NAV = [
   { to: '/manager/analytics',          label: 'Analytics',   Icon: BarChart3 },
   { to: '/manager/delivery-history',   label: 'History',     Icon: History },
   { to: '/manager/reports',            label: 'Reports',     Icon: TrendingUp },
+  { to: '/manager/fleet-tracking',     label: 'Fleet Tracking', Icon: MapPin },
   { to: '/manager/notifications',      label: 'Notifications', Icon: Bell },
 ]
 

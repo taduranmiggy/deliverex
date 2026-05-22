@@ -10,6 +10,7 @@ use App\Models\TrackingLog;
 use App\Models\Vehicle;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Support\AuditLogger;
+use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 
 class StatusController extends Controller
@@ -29,9 +30,9 @@ class StatusController extends Controller
         ]);
 
         $assignment = DispatchAssignment::findOrFail($data['assignment_id']);
-        $driverId   = $request->user()?->driver?->id;
+        $driver     = DriverAccount::require($request->user());
 
-        if ($assignment->driver_id !== $driverId) {
+        if ($assignment->driver_id !== $driver->id) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -68,6 +69,14 @@ class StatusController extends Controller
 
         if ($status === 'in_progress') {
             $assignment->update(['started_at' => now()]);
+            $assignment->jobOrder?->update(['status' => 'in_progress']);
+            $driver = Driver::find($assignment->driver_id);
+            $vehicle = Vehicle::find($assignment->vehicle_id);
+            $driver?->update([
+                'availability'          => 'busy',
+                'current_assignment_id' => $assignment->id,
+            ]);
+            $vehicle?->update(['status' => 'assigned']);
         }
 
         // Propagate arrived to job order

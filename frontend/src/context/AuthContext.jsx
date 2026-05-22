@@ -6,7 +6,7 @@ import {
   useMemo,
   useState,
 } from 'react'
-import { logout as logoutApi } from '../api/auth'
+import { getProfile, logout as logoutApi } from '../api/auth'
 
 const AuthContext = createContext(null)
 
@@ -16,20 +16,46 @@ export function AuthProvider({ children }) {
   const [bootstrapped, setBootstrapped] = useState(false)
 
   useEffect(() => {
-    try {
-      const rawUser = localStorage.getItem('deliverex_user')
-      const savedToken = localStorage.getItem('deliverex_token')
-      if (rawUser) {
-        setUser(JSON.parse(rawUser))
+    let cancelled = false
+
+    const bootstrap = async () => {
+      try {
+        const rawUser = localStorage.getItem('deliverex_user')
+        const savedToken = localStorage.getItem('deliverex_token')
+        if (rawUser) {
+          setUser(JSON.parse(rawUser))
+        }
+        if (savedToken) {
+          setToken(savedToken)
+          try {
+            const me = await getProfile()
+            if (!cancelled && me) {
+              setUser(me)
+              localStorage.setItem('deliverex_user', JSON.stringify(me))
+            }
+          } catch {
+            if (!cancelled) {
+              localStorage.removeItem('deliverex_user')
+              localStorage.removeItem('deliverex_token')
+              setUser(null)
+              setToken(null)
+            }
+          }
+        }
+      } catch {
+        localStorage.removeItem('deliverex_user')
+        localStorage.removeItem('deliverex_token')
+      } finally {
+        if (!cancelled) {
+          setBootstrapped(true)
+        }
       }
-      if (savedToken) {
-        setToken(savedToken)
-      }
-    } catch {
-      localStorage.removeItem('deliverex_user')
-      localStorage.removeItem('deliverex_token')
-    } finally {
-      setBootstrapped(true)
+    }
+
+    bootstrap()
+
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -38,6 +64,15 @@ export function AuthProvider({ children }) {
     localStorage.setItem('deliverex_user', JSON.stringify(nextUser))
     setUser(nextUser)
     setToken(nextToken)
+  }, [])
+
+  const updateUser = useCallback((patch) => {
+    setUser((prev) => {
+      if (!prev) return prev
+      const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
+      localStorage.setItem('deliverex_user', JSON.stringify(next))
+      return next
+    })
   }, [])
 
   const logout = useCallback(async () => {
@@ -63,8 +98,9 @@ export function AuthProvider({ children }) {
       bootstrapped,
       login,
       logout,
+      updateUser,
     }),
-    [user, token, bootstrapped, login, logout],
+    [user, token, bootstrapped, login, logout, updateUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

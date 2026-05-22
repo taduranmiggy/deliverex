@@ -3,7 +3,7 @@ import { createAssignment, fetchJobOrders, getBestFit } from '../../api/dispatch
 import { IconCheckSmall, IconRouteArrow } from '../../components/DxIcons'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus } from '../../utils/statusLabels'
-import { AlertTriangle, CheckCircle2, Loader2, User, Truck } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, User, Truck } from 'lucide-react'
 
 /* ── Confirmation modal ─────────────────────────────────────── */
 function AssignConfirmModal({ job, candidate, isOverride, onConfirm, onCancel, submitting, error }) {
@@ -290,10 +290,19 @@ function AssignDriverVehiclePage() {
                 </>
               ) : (
                 <div className="dx-why-box">
-                  <strong>No recommendations</strong>
+                  <strong>No recommendations available</strong>
                   <p style={{ margin: '8px 0 0', color: 'var(--muted)', fontSize: '0.875rem' }}>
-                    No available drivers or vehicles match the requirements. Check fleet availability in Master Data.
+                    No available drivers or vehicles match the requirements for this job.
                   </p>
+                  <a
+                    href="/admin/master-data"
+                    title="Fleet master data is managed by Admin"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, fontSize: '0.8125rem', color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none' }}
+                  >
+                    <ExternalLink size={13} /> Check fleet availability in Master Data
+                  </a>
                 </div>
               )}
 
@@ -342,7 +351,7 @@ function AssignDriverVehiclePage() {
                     <CheckCircle2 size={16} /> Assign This Driver
                   </button>
                 )}
-                <button type="button" className="btn-dx-secondary" onClick={() => setSelected(null)}>
+                <button type="button" className="btn-dx-secondary" onClick={() => setPendingAssign(null)}>
                   Cancel
                 </button>
               </div>

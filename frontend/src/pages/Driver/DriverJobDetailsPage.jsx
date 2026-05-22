@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { fetchDriverAssignment } from '../../api/driver'
 import { StatusBadge } from '../../components/ui'
 import { formatJobPublicId } from '../../utils/formatPhp'
-import { ArrowLeft, Calendar, Car, ClipboardList, FileUp, MapPin, User } from 'lucide-react'
+import { ArrowLeft, Calendar, Car, ClipboardList, ExternalLink, FileUp, MapPin, Navigation, User } from 'lucide-react'
 
 function DriverJobDetailsPage() {
   const { id } = useParams()
@@ -21,6 +21,16 @@ function DriverJobDetailsPage() {
   const job = assignment?.job_order
   const logs = [...(assignment?.delivery_status_logs ?? [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
   const isActive = assignment && !['completed', 'cancelled'].includes(assignment.status)
+  const latestGps = [...(assignment?.tracking_logs ?? [])].sort(
+    (a, b) => new Date(b.captured_at) - new Date(a.captured_at),
+  )[0]
+  const dropoff = job?.dropoff_location ?? ''
+  const navUrl = latestGps
+    ? `https://www.google.com/maps/dir/?api=1&destination=${latestGps.latitude},${latestGps.longitude}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dropoff)}`
+  const wazeUrl = latestGps
+    ? `https://waze.com/ul?ll=${latestGps.latitude},${latestGps.longitude}&navigate=yes`
+    : `https://waze.com/ul?q=${encodeURIComponent(dropoff)}&navigate=yes`
 
   return (
     <section className="driver-page">
@@ -121,6 +131,20 @@ function DriverJobDetailsPage() {
                   </li>
                 ))}
               </ol>
+            </div>
+          )}
+
+          {isActive && (
+            <div className="driver-card">
+              <p className="driver-card-title"><Navigation size={12} style={{ display: 'inline', marginRight: 4 }} /> Navigation</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <a href={navUrl} target="_blank" rel="noopener noreferrer" className="driver-btn-secondary" style={{ flex: 1, justifyContent: 'center', textDecoration: 'none' }}>
+                  <ExternalLink size={14} /> Google Maps
+                </a>
+                <a href={wazeUrl} target="_blank" rel="noopener noreferrer" className="driver-btn-secondary" style={{ flex: 1, justifyContent: 'center', textDecoration: 'none' }}>
+                  <ExternalLink size={14} /> Waze
+                </a>
+              </div>
             </div>
           )}
 

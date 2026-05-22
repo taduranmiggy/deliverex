@@ -14,8 +14,8 @@ class OcrController extends Controller
 
     public function process(DeliveryDocument $document)
     {
-        $ocrResult = $this->ocrService->process($document);
+        $ocrResult = $this->ocrService->process($document->fresh());
 
-        return response()->json($ocrResult, 201);
+        return response()->json($ocrResult->load('document.assignment.jobOrder'));
     }
 }

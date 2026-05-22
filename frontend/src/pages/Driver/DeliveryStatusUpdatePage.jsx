@@ -44,6 +44,14 @@ function DeliveryStatusUpdatePage() {
       return
     }
 
+    if (['completed', 'cancelled'].includes(status)) {
+      const label = status === 'completed' ? 'Completed' : 'Cancelled'
+      const confirmed = window.confirm(
+        `Mark this delivery as ${label}? This action cannot be undone.`
+      )
+      if (!confirmed) return
+    }
+
     setMessage('')
     setError('')
     setSubmitting(true)

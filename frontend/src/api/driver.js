@@ -1,5 +1,9 @@
 import { apiRequest } from './client'
 
+export function fetchDriverProfile(historyPage = 1) {
+  return apiRequest(`/driver/profile?history_page=${historyPage}`)
+}
+
 export function fetchDriverAssignments(page = 1) {
   return apiRequest(`/driver/assignments?page=${page}`)
 }

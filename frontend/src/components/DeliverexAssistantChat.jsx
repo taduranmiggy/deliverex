@@ -6,21 +6,6 @@ import { IconCheckSmall, IconDocOutline, IconMail, IconPhone } from './DxIcons'
 const SUPPORT_EMAIL = 'support@deliverex.ph'
 const SUPPORT_PHONE = '(+63) 917-123-4567'
 
-const MOCK_TRACKING = {
-  'DLX2026-001': {
-    tracking_code: 'DLX2026-001',
-    badgeLabel: 'En Route',
-    badgeClass: 'badge-dx--enroute',
-    eta_window: '10:30–11:00 AM',
-    proofAvailable: false,
-    proofLabel: 'Not yet available',
-    updateLine: 'Driver departed from depot at 9:45 AM.',
-    approximate_location: null,
-    detail: null,
-    showDemoMapUnavailable: false,
-  },
-}
-
 let msgIdSeq = 0
 function nid() {
   msgIdSeq += 1
@@ -52,44 +37,23 @@ async function lookupTracking(raw) {
     throw new Error('Enter a Tracking ID first.')
   }
 
-  try {
-    const api = await trackDelivery(code)
-    const fallbackMock = MOCK_TRACKING[code]
-    const badge = normalizeStatusBadge(api.status)
-    const statusLc = String(api.status ?? '').toLowerCase()
-    const completed = statusLc.includes('complete') || statusLc.includes('deliver')
+  const api = await trackDelivery(code)
+  const badge = normalizeStatusBadge(api.status)
+  const statusLc = String(api.status ?? '').toLowerCase()
+  const completed = statusLc.includes('complete') || statusLc.includes('deliver')
 
-    let etaDisplay = api.eta_window
-    if (!etaDisplay || etaDisplay.includes('ETA window to be calculated')) {
-      etaDisplay = fallbackMock?.eta_window ?? 'See latest status update below'
-    }
-
-    const proofAvailable = completed ? true : Boolean(fallbackMock?.proofAvailable)
-    const proofLabel = completed
-      ? 'Available — check your confirmation email'
-      : (fallbackMock?.proofLabel ?? 'Not yet available')
-
-    return {
-      source: 'api',
-      tracking_code: api.tracking_code ?? code,
-      badgeLabel: badge.label,
-      badgeClass: badge.cls,
-      eta_window: etaDisplay,
-      proofAvailable,
-      proofLabel,
-      updateLine:
-        fallbackMock?.updateLine ?? `Latest status recorded: ${String(api.status ?? 'unknown')}.`,
-      approximate_location: api.approximate_location,
-      detail: null,
-      showDemoMapUnavailable: false,
-    }
-  } catch {
-    const mock = MOCK_TRACKING[code]
-    if (mock) return { ...mock, source: 'demo' }
-
-    throw new Error(
-      "We couldn't find an active shipment with that ID. Confirm the code from your paperwork or coordinator.",
-    )
+  return {
+    source: 'api',
+    tracking_code: api.tracking_code ?? code,
+    badgeLabel: badge.label,
+    badgeClass: badge.cls,
+    eta_window: api.eta_window ?? 'See latest status update below',
+    proofAvailable: completed,
+    proofLabel: completed ? 'Available when delivery is completed' : 'Not yet available',
+    updateLine: `Latest status: ${String(api.status ?? 'unknown')}.`,
+    approximate_location: api.approximate_location,
+    detail: null,
+    showDemoMapUnavailable: false,
   }
 }
 

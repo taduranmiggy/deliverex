@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { fetchDriverAssignments, uploadDocument } from '../../api/driver'
 import useOnlineStatus from '../../hooks/useOnlineStatus'
+import useSyncOnReconnect from '../../hooks/useSyncOnReconnect'
+import { enqueue } from '../../utils/offlineQueue'
 
 const DOC_TYPES = [
   { value: 'pod',          label: 'Proof of Delivery (POD)' },
   { value: 'receipt',      label: 'Delivery Receipt' },
+  { value: 'invoice',      label: 'Invoice' },
+  { value: 'job_order',    label: 'Job Order' },
   { value: 'gate_pass',    label: 'Gate Pass' },
   { value: 'weighbridge',  label: 'Weighbridge Ticket' },
   { value: 'signed_doc',   label: 'Signed Document' },
@@ -16,6 +20,7 @@ function DocumentUploadPage() {
   const location = useNavigate ? useLocation() : {}
   const navigate = useNavigate()
   const isOnline = useOnlineStatus()
+  const { pendingCount } = useSyncOnReconnect()
 
   const [assignments, setAssignments] = useState([])
   const [selectedId, setSelectedId] = useState(location.state?.assignmentId ?? '')
@@ -61,11 +66,6 @@ function DocumentUploadPage() {
     setMessage('')
     setError('')
 
-    if (!isOnline) {
-      setError('Document upload requires an internet connection.')
-      return
-    }
-
     if (!selectedId) {
       setError('Select an assignment first.')
       return
@@ -77,21 +77,66 @@ function DocumentUploadPage() {
       return
     }
 
-    setUploading(true)
-    const fd = new FormData()
-    fd.append('assignment_id', String(selectedId))
-    fd.append('type',          docType)
-    fd.append('notes',         notes)
-    fd.append('file',          file)
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Image must be under 2 MB for offline queue support.')
+      return
+    }
 
-    try {
-      await uploadDocument(fd)
-      setMessage('Document uploaded and queued for OCR processing.')
+    setUploading(true)
+
+    const uploadOnline = async () => {
+      const fd = new FormData()
+      fd.append('assignment_id', String(selectedId))
+      fd.append('type', docType)
+      fd.append('notes', notes)
+      fd.append('file', file)
+      const res = await uploadDocument(fd)
       setPreview(null)
       setFileName('')
       setNotes('')
-      if (fileRef.current)   fileRef.current.value   = ''
+      if (fileRef.current) fileRef.current.value = ''
       if (cameraRef.current) cameraRef.current.value = ''
+      return res
+    }
+
+    try {
+      if (!isOnline) {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => {
+            const result = String(reader.result || '')
+            const comma = result.indexOf(',')
+            resolve(comma >= 0 ? result.slice(comma + 1) : result)
+          }
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+        enqueue({
+          type: 'document',
+          payload: {
+            assignment_id: Number(selectedId),
+            type: docType,
+            notes: notes || undefined,
+            fileName: file.name,
+            fileType: file.type,
+            fileBase64: base64,
+          },
+        })
+        setMessage(`Document queued offline (${pendingCount + 1} pending). Will upload when online.`)
+        return
+      }
+      const res = await uploadOnline()
+      const engine = res?.ocr_result?.engine
+      const status = res?.ocr_result?.processing_status
+      if (status === 'completed' && engine === 'tesseract') {
+        setMessage('Document uploaded. OCR text extracted successfully.')
+      } else if (status === 'completed' && engine === 'stub') {
+        setMessage('Document uploaded. OCR stub mode — install Tesseract on server for real extraction.')
+      } else if (status === 'failed') {
+        setMessage('Document saved but OCR failed. Admin can reprocess from OCR Validation.')
+      } else {
+        setMessage('Document uploaded and queued for OCR processing.')
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -111,7 +156,7 @@ function DocumentUploadPage() {
 
       {!isOnline && (
         <div className="driver-offline-banner">
-          Offline — uploads require a connection.
+          Offline — documents will queue and sync automatically when you reconnect.
         </div>
       )}
 
@@ -214,7 +259,7 @@ function DocumentUploadPage() {
         <button
           type="submit"
           className="driver-btn-primary driver-btn-full"
-          disabled={uploading || !isOnline}
+          disabled={uploading}
         >
           {uploading ? 'Uploading…' : 'Upload Document'}
         </button>

@@ -4,11 +4,15 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\OcrResult;
+use App\Services\Notifications\NotificationDispatcher;
 use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 
 class OcrReviewController extends Controller
 {
+    public function __construct(private NotificationDispatcher $notificationDispatcher)
+    {
+    }
     public function index(Request $request)
     {
         $filter = $request->query('filter', 'all');
@@ -77,6 +81,8 @@ class OcrReviewController extends Controller
         AuditLogger::record($request->user(), 'ocr.' . $data['action'], OcrResult::class, $ocrResult->id, [
             'document_id' => $ocrResult->document_id,
         ], $request);
+
+        $this->notificationDispatcher->ocrValidated($ocrResult->fresh(), $data['action']);
 
         return response()->json($ocrResult->fresh()->load('document'));
     }

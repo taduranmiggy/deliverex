@@ -2,8 +2,11 @@
 
 namespace App\Services\Notifications;
 
+use App\Models\DeliveryDocument;
 use App\Models\DispatchAssignment;
 use App\Models\NotificationLog;
+use App\Models\OcrResult;
+use App\Models\Role;
 use App\Models\User;
 
 class NotificationDispatcher
@@ -16,16 +19,28 @@ class NotificationDispatcher
 
         NotificationLog::query()->create([
             'user_id' => $user->id,
-            'title' => $title,
+            'title'   => $title,
             'message' => $message,
             'is_read' => false,
         ]);
     }
 
+    public function notifyRole(string $roleName, string $title, string $message): void
+    {
+        $role = Role::where('name', $roleName)->first();
+        if (! $role) {
+            return;
+        }
+
+        User::where('role_id', $role->id)
+            ->where('status', 'active')
+            ->each(fn (User $user) => $this->notifyUser($user, $title, $message));
+    }
+
     public function assignmentCreated(DispatchAssignment $assignment): void
     {
-        $assignment->loadMissing('driver.user', 'jobOrder');
-        $job = $assignment->jobOrder;
+        $assignment->loadMissing('driver.user', 'jobOrder', 'assignedBy');
+        $job  = $assignment->jobOrder;
         $code = $job?->tracking_code ?? (string) $job?->id;
 
         $this->notifyUser(
@@ -33,33 +48,46 @@ class NotificationDispatcher
             'New delivery assignment',
             'You have been assigned job '.$code.'. Open the driver app for route and status updates.'
         );
+
+        $this->notifyUser(
+            $assignment->assignedBy,
+            'Assignment confirmed',
+            'Job '.$code.' assigned to '.($assignment->driver?->user?->name ?? 'driver').'.'
+        );
     }
 
     public function statusUpdated(DispatchAssignment $assignment, string $status): void
     {
-        $assignment->loadMissing('assignedBy', 'jobOrder');
-        $job = $assignment->jobOrder;
+        $assignment->loadMissing('assignedBy', 'jobOrder', 'driver.user');
+        $job  = $assignment->jobOrder;
         $code = $job?->tracking_code ?? (string) $job?->id;
+        $label = str_replace('_', ' ', $status);
 
         $this->notifyUser(
             $assignment->assignedBy,
             'Delivery status update',
-            'Job '.$code.' updated to '.$status.'.'
+            'Job '.$code.' updated to '.$label.'.'
         );
 
         if ($job && $job->customerAccount) {
             $this->notifyUser(
                 $job->customerAccount,
                 'Delivery status update',
-                'Your delivery '.$code.' is now '.$status.'.'
+                'Your delivery '.$code.' is now '.$label.'.'
             );
         }
+
+        $this->notifyRole(
+            'manager',
+            'Delivery status update',
+            'Job '.$code.' ('.($assignment->driver?->user?->name ?? 'driver').') is now '.$label.'.'
+        );
     }
 
     public function deliveryCompleted(DispatchAssignment $assignment): void
     {
-        $assignment->loadMissing('assignedBy', 'jobOrder');
-        $job = $assignment->jobOrder;
+        $assignment->loadMissing('assignedBy', 'jobOrder', 'driver.user');
+        $job  = $assignment->jobOrder;
         $code = $job?->tracking_code ?? (string) $job?->id;
 
         $this->notifyUser(
@@ -73,6 +101,57 @@ class NotificationDispatcher
                 $job->customerAccount,
                 'Delivery completed',
                 'Your delivery '.$code.' is completed. Proof of delivery is available if provided.'
+            );
+        }
+
+        $this->notifyRole('manager', 'Delivery completed', 'Job '.$code.' has been completed.');
+        $this->notifyRole('admin', 'Delivery completed', 'Job '.$code.' has been completed.');
+    }
+
+    public function documentUploaded(DeliveryDocument $document): void
+    {
+        $document->loadMissing('assignment.jobOrder', 'assignment.driver.user');
+        $assignment = $document->assignment;
+        $job        = $assignment?->jobOrder;
+        $code       = $job?->tracking_code ?? (string) $job?->id;
+
+        $this->notifyUser(
+            $assignment?->assignedBy,
+            'Document uploaded',
+            'New '.($document->type ?? 'document').' uploaded for job '.$code.'. OCR processing started.'
+        );
+
+        $this->notifyRole(
+            'admin',
+            'Document awaiting OCR review',
+            'A '.($document->type ?? 'document').' was uploaded for job '.$code.' and is queued for review.'
+        );
+    }
+
+    public function ocrValidated(OcrResult $ocrResult, string $action): void
+    {
+        $ocrResult->loadMissing('document.assignment.jobOrder', 'document.assignment.driver.user');
+        $document   = $ocrResult->document;
+        $assignment = $document?->assignment;
+        $job        = $assignment?->jobOrder;
+        $code       = $job?->tracking_code ?? (string) $job?->id;
+
+        if ($action === 'approve') {
+            $this->notifyUser(
+                $assignment?->assignedBy,
+                'OCR document validated',
+                'Document for job '.$code.' was approved by admin.'
+            );
+            $this->notifyUser(
+                $assignment?->driver?->user,
+                'Proof of delivery verified',
+                'Your uploaded document for job '.$code.' was validated.'
+            );
+        } elseif ($action === 'reject') {
+            $this->notifyUser(
+                $assignment?->driver?->user,
+                'Document rejected',
+                'Uploaded document for job '.$code.' was rejected. Please re-upload if required.'
             );
         }
     }

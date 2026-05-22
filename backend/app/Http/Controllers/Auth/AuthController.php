@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\JobOrder;
 use App\Support\AuditLogger;
+use App\Support\DriverAccount;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -77,9 +78,11 @@ class AuthController extends Controller
 
         AuditLogger::record($user, 'auth.login_success', User::class, $user->id, [], $request);
 
+        $this->prepareUserPayload($user);
+
         return response()->json([
             'token' => $token,
-            'user' => $user->load('role', 'driver'),
+            'user'  => $user,
         ]);
     }
 
@@ -168,6 +171,25 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        return response()->json($request->user()?->load('role', 'driver'));
+        $user = $request->user();
+        if ($user) {
+            $this->prepareUserPayload($user);
+        }
+
+        return response()->json($user);
+    }
+
+    private function prepareUserPayload(User $user): void
+    {
+        $user->load('role');
+
+        if ($user->role?->name === 'driver') {
+            DriverAccount::resolve($user);
+        }
+
+        $user->load([
+            'driver.currentAssignment.jobOrder',
+            'driver.currentAssignment.vehicle',
+        ]);
     }
 }

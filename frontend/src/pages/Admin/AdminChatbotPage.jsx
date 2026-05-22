@@ -375,6 +375,11 @@ function AdminChatbotPage() {
         </div>
       </header>
 
+      <div className="notice" style={{ marginBottom: 20, borderLeft: '4px solid var(--color-warning)' }}>
+        <strong>Preview / configuration UI.</strong> Metrics, intent volumes, and charts on this page are sample data for layout demonstration only.
+        Live customer tracking and FAQs run in the public assistant (<code>DeliverexAssistantChat</code>) and use real API data.
+      </div>
+
       <div className="dx-chat-tabs">
         {TABS.map((item) => (
           <button
