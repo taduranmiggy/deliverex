@@ -27,10 +27,12 @@ class OcrCheckCommand extends Command
             $this->error('Tesseract was NOT found by the OCR service.');
             $this->newLine();
             $this->line('Try:');
-            $this->line('  1. Set TESSERACT_PATH in backend/.env to the full path, e.g.');
-            $this->line('     TESSERACT_PATH="C:\\Program Files\\Tesseract-OCR\\tesseract.exe"');
-            $this->line('  2. Restart the terminal and run: php artisan serve');
-            $this->line('  3. In Admin → OCR Validation, click Reprocess OCR on a document');
+            $this->line('  1. Install Tesseract: https://github.com/UB-Mannheim/tesseract/wiki');
+            $this->line('  2. Set TESSERACT_PATH in backend/.env, e.g.');
+            $this->line('     TESSERACT_PATH="C:/Program Files/Tesseract-OCR/tesseract.exe"');
+            $this->line('  3. Run: php artisan serve  (restart after .env change)');
+            $this->line('  4. Optional demo mode: OCR_SYNC_MODE=true (processes OCR on upload)');
+            $this->line('  5. Admin → OCR Validation → Reprocess OCR on a document');
 
             return self::FAILURE;
         }

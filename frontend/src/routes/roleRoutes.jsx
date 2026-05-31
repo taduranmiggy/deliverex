@@ -1,3 +1,4 @@
+import { lazy } from 'react'
 import { Route, Navigate } from 'react-router-dom'
 import AdminDashboard from '../pages/Admin/AdminDashboard'
 import UserManagementPage from '../pages/Admin/UserManagementPage'
@@ -13,11 +14,14 @@ import DeliveryMonitoringPage from '../pages/Dispatcher/DeliveryMonitoringPage'
 import DispatcherCalendarPage from '../pages/Dispatcher/DispatcherCalendarPage'
 import DispatcherNotificationsPage from '../pages/Dispatcher/DispatcherNotificationsPage'
 import InquiriesPage from '../pages/Dispatcher/InquiriesPage'
-import DriverDashboard from '../pages/Driver/DriverDashboard'
-import DriverJobDetailsPage from '../pages/Driver/DriverJobDetailsPage'
+import DriverHomePage from '../pages/Driver/DriverHomePage'
+import DriverJobsPage from '../pages/Driver/DriverJobsPage'
+import DriverNotificationsPage from '../pages/Driver/DriverNotificationsPage'
 import DeliveryStatusUpdatePage from '../pages/Driver/DeliveryStatusUpdatePage'
-import DocumentUploadPage from '../pages/Driver/DocumentUploadPage'
-import DriverProfilePage from '../pages/Driver/DriverProfilePage'
+
+const DriverJobDetailsPage = lazy(() => import('../pages/Driver/DriverJobDetailsPage'))
+const DocumentUploadPage = lazy(() => import('../pages/Driver/DocumentUploadPage'))
+const DriverProfilePage = lazy(() => import('../pages/Driver/DriverProfilePage'))
 import ManagerDashboard from '../pages/Manager/ManagerDashboard'
 import AnalyticsPage from '../pages/Manager/AnalyticsPage'
 import ReportsPage from '../pages/Manager/ReportsPage'
@@ -52,8 +56,10 @@ export const roleRoutes = {
     <Route key="dispatcher-notifs" path="notifications" element={<DispatcherNotificationsPage />} />,
   ],
   driver: [
-    <Route key="driver-home" index element={<DriverDashboard />} />,
+    <Route key="driver-home" index element={<DriverHomePage />} />,
+    <Route key="driver-jobs" path="jobs" element={<DriverJobsPage />} />,
     <Route key="driver-job" path="jobs/:id" element={<DriverJobDetailsPage />} />,
+    <Route key="driver-notifs" path="notifications" element={<DriverNotificationsPage />} />,
     <Route key="driver-status" path="status-update" element={<DeliveryStatusUpdatePage />} />,
     <Route key="driver-docs" path="documents" element={<DocumentUploadPage />} />,
     <Route key="driver-profile" path="profile" element={<DriverProfilePage />} />,

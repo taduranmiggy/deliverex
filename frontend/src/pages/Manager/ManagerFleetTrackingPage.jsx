@@ -29,8 +29,6 @@ function ManagerFleetTrackingPage() {
 
   useEffect(() => {
     load()
-    const iv = setInterval(load, 20000)
-    return () => clearInterval(iv)
   }, [])
 
   const markers = useMemo(
@@ -48,7 +46,7 @@ function ManagerFleetTrackingPage() {
 
   return (
     <>
-      <PageHeader title="Fleet Tracking" subtitle="Read-only live view of active deliveries">
+      <PageHeader title="Fleet Tracking" subtitle="Latest driver updates and last reported status">
         <button type="button" className="btn-dx-secondary btn-sm" onClick={load} disabled={refreshing}>
           <RefreshCw size={14} style={refreshing ? { animation: 'spin 0.7s linear infinite' } : {}} />
           Refresh
@@ -57,7 +55,7 @@ function ManagerFleetTrackingPage() {
       {error && <p className="notice error">{error}</p>}
 
       <div className="dx-panel" style={{ marginBottom: 20 }}>
-        <h3 className="dx-panel-title">Live Map</h3>
+        <h3 className="dx-panel-title">Last Known Locations</h3>
         <LiveFleetMap markers={markers} />
       </div>
 

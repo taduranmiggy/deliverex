@@ -22,7 +22,7 @@ class OcrReviewController extends Controller
 
         switch ($filter) {
             case 'waiting':
-                $query->whereIn('processing_status', ['pending', 'processing', 'completed'])
+                $query->whereIn('processing_status', ['pending', 'processing', 'processed', 'completed'])
                       ->where('is_validated', false);
                 break;
             case 'flagged':

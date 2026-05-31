@@ -190,7 +190,7 @@ function AssignDriverVehiclePage() {
       <header className="page-header">
         <div className="header-stack">
           <h1>Dispatch (Best-Fit)</h1>
-          <p>Intelligent job assignment recommendations</p>
+          <p>System-generated job assignment recommendations</p>
         </div>
       </header>
       {message && <p className="notice">{message}</p>}

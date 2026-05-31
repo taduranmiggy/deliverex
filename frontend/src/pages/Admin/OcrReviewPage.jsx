@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, validateOcr } from '../../api/admin'
-import { EmptyState, PageHeader, StatusBadge } from '../../components/ui'
+import { EmptyState, PageHeader } from '../../components/ui'
 import { Check, FileSearch, Flag, RefreshCw, X } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 
@@ -14,10 +14,15 @@ const FILTER_TABS = [
 const STATUS_MAP = {
   pending:      { cls: 'badge-dx badge-dx--pending',     label: 'Pending' },
   processing:   { cls: 'badge-dx badge-dx--dispatched',  label: 'Processing' },
-  completed:    { cls: 'badge-dx badge-dx--enroute',     label: 'Waiting Review' },
-  needs_review: { cls: 'badge-dx badge-dx--reviewing',   label: 'Flagged' },
+  processed:    { cls: 'badge-dx badge-dx--enroute',     label: 'Ready for Review' },
+  completed:    { cls: 'badge-dx badge-dx--enroute',     label: 'Ready for Review' },
+  needs_review: { cls: 'badge-dx badge-dx--reviewing',   label: 'Needs Review' },
   validated:    { cls: 'badge-dx badge-dx--validated',   label: 'Validated' },
   failed:       { cls: 'badge-dx badge-dx--failed',      label: 'Failed' },
+}
+
+function isReadyToApprove(status) {
+  return ['processed', 'completed', 'needs_review'].includes(status)
 }
 
 function OcrReviewPage() {
@@ -50,7 +55,6 @@ function OcrReviewPage() {
 
   useEffect(() => { load(tab) }, [tab]) // eslint-disable-line
 
-  // Auto-refresh while items are processing
   useEffect(() => {
     const needsPoll = queue.some((q) => ['pending', 'processing'].includes(q.processing_status))
     if (!needsPoll) return undefined
@@ -103,7 +107,7 @@ function OcrReviewPage() {
         corrected_text: action === 'approve' ? corrected : undefined,
         reject_reason:  action !== 'approve' ? rejectReason : undefined,
       })
-      setMsg({ approve: 'Document approved.', reject: 'Document rejected.', flag: 'Document flagged for review.' }[action])
+      setMsg({ approve: 'Document validated and saved.', reject: 'Document rejected.', flag: 'Document flagged for review.' }[action])
       load(tab)
     } catch (err) {
       setError(err.message)
@@ -130,8 +134,9 @@ function OcrReviewPage() {
 
   const getBadge = (item) => STATUS_MAP[item.processing_status] ?? { cls: 'badge-dx badge-dx--muted', label: item.processing_status ?? '—' }
 
-  const canReprocess = selected && ['pending', 'processing', 'failed', 'completed'].includes(selected.processing_status)
+  const canReprocess = selected && ['pending', 'processing', 'failed', 'processed', 'completed', 'needs_review'].includes(selected.processing_status)
   const isStub = selected?.engine === 'stub'
+  const showTesseractWarning = isStub || (selected?.processing_status === 'failed' && selected?.error_message?.toLowerCase().includes('tesseract'))
 
   return (
     <>
@@ -139,10 +144,11 @@ function OcrReviewPage() {
       {error && <p className="notice error">{error}</p>}
       {msg   && <p className="notice">{msg}</p>}
 
-      {isStub && (
-        <p className="notice" style={{ marginBottom: 16 }}>
-          Tesseract OCR is not installed on the server. Install it, then click <strong>Reprocess OCR</strong>.
-          See <code>DEFENSE_SETUP.md</code> for Windows install steps.
+      {showTesseractWarning && (
+        <p className="notice error" style={{ marginBottom: 16 }}>
+          <strong>Tesseract OCR is not installed or not configured.</strong>
+          {' '}Install Tesseract, set <code>TESSERACT_PATH</code> in <code>backend/.env</code>, run{' '}
+          <code>php artisan ocr:check</code>, restart <code>php artisan serve</code>, then click <strong>Reprocess OCR</strong>.
         </p>
       )}
 
@@ -238,14 +244,16 @@ function OcrReviewPage() {
                   <textarea rows={2} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection or flag…" />
                 </label>
               )}
-              {selected.error_message && selected.processing_status === 'failed' && (
-                <p className="notice error" style={{ margin: 0 }}>{selected.error_message}</p>
+              {selected.error_message && (
+                <p className={`notice${selected.processing_status === 'failed' || isStub ? ' error' : ''}`} style={{ margin: 0 }}>
+                  {selected.error_message}
+                </p>
               )}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button className="btn-dx-primary" type="button" disabled={submitting || selected.processing_status !== 'completed'} onClick={() => handleAction('approve')}
+                <button className="btn-dx-primary" type="button" disabled={submitting || !isReadyToApprove(selected.processing_status)} onClick={() => handleAction('approve')}
                   style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
-                  title={selected.processing_status !== 'completed' ? 'Wait until OCR completes' : 'Save validated record'}>
-                  <Check size={15} /> Approve
+                  title={!isReadyToApprove(selected.processing_status) ? 'Wait until OCR completes or reprocess failed items' : 'Save validated record'}>
+                  <Check size={15} /> Validate
                 </button>
                 <button className="btn-dx-secondary" type="button" disabled={submitting} onClick={() => handleAction('reject')}
                   style={{ color: 'var(--color-error)', borderColor: 'var(--color-error-mid)' }}>

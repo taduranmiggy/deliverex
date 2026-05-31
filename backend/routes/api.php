@@ -17,6 +17,7 @@ use App\Http\Controllers\Dispatcher\CalendarController;
 use App\Http\Controllers\Dispatcher\JobOrderController;
 use App\Http\Controllers\Driver\AssignmentController as DriverAssignmentController;
 use App\Http\Controllers\Driver\ProfileController as DriverProfileController;
+use App\Http\Controllers\Driver\IssueController as DriverIssueController;
 use App\Http\Controllers\Driver\DocumentController as DriverDocumentController;
 use App\Http\Controllers\Driver\StatusController as DriverStatusController;
 use App\Http\Controllers\Driver\TrackingController as DriverTrackingController;
@@ -112,11 +113,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // ─── Driver ───────────────────────────────────────────────────────────────
     Route::middleware('role:driver')->prefix('driver')->group(function () {
         Route::get('/profile',                             [DriverProfileController::class, 'show']);
+        Route::put('/profile',                             [DriverProfileController::class, 'update']);
         Route::get('/assignments',                         [DriverAssignmentController::class, 'index']);
         Route::get('/assignments/{assignment}',            [DriverAssignmentController::class, 'show']);
         Route::post('/status',                             [DriverStatusController::class, 'store']);
         Route::post('/tracking',                           [DriverTrackingController::class, 'store']);
         Route::post('/documents',                          [DriverDocumentController::class, 'store']);
+        Route::post('/issues',                             [DriverIssueController::class, 'store']);
     });
 
     // ─── Manager ──────────────────────────────────────────────────────────────

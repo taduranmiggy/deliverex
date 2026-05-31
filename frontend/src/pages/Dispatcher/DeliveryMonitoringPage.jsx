@@ -6,11 +6,21 @@ import { PageHeader, StatusBadge } from '../../components/ui'
 import { Car, ExternalLink, MapPin, RefreshCw } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 
+function formatGpsTime(iso) {
+  if (!iso) return null
+  return new Date(iso).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 function DeliveryMonitoringPage() {
   const [assignments, setAssignments] = useState([])
-  const [gpsMap, setGpsMap]           = useState({})
-  const [error, setError]             = useState('')
-  const [refreshing, setRefreshing]   = useState(false)
+  const [gpsMap, setGpsMap] = useState({})
+  const [error, setError] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
 
   const load = async () => {
     setRefreshing(true)
@@ -45,8 +55,6 @@ function DeliveryMonitoringPage() {
 
   useEffect(() => {
     load()
-    const iv = setInterval(load, 20000)
-    return () => clearInterval(iv)
   }, [])
 
   const mapMarkers = useMemo(
@@ -66,11 +74,9 @@ function DeliveryMonitoringPage() {
     [assignments, gpsMap],
   )
 
-  const gpsCount = Object.keys(gpsMap).length
-
   return (
     <>
-      <PageHeader title="Live Tracking" subtitle={`OpenStreetMap · ${gpsCount} drivers with GPS · refreshes every 20 s`}>
+      <PageHeader title="Tracking" subtitle="Latest driver updates and last reported status">
         <button type="button" className="btn-dx-secondary btn-sm" onClick={load} disabled={refreshing}>
           <RefreshCw size={14} style={refreshing ? { animation: 'spin 0.7s linear infinite' } : {}} />
           Refresh
@@ -80,7 +86,7 @@ function DeliveryMonitoringPage() {
 
       <div className="dx-split-bestfit">
         <div className="dx-panel" style={{ marginBottom: 0 }}>
-          <h3 className="dx-panel-title">Live Map (GPS)</h3>
+          <h3 className="dx-panel-title">Last Known Locations</h3>
           <LiveFleetMap markers={mapMarkers} />
         </div>
 
@@ -107,10 +113,18 @@ function DeliveryMonitoringPage() {
                     <div className="dx-driver-muted" style={{ marginTop: 10 }}>
                       <div style={{ fontWeight: 600 }}>Job {formatJobPublicId(a.job_order_id)}</div>
                       <div style={{ marginTop: 3 }}>{a.job_order?.pickup_location} → {a.job_order?.dropoff_location}</div>
+                      <div style={{ marginTop: 6, fontSize: '0.8125rem' }}>
+                        <strong>Last Reported Status:</strong> {a.status?.replace(/_/g, ' ') ?? '—'}
+                      </div>
                       <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
                         <MapPin size={13} />
-                        {gps ? `${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : 'Awaiting GPS'}
+                        {gps ? `Last Known Location: ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : 'No location reported yet'}
                       </div>
+                      {gps?.at && (
+                        <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--muted)' }}>
+                          Last Updated: {formatGpsTime(gps.at)}
+                        </div>
+                      )}
                       <div style={{ marginTop: 3 }}><Car size={12} style={{ display: 'inline', marginRight: 4 }} />{a.vehicle?.plate_no}</div>
                       <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="btn-dx-secondary btn-sm" style={{ marginTop: 8, display: 'inline-flex', gap: 4 }}>
                         <ExternalLink size={12} /> Open in Maps

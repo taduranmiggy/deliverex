@@ -39,7 +39,7 @@ function AdminDashboard() {
 
   return (
     <>
-      <PageHeader title="Admin Dashboard" subtitle="OCR validation and system overview" />
+      <PageHeader title="Admin Dashboard" subtitle="System Overview and Activity Monitoring" />
       {error && <p className="notice error">{error}</p>}
 
       <div className="dx-stat-row">
@@ -80,7 +80,7 @@ function AdminDashboard() {
           <SectionCard title="Quick Navigation">
             {[
               { label: 'OCR Validation Queue', to: '/admin/ocr-validation', count: summary.ocr, urgent: summary.ocr > 0 },
-              { label: 'User Management', to: '/admin/users', count: summary.users },
+              { label: 'Manage Users and Roles', to: '/admin/users', count: summary.users },
               { label: 'Master Data', to: '/admin/master-data', count: null },
               { label: 'Audit Logs', to: '/admin/audit-logs', count: null },
               { label: 'Chatbot Management', to: '/admin/chatbot', count: null },

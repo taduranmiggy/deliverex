@@ -1,90 +1,113 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import LogoutButton from '../components/LogoutButton'
-import useAuth from '../hooks/useAuth'
-import { ClipboardCheck, FileUp, Truck, User } from 'lucide-react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { DriverUiProvider } from '../context/DriverUiContext'
+import { fetchNotifications } from '../api/notifications'
+import '../styles/driver-app.css'
+import { ArrowLeft, Bell, Briefcase, Camera, Home, Truck, User } from 'lucide-react'
 
-const navCls = ({ isActive }) => `driver-nav-link${isActive ? ' driver-nav-link--active' : ''}`
+const TABS = [
+  { to: '/driver', end: true, icon: Home, label: 'Home' },
+  { to: '/driver/jobs', icon: Briefcase, label: 'Jobs' },
+  { to: '/driver/documents', icon: Camera, label: 'Upload' },
+  { to: '/driver/notifications', icon: Bell, label: 'Alerts' },
+  { to: '/driver/profile', icon: User, label: 'Profile' },
+]
 
-function DriverLayout() {
-  const { user } = useAuth()
-  const initials = user?.name
-    ? user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
-    : 'DR'
+const PAGE_TITLES = {
+  '/driver': 'Home',
+  '/driver/jobs': 'Jobs',
+  '/driver/documents': 'Upload',
+  '/driver/notifications': 'Notifications',
+  '/driver/profile': 'Profile',
+}
+
+function DriverLayoutInner() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  const isJobDetail = /^\/driver\/jobs\/[^/]+$/.test(location.pathname)
+  const showBack = isJobDetail
+
+  const headerTitle = useMemo(() => {
+    if (isJobDetail) return 'Job Details'
+    return PAGE_TITLES[location.pathname] ?? 'Deliverex'
+  }, [location.pathname, isJobDetail])
+
+  useEffect(() => {
+    fetchNotifications(1)
+      .then((res) => {
+        const count = (res.data || []).filter((n) => !n.is_read).length
+        setUnreadCount(count)
+      })
+      .catch(() => {})
+  }, [location.pathname])
+
+  const tabCls = ({ isActive }) => `driver-app-tab${isActive ? ' driver-app-tab--active' : ''}`
 
   return (
-    <div className="driver-shell">
-      {/* Desktop sidebar — hidden on mobile */}
-      <aside className="sidebar sidebar--deliverex driver-sidebar-desktop">
-        <div className="sidebar-brand-block">
-          <div className="sidebar-brand-wrap">
-            <div className="sidebar-brand-icon" aria-hidden>
-              <Truck size={18} color="#fff" />
-            </div>
-            <div>
-              <div className="brand">Deliverex</div>
-              <div className="sidebar-role-label">Driver</div>
-            </div>
-          </div>
-        </div>
-
-        <nav aria-label="Driver navigation">
-          <NavLink to="/driver" end className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
-            <Truck size={17} aria-hidden />
-            <span>My Jobs</span>
-          </NavLink>
-          <NavLink to="/driver/status-update" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
-            <ClipboardCheck size={17} aria-hidden />
-            <span>Status Update</span>
-          </NavLink>
-          <NavLink to="/driver/documents" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
-            <FileUp size={17} aria-hidden />
-            <span>Upload Documents</span>
-          </NavLink>
-          <NavLink to="/driver/profile" className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
-            <User size={17} aria-hidden />
-            <span>My Profile</span>
-          </NavLink>
-        </nav>
-
-        <div className="profile">
-          <NavLink to="/driver/profile" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <div className="topbar-avatar" style={{ flexShrink: 0 }}>{initials}</div>
-              <div style={{ minWidth: 0 }}>
-                <strong>{user?.name ?? 'Driver'}</strong>
-                <span>{user?.email ?? ''}</span>
+    <div className="driver-app-root">
+      <div className="driver-app-frame">
+        <header className="driver-app-header">
+          {showBack ? (
+            <button
+              type="button"
+              className="driver-app-header__back"
+              aria-label="Go back"
+              onClick={() => navigate(-1)}
+            >
+              <ArrowLeft size={22} />
+            </button>
+          ) : (
+            <div className="driver-app-header__brand">
+              <div className="driver-app-header__logo" aria-hidden>
+                <Truck size={18} />
               </div>
             </div>
+          )}
+          <h1 className="driver-app-header__title">{headerTitle}</h1>
+          <NavLink to="/driver/notifications" className="driver-app-header__notif" aria-label="Notifications">
+            <Bell size={22} />
+            {unreadCount > 0 && (
+              <span className="driver-app-header__badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+            )}
           </NavLink>
-          <LogoutButton />
-        </div>
-      </aside>
+        </header>
 
-      {/* Main content */}
-      <main id="main-content" tabIndex={-1} className="driver-main">
-        <Outlet />
-      </main>
+        <main className="driver-app-main" id="main-content" tabIndex={-1}>
+          <Suspense
+            fallback={(
+              <div className="driver-app-content">
+                <div className="da-skeleton" style={{ minHeight: 140 }} />
+                <div className="da-skeleton" />
+                <div className="da-skeleton" />
+              </div>
+            )}
+          >
+            <div className="driver-app-content">
+              <Outlet />
+            </div>
+          </Suspense>
+        </main>
 
-      {/* Mobile bottom navigation */}
-      <nav className="driver-bottom-nav" aria-label="Driver navigation">
-        <NavLink to="/driver" end className={navCls}>
-          <Truck size={22} aria-hidden />
-          <span>Jobs</span>
-        </NavLink>
-        <NavLink to="/driver/status-update" className={navCls}>
-          <ClipboardCheck size={22} aria-hidden />
-          <span>Status</span>
-        </NavLink>
-        <NavLink to="/driver/documents" className={navCls}>
-          <FileUp size={22} aria-hidden />
-          <span>Docs</span>
-        </NavLink>
-        <NavLink to="/driver/profile" className={navCls}>
-          <User size={22} aria-hidden />
-          <span>Profile</span>
-        </NavLink>
-      </nav>
+        <nav className="driver-app-tabbar" aria-label="Driver navigation">
+          {TABS.map(({ to, end, icon: Icon, label }) => (
+            <NavLink key={to} to={to} end={end} className={tabCls}>
+              <Icon size={22} aria-hidden />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      </div>
     </div>
+  )
+}
+
+function DriverLayout() {
+  return (
+    <DriverUiProvider>
+      <DriverLayoutInner />
+    </DriverUiProvider>
   )
 }
 

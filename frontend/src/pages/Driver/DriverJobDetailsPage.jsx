@@ -1,25 +1,80 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { fetchDriverAssignment } from '../../api/driver'
-import { StatusBadge } from '../../components/ui'
+import { useCallback, useEffect, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import BottomSheet from '../../components/driver/BottomSheet'
+import DeliveryTimeline from '../../components/driver/DeliveryTimeline'
+import DriverOfflineBar from '../../components/driver/DriverOfflineBar'
+import DriverStatusChip from '../../components/driver/DriverStatusChip'
+import { useDriverUi } from '../../context/DriverUiContext'
+import { fetchDriverAssignment, postIssueReport, postStatusUpdate } from '../../api/driver'
 import { formatJobPublicId } from '../../utils/formatPhp'
-import { ArrowLeft, Calendar, Car, ClipboardList, ExternalLink, FileUp, MapPin, Navigation, User } from 'lucide-react'
+import {
+  formatJobSchedule,
+  formatLastUpdated,
+  getNextStatusOptions,
+  ISSUE_TYPES,
+} from '../../utils/driverAssignment'
+import {
+  AlertTriangle,
+  Car,
+  ClipboardList,
+  ExternalLink,
+  FileUp,
+  MapPin,
+  Navigation,
+  User,
+} from 'lucide-react'
+
+const STATUS_META = {
+  in_progress: {
+    label: 'Start Delivery / En Route',
+    confirmTitle: 'Start delivery?',
+    confirmSub: 'Mark yourself as en route to the pickup or drop-off location.',
+  },
+  arrived: {
+    label: 'Mark Arrived',
+    confirmTitle: 'Confirm arrival?',
+    confirmSub: 'Confirm you have arrived at the destination.',
+  },
+  completed: {
+    label: 'Complete Delivery',
+    confirmTitle: 'Complete delivery?',
+    confirmSub: 'Mark this delivery as completed. This action cannot be undone.',
+  },
+}
 
 function DriverJobDetailsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [assignment, setAssignment] = useState(null)
-  const [error, setError]           = useState('')
+  const location = useLocation()
+  const { showToast } = useDriverUi()
 
-  useEffect(() => {
+  const [assignment, setAssignment] = useState(null)
+  const [error, setError] = useState('')
+  const [statusSubmitting, setStatusSubmitting] = useState(false)
+  const [pendingStatus, setPendingStatus] = useState(null)
+  const [issueOpen, setIssueOpen] = useState(false)
+  const [issueType, setIssueType] = useState('')
+  const [issueNotes, setIssueNotes] = useState('')
+  const [issueSubmitting, setIssueSubmitting] = useState(false)
+  const [issueError, setIssueError] = useState('')
+
+  const load = useCallback(() => {
     if (!id) return
     fetchDriverAssignment(id)
       .then((res) => setAssignment(res))
       .catch((err) => setError(err.message))
   }, [id])
 
+  useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (location.state?.reportIssue) setIssueOpen(true)
+  }, [location.state?.reportIssue])
+
   const job = assignment?.job_order
-  const logs = [...(assignment?.delivery_status_logs ?? [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+  const logs = [...(assignment?.delivery_status_logs ?? [])].sort(
+    (a, b) => new Date(a.created_at) - new Date(b.created_at),
+  )
   const isActive = assignment && !['completed', 'cancelled'].includes(assignment.status)
   const latestGps = [...(assignment?.tracking_logs ?? [])].sort(
     (a, b) => new Date(b.captured_at) - new Date(a.captured_at),
@@ -32,140 +87,269 @@ function DriverJobDetailsPage() {
     ? `https://waze.com/ul?ll=${latestGps.latitude},${latestGps.longitude}&navigate=yes`
     : `https://waze.com/ul?q=${encodeURIComponent(dropoff)}&navigate=yes`
 
+  const lastUpdated = formatLastUpdated(assignment)
+  const nextStatuses = assignment ? getNextStatusOptions(assignment.status) : []
+  const deliveryNotes = [job?.notes, job?.job_requirements].filter(Boolean)
+  const primaryNext = nextStatuses[0]
+
+  const confirmStatus = async () => {
+    if (!assignment || !pendingStatus || statusSubmitting) return
+    setStatusSubmitting(true)
+    try {
+      await postStatusUpdate({ assignment_id: assignment.id, status: pendingStatus })
+      showToast('Status updated successfully')
+      setPendingStatus(null)
+      load()
+    } catch {
+      showToast('Unable to update status', 'error')
+    } finally {
+      setStatusSubmitting(false)
+    }
+  }
+
+  const submitIssue = async () => {
+    if (!issueType) {
+      setIssueError('Select an issue type.')
+      return
+    }
+    setIssueSubmitting(true)
+    setIssueError('')
+    try {
+      await postIssueReport({
+        assignment_id: assignment.id,
+        issue_type: issueType,
+        notes: issueNotes.trim() || undefined,
+      })
+      showToast('Issue report submitted')
+      setIssueOpen(false)
+      setIssueType('')
+      setIssueNotes('')
+    } catch (err) {
+      setIssueError(err.message || 'Unable to submit issue report.')
+    } finally {
+      setIssueSubmitting(false)
+    }
+  }
+
+  if (!assignment && !error) {
+    return (
+      <>
+        <DriverOfflineBar />
+        <div className="da-skeleton" style={{ minHeight: 200 }} />
+      </>
+    )
+  }
+
   return (
-    <section className="driver-page">
-      <button type="button" className="driver-back-btn" onClick={() => navigate('/driver')}>
-        <ArrowLeft size={16} /> Back to jobs
-      </button>
-
-      <div className="driver-page-header">
-        <div>
-          <h1>Job Details</h1>
-          {assignment?.job_order_id && (
-            <p className="driver-page-sub" style={{ fontFamily: 'monospace' }}>{formatJobPublicId(assignment.job_order_id)}</p>
-          )}
-        </div>
-        {assignment && <StatusBadge status={assignment.status} />}
-      </div>
-
-      {error && <p className="driver-error">{error}</p>}
-      {!assignment && !error && (
-        <div className="driver-card" style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px' }}>
-          Loading…
-        </div>
-      )}
+    <>
+      <DriverOfflineBar />
+      {error && <p className="da-alert da-alert--error">{error}</p>}
 
       {assignment && (
         <>
-          {/* Client */}
-          {job?.customer_name && (
-            <div className="driver-card" style={{ background: 'linear-gradient(135deg, var(--color-primary), #1d4ed8)', color: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'grid', placeItems: 'center' }}>
-                  <User size={20} color="#fff" />
-                </div>
-                <div>
-                  <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', margin: 0 }}>Client</p>
-                  <p style={{ fontWeight: 700, fontSize: '1rem', margin: 0, color: '#fff' }}>{job.customer_name}</p>
-                  {job.customer_contact && <p style={{ fontSize: '0.8125rem', color: 'rgba(255,255,255,0.75)', margin: 0 }}>{job.customer_contact}</p>}
-                </div>
-              </div>
+          <div className="da-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontFamily: 'monospace', fontSize: '0.8125rem', color: 'var(--da-muted)' }}>
+                {formatJobPublicId(assignment.job_order_id)}
+              </span>
+              <DriverStatusChip status={assignment.status} />
             </div>
-          )}
-
-          {/* Route card */}
-          <div className="driver-card">
-            <p className="driver-card-title"><MapPin size={12} style={{ display: 'inline', marginRight: 4 }} /> Route</p>
-            <div className="driver-kv"><span>Pickup</span><strong>{job?.pickup_location ?? '—'}</strong></div>
-            <div className="driver-kv"><span>Drop-off</span><strong>{job?.dropoff_location ?? '—'}</strong></div>
-            {job?.scheduled_start && (
-              <div className="driver-kv">
-                <span><Calendar size={12} style={{ display: 'inline', marginRight: 4 }} />Schedule</span>
-                <strong style={{ fontSize: '0.875rem' }}>
-                  {new Date(job.scheduled_start).toLocaleString()}
-                  {job.scheduled_end ? ` → ${new Date(job.scheduled_end).toLocaleString()}` : ''}
-                </strong>
-              </div>
+            {lastUpdated && (
+              <p style={{ fontSize: '0.75rem', color: 'var(--da-muted)', margin: '0 0 14px' }}>
+                Last updated {lastUpdated}
+              </p>
             )}
-            <div className="driver-kv">
-              <span>Priority</span>
-              <strong style={{ textTransform: 'capitalize' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 99, fontSize: '0.8125rem', background: job?.priority === 'urgent' ? 'var(--color-error-light)' : job?.priority === 'high' ? 'var(--color-warning-light)' : 'var(--slate-100)', color: job?.priority === 'urgent' ? 'var(--color-error)' : job?.priority === 'high' ? 'var(--color-warning)' : 'var(--muted)' }}>
-                  {job?.priority ?? '—'}
-                </span>
-              </strong>
-            </div>
+            <DeliveryTimeline status={assignment.status} />
           </div>
 
-          {/* Vehicle */}
-          {assignment.vehicle && (
-            <div className="driver-card">
-              <p className="driver-card-title"><Car size={12} style={{ display: 'inline', marginRight: 4 }} /> Vehicle</p>
-              <div className="driver-kv"><span>Plate</span><strong style={{ fontFamily: 'monospace' }}>{assignment.vehicle.plate_no}</strong></div>
-              <div className="driver-kv"><span>Type</span><strong>{assignment.vehicle.type}</strong></div>
-              {assignment.vehicle.capacity && <div className="driver-kv"><span>Capacity</span><strong>{assignment.vehicle.capacity}</strong></div>}
+          {job?.customer_name && (
+            <div className="da-card">
+              <p className="da-card__label">Client</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 14, background: '#eff6ff', display: 'grid', placeItems: 'center' }}>
+                  <User size={20} color="var(--da-primary)" />
+                </div>
+                <div>
+                  <p style={{ fontWeight: 800, margin: 0, fontSize: '1rem' }}>{job.customer_name}</p>
+                  {job.customer_contact && (
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--da-muted)', margin: '2px 0 0' }}>{job.customer_contact}</p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Special instructions */}
-          {job?.job_requirements && (
-            <div className="driver-card">
-              <p className="driver-card-title"><ClipboardList size={12} style={{ display: 'inline', marginRight: 4 }} /> Special Instructions</p>
-              <p className="driver-requirements">{job.job_requirements}</p>
-            </div>
-          )}
-
-          {/* Timeline */}
-          {logs.length > 0 && (
-            <div className="driver-card">
-              <p className="driver-card-title">Delivery Timeline</p>
-              <ol className="driver-timeline">
-                {logs.map((log, i) => (
-                  <li key={i} className="driver-timeline-item">
-                    <div className="driver-timeline-dot" style={{ background: log.status === 'completed' ? 'var(--color-success)' : 'var(--color-primary)' }} />
-                    <div>
-                      <StatusBadge status={log.status} />
-                      {log.notes && <span className="driver-timeline-note">{log.notes}</span>}
-                      <div className="driver-timeline-time">{log.created_at ? new Date(log.created_at).toLocaleString() : '—'}</div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
+          <div className="da-card">
+            <p className="da-card__label"><MapPin size={12} style={{ display: 'inline', marginRight: 4 }} />Route</p>
+            <div className="da-kv"><span>Pickup</span><strong>{job?.pickup_location ?? '—'}</strong></div>
+            <div className="da-kv"><span>Drop-off</span><strong>{job?.dropoff_location ?? '—'}</strong></div>
+            <div className="da-kv"><span>Schedule</span><strong>{formatJobSchedule(job)}</strong></div>
+            {job?.tracking_code && (
+              <div className="da-kv"><span>Tracking</span><strong style={{ fontFamily: 'monospace' }}>{job.tracking_code}</strong></div>
+            )}
+          </div>
 
           {isActive && (
-            <div className="driver-card">
-              <p className="driver-card-title"><Navigation size={12} style={{ display: 'inline', marginRight: 4 }} /> Navigation</p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <a href={navUrl} target="_blank" rel="noopener noreferrer" className="driver-btn-secondary" style={{ flex: 1, justifyContent: 'center', textDecoration: 'none' }}>
-                  <ExternalLink size={14} /> Google Maps
+            <div className="da-nav-card">
+              <p className="da-card__label" style={{ color: 'var(--da-primary)' }}>
+                <Navigation size={12} style={{ display: 'inline', marginRight: 4 }} />
+                Navigation
+              </p>
+              <p className="da-nav-card__dest">{dropoff || 'Destination not set'}</p>
+              {latestGps && (
+                <p style={{ fontSize: '0.75rem', color: 'var(--da-muted)', margin: '0 0 12px' }}>
+                  Last known: {Number(latestGps.latitude).toFixed(4)}, {Number(latestGps.longitude).toFixed(4)}
+                </p>
+              )}
+              <div className="da-nav-grid">
+                <a href={navUrl} target="_blank" rel="noopener noreferrer" className="da-btn da-btn--maps">
+                  <ExternalLink size={16} /> Google Maps
                 </a>
-                <a href={wazeUrl} target="_blank" rel="noopener noreferrer" className="driver-btn-secondary" style={{ flex: 1, justifyContent: 'center', textDecoration: 'none' }}>
-                  <ExternalLink size={14} /> Waze
+                <a href={wazeUrl} target="_blank" rel="noopener noreferrer" className="da-btn da-btn--waze">
+                  <ExternalLink size={16} /> Waze
                 </a>
               </div>
             </div>
           )}
 
-          {/* Actions */}
-          {isActive && (
-            <div className="driver-sticky-actions">
-              <button type="button" className="driver-btn-primary"
-                style={{ background: 'var(--color-primary)', color: '#fff', borderColor: 'var(--color-primary)', flex: 1 }}
-                onClick={() => navigate('/driver/status-update', { state: { assignmentId: assignment.id } })}>
-                Update Status
-              </button>
-              <button type="button" className="driver-btn-secondary"
-                style={{ background: 'var(--surface)', color: 'var(--slate-700)', border: '1.5px solid var(--stroke)', flex: 1, justifyContent: 'center' }}
-                onClick={() => navigate('/driver/documents', { state: { assignmentId: assignment.id } })}>
-                <FileUp size={16} /> Upload Docs
-              </button>
+          {assignment.vehicle && (
+            <div className="da-card">
+              <p className="da-card__label"><Car size={12} style={{ display: 'inline', marginRight: 4 }} />Vehicle</p>
+              <div className="da-kv"><span>Plate</span><strong style={{ fontFamily: 'monospace' }}>{assignment.vehicle.plate_no}</strong></div>
+              <div className="da-kv"><span>Type</span><strong>{assignment.vehicle.type ?? '—'}</strong></div>
             </div>
           )}
+
+          <div className="da-card">
+            <p className="da-card__label"><ClipboardList size={12} style={{ display: 'inline', marginRight: 4 }} />Delivery notes</p>
+            {deliveryNotes.length > 0 ? (
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.875rem', lineHeight: 1.5 }}>
+                {deliveryNotes.map((note, i) => <li key={i}>{note}</li>)}
+              </ul>
+            ) : (
+              <p style={{ margin: 0, color: 'var(--da-muted)', fontSize: '0.875rem' }}>No delivery notes.</p>
+            )}
+          </div>
+
+          {logs.length > 0 && (
+            <div className="da-card">
+              <p className="da-card__label">Status history</p>
+              {logs.map((log, i) => (
+                <div key={i} className="da-kv">
+                  <span>{log.created_at ? new Date(log.created_at).toLocaleString() : '—'}</span>
+                  <DriverStatusChip status={log.status} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {isActive && (
+            <div className="da-job-footer">
+              {primaryNext && (
+                <button
+                  type="button"
+                  className="da-btn da-btn--primary da-btn--lg da-btn--block"
+                  disabled={statusSubmitting}
+                  onClick={() => setPendingStatus(primaryNext.value)}
+                >
+                  {STATUS_META[primaryNext.value]?.label ?? primaryNext.label}
+                </button>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button
+                  type="button"
+                  className="da-btn da-btn--secondary"
+                  onClick={() => navigate('/driver/documents', { state: { assignmentId: assignment.id } })}
+                >
+                  <FileUp size={16} /> Upload Proof
+                </button>
+                <button type="button" className="da-btn da-btn--outline" onClick={() => setIssueOpen(true)}>
+                  <AlertTriangle size={16} /> Report Issue
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ height: isActive ? 120 : 0 }} aria-hidden />
+
+          <BottomSheet
+            open={!!pendingStatus}
+            onClose={() => !statusSubmitting && setPendingStatus(null)}
+            title={STATUS_META[pendingStatus]?.confirmTitle ?? 'Update status?'}
+            subtitle={STATUS_META[pendingStatus]?.confirmSub}
+            footer={(
+              <>
+                <button
+                  type="button"
+                  className="da-btn da-btn--primary da-btn--block"
+                  disabled={statusSubmitting}
+                  onClick={confirmStatus}
+                >
+                  {statusSubmitting ? 'Saving…' : 'Confirm'}
+                </button>
+                <button
+                  type="button"
+                  className="da-btn da-btn--secondary da-btn--block"
+                  disabled={statusSubmitting}
+                  onClick={() => setPendingStatus(null)}
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+          />
+
+          <BottomSheet
+            open={issueOpen}
+            onClose={() => !issueSubmitting && setIssueOpen(false)}
+            title="Report Issue"
+            subtitle="Select the issue type and add details if needed."
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {ISSUE_TYPES.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  className={`da-issue-option${issueType === t.value ? ' da-issue-option--selected' : ''}`}
+                  onClick={() => setIssueType(t.value)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="da-field" style={{ marginTop: 16 }}>
+              <label htmlFor="issue-notes">Additional notes (optional)</label>
+              <textarea
+                id="issue-notes"
+                rows={3}
+                placeholder="Describe the issue…"
+                value={issueNotes}
+                onChange={(e) => setIssueNotes(e.target.value)}
+              />
+            </div>
+            {issueError && <p className="da-alert da-alert--error">{issueError}</p>}
+            <div className="da-sheet__actions">
+              <button
+                type="button"
+                className="da-btn da-btn--primary da-btn--block"
+                disabled={issueSubmitting}
+                onClick={submitIssue}
+              >
+                {issueSubmitting ? 'Submitting…' : 'Submit Issue Report'}
+              </button>
+              <button
+                type="button"
+                className="da-btn da-btn--secondary da-btn--block"
+                disabled={issueSubmitting}
+                onClick={() => setIssueOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </BottomSheet>
         </>
       )}
-    </section>
+    </>
   )
 }
 

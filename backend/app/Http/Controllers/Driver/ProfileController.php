@@ -39,6 +39,13 @@ class ProfileController extends Controller
             ->orderByDesc('id')
             ->paginate(10, ['*'], 'history_page', $historyPage);
 
+        $baseQuery = DispatchAssignment::query()->where('driver_id', $driver->id);
+        $stats = [
+            'total_deliveries'     => (clone $baseQuery)->count(),
+            'completed_deliveries' => (clone $baseQuery)->where('status', 'completed')->count(),
+            'pending_deliveries'   => (clone $baseQuery)->whereIn('status', ['assigned', 'in_progress', 'arrived'])->count(),
+        ];
+
         return response()->json([
             'user' => [
                 'id'    => $user->id,
@@ -60,6 +67,38 @@ class ProfileController extends Controller
             ] : null,
             'current_assignment' => $currentAssignment,
             'delivery_history'   => $history,
+            'stats'              => $stats,
+        ]);
+    }
+
+    /**
+     * Driver may update limited profile fields on their own account.
+     */
+    public function update(Request $request)
+    {
+        $user = $request->user();
+        DriverAccount::require($user);
+
+        $data = $request->validate([
+            'phone' => ['nullable', 'string', 'max:50'],
+            'name'  => ['sometimes', 'string', 'max:255'],
+        ]);
+
+        if (array_key_exists('name', $data)) {
+            $user->name = $data['name'];
+        }
+        if (array_key_exists('phone', $data)) {
+            $user->phone = $data['phone'];
+        }
+        $user->save();
+
+        return response()->json([
+            'user' => [
+                'id'    => $user->id,
+                'name'  => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+            ],
         ]);
     }
 

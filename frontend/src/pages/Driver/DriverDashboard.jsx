@@ -87,9 +87,6 @@ function DriverDashboard() {
             <Link to={`/driver/jobs/${active.id}`} className="driver-btn-primary">
               <CheckCircle2 size={16} /> View details
             </Link>
-            <Link to="/driver/status-update" state={{ assignmentId: active.id }} className="driver-btn-secondary">
-              Update status
-            </Link>
             <button type="button" className="driver-btn-ghost" onClick={handleGpsPing}>
               <MapPin size={15} /> GPS
             </button>

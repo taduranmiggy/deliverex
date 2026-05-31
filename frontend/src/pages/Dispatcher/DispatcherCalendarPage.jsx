@@ -1,149 +1,99 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Calendar as BigCalendar, dateFnsLocalizer } from 'react-big-calendar'
+import { format, parse, startOfWeek, getDay } from 'date-fns'
+import enUS from 'date-fns/locale/en-US'
+import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { fetchCalendarEvents, fetchJobOrder } from '../../api/dispatcher'
-import { PageHeader, StatusBadge } from '../../components/ui'
-import {
-  addDays,
-  addMonths,
-  buildMonthCells,
-  buildWeekDays,
-  endOfWeek,
-  eventsForDay,
-  formatDayLabel,
-  formatMonthYear,
-  formatWeekLabel,
-  sameDay,
-  startOfMonth,
-  toIso,
-  viewRange,
-} from '../../utils/calendarRange'
-import { formatJobPublicId } from '../../utils/formatPhp'
+import { EmptyState, PageHeader, StatusBadge } from '../../components/ui'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
-import { Calendar, ChevronLeft, ChevronRight, FileText, X } from 'lucide-react'
+import { AlertTriangle, Calendar, Search, X } from 'lucide-react'
 
-const CATEGORY_META = {
-  pending:   { label: 'Pending',   color: '#d97706', bg: '#fef3c7' },
-  scheduled: { label: 'Scheduled', color: '#2563eb', bg: '#dbeafe' },
-  assigned:  { label: 'Assigned',  color: '#7c3aed', bg: '#ede9fe' },
-  completed: { label: 'Completed', color: '#16a34a', bg: '#dcfce7' },
-  delayed:   { label: 'Delayed',   color: '#dc2626', bg: '#fee2e2' },
-  cancelled: { label: 'Cancelled', color: '#64748b', bg: '#f1f5f9' },
-  ocr:       { label: 'OCR',       color: '#ea580c', bg: '#ffedd5' },
+const locales = { 'en-US': enUS }
+const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales })
+
+const STATUS_COLORS = {
+  pending:        { bg: '#fef3c7', border: '#d97706', text: '#92400e', label: 'Pending' },
+  assigned:       { bg: '#dbeafe', border: '#2563eb', text: '#1e40af', label: 'Assigned' },
+  in_progress:    { bg: '#ede9fe', border: '#7c3aed', text: '#5b21b6', label: 'En Route' },
+  arrived:        { bg: '#cffafe', border: '#0891b2', text: '#0e7490', label: 'Arrived' },
+  completed:      { bg: '#dcfce7', border: '#16a34a', text: '#166534', label: 'Completed' },
+  issue_reported: { bg: '#ffedd5', border: '#ea580c', text: '#9a3412', label: 'Issue Reported' },
+  delayed:        { bg: '#fee2e2', border: '#dc2626', text: '#991b1b', label: 'Delayed' },
+  cancelled:      { bg: '#f1f5f9', border: '#64748b', text: '#475569', label: 'Cancelled' },
 }
 
-const VIEWS = [
-  { id: 'month', label: 'Month' },
-  { id: 'week', label: 'Week' },
-  { id: 'day', label: 'Day' },
-]
+const VIEW_MAP = { month: 'month', week: 'week', day: 'day' }
 
-function formatEventTime(iso) {
+function formatDateTime(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit',
   })
 }
 
-function CalendarEventChip({ event, onSelect }) {
-  const meta = CATEGORY_META[event.category] ?? CATEGORY_META.scheduled
-  return (
-    <button
-      type="button"
-      className="dx-cal-event"
-      style={{ background: meta.bg, borderColor: meta.color, color: meta.color }}
-      onClick={() => onSelect(event)}
-      title={`${event.job_number} · ${event.customer_name}`}
-    >
-      <span className="dx-cal-event__id">{event.job_number}</span>
-      <span className="dx-cal-event__client">{event.customer_name}</span>
-    </button>
-  )
-}
-
-function JobDetailModal({ job, event, onClose }) {
-  if (!job && !event) return null
+function EventDetailModal({ job, event, onClose }) {
+  if (!event) return null
   const assignment = job?.assignments?.[0]
-  const display = job || event
+  const colors = STATUS_COLORS[event.category] ?? STATUS_COLORS.assigned
 
   return (
     <div className="dx-cal-modal-backdrop" role="presentation" onClick={onClose}>
-      <div
-        className="dx-cal-modal"
-        role="dialog"
-        aria-labelledby="cal-modal-title"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="dx-cal-modal dx-cal-modal--wide" role="dialog" aria-labelledby="cal-modal-title" onClick={(e) => e.stopPropagation()}>
         <div className="dx-cal-modal__head">
-          <h2 id="cal-modal-title" style={{ margin: 0, fontSize: '1.125rem' }}>
-            {job ? formatJobPublicId(job.id) : event?.job_number}
-          </h2>
-          <button type="button" className="dx-detail-panel__close" aria-label="Close" onClick={onClose}>
-            <X size={18} />
-          </button>
+          <div>
+            <h2 id="cal-modal-title" style={{ margin: 0, fontSize: '1.125rem' }}>{event.job_number}</h2>
+            <p style={{ margin: '4px 0 0', fontSize: '0.8125rem', color: 'var(--muted)' }}>{event.customer_name}</p>
+          </div>
+          <button type="button" className="dx-detail-panel__close" aria-label="Close" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="dx-cal-modal__body">
-          {event?.type === 'ocr' && (
-            <p className="notice" style={{ marginTop: 0 }}>
-              <FileText size={14} style={{ display: 'inline', marginRight: 6 }} />
-              {event.title ?? 'Document OCR activity'} — status: {event.status}
+          {event.has_conflict && (
+            <p className="notice error" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={16} /> Schedule Conflict Detected
             </p>
           )}
-          <div className="dx-kv"><span>Client</span><strong>{display.customer_name ?? '—'}</strong></div>
-          {job?.customer_contact && (
-            <div className="dx-kv"><span>Contact</span><strong>{job.customer_contact}</strong></div>
-          )}
-          {job && (
-            <div className="dx-kv">
-              <span>Route</span>
-              <strong>{job.pickup_location} → {job.dropoff_location}</strong>
-            </div>
-          )}
-          <div className="dx-kv"><span>Delivery window</span>
-            <strong>
-              {formatEventTime(display.start ?? job?.scheduled_start)}
-              {(display.end ?? job?.scheduled_end) && (
-                <> – {formatEventTime(display.end ?? job?.scheduled_end)}</>
-              )}
+          <div className="dx-kv"><span>Client</span><strong>{event.customer_name ?? '—'}</strong></div>
+          <div className="dx-kv"><span>Delivery Type</span>
+            <strong style={{ textTransform: 'capitalize' }}>
+              {job?.delivery_type ? String(job.delivery_type).replace(/_/g, ' ') : event.delivery_type ? String(event.delivery_type).replace(/_/g, ' ') : '—'}
             </strong>
           </div>
+          <div className="dx-kv"><span>Pickup</span><strong>{event.pickup_location ?? job?.pickup_location ?? '—'}</strong></div>
+          <div className="dx-kv"><span>Destination</span><strong>{event.dropoff_location ?? job?.dropoff_location ?? '—'}</strong></div>
+          <div className="dx-kv"><span>Driver</span><strong>{event.driver_name ?? assignment?.driver?.user?.name ?? '—'}</strong></div>
+          <div className="dx-kv"><span>Vehicle</span><strong>{event.vehicle_name ?? event.vehicle_plate ?? '—'}</strong></div>
           <div className="dx-kv"><span>Status</span>
-            <span className={jobStatusBadgeClass(job?.status ?? event?.status)}>
-              {formatJobStatus(job?.status ?? event?.status)}
+            <span className={jobStatusBadgeClass(event.status)} style={{ marginRight: 8 }}>
+              {formatJobStatus(event.status)}
             </span>
-            {event?.is_delayed && (
-              <span className="badge-dx badge-dx--pending" style={{ marginLeft: 8 }}>Delayed</span>
-            )}
+            <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: 99, background: colors.bg, color: colors.text }}>
+              {colors.label}
+            </span>
           </div>
-          <div className="dx-kv"><span>Assigned driver</span>
-            <strong>{assignment?.driver?.user?.name ?? event?.driver_name ?? '—'}</strong>
-          </div>
-          <div className="dx-kv"><span>Assigned vehicle</span>
-            <strong>{assignment?.vehicle?.plate_no ?? event?.vehicle_plate ?? '—'}</strong>
-          </div>
-          {job?.tracking_code && (
-            <div className="dx-kv"><span>Tracking code</span><strong>{job.tracking_code}</strong></div>
-          )}
-          {job?.priority && (
-            <div className="dx-kv"><span>Priority</span>
-              <strong style={{ textTransform: 'capitalize' }}>{job.priority}</strong>
+          <div className="dx-kv"><span>Scheduled Start</span><strong>{formatDateTime(event.start ?? job?.scheduled_start)}</strong></div>
+          <div className="dx-kv"><span>Scheduled End</span><strong>{formatDateTime(event.end ?? job?.scheduled_end)}</strong></div>
+          <div className="dx-kv"><span>Tracking Code</span><strong>{event.tracking_code ?? job?.tracking_code ?? '—'}</strong></div>
+          {(event.notes || job?.notes) && (
+            <div className="dx-kv" style={{ alignItems: 'flex-start' }}>
+              <span>Notes</span><strong>{event.notes ?? job?.notes}</strong>
             </div>
           )}
         </div>
         <div className="dx-cal-modal__foot">
-          {(job?.status === 'pending' || event?.status === 'pending') && (
-            <Link to="/dispatcher/dispatch-best-fit" className="btn-dx-primary btn-sm">
-              Dispatch
-            </Link>
-          )}
+          <Link to="/dispatcher/job-orders" className="btn-dx-primary btn-sm" state={{ jobOrderId: event.job_order_id }}>
+            View Job Order
+          </Link>
           <Link
-            to="/dispatcher/job-orders"
+            to="/dispatcher/dispatch-best-fit"
             className="btn-dx-secondary btn-sm"
-            state={{ jobOrderId: job?.id ?? event?.job_order_id }}
+            state={{ jobOrderId: event.job_order_id }}
           >
-            Open in Job Orders
+            View Assignment
+          </Link>
+          <Link to="/dispatcher/live-tracking" className="btn-dx-secondary btn-sm">
+            View Tracking
           </Link>
           <button type="button" className="btn-dx-secondary btn-sm" onClick={onClose}>Close</button>
         </div>
@@ -152,40 +102,188 @@ function JobDetailModal({ job, event, onClose }) {
   )
 }
 
+function SummaryCard({ summary }) {
+  if (!summary) return null
+  const items = [
+    { label: "Today's Deliveries", value: summary.today_deliveries },
+    { label: 'Assigned Deliveries', value: summary.assigned_deliveries },
+    { label: 'Completed Deliveries', value: summary.completed_deliveries },
+    { label: 'Delayed Deliveries', value: summary.delayed_deliveries },
+    { label: 'Issue Reports', value: summary.issue_reports },
+    { label: 'Unassigned Job Orders', value: summary.unassigned_jobs },
+  ]
+  return (
+    <div className="dx-panel dx-cal-summary">
+      <h3 className="dx-panel-title">Today&apos;s Summary</h3>
+      <div className="dx-cal-summary__grid">
+        {items.map(({ label, value }) => (
+          <div key={label} className="dx-cal-summary__item">
+            <span className="dx-cal-summary__value">{value ?? 0}</span>
+            <span className="dx-cal-summary__label">{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function UpcomingPanel({ upcoming, onSelectJob }) {
+  if (!upcoming) return null
+  const sections = [
+    { key: 'next_deliveries', title: 'Next Deliveries', items: upcoming.next_deliveries ?? [] },
+    { key: 'delayed_deliveries', title: 'Delayed Deliveries', items: upcoming.delayed_deliveries ?? [] },
+    { key: 'needs_assignment', title: 'Needs Assignment', items: upcoming.needs_assignment ?? [] },
+  ]
+  return (
+    <div className="dx-panel dx-cal-upcoming">
+      <h3 className="dx-panel-title">Upcoming Activities</h3>
+      {sections.map(({ key, title, items }) => (
+        <div key={key} className="dx-cal-upcoming__section">
+          <h4 className="dx-cal-upcoming__heading">{title}</h4>
+          {items.length === 0 ? (
+            <p className="dx-muted" style={{ fontSize: '0.8125rem', margin: '0 0 12px' }}>None</p>
+          ) : (
+            items.slice(0, 5).map((item) => (
+              <button
+                key={`${key}-${item.job_order_id}`}
+                type="button"
+                className="dx-cal-upcoming__row"
+                onClick={() => onSelectJob(item.job_order_id)}
+              >
+                <strong>{item.job_number}</strong>
+                <span>{item.customer_name}</span>
+                <span className="dx-muted" style={{ fontSize: '0.75rem' }}>
+                  {item.scheduled_start ? formatDateTime(item.scheduled_start) : 'No schedule'}
+                  {item.driver_name ? ` · ${item.driver_name}` : ''}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function DispatcherCalendarPage() {
-  const [view, setView] = useState('month')
-  const [anchor, setAnchor] = useState(() => new Date())
-  const [events, setEvents] = useState([])
+  const [calendarDate, setCalendarDate] = useState(new Date())
+  const [calendarView, setCalendarView] = useState('month')
+  const [rawEvents, setRawEvents] = useState([])
+  const [summary, setSummary] = useState(null)
+  const [upcoming, setUpcoming] = useState(null)
+  const [conflicts, setConflicts] = useState([])
+  const [filterOptions, setFilterOptions] = useState({ drivers: [], vehicles: [], statuses: [] })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const [driverFilter, setDriverFilter] = useState('')
+  const [vehicleFilter, setVehicleFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [rangeStart, setRangeStart] = useState('')
+  const [rangeEnd, setRangeEnd] = useState('')
+
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [selectedJob, setSelectedJob] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
-  const range = useMemo(() => viewRange(view, anchor), [view, anchor])
+  const rangeBounds = useMemo(() => {
+    const start = new Date(calendarDate)
+    const end = new Date(calendarDate)
+    if (calendarView === 'month') {
+      start.setDate(1)
+      start.setHours(0, 0, 0, 0)
+      end.setMonth(end.getMonth() + 1, 0)
+      end.setHours(23, 59, 59, 999)
+    } else if (calendarView === 'week') {
+      const day = start.getDay()
+      const diff = day === 0 ? -6 : 1 - day
+      start.setDate(start.getDate() + diff)
+      start.setHours(0, 0, 0, 0)
+      end.setTime(start.getTime())
+      end.setDate(end.getDate() + 6)
+      end.setHours(23, 59, 59, 999)
+    } else {
+      start.setHours(0, 0, 0, 0)
+      end.setHours(23, 59, 59, 999)
+    }
+    return { start, end }
+  }, [calendarDate, calendarView])
 
-  const loadEvents = useCallback(async () => {
+  const loadCalendar = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetchCalendarEvents(toIso(range.start), toIso(range.end))
-      setEvents(res.events || [])
+      const res = await fetchCalendarEvents(rangeBounds.start.toISOString(), rangeBounds.end.toISOString())
+      setRawEvents(res.events || [])
+      setSummary(res.summary || null)
+      setUpcoming(res.upcoming || null)
+      setConflicts(res.conflicts || [])
+      setFilterOptions(res.filters || { drivers: [], vehicles: [], statuses: [] })
     } catch (err) {
       setError(err.message)
-      setEvents([])
+      setRawEvents([])
     } finally {
       setLoading(false)
     }
-  }, [range.start, range.end])
+  }, [rangeBounds.start, rangeBounds.end])
 
   useEffect(() => {
-    loadEvents()
-  }, [loadEvents])
+    loadCalendar()
+  }, [loadCalendar])
 
-  const handleSelectEvent = async (event) => {
+  const filteredEvents = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return rawEvents.filter((ev) => {
+      if (driverFilter && String(ev.driver_id) !== String(driverFilter)) return false
+      if (vehicleFilter && String(ev.vehicle_id) !== String(vehicleFilter)) return false
+      if (statusFilter === 'delayed' && !ev.is_delayed) return false
+      if (statusFilter === 'issue_reported' && !ev.has_issue) return false
+      if (statusFilter && !['delayed', 'issue_reported'].includes(statusFilter) && ev.status !== statusFilter) return false
+      if (rangeStart && new Date(ev.end) < new Date(rangeStart)) return false
+      if (rangeEnd && new Date(ev.start) > new Date(`${rangeEnd}T23:59:59`)) return false
+      if (q) {
+        const hay = [ev.job_number, ev.customer_name, ev.tracking_code].filter(Boolean).join(' ').toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [rawEvents, driverFilter, vehicleFilter, statusFilter, search, rangeStart, rangeEnd])
+
+  const bigCalEvents = useMemo(
+    () => filteredEvents.map((ev) => {
+      const colors = STATUS_COLORS[ev.category] ?? STATUS_COLORS.assigned
+      return {
+        ...ev,
+        title: `${ev.job_number}\n${ev.customer_name}`,
+        start: new Date(ev.start),
+        end: new Date(ev.end),
+        resource: colors,
+      }
+    }),
+    [filteredEvents],
+  )
+
+  const eventStyleGetter = (event) => {
+    const c = event.resource ?? STATUS_COLORS.assigned
+    return {
+      style: {
+        backgroundColor: c.bg,
+        borderLeft: `4px solid ${c.border}`,
+        color: c.text,
+        borderRadius: '6px',
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        opacity: event.has_conflict ? 0.95 : 1,
+        boxShadow: event.has_conflict ? 'inset 0 0 0 2px #dc2626' : undefined,
+      },
+    }
+  }
+
+  const openEvent = async (event) => {
     setSelectedEvent(event)
     setSelectedJob(null)
-    if (!event.job_order_id) return
+    if (!event?.job_order_id) return
     setDetailLoading(true)
     try {
       const job = await fetchJobOrder(event.job_order_id)
@@ -197,226 +295,161 @@ function DispatcherCalendarPage() {
     }
   }
 
-  const closeModal = () => {
-    setSelectedEvent(null)
-    setSelectedJob(null)
-  }
-
-  const goToday = () => setAnchor(new Date())
-
-  const goPrev = () => {
-    if (view === 'month') setAnchor((d) => addMonths(d, -1))
-    else if (view === 'week') setAnchor((d) => addDays(d, -7))
-    else setAnchor((d) => addDays(d, -1))
-  }
-
-  const goNext = () => {
-    if (view === 'month') setAnchor((d) => addMonths(d, 1))
-    else if (view === 'week') setAnchor((d) => addDays(d, 7))
-    else setAnchor((d) => addDays(d, 1))
-  }
-
-  const titleLabel = useMemo(() => {
-    if (view === 'month') return formatMonthYear(anchor)
-    if (view === 'week') {
-      const { start, end } = viewRange('week', anchor)
-      return formatWeekLabel(start, end)
+  const openJobById = async (jobOrderId) => {
+    const ev = rawEvents.find((e) => e.job_order_id === jobOrderId)
+    if (ev) {
+      openEvent(ev)
+      return
     }
-    return formatDayLabel(anchor)
-  }, [view, anchor])
-
-  const monthCells = view === 'month' ? buildMonthCells(range.start, range.end) : []
-  const weekDays = view === 'week' ? buildWeekDays(anchor) : []
-  const today = new Date()
+    setDetailLoading(true)
+    try {
+      const job = await fetchJobOrder(jobOrderId)
+      setSelectedJob(job)
+      setSelectedEvent({
+        job_order_id: job.id,
+        job_number: `JO-${new Date().getFullYear()}-${String(job.id).padStart(3, '0')}`,
+        customer_name: job.customer_name,
+        status: job.status,
+        category: job.status,
+        start: job.scheduled_start,
+        end: job.scheduled_end,
+        tracking_code: job.tracking_code,
+        pickup_location: job.pickup_location,
+        dropoff_location: job.dropoff_location,
+      })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
 
   return (
     <>
       <PageHeader
-        title="Dispatch Calendar"
-        subtitle="Scheduled jobs, assignments, delays, and document OCR activity from live data"
+        title="Dispatcher Calendar"
+        subtitle="Scheduling and activity monitoring for delivery planning"
       />
       {error && <p className="notice error">{error}</p>}
 
-      <div className="dx-cal-toolbar">
-        <div className="dx-cal-toolbar__nav">
-          <button type="button" className="btn-dx-secondary btn-sm" onClick={goPrev} aria-label="Previous">
-            <ChevronLeft size={16} />
-          </button>
-          <button type="button" className="btn-dx-secondary btn-sm" onClick={goToday}>Today</button>
-          <button type="button" className="btn-dx-secondary btn-sm" onClick={goNext} aria-label="Next">
-            <ChevronRight size={16} />
-          </button>
-          <h2 className="dx-cal-toolbar__title">
-            <Calendar size={18} aria-hidden />
-            {titleLabel}
-          </h2>
+      {conflicts.length > 0 && (
+        <div className="notice error dx-cal-conflict-banner">
+          <AlertTriangle size={18} />
+          <div>
+            <strong>Schedule Conflict Detected</strong>
+            <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: '0.875rem' }}>
+              {conflicts.slice(0, 5).map((c, i) => (
+                <li key={i}>{c.vehicle_label}: {c.details}</li>
+              ))}
+            </ul>
+          </div>
         </div>
-        <div className="dx-cal-toolbar__views">
-          {VIEWS.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              className={`dx-cal-view-btn${view === v.id ? ' dx-cal-view-btn--active' : ''}`}
-              onClick={() => setView(v.id)}
-            >
-              {v.label}
-            </button>
+      )}
+
+      <div className="dx-cal-filters dx-panel">
+        <div className="dx-cal-filters__row">
+          <label>
+            Driver
+            <select value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)}>
+              <option value="">All drivers</option>
+              {filterOptions.drivers?.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Vehicle
+            <select value={vehicleFilter} onChange={(e) => setVehicleFilter(e.target.value)}>
+              <option value="">All vehicles</option>
+              {filterOptions.vehicles?.map((v) => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Status
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All statuses</option>
+              {filterOptions.statuses?.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            From
+            <input type="date" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
+          </label>
+          <label>
+            To
+            <input type="date" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
+          </label>
+          <label className="dx-cal-search">
+            <Search size={16} aria-hidden />
+            <input
+              type="search"
+              placeholder="Job #, client, tracking code…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+        </div>
+        <div className="dx-cal-legend">
+          {Object.entries(STATUS_COLORS).map(([key, meta]) => (
+            <span key={key} className="dx-cal-legend__item">
+              <span className="dx-cal-legend__dot" style={{ background: meta.border }} />
+              {meta.label}
+            </span>
           ))}
         </div>
       </div>
 
-      <div className="dx-cal-legend">
-        {Object.entries(CATEGORY_META).map(([key, meta]) => (
-          <span key={key} className="dx-cal-legend__item">
-            <span className="dx-cal-legend__dot" style={{ background: meta.color }} />
-            {meta.label}
-          </span>
-        ))}
-      </div>
-
-      {loading && <p className="dx-muted" style={{ marginBottom: 12 }}>Loading calendar…</p>}
-
-      {view === 'month' && (
-        <div className="dx-cal-month">
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-            <div key={d} className="dx-cal-month__dow">{d}</div>
-          ))}
-          {monthCells.map((day) => {
-            const dayEvents = eventsForDay(events, day)
-            const inMonth = day.getMonth() === anchor.getMonth()
-            const isToday = sameDay(day, today)
-            return (
-              <div
-                key={day.toISOString()}
-                className={`dx-cal-month__cell${inMonth ? '' : ' dx-cal-month__cell--muted'}${isToday ? ' dx-cal-month__cell--today' : ''}`}
-              >
-                <span className="dx-cal-month__date">{day.getDate()}</span>
-                <div className="dx-cal-month__events">
-                  {dayEvents.slice(0, 3).map((ev) => (
-                    <CalendarEventChip key={ev.id} event={ev} onSelect={handleSelectEvent} />
-                  ))}
-                  {dayEvents.length > 3 && (
-                    <button
-                      type="button"
-                      className="dx-cal-more"
-                      onClick={() => { setView('day'); setAnchor(new Date(day)) }}
-                    >
-                      +{dayEvents.length - 3} more
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {view === 'week' && (
-        <div className="dx-cal-week">
-          {weekDays.map((day) => {
-            const dayEvents = eventsForDay(events, day)
-            const isToday = sameDay(day, today)
-            return (
-              <div key={day.toISOString()} className={`dx-cal-week__col${isToday ? ' dx-cal-week__col--today' : ''}`}>
-                <div className="dx-cal-week__head">
-                  <span className="dx-cal-week__dow">{day.toLocaleDateString(undefined, { weekday: 'short' })}</span>
-                  <span className="dx-cal-week__num">{day.getDate()}</span>
-                </div>
-                <div className="dx-cal-week__body">
-                  {dayEvents.length === 0 ? (
-                    <p className="dx-cal-empty">No events</p>
-                  ) : (
-                    dayEvents.map((ev) => (
-                      <button
-                        key={ev.id}
-                        type="button"
-                        className="dx-cal-week-card"
-                        style={{
-                          borderLeftColor: (CATEGORY_META[ev.category] ?? CATEGORY_META.scheduled).color,
-                        }}
-                        onClick={() => handleSelectEvent(ev)}
-                      >
-                        <div className="dx-cal-week-card__top">
-                          <strong>{ev.job_number}</strong>
-                          <StatusBadge status={ev.is_delayed ? 'delayed' : ev.status} />
-                        </div>
-                        <p>{ev.customer_name}</p>
-                        <p className="dx-cal-week-card__meta">
-                          {formatEventTime(ev.start)}
-                        </p>
-                        <p className="dx-cal-week-card__meta">
-                          {ev.driver_name ? `${ev.driver_name}` : 'No driver'}
-                          {ev.vehicle_plate ? ` · ${ev.vehicle_plate}` : ''}
-                        </p>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {view === 'day' && (
-        <div className="dx-cal-day">
-          {eventsForDay(events, anchor).length === 0 ? (
-            <div className="dx-panel" style={{ padding: 32, textAlign: 'center', color: 'var(--muted)' }}>
-              No scheduled activity for this day.
-            </div>
+      <div className="dx-cal-layout">
+        <div className="dx-cal-main">
+          {loading ? (
+            <div className="dx-panel dx-cal-loading">Loading calendar…</div>
+          ) : rawEvents.length === 0 ? (
+            <EmptyState
+              icon={Calendar}
+              title="No scheduled activities found."
+              message="Adjust filters or create job orders with scheduled dates."
+            />
           ) : (
-            eventsForDay(events, anchor)
-              .sort((a, b) => new Date(a.start) - new Date(b.start))
-              .map((ev) => {
-                const meta = CATEGORY_META[ev.category] ?? CATEGORY_META.scheduled
-                return (
-                  <button
-                    key={ev.id}
-                    type="button"
-                    className="dx-cal-day-card"
-                    style={{ borderLeftColor: meta.color }}
-                    onClick={() => handleSelectEvent(ev)}
-                  >
-                    <div className="dx-cal-day-card__time">{formatEventTime(ev.start)}</div>
-                    <div className="dx-cal-day-card__main">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <strong style={{ fontSize: '1rem' }}>{ev.job_number}</strong>
-                        <span
-                          className="dx-cal-legend__item"
-                          style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: 99, background: meta.bg, color: meta.color }}
-                        >
-                          {meta.label}
-                        </span>
-                        {ev.is_delayed && <StatusBadge status="delayed" />}
-                      </div>
-                      <p style={{ margin: '6px 0 0', fontWeight: 600 }}>{ev.customer_name}</p>
-                      <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: 'var(--muted)' }}>
-                        Driver: {ev.driver_name ?? '—'} · Vehicle: {ev.vehicle_plate ?? '—'}
-                      </p>
-                      <p style={{ margin: '4px 0 0', fontSize: '0.875rem' }}>
-                        Status: {formatJobStatus(ev.status)}
-                        {ev.type === 'ocr' && ev.title ? ` · ${ev.title}` : ''}
-                      </p>
-                    </div>
-                    <ChevronRight size={18} style={{ flexShrink: 0, opacity: 0.4 }} />
-                  </button>
-                )
-              })
+            <div className="dx-panel dx-cal-rbc-wrap">
+              <BigCalendar
+                localizer={localizer}
+                events={bigCalEvents}
+                startAccessor="start"
+                endAccessor="end"
+                view={VIEW_MAP[calendarView] ?? 'month'}
+                onView={(v) => setCalendarView(v)}
+                date={calendarDate}
+                onNavigate={setCalendarDate}
+                onSelectEvent={openEvent}
+                eventPropGetter={eventStyleGetter}
+                popup
+                views={['month', 'week', 'day']}
+                style={{ minHeight: 560 }}
+                tooltipAccessor={(ev) => `${ev.job_number} · ${ev.customer_name}\nDriver: ${ev.driver_name ?? '—'}\nVehicle: ${ev.vehicle_name ?? '—'}`}
+              />
+            </div>
           )}
         </div>
-      )}
 
-      {(selectedEvent || detailLoading) && (
-        <JobDetailModal
+        <aside className="dx-cal-sidebar">
+          <SummaryCard summary={summary} />
+          <UpcomingPanel upcoming={upcoming} onSelectJob={openJobById} />
+        </aside>
+      </div>
+
+      {selectedEvent && (
+        <EventDetailModal
           job={selectedJob}
           event={selectedEvent}
-          onClose={closeModal}
+          onClose={() => { setSelectedEvent(null); setSelectedJob(null) }}
         />
       )}
       {detailLoading && (
-        <p className="dx-muted" style={{ position: 'fixed', bottom: 24, right: 24, background: 'var(--surface)', padding: '8px 16px', borderRadius: 8, boxShadow: 'var(--shadow-md)' }}>
-          Loading job details…
-        </p>
+        <p className="dx-cal-loading-toast">Loading details…</p>
       )}
     </>
   )

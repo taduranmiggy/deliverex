@@ -59,7 +59,7 @@ function DispatcherDashboard() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'flex-start' }}>
         <SectionCard title="Active Deliveries"
-          action={<Link to="/dispatcher/live-tracking" className="btn-dx-secondary btn-sm">Live map →</Link>}
+          action={<Link to="/dispatcher/live-tracking" className="btn-dx-secondary btn-sm">View map →</Link>}
         >
           {deliveries.length === 0 ? (
             <EmptyState icon={Truck} title="No active deliveries" message="Assign jobs to see active deliveries here." />
@@ -93,9 +93,10 @@ function DispatcherDashboard() {
           <SectionCard title="Quick Actions">
             {[
               { label: 'Create Job Order',   to: '/dispatcher/job-orders',        cls: 'btn-dx-primary' },
-              { label: 'Dispatch (Best-Fit)', to: '/dispatcher/dispatch-best-fit', cls: 'btn-dx-secondary' },
-              { label: 'View Inquiries',     to: '/dispatcher/inquiries',          cls: 'btn-dx-secondary' },
-              { label: 'Live Tracking',      to: '/dispatcher/live-tracking',      cls: 'btn-dx-secondary' },
+              { label: 'Fleet Dispatch',      to: '/dispatcher/dispatch-best-fit', cls: 'btn-dx-secondary' },
+              { label: 'Calendar',            to: '/dispatcher/calendar',          cls: 'btn-dx-secondary' },
+              { label: 'View Inquiries',      to: '/dispatcher/inquiries',          cls: 'btn-dx-secondary' },
+              { label: 'Tracking',            to: '/dispatcher/live-tracking',      cls: 'btn-dx-secondary' },
             ].map(({ label, to, cls }) => (
               <Link key={to} to={to} className={`${cls} btn-sm`} style={{ width: '100%', marginBottom: 8, justifyContent: 'flex-start', gap: 8 }}>
                 {label}

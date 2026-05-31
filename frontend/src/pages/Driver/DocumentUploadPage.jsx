@@ -1,24 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { fetchDriverAssignments, uploadDocument } from '../../api/driver'
+import { useLocation } from 'react-router-dom'
+import DriverOfflineBar from '../../components/driver/DriverOfflineBar'
+import { useDriverUi } from '../../context/DriverUiContext'
+import { fetchDriverAssignments, uploadDocumentWithProgress } from '../../api/driver'
 import useOnlineStatus from '../../hooks/useOnlineStatus'
 import useSyncOnReconnect from '../../hooks/useSyncOnReconnect'
 import { enqueue } from '../../utils/offlineQueue'
+import { Camera, Loader2, Upload } from 'lucide-react'
 
 const DOC_TYPES = [
-  { value: 'pod',          label: 'Proof of Delivery (POD)' },
-  { value: 'receipt',      label: 'Delivery Receipt' },
-  { value: 'invoice',      label: 'Invoice' },
-  { value: 'job_order',    label: 'Job Order' },
-  { value: 'gate_pass',    label: 'Gate Pass' },
-  { value: 'weighbridge',  label: 'Weighbridge Ticket' },
-  { value: 'signed_doc',   label: 'Signed Document' },
-  { value: 'other',        label: 'Other' },
+  { value: 'receipt', label: 'Delivery Receipt' },
+  { value: 'invoice', label: 'Invoice' },
+  { value: 'pod', label: 'Proof of Delivery' },
+  { value: 'job_order', label: 'Job Order' },
+  { value: 'other', label: 'Other' },
 ]
 
 function DocumentUploadPage() {
-  const location = useNavigate ? useLocation() : {}
-  const navigate = useNavigate()
+  const location = useLocation()
+  const { showToast } = useDriverUi()
   const isOnline = useOnlineStatus()
   const { pendingCount } = useSyncOnReconnect()
 
@@ -28,34 +28,60 @@ function DocumentUploadPage() {
   const [notes, setNotes] = useState('')
   const [preview, setPreview] = useState(null)
   const [fileName, setFileName] = useState('')
-  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [ocrStatus, setOcrStatus] = useState(null)
 
-  const fileRef    = useRef(null)
-  const cameraRef  = useRef(null)
+  const fileRef = useRef(null)
+  const cameraRef = useRef(null)
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetchDriverAssignments(1)
-        const active = (res.data || []).filter(
-          (a) => !['completed', 'cancelled'].includes(a.status),
-        )
+    fetchDriverAssignments(1)
+      .then((res) => {
+        const active = (res.data || []).filter((a) => !['completed', 'cancelled'].includes(a.status))
         setAssignments(active)
-        if (!selectedId && active.length > 0) {
-          setSelectedId(active[0].id)
-        }
-      } catch (err) {
-        setError(err.message)
-      }
-    }
-    load()
+        if (!selectedId && active.length > 0) setSelectedId(String(active[0].id))
+      })
+      .catch((err) => setError(err.message))
   }, []) // eslint-disable-line
+
+  const clearFile = () => {
+    setPreview(null)
+    setFileName('')
+    setOcrStatus(null)
+    if (fileRef.current) fileRef.current.value = ''
+    if (cameraRef.current) cameraRef.current.value = ''
+  }
+
+  const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png']
+  const ALLOWED_EXT = ['.jpg', '.jpeg', '.png']
+
+  const validateFile = (file) => {
+    if (!file) return 'Please capture or upload an image first.'
+    const ext = file.name?.toLowerCase().slice(file.name.lastIndexOf('.'))
+    if (!ALLOWED_TYPES.includes(file.type) && !ALLOWED_EXT.includes(ext)) {
+      return 'Only JPG, JPEG, and PNG images are supported for OCR.'
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return 'Image must be under 10 MB.'
+    }
+    if (!isOnline && file.size > 2 * 1024 * 1024) {
+      return 'Image must be under 2 MB for offline queue support.'
+    }
+    return null
+  }
 
   const handleFileChange = (file) => {
     if (!file) return
+    const validationError = validateFile(file)
+    if (validationError) {
+      setError(validationError)
+      clearFile()
+      return
+    }
     setFileName(file.name)
+    setError('')
     const reader = new FileReader()
     reader.onload = (e) => setPreview(e.target.result)
     reader.readAsDataURL(file)
@@ -63,8 +89,8 @@ function DocumentUploadPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    setMessage('')
     setError('')
+    setOcrStatus(null)
 
     if (!selectedId) {
       setError('Select an assignment first.')
@@ -72,32 +98,14 @@ function DocumentUploadPage() {
     }
 
     const file = fileRef.current?.files?.[0] ?? cameraRef.current?.files?.[0]
-    if (!file) {
-      setError('Please select or capture an image.')
-      return
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Image must be under 2 MB for offline queue support.')
+    const fileError = validateFile(file)
+    if (fileError) {
+      setError(fileError)
       return
     }
 
     setUploading(true)
-
-    const uploadOnline = async () => {
-      const fd = new FormData()
-      fd.append('assignment_id', String(selectedId))
-      fd.append('type', docType)
-      fd.append('notes', notes)
-      fd.append('file', file)
-      const res = await uploadDocument(fd)
-      setPreview(null)
-      setFileName('')
-      setNotes('')
-      if (fileRef.current) fileRef.current.value = ''
-      if (cameraRef.current) cameraRef.current.value = ''
-      return res
-    }
+    setUploadProgress(0)
 
     try {
       if (!isOnline) {
@@ -122,149 +130,186 @@ function DocumentUploadPage() {
             fileBase64: base64,
           },
         })
-        setMessage(`Document queued offline (${pendingCount + 1} pending). Will upload when online.`)
+        showToast(`Document queued (${pendingCount + 1} pending sync)`)
+        clearFile()
         return
       }
-      const res = await uploadOnline()
-      const engine = res?.ocr_result?.engine
-      const status = res?.ocr_result?.processing_status
-      if (status === 'completed' && engine === 'tesseract') {
-        setMessage('Document uploaded. OCR text extracted successfully.')
-      } else if (status === 'completed' && engine === 'stub') {
-        setMessage('Document uploaded. OCR stub mode — install Tesseract on server for real extraction.')
-      } else if (status === 'failed') {
-        setMessage('Document saved but OCR failed. Admin can reprocess from OCR Validation.')
+
+      const fd = new FormData()
+      fd.append('assignment_id', String(selectedId))
+      fd.append('type', docType)
+      fd.append('notes', notes)
+      fd.append('file', file)
+      const res = await uploadDocumentWithProgress(fd, setUploadProgress)
+      setUploadProgress(100)
+
+      const ocr = res?.ocr_result
+      const status = ocr?.processing_status
+      if (status === 'failed') {
+        setOcrStatus('failed')
+        setError(ocr?.error_message || 'OCR processing failed on the server.')
+        showToast('Upload saved but OCR failed', 'error')
+      } else if (status === 'validated') {
+        setOcrStatus('validated')
+        showToast('Document submitted — OCR validated')
+      } else if (status === 'needs_review') {
+        setOcrStatus('processing')
+        showToast('Document submitted — OCR needs admin review')
+      } else if (['processed', 'completed'].includes(status)) {
+        setOcrStatus('validated')
+        showToast('Document submitted — OCR processed')
+      } else if (status === 'processing' || status === 'pending') {
+        setOcrStatus('processing')
+        showToast('Document submitted — OCR processing')
       } else {
-        setMessage('Document uploaded and queued for OCR processing.')
+        showToast('Document submitted successfully')
       }
+      clearFile()
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Document upload failed. Please try again.')
+      showToast('Upload failed', 'error')
     } finally {
       setUploading(false)
+      setTimeout(() => setUploadProgress(0), 800)
     }
   }
 
   return (
-    <section className="driver-page">
-      <button type="button" className="driver-back-btn" onClick={() => navigate('/driver')}>
-        ← Back
-      </button>
-      <header className="driver-page-header">
-        <h1>Upload Document</h1>
-        <p className="driver-page-sub">Attach proof of delivery, receipts, and gate passes.</p>
-      </header>
+    <>
+      <DriverOfflineBar />
 
       {!isOnline && (
-        <div className="driver-offline-banner">
-          Offline — documents will queue and sync automatically when you reconnect.
-        </div>
+        <p className="da-alert" style={{ background: '#fef3c7', color: '#92400e' }}>
+          Offline — documents will queue and sync when you reconnect.
+        </p>
       )}
 
-      <form className="driver-form-card" onSubmit={handleSubmit}>
-        {/* Assignment selector */}
-        <div className="driver-field">
-          <label htmlFor="dx-doc-assign">Assignment</label>
-          <select
-            id="dx-doc-assign"
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
-            required
-          >
-            <option value="">— Select assignment —</option>
-            {assignments.map((a) => (
-              <option key={a.id} value={a.id}>
-                #{a.id} · {a.job_order?.pickup_location ?? '?'} → {a.job_order?.dropoff_location ?? '?'}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Document type */}
-        <div className="driver-field">
-          <label htmlFor="dx-doc-type">Document type</label>
-          <select
-            id="dx-doc-type"
-            value={docType}
-            onChange={(e) => setDocType(e.target.value)}
-          >
-            {DOC_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Camera capture (primary for PWA) */}
-        <div className="driver-field">
-          <label>Take photo (camera)</label>
-          <input
-            ref={cameraRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={(e) => handleFileChange(e.target.files?.[0])}
-            className="driver-file-input"
-          />
-        </div>
-
-        {/* File picker fallback */}
-        <div className="driver-field">
-          <label>Or choose from files</label>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/jpeg,image/png,image/jpg"
-            onChange={(e) => {
-              handleFileChange(e.target.files?.[0])
-              if (cameraRef.current) cameraRef.current.value = ''
-            }}
-            className="driver-file-input"
-          />
-          {fileName && <span className="driver-file-name">{fileName}</span>}
-        </div>
-
-        {/* Image preview */}
-        {preview && (
-          <div className="driver-preview-wrap">
-            <img src={preview} alt="Preview" className="driver-preview-img" />
-            <button
-              type="button"
-              className="driver-preview-remove"
-              onClick={() => {
-                setPreview(null)
-                setFileName('')
-                if (fileRef.current)   fileRef.current.value   = ''
-                if (cameraRef.current) cameraRef.current.value = ''
-              }}
-            >
-              Remove
-            </button>
+      <form onSubmit={handleSubmit}>
+        {assignments.length > 1 && (
+          <div className="da-field">
+            <label>Assignment</label>
+            <div className="da-chip-row">
+              {assignments.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className={`da-type-chip${String(a.id) === String(selectedId) ? ' da-type-chip--on' : ''}`}
+                  onClick={() => setSelectedId(String(a.id))}
+                >
+                  #{a.id}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Notes */}
-        <div className="driver-field">
-          <label htmlFor="dx-doc-notes">Notes (optional)</label>
+        {assignments.length === 1 && selectedId && (
+          <div className="da-card" style={{ marginBottom: 16 }}>
+            <p className="da-card__label">Assignment</p>
+            <p style={{ fontWeight: 700, margin: 0 }}>Job #{selectedId}</p>
+          </div>
+        )}
+
+        <p className="da-section-head">Add image</p>
+        <div className="da-upload-grid">
+          <button type="button" className="da-upload-tile" onClick={() => cameraRef.current?.click()}>
+            <Camera size={24} />
+            Take Photo
+          </button>
+          <button type="button" className="da-upload-tile" onClick={() => fileRef.current?.click()}>
+            <Upload size={24} />
+            Upload from Device
+          </button>
+        </div>
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          tabIndex={-1}
+          aria-hidden
+          className="driver-file-input-hidden"
+          onChange={(e) => {
+            if (fileRef.current) fileRef.current.value = ''
+            handleFileChange(e.target.files?.[0])
+          }}
+        />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/jpg"
+          tabIndex={-1}
+          aria-hidden
+          className="driver-file-input-hidden"
+          onChange={(e) => {
+            if (cameraRef.current) cameraRef.current.value = ''
+            handleFileChange(e.target.files?.[0])
+          }}
+        />
+
+        {preview && (
+          <div className="da-preview">
+            <img src={preview} alt="Preview" />
+            <button type="button" className="da-preview__remove" onClick={clearFile}>Remove</button>
+          </div>
+        )}
+        {fileName && !preview && (
+          <p style={{ fontSize: '0.8125rem', color: 'var(--da-muted)', marginBottom: 12 }}>Selected: {fileName}</p>
+        )}
+
+        <p className="da-section-head">Document type</p>
+        <div className="da-chip-row">
+          {DOC_TYPES.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              className={`da-type-chip${docType === t.value ? ' da-type-chip--on' : ''}`}
+              onClick={() => setDocType(t.value)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="da-field">
+          <label htmlFor="doc-notes">Notes (optional)</label>
           <textarea
-            id="dx-doc-notes"
+            id="doc-notes"
             rows={2}
-            placeholder="Any document-specific remarks…"
+            placeholder="Any remarks about this document…"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
 
-        {message && <p className="driver-success">{message}</p>}
-        {error   && <p className="driver-error">{error}</p>}
+        {error && <p className="da-alert da-alert--error">{error}</p>}
 
-        <button
-          type="submit"
-          className="driver-btn-primary driver-btn-full"
-          disabled={uploading}
-        >
-          {uploading ? 'Uploading…' : 'Upload Document'}
+        {uploading && (
+          <div aria-live="polite">
+            <div className="da-progress">
+              <div className="da-progress__bar" style={{ width: `${Math.max(uploadProgress, 8)}%` }} />
+            </div>
+            <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--da-muted)', textAlign: 'center' }}>
+              {uploadProgress < 100 ? `Uploading… ${uploadProgress}%` : 'Processing document…'}
+            </p>
+          </div>
+        )}
+
+        {ocrStatus === 'processing' && (
+          <div className="da-ocr-badge"><Loader2 size={14} className="driver-spin" /> OCR processing…</div>
+        )}
+        {ocrStatus === 'validated' && (
+          <div className="da-ocr-badge" style={{ background: '#d1fae5', color: '#047857' }}>OCR validated</div>
+        )}
+        {ocrStatus === 'failed' && (
+          <div className="da-ocr-badge" style={{ background: '#fee2e2', color: '#b91c1c' }}>OCR failed — admin can reprocess</div>
+        )}
+
+        <button type="submit" className="da-btn da-btn--primary da-btn--lg da-btn--block" disabled={uploading} style={{ marginTop: 8 }}>
+          {uploading ? 'Submitting…' : 'Submit Document'}
         </button>
       </form>
-    </section>
+    </>
   )
 }
 

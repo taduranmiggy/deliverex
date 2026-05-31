@@ -12,21 +12,33 @@ use Throwable;
 
 class OcrService
 {
+    public const STATUS_PENDING      = 'pending';
+    public const STATUS_PROCESSING   = 'processing';
+    public const STATUS_PROCESSED    = 'processed';
+    public const STATUS_FAILED       = 'failed';
+    public const STATUS_NEEDS_REVIEW = 'needs_review';
+    public const STATUS_VALIDATED    = 'validated';
+
+    /** Legacy alias kept for older rows */
+    public const STATUS_COMPLETED = 'completed';
+
     /**
      * Create a placeholder result used before OCR runs.
      */
     public function createPending(DeliveryDocument $document): OcrResult
     {
-        return OcrResult::query()->create([
-            'document_id'        => $document->id,
-            'processing_status'  => 'pending',
-            'extracted_text'     => null,
-            'corrected_text'     => null,
-            'confidence_score'   => null,
-            'engine'             => null,
-            'error_message'      => null,
-            'is_validated'       => false,
-        ]);
+        return OcrResult::query()->updateOrCreate(
+            ['document_id' => $document->id],
+            [
+                'processing_status' => self::STATUS_PENDING,
+                'extracted_text'    => null,
+                'corrected_text'    => null,
+                'confidence_score'  => null,
+                'engine'            => null,
+                'error_message'     => null,
+                'is_validated'      => false,
+            ]
+        );
     }
 
     /**
@@ -41,14 +53,24 @@ class OcrService
         }
 
         $result->forceFill([
-            'processing_status' => 'processing',
+            'processing_status' => self::STATUS_PROCESSING,
             'error_message'     => null,
         ])->save();
 
         $diskPath = Storage::disk('public')->path($document->file_path);
 
+        if (! Storage::disk('public')->exists($document->file_path)) {
+            return $this->fail(
+                $result,
+                'Stored file not found at '.$document->file_path.'. Run: php artisan storage:link'
+            );
+        }
+
         if (! is_readable($diskPath)) {
-            return $this->fail($result, 'Stored file is not readable. Ensure storage/app/public is linked (php artisan storage:link).');
+            return $this->fail(
+                $result,
+                'Stored file is not readable. Ensure storage/app/public is linked (php artisan storage:link).'
+            );
         }
 
         $ext = strtolower(pathinfo($diskPath, PATHINFO_EXTENSION));
@@ -65,9 +87,16 @@ class OcrService
 
         $tesseract = $this->resolveTesseractBinary();
         if (! $tesseract) {
-            Log::warning('Tesseract not found; using OCR fallback stub.', ['document_id' => $document->id]);
+            $message = 'Tesseract OCR is not installed or not configured. '
+                .'Install Tesseract and set TESSERACT_PATH in .env, then run: php artisan ocr:check';
 
-            return $this->fallbackExtraction($result, $document, $diskPath);
+            if ($this->stubFallbackEnabled()) {
+                Log::warning('Tesseract not found; using local stub fallback.', ['document_id' => $document->id]);
+
+                return $this->stubExtraction($result, $document, $diskPath, $message);
+            }
+
+            return $this->fail($result, $message);
         }
 
         try {
@@ -83,10 +112,16 @@ class OcrService
 
             $text = trim($process->getOutput());
             $confidence = $this->estimateConfidence($text);
+            $displayText = $text !== '' ? $text : '(No text detected — image may be blank or low contrast.)';
+
+            $status = self::STATUS_PROCESSED;
+            if ($text === '' || ($confidence !== null && $confidence < 0.65)) {
+                $status = self::STATUS_NEEDS_REVIEW;
+            }
 
             $result->forceFill([
-                'processing_status'  => 'completed',
-                'extracted_text'     => $text !== '' ? $text : '(No text detected — image may be blank or low contrast.)',
+                'processing_status'  => $status,
+                'extracted_text'     => $displayText,
                 'corrected_text'     => null,
                 'confidence_score'   => $confidence,
                 'engine'             => 'tesseract',
@@ -99,6 +134,11 @@ class OcrService
 
             return $this->fail($result, $e->getMessage());
         }
+    }
+
+    public function isTesseractAvailable(): bool
+    {
+        return $this->resolveTesseractBinary() !== null;
     }
 
     /**
@@ -201,31 +241,34 @@ class OcrService
         return null;
     }
 
+    private function stubFallbackEnabled(): bool
+    {
+        return config('ocr.stub_fallback') && app()->environment('local');
+    }
+
     /**
-     * Fallback when Tesseract is not installed — still completes the pipeline for demos.
+     * Optional local-only placeholder when Tesseract is missing (OCR_STUB_FALLBACK=true).
      */
-    private function fallbackExtraction(OcrResult $result, DeliveryDocument $document, string $diskPath): OcrResult
+    private function stubExtraction(OcrResult $result, DeliveryDocument $document, string $diskPath, string $errorHint): OcrResult
     {
         $size = @filesize($diskPath) ?: 0;
         $stub = implode("\n", [
-            '[OCR — Tesseract not installed on server]',
-            'Install Tesseract OCR and add it to PATH, then click Reprocess OCR.',
+            '[OCR stub — Tesseract not available]',
+            $errorHint,
             '',
             'Document ID: '.$document->id,
             'Type: '.($document->type ?? 'document'),
             'File: '.basename($diskPath),
             'Size: '.$size.' bytes',
-            '',
-            'After installing Tesseract, extracted delivery receipt text will appear here automatically.',
         ]);
 
         $result->forceFill([
-            'processing_status'  => 'completed',
+            'processing_status'  => self::STATUS_NEEDS_REVIEW,
             'extracted_text'     => $stub,
             'corrected_text'     => null,
             'confidence_score'   => null,
             'engine'             => 'stub',
-            'error_message'      => 'Tesseract OCR is not installed. Install from https://github.com/tesseract-ocr/tesseract',
+            'error_message'      => $errorHint,
         ])->save();
 
         return $result->fresh();
@@ -251,7 +294,7 @@ class OcrService
     private function fail(OcrResult $result, string $message): OcrResult
     {
         $result->forceFill([
-            'processing_status' => 'failed',
+            'processing_status' => self::STATUS_FAILED,
             'error_message'     => $message,
         ])->save();
 

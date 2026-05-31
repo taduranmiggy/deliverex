@@ -65,4 +65,9 @@ class DispatchAssignment extends Model
     {
         return $this->hasMany(DeliveryDocument::class, 'assignment_id');
     }
+
+    public function issueReports()
+    {
+        return $this->hasMany(DeliveryIssueReport::class, 'assignment_id');
+    }
 }

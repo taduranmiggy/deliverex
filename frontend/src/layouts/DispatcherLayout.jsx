@@ -11,11 +11,11 @@ const navCls = ({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`
 const NAV = [
   { to: '/dispatcher',                   label: 'Dashboard',       Icon: LayoutDashboard, end: true },
   { to: '/dispatcher/job-orders',        label: 'Job Orders',      Icon: Truck },
+  { to: '/dispatcher/dispatch-best-fit', label: 'Fleet Dispatch',  Icon: Route },
   { to: '/dispatcher/calendar',          label: 'Calendar',        Icon: Calendar },
-  { to: '/dispatcher/inquiries',         label: 'Inquiries',       Icon: Mail },
-  { to: '/dispatcher/dispatch-best-fit', label: 'Dispatch',        Icon: Route },
-  { to: '/dispatcher/live-tracking',     label: 'Live Tracking',   Icon: Map },
+  { to: '/dispatcher/live-tracking',     label: 'Tracking',        Icon: Map },
   { to: '/dispatcher/notifications',     label: 'Notifications',   Icon: Bell },
+  { to: '/dispatcher/inquiries',         label: 'Inquiries',       Icon: Mail },
 ]
 
 function DispatcherLayout() {

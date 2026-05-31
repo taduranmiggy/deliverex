@@ -3,6 +3,7 @@
 namespace App\Services\Notifications;
 
 use App\Models\DeliveryDocument;
+use App\Models\DeliveryIssueReport;
 use App\Models\DispatchAssignment;
 use App\Models\NotificationLog;
 use App\Models\OcrResult;
@@ -126,6 +127,25 @@ class NotificationDispatcher
             'Document awaiting OCR review',
             'A '.($document->type ?? 'document').' was uploaded for job '.$code.' and is queued for review.'
         );
+    }
+
+    public function issueReported(DeliveryIssueReport $report): void
+    {
+        $report->loadMissing('assignment.jobOrder', 'assignment.assignedBy', 'driver.user');
+        $assignment = $report->assignment;
+        $job        = $assignment?->jobOrder;
+        $code       = $job?->tracking_code ?? (string) $job?->id;
+        $label      = DeliveryIssueReport::TYPES[$report->issue_type] ?? $report->issue_type;
+        $driverName = $report->driver?->user?->name ?? 'Driver';
+
+        $message = $driverName.' reported "'.$label.'" for job '.$code.'.';
+        if ($report->notes) {
+            $message .= ' Notes: '.$report->notes;
+        }
+
+        $this->notifyUser($assignment?->assignedBy, 'Driver issue report', $message);
+        $this->notifyRole('admin', 'Driver issue report', $message);
+        $this->notifyRole('dispatcher', 'Driver issue report', $message);
     }
 
     public function ocrValidated(OcrResult $ocrResult, string $action): void

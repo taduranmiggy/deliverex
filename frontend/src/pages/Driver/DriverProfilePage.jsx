@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchDriverProfile } from '../../api/driver'
+import BottomSheet from '../../components/driver/BottomSheet'
+import DriverJobCard from '../../components/driver/DriverJobCard'
+import DriverOfflineBar from '../../components/driver/DriverOfflineBar'
+import DriverStatusChip from '../../components/driver/DriverStatusChip'
+import { useDriverUi } from '../../context/DriverUiContext'
+import { fetchDriverProfile, updateDriverProfile } from '../../api/driver'
 import LogoutButton from '../../components/LogoutButton'
-import { StatusBadge } from '../../components/ui'
 import useAuth from '../../hooks/useAuth'
-import {
-  Car,
-  ChevronRight,
-  ClipboardList,
-  History,
-  Mail,
-  Phone,
-  User,
-} from 'lucide-react'
+import { Car, ChevronRight, History, Mail, Pencil, Phone, User } from 'lucide-react'
 
 const AVAILABILITY_LABELS = {
   available: 'Available',
@@ -22,10 +18,16 @@ const AVAILABILITY_LABELS = {
 
 function DriverProfilePage() {
   const { updateUser } = useAuth()
+  const { showToast } = useDriverUi()
   const [profile, setProfile] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [historyPage, setHistoryPage] = useState(1)
+  const [editOpen, setEditOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState('')
 
   const load = useCallback(async (page = 1) => {
     setLoading(true)
@@ -33,6 +35,8 @@ function DriverProfilePage() {
     try {
       const data = await fetchDriverProfile(page)
       setProfile(data)
+      setName(data.user?.name ?? '')
+      setPhone(data.user?.phone ?? '')
       if (data?.user) {
         updateUser((prev) => ({
           ...prev,
@@ -57,161 +61,178 @@ function DriverProfilePage() {
 
   const history = profile?.delivery_history
   const historyItems = history?.data ?? []
-  const historyMeta = {
-    last_page: history?.last_page ?? 1,
-    total: history?.total ?? 0,
-  }
-
+  const historyMeta = { last_page: history?.last_page ?? 1, total: history?.total ?? 0 }
+  const stats = profile?.stats ?? {}
   const current = profile?.current_assignment
   const vehicle = profile?.vehicle
   const availability = profile?.driver?.availability ?? 'available'
 
-  return (
-    <section className="driver-page">
-      <header className="driver-page-header">
-        <div>
-          <h1>My Profile</h1>
-          <p className="driver-page-sub">Your account and delivery activity</p>
-        </div>
-        <LogoutButton />
-      </header>
+  const saveProfile = async () => {
+    setSaving(true)
+    setEditError('')
+    try {
+      const res = await updateDriverProfile({ name: name.trim(), phone: phone.trim() || null })
+      setProfile((prev) => ({ ...prev, user: { ...prev.user, ...res.user } }))
+      updateUser((prev) => ({ ...prev, name: res.user.name, phone: res.user.phone }))
+      showToast('Profile updated')
+      setEditOpen(false)
+    } catch (err) {
+      setEditError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
 
-      {error && <p className="driver-banner-error" style={{ marginBottom: 16 }}>{error}</p>}
-      {loading && !profile && <p className="driver-page-sub">Loading profile…</p>}
+  if (loading && !profile) {
+    return (
+      <>
+        <DriverOfflineBar />
+        <div className="da-skeleton" style={{ minHeight: 120 }} />
+        <div className="da-skeleton" />
+      </>
+    )
+  }
+
+  return (
+    <>
+      <DriverOfflineBar />
+      {error && <p className="da-alert da-alert--error">{error}</p>}
 
       {profile && (
         <>
-          <div className="driver-profile-card">
-            <div className="driver-profile-card__avatar" aria-hidden>
-              <User size={28} />
+          <div className="da-profile-hero">
+            <div className="da-profile-hero__avatar">
+              <User size={32} />
             </div>
-            <div className="driver-profile-card__body">
-              <h2 className="driver-profile-card__name">{profile.user?.name ?? '—'}</h2>
-              <p className="driver-profile-meta">
-                <Mail size={14} aria-hidden />
-                {profile.user?.email ?? '—'}
-              </p>
-              <p className="driver-profile-meta">
-                <Phone size={14} aria-hidden />
-                {profile.user?.phone?.trim() ? profile.user.phone : 'No contact number on file'}
-              </p>
-              <p className="driver-profile-meta">
-                License: <strong>{profile.driver?.license_no ?? '—'}</strong>
-              </p>
-              <span className={`driver-avail-pill driver-avail-pill--${availability}`}>
-                {AVAILABILITY_LABELS[availability] ?? availability}
-              </span>
+            <div>
+              <h2>{profile.user?.name ?? '—'}</h2>
+              <DriverStatusChip status={availability} label={AVAILABILITY_LABELS[availability] ?? availability} />
             </div>
           </div>
 
-          <div className="driver-section">
-            <h3 className="driver-section-title">Assigned vehicle</h3>
-            {vehicle ? (
-              <div className="driver-info-tile">
-                <Car size={20} style={{ flexShrink: 0, opacity: 0.6 }} />
-                <div>
-                  <p style={{ fontWeight: 700, margin: 0 }}>{vehicle.plate_no}</p>
-                  <p style={{ margin: '4px 0 0', fontSize: '0.8125rem', color: 'var(--muted)' }}>
-                    {vehicle.type ?? 'Vehicle'} · {vehicle.status ?? '—'}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="driver-empty-card" style={{ marginBottom: 0, padding: 20 }}>
-                <p style={{ margin: 0, fontSize: '0.875rem' }}>No vehicle linked to your current assignment.</p>
-              </div>
-            )}
+          <div className="da-card">
+            <p className="da-profile-meta"><Mail size={16} /> {profile.user?.email ?? '—'}</p>
+            <p className="da-profile-meta"><Phone size={16} /> {profile.user?.phone?.trim() || 'No contact number'}</p>
           </div>
 
-          <div className="driver-section">
-            <h3 className="driver-section-title">Current assignment</h3>
-            {current ? (
-              <Link to={`/driver/jobs/${current.id}`} className="driver-job-row">
-                <div className="driver-job-row__top">
-                  <span className="driver-job-row__id">#{current.id}</span>
-                  <StatusBadge status={current.status} />
-                </div>
-                <p className="driver-job-row__route">
-                  {current.job_order?.pickup_location ?? '—'} → {current.job_order?.dropoff_location ?? '—'}
+          <div className="da-summary-row">
+            <div className="da-summary-pill">
+              <strong>{stats.total_deliveries ?? 0}</strong>
+              <span>Total</span>
+            </div>
+            <div className="da-summary-pill">
+              <strong>{stats.completed_deliveries ?? 0}</strong>
+              <span>Done</span>
+            </div>
+            <div className="da-summary-pill">
+              <strong>{stats.pending_deliveries ?? 0}</strong>
+              <span>Pending</span>
+            </div>
+          </div>
+
+          <button type="button" className="da-btn da-btn--outline da-btn--block" style={{ marginBottom: 12 }} onClick={() => setEditOpen(true)}>
+            <Pencil size={16} /> Edit Profile
+          </button>
+
+          <p className="da-section-head">Assigned vehicle</p>
+          {vehicle ? (
+            <div className="da-card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Car size={22} color="var(--da-primary)" />
+              <div>
+                <p style={{ fontWeight: 800, margin: 0 }}>{vehicle.plate_no}</p>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--da-muted)', margin: '2px 0 0' }}>
+                  {vehicle.type ?? 'Vehicle'} · {vehicle.status ?? '—'}
                 </p>
-                {current.job_order?.tracking_code && (
-                  <p className="driver-job-row__vehicle">Tracking: {current.job_order.tracking_code}</p>
-                )}
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8, fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-primary)' }}>
-                  View details <ChevronRight size={14} />
-                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="da-card da-empty" style={{ padding: 24 }}>
+              <p style={{ margin: 0, fontSize: '0.875rem' }}>No vehicle linked to current assignment.</p>
+            </div>
+          )}
+
+          <p className="da-section-head">Current assignment</p>
+          {current ? (
+            <Link to={`/driver/jobs/${current.id}`} className="da-card" style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700 }}>Job #{current.id}</span>
+                <DriverStatusChip status={current.status} />
+              </div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--da-muted)', margin: '8px 0 0' }}>
+                {current.job_order?.dropoff_location ?? '—'}
+              </p>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 10, fontSize: '0.8125rem', fontWeight: 700, color: 'var(--da-primary)' }}>
+                View details <ChevronRight size={14} />
+              </span>
+            </Link>
+          ) : (
+            <div className="da-card da-empty" style={{ padding: 24 }}>
+              <p style={{ margin: 0, fontWeight: 600 }}>No active assignment</p>
+              <Link to="/driver/jobs" className="da-btn da-btn--primary" style={{ marginTop: 12, textDecoration: 'none' }}>
+                View Jobs
               </Link>
-            ) : (
-              <div className="driver-empty-card" style={{ marginBottom: 0, padding: 20 }}>
-                <ClipboardList size={24} style={{ margin: '0 auto 8px', opacity: 0.25 }} />
-                <p style={{ margin: 0, fontWeight: 600 }}>No active assignment</p>
-                <p style={{ margin: '4px 0 0', fontSize: '0.8125rem' }}>Check My Jobs when dispatch assigns you.</p>
-                <Link to="/driver" className="driver-btn-primary" style={{ display: 'inline-flex', marginTop: 14, textDecoration: 'none' }}>
-                  Go to My Jobs
-                </Link>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="driver-section">
-            <h3 className="driver-section-title">
-              <History size={14} style={{ display: 'inline', marginRight: 4 }} />
-              Delivery history
-              {historyMeta.total > 0 ? ` (${historyMeta.total})` : ''}
-            </h3>
-            {historyItems.length === 0 ? (
-              <div className="driver-empty-card" style={{ marginBottom: 0, padding: 20 }}>
-                <p style={{ margin: 0, fontSize: '0.875rem' }}>No completed deliveries yet.</p>
-              </div>
-            ) : (
-              historyItems.map((item) => (
-                <Link key={item.id} to={`/driver/jobs/${item.id}`} className="driver-job-row">
-                  <div className="driver-job-row__top">
-                    <span className="driver-job-row__id">#{item.id}</span>
-                    <StatusBadge status={item.status} />
-                  </div>
-                  <p className="driver-job-row__route">
-                    {item.job_order?.customer_name ?? 'Delivery'} — {item.job_order?.dropoff_location ?? '—'}
-                  </p>
-                  <p className="driver-job-row__vehicle">
-                    {item.vehicle?.plate_no ? `${item.vehicle.plate_no} · ` : ''}
-                    {item.completed_at
-                      ? `Completed ${new Date(item.completed_at).toLocaleDateString()}`
-                      : item.assigned_at
-                        ? `Assigned ${new Date(item.assigned_at).toLocaleDateString()}`
-                        : '—'}
-                    {item.delivery_status_logs_count != null
-                      ? ` · ${item.delivery_status_logs_count} status update(s)`
-                      : ''}
-                  </p>
-                </Link>
-              ))
-            )}
-            {historyMeta.last_page > 1 && (
-              <div className="dx-pagination" style={{ marginTop: 12 }}>
-                <button type="button" disabled={historyPage <= 1} onClick={() => setHistoryPage((p) => p - 1)}>
-                  Previous
-                </button>
-                <span>
-                  Page {historyPage} / {historyMeta.last_page}
-                </span>
-                <button
-                  type="button"
-                  disabled={historyPage >= historyMeta.last_page}
-                  onClick={() => setHistoryPage((p) => p + 1)}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </div>
+          <p className="da-section-head">
+            <History size={14} style={{ display: 'inline', marginRight: 4 }} />
+            Delivery history {historyMeta.total > 0 ? `(${historyMeta.total})` : ''}
+          </p>
+          {historyItems.length === 0 ? (
+            <div className="da-card da-empty" style={{ padding: 24 }}>
+              <p style={{ margin: 0, fontSize: '0.875rem' }}>No completed deliveries yet.</p>
+            </div>
+          ) : (
+            historyItems.map((item) => (
+              <DriverJobCard key={item.id} assignment={item} />
+            ))
+          )}
 
-          <div className="driver-profile-logout-block">
+          {historyMeta.last_page > 1 && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button type="button" className="da-btn da-btn--secondary" style={{ flex: 1 }} disabled={historyPage <= 1} onClick={() => setHistoryPage((p) => p - 1)}>
+                Previous
+              </button>
+              <button type="button" className="da-btn da-btn--secondary" style={{ flex: 1 }} disabled={historyPage >= historyMeta.last_page} onClick={() => setHistoryPage((p) => p + 1)}>
+                Next
+              </button>
+            </div>
+          )}
+
+          <div style={{ marginTop: 24 }}>
             <LogoutButton />
           </div>
+
+          <BottomSheet
+            open={editOpen}
+            onClose={() => !saving && setEditOpen(false)}
+            title="Edit Profile"
+            subtitle="Update your name and contact number."
+          >
+            <div className="da-field">
+              <label htmlFor="edit-name">Full name</label>
+              <input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} required />
+            </div>
+            <div className="da-field">
+              <label htmlFor="edit-phone">Contact number</label>
+              <input id="edit-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+63 …" />
+            </div>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--da-muted)', margin: '0 0 12px' }}>
+              Email changes require dispatcher approval.
+            </p>
+            {editError && <p className="da-alert da-alert--error">{editError}</p>}
+            <div className="da-sheet__actions">
+              <button type="button" className="da-btn da-btn--primary da-btn--block" disabled={saving} onClick={saveProfile}>
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+              <button type="button" className="da-btn da-btn--secondary da-btn--block" disabled={saving} onClick={() => setEditOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </BottomSheet>
         </>
       )}
-    </section>
+    </>
   )
 }
 
