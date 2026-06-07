@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
+use App\Models\DeliveryDelayReport;
 use App\Models\DispatchAssignment;
 use App\Models\Driver;
 use App\Models\JobOrder;
@@ -87,6 +88,74 @@ class AnalyticsController extends Controller
             ->get()
             ->map(fn ($row) => ['date' => $row->date, 'count' => (int) $row->count]);
 
+        // --- Delay reason analytics ---
+        $delayBase = DeliveryDelayReport::whereBetween('created_at', [$fromDate, $toDate]);
+
+        $commonDelayReasons = (clone $delayBase)
+            ->select('delay_reason', DB::raw('COUNT(*) as count'))
+            ->groupBy('delay_reason')
+            ->orderByDesc('count')
+            ->get()
+            ->map(fn ($row) => [
+                'reason' => $row->delay_reason,
+                'label'  => DeliveryDelayReport::REASONS[$row->delay_reason] ?? $row->delay_reason,
+                'count'  => (int) $row->count,
+            ]);
+
+        $monthlyDelayTrends = (clone $delayBase)
+            ->select(DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw("DATE_FORMAT(created_at, '%Y-%m')"))
+            ->orderBy('month')
+            ->get()
+            ->map(fn ($row) => ['month' => $row->month, 'count' => (int) $row->count]);
+
+        $driverDelayRates = $drivers->map(function (Driver $driver) use ($fromDate, $toDate) {
+            $totalAssignments = DispatchAssignment::where('driver_id', $driver->id)
+                ->whereBetween('created_at', [$fromDate, $toDate])
+                ->count();
+            $delayCount = DeliveryDelayReport::where('driver_id', $driver->id)
+                ->whereBetween('created_at', [$fromDate, $toDate])
+                ->count();
+            $rate = $totalAssignments > 0
+                ? round(($delayCount / $totalAssignments) * 100, 1)
+                : null;
+
+            return [
+                'id'                => $driver->id,
+                'name'              => $driver->user?->name ?? '—',
+                'total_assignments' => $totalAssignments,
+                'delay_reports'     => $delayCount,
+                'delay_rate_pct'    => $rate,
+            ];
+        })->filter(fn ($row) => $row['total_assignments'] > 0)
+            ->sortByDesc('delay_rate_pct')
+            ->values();
+
+        $vehicles = Vehicle::with('vehicleType')->get();
+        $vehicleDelayRates = $vehicles->map(function (Vehicle $vehicle) use ($fromDate, $toDate) {
+            $totalAssignments = DispatchAssignment::where('vehicle_id', $vehicle->id)
+                ->whereBetween('created_at', [$fromDate, $toDate])
+                ->count();
+            $delayCount = DeliveryDelayReport::whereHas(
+                'assignment',
+                fn ($q) => $q->where('vehicle_id', $vehicle->id)
+            )->whereBetween('created_at', [$fromDate, $toDate])->count();
+            $rate = $totalAssignments > 0
+                ? round(($delayCount / $totalAssignments) * 100, 1)
+                : null;
+
+            return [
+                'id'                => $vehicle->id,
+                'plate_no'          => $vehicle->plate_no,
+                'type'              => $vehicle->type ?? $vehicle->vehicleType?->name,
+                'total_assignments' => $totalAssignments,
+                'delay_reports'     => $delayCount,
+                'delay_rate_pct'    => $rate,
+            ];
+        })->filter(fn ($row) => $row['total_assignments'] > 0)
+            ->sortByDesc('delay_rate_pct')
+            ->values();
+
         return response()->json([
             'summary' => [
                 'total'       => $totalJobs,
@@ -105,6 +174,13 @@ class AnalyticsController extends Controller
             ],
             'drivers'      => $driverStats,
             'daily_stats'  => $dailyStats,
+            'delays'       => [
+                'total_reports'        => (clone $delayBase)->count(),
+                'common_reasons'       => $commonDelayReasons,
+                'monthly_trends'       => $monthlyDelayTrends,
+                'driver_delay_rates'   => $driverDelayRates,
+                'vehicle_delay_rates'  => $vehicleDelayRates,
+            ],
             'filters'      => [
                 'from'   => $fromDate->toDateString(),
                 'to'     => $toDate->toDateString(),

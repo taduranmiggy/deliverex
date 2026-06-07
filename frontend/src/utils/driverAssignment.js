@@ -71,11 +71,30 @@ export function getNextStatusOptions(currentStatus) {
 }
 
 export const ISSUE_TYPES = [
-  { value: 'customer_unavailable', label: 'Customer Unavailable' },
-  { value: 'wrong_address', label: 'Wrong Address' },
-  { value: 'access_denied', label: 'Access Denied / Gate Closed' },
-  { value: 'traffic_delay', label: 'Traffic / Road Delay' },
-  { value: 'vehicle_problem', label: 'Vehicle Problem' },
-  { value: 'package_damaged', label: 'Package Damaged' },
-  { value: 'other', label: 'Other Issue' },
+  { value: 'vehicle_breakdown', label: 'Vehicle Breakdown' },
+  { value: 'flat_tire', label: 'Flat Tire' },
+  { value: 'accident', label: 'Accident' },
+  { value: 'wrong_material', label: 'Wrong Material' },
+  { value: 'site_inaccessible', label: 'Site Inaccessible' },
+  { value: 'safety_issue', label: 'Safety Issue' },
+  { value: 'other', label: 'Other' },
 ]
+
+export function getIssueTypeLabel(value) {
+  return ISSUE_TYPES.find((t) => t.value === value)?.label ?? value?.replace(/_/g, ' ')
+}
+
+export const DELAY_REASONS = [
+  { value: 'traffic_congestion', label: 'Traffic Congestion' },
+  { value: 'vehicle_breakdown', label: 'Vehicle Breakdown' },
+  { value: 'loading_delay', label: 'Loading Delay' },
+  { value: 'client_site_not_ready', label: 'Client Site Not Ready' },
+  { value: 'weather_condition', label: 'Weather Condition' },
+  { value: 'road_closure', label: 'Road Closure' },
+  { value: 'accident', label: 'Accident' },
+  { value: 'other', label: 'Other' },
+]
+
+export function getDelayReasonLabel(value) {
+  return DELAY_REASONS.find((r) => r.value === value)?.label ?? value
+}

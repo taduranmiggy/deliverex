@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { fetchManagerDashboard } from '../../api/manager'
-import { EmptyState, PageHeader, SectionCard, StatCard } from '../../components/ui'
+import AssignmentAuditSection from '../../components/AssignmentAuditSection'
+import DriverPerformanceSection from '../../components/DriverPerformanceSection'
+import IssueReportsSection from '../../components/IssueReportsSection'
+import VehicleUtilizationSection from '../../components/VehicleUtilizationSection'
+import { PageHeader, SectionCard, StatCard } from '../../components/ui'
 import { AlertTriangle, Car, CheckCircle2, Clock, TrendingUp, Truck, Users } from 'lucide-react'
 
 function MiniBarChart({ data }) {
@@ -75,6 +79,14 @@ function ManagerDashboard() {
           ))}
         </SectionCard>
       </div>
+
+      <VehicleUtilizationSection />
+
+      <AssignmentAuditSection title="Assignment Audit History" />
+
+      <IssueReportsSection title="Operational Issue Reports" />
+
+      <DriverPerformanceSection />
     </>
   )
 }

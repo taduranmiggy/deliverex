@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
+use App\Models\DeliveryCompletionProof;
 use App\Models\DeliveryStatusLog;
 use App\Models\DispatchAssignment;
 use App\Models\Driver;
 use App\Models\TrackingLog;
 use App\Models\Vehicle;
+use App\Services\Delivery\ArrivalVerificationService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Support\AuditLogger;
 use App\Support\DriverAccount;
@@ -15,8 +17,10 @@ use Illuminate\Http\Request;
 
 class StatusController extends Controller
 {
-    public function __construct(private NotificationDispatcher $notificationDispatcher)
-    {
+    public function __construct(
+        private NotificationDispatcher $notificationDispatcher,
+        private ArrivalVerificationService $arrivalVerification,
+    ) {
     }
 
     public function store(Request $request)
@@ -48,21 +52,74 @@ class StatusController extends Controller
             ], 422);
         }
 
+        $latitude  = $data['latitude'] ?? null;
+        $longitude = $data['longitude'] ?? null;
+
+        // Start Trip Verification: require GPS proof when leaving "assigned" for "en route".
+        // Accept a prior tracking log (e.g. dashboard GPS ping) as already-captured proof.
+        $isStartTrip = $status === 'in_progress' && $assignment->status === 'assigned';
+        if ($isStartTrip && ($latitude === null || $longitude === null)
+            && ! $assignment->trackingLogs()->exists()) {
+            return response()->json([
+                'message' => 'GPS location is required to start the trip. Enable location and try again.',
+            ], 422);
+        }
+
+        // Arrival Verification: require GPS within radius of drop-off destination.
+        $isArrivalVerify = $status === 'arrived' && $assignment->status === 'in_progress';
+        $arrivalVerified = null;
+
+        if ($isArrivalVerify) {
+            if ($latitude === null || $longitude === null) {
+                return response()->json([
+                    'message' => 'GPS location is required to confirm arrival. Enable location and try again.',
+                ], 422);
+            }
+
+            $assignment->loadMissing('jobOrder');
+            $verification = $this->arrivalVerification->verify(
+                (float) $latitude,
+                (float) $longitude,
+                $assignment->jobOrder,
+            );
+
+            if (! $verification['verified']) {
+                return response()->json([
+                    'message'          => $verification['error'] ?? 'You are too far from the delivery destination.',
+                    'distance_meters'  => $verification['distance_meters'] ?? null,
+                    'allowed_meters'   => $verification['allowed_meters'] ?? config('delivery.arrival_radius_meters', 300),
+                ], 422);
+            }
+
+            $arrivalVerified = true;
+        }
+
+        // Completion proof required before marking delivery as completed.
+        $isComplete = $status === 'completed' && $assignment->status === 'arrived';
+        if ($isComplete && ! DeliveryCompletionProof::where('assignment_id', $assignment->id)->exists()) {
+            return response()->json([
+                'message' => 'Delivery completion proof is required. Upload a receipt photo or OCR document before completing.',
+            ], 422);
+        }
+
         DeliveryStatusLog::create([
-            'assignment_id' => $assignment->id,
-            'status'        => $status,
-            'notes'         => $data['notes'] ?? null,
-            'created_at'    => now(),
+            'assignment_id'    => $assignment->id,
+            'status'           => $status,
+            'notes'            => $data['notes'] ?? null,
+            'latitude'         => $latitude,
+            'longitude'        => $longitude,
+            'arrival_verified' => $arrivalVerified,
+            'created_at'       => now(),
         ]);
 
         $assignment->update(['status' => $status]);
         $this->notificationDispatcher->statusUpdated($assignment, $status);
 
-        if ($data['latitude'] !== null && $data['longitude'] !== null) {
+        if ($latitude !== null && $longitude !== null) {
             TrackingLog::create([
                 'assignment_id' => $assignment->id,
-                'latitude'      => $data['latitude'],
-                'longitude'     => $data['longitude'],
+                'latitude'      => $latitude,
+                'longitude'     => $longitude,
                 'captured_at'   => now(),
             ]);
         }
@@ -116,7 +173,11 @@ class StatusController extends Controller
             ], $request);
         }
 
-        return response()->json(['message' => 'Status updated', 'status' => $status]);
+        return response()->json([
+            'message'          => 'Status updated',
+            'status'           => $status,
+            'arrival_verified' => $arrivalVerified,
+        ]);
     }
 
     private function normalizeStatus(string $status): ?string

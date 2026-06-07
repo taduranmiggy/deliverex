@@ -12,13 +12,21 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Customer\InquiryController;
 use App\Http\Controllers\Customer\PortalController as CustomerPortalController;
 use App\Http\Controllers\Customer\TrackingController as CustomerTrackingController;
+use App\Http\Controllers\DriverPerformanceController;
+use App\Http\Controllers\AssignmentAuditController;
+use App\Http\Controllers\IssueReportController;
+use App\Http\Controllers\VehicleUtilizationController;
 use App\Http\Controllers\Dispatcher\AssignmentController as DispatcherAssignmentController;
 use App\Http\Controllers\Dispatcher\BestFitController;
+use App\Http\Controllers\Dispatcher\ClientHistoryController;
 use App\Http\Controllers\Dispatcher\CalendarController;
+use App\Http\Controllers\Dispatcher\DelayController as DispatcherDelayController;
 use App\Http\Controllers\Dispatcher\JobOrderController;
 use App\Http\Controllers\Dispatcher\MasterDataOptionsController;
 use App\Http\Controllers\Driver\AssignmentController as DriverAssignmentController;
 use App\Http\Controllers\Driver\ProfileController as DriverProfileController;
+use App\Http\Controllers\Driver\CompletionProofController as DriverCompletionProofController;
+use App\Http\Controllers\Driver\DelayController as DriverDelayController;
 use App\Http\Controllers\Driver\IssueController as DriverIssueController;
 use App\Http\Controllers\Driver\DocumentController as DriverDocumentController;
 use App\Http\Controllers\Driver\StatusController as DriverStatusController;
@@ -113,9 +121,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/assignments',                   [DispatcherAssignmentController::class, 'index']);
         Route::post('/assignments',                  [DispatcherAssignmentController::class, 'store']);
 
+        Route::get('/clients/{client}/history',      [ClientHistoryController::class, 'show']);
         Route::get('/best-fit/{jobOrder}',           [BestFitController::class, 'show']);
         Route::get('/calendar',                      [CalendarController::class, 'index']);
         Route::get('/master-data/options',           [MasterDataOptionsController::class, 'index']);
+        Route::get('/delays',                        [DispatcherDelayController::class, 'index']);
+        Route::put('/delays/{delayReport}/acknowledge', [DispatcherDelayController::class, 'acknowledge']);
     });
 
     // ─── Driver ───────────────────────────────────────────────────────────────
@@ -128,6 +139,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/tracking',                           [DriverTrackingController::class, 'store']);
         Route::post('/documents',                          [DriverDocumentController::class, 'store']);
         Route::post('/issues',                             [DriverIssueController::class, 'store']);
+        Route::post('/delays',                             [DriverDelayController::class, 'store']);
+        Route::post('/completion-proof',                   [DriverCompletionProofController::class, 'store']);
     });
 
     // ─── Manager ──────────────────────────────────────────────────────────────
@@ -136,6 +149,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports',    [ReportsController::class, 'index']);
         Route::get('/analytics',  [AnalyticsController::class, 'index']);
         Route::get('/active-deliveries', [FleetController::class, 'index']);
+        Route::get('/vehicle-utilization', [VehicleUtilizationController::class, 'index']);
+    });
+
+    // ─── Admin + Manager: driver performance scoring ─────────────────────────
+    Route::middleware('role:admin|manager')->group(function () {
+        Route::get('/driver-performance', [DriverPerformanceController::class, 'index']);
+    });
+
+    // ─── Dispatcher + Manager: issue report review ───────────────────────────
+    Route::middleware('role:dispatcher|manager')->group(function () {
+        Route::get('/issue-reports', [IssueReportController::class, 'index']);
+    });
+
+    // ─── Admin + Dispatcher + Manager: assignment audit trail ────────────────
+    Route::middleware('role:admin|dispatcher|manager')->group(function () {
+        Route::get('/assignment-audit', [AssignmentAuditController::class, 'index']);
     });
 
     // ─── Admin + Dispatcher + Manager: GPS tracking view & OCR reprocess ─────

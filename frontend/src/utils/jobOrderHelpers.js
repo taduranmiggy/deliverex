@@ -6,6 +6,8 @@
 
 /** Build a display-ready full name from structured parts or legacy field. */
 export function buildDisplayName(order) {
+  if (order?.client?.client_name) return order.client.client_name
+  if (order?.custom_client_name) return order.custom_client_name
   if (order?.customer_first_name || order?.customer_last_name) {
     return [
       order.customer_first_name,

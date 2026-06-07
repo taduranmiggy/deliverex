@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { fetchAssignmentAuditTrails } from '../../api/assignmentAudit'
 import { fetchAnalytics, fetchReports } from '../../api/manager'
 import { DataTable, EmptyState, PageHeader, StatusBadge } from '../../components/ui'
 import { BarChart3, ClipboardList, Download, FileText, Users } from 'lucide-react'
@@ -18,12 +19,15 @@ function downloadCsv(filename, headers, rows) {
 const TABS = [
   { key: 'deliveries', label: 'Deliveries', Icon: FileText, desc: 'Complete delivery history' },
   { key: 'driver_perf', label: 'Driver Performance', Icon: Users, desc: 'Driver efficiency metrics' },
+  { key: 'assignment_audit', label: 'Assignment Audit', Icon: ClipboardList, desc: 'Best-Fit vs actual assignments' },
 ]
 
 function ReportsPage() {
   const [tab, setTab]         = useState('deliveries')
   const [deliveries, setDeliveries] = useState([])
   const [analytics, setAnalytics]   = useState(null)
+  const [auditTrails, setAuditTrails] = useState([])
+  const [auditMeta, setAuditMeta] = useState({ last_page: 1, total: 0 })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [page, setPage]       = useState(1)
@@ -47,9 +51,20 @@ function ReportsPage() {
     finally { setLoading(false) }
   }, [])
 
+  const loadAuditTrails = useCallback(async (p = 1) => {
+    setLoading(true); setError('')
+    try {
+      const res = await fetchAssignmentAuditTrails({ page: p, per_page: 20 })
+      setAuditTrails(res.data || [])
+      setAuditMeta({ last_page: res.last_page ?? 1, total: res.total ?? 0 })
+    } catch (err) { setError(err.message) }
+    finally { setLoading(false) }
+  }, [])
+
   useEffect(() => {
     if (tab === 'deliveries') loadDeliveries(page, statusFilter)
-    else loadAnalytics()
+    else if (tab === 'driver_perf') loadAnalytics()
+    else loadAuditTrails(page)
   }, [tab, page]) // eslint-disable-line
 
   const handleExport = () => {
@@ -62,11 +77,26 @@ function ReportsPage() {
           d.completed_at ? new Date(d.completed_at).toLocaleString() : '—',
         ])
       )
-    } else {
+    } else if (tab === 'driver_perf') {
       const rows = analytics?.drivers ?? []
       downloadCsv(`driver-performance-${new Date().toISOString().slice(0, 10)}.csv`,
         ['Driver', 'Total Jobs', 'Completed', 'On-Time Rate', 'Availability'],
         rows.map((d) => [d.name, d.total, d.completed, d.on_time_pct != null ? `${d.on_time_pct}%` : '—', d.availability])
+      )
+    } else {
+      downloadCsv(`assignment-audit-${new Date().toISOString().slice(0, 10)}.csv`,
+        ['When', 'Dispatcher', 'Job', 'Best-Fit Driver', 'Best-Fit Vehicle', 'Assigned Driver', 'Assigned Vehicle', 'Override', 'Reason'],
+        auditTrails.map((t) => [
+          t.created_at ? new Date(t.created_at).toLocaleString() : '—',
+          t.dispatcher_name ?? '—',
+          t.job_order_id ? formatJobPublicId(t.job_order_id) : '—',
+          t.recommended_driver_name ?? '—',
+          t.recommended_vehicle_plate ?? '—',
+          t.assigned_driver_name ?? '—',
+          t.assigned_vehicle_plate ?? '—',
+          t.is_override ? 'Yes' : 'No',
+          t.override_reason ?? (t.is_override ? '—' : 'Matched Best-Fit'),
+        ])
       )
     }
   }
@@ -140,7 +170,7 @@ function ReportsPage() {
               </div>
             )}
           </>
-        ) : (
+        ) : tab === 'driver_perf' ? (
           <DataTable headers={['Driver', 'Total Jobs', 'Completed', 'On-Time Rate', 'Availability']} loading={loading}
             empty={<EmptyState icon={Users} title="No driver data" />}
           >
@@ -158,6 +188,46 @@ function ReportsPage() {
               </tr>
             ))}
           </DataTable>
+        ) : (
+          <>
+            <p style={{ color: 'var(--muted)', fontSize: '0.8125rem', marginBottom: 16 }}>{auditMeta.total} assignment decisions recorded</p>
+            <DataTable
+              headers={['When', 'Dispatcher', 'Job', 'Best-Fit', 'Assigned', 'Override Reason']}
+              loading={loading}
+              empty={<EmptyState icon={ClipboardList} title="No assignment audits" message="Assignment decisions will appear here as dispatchers confirm assignments." />}
+            >
+              {auditTrails.map((t) => (
+                <tr key={t.id}>
+                  <td style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+                    {t.created_at ? new Date(t.created_at).toLocaleString() : '—'}
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{t.dispatcher_name ?? '—'}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                    {t.job_order_id ? formatJobPublicId(t.job_order_id) : '—'}
+                  </td>
+                  <td style={{ fontSize: '0.8125rem' }}>
+                    {t.recommended_driver_name
+                      ? `${t.recommended_driver_name}${t.recommended_vehicle_plate ? ` · ${t.recommended_vehicle_plate}` : ''}`
+                      : '—'}
+                  </td>
+                  <td style={{ fontSize: '0.8125rem' }}>
+                    <strong>{t.assigned_driver_name}</strong>
+                    {t.assigned_vehicle_plate ? ` · ${t.assigned_vehicle_plate}` : ''}
+                  </td>
+                  <td style={{ fontSize: '0.8125rem', color: 'var(--muted)', maxWidth: 260 }}>
+                    {t.override_reason ?? (t.is_override ? '—' : 'Matched Best-Fit')}
+                  </td>
+                </tr>
+              ))}
+            </DataTable>
+            {auditMeta.last_page > 1 && (
+              <div className="dx-pagination">
+                <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
+                <span>Page {page} / {auditMeta.last_page}</span>
+                <button disabled={page >= auditMeta.last_page} onClick={() => setPage((p) => p + 1)}>Next</button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

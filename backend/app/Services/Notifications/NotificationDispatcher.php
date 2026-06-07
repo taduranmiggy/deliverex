@@ -2,6 +2,7 @@
 
 namespace App\Services\Notifications;
 
+use App\Models\DeliveryDelayReport;
 use App\Models\DeliveryDocument;
 use App\Models\DeliveryIssueReport;
 use App\Models\DispatchAssignment;
@@ -135,7 +136,7 @@ class NotificationDispatcher
         $assignment = $report->assignment;
         $job        = $assignment?->jobOrder;
         $code       = $job?->tracking_code ?? (string) $job?->id;
-        $label      = DeliveryIssueReport::TYPES[$report->issue_type] ?? $report->issue_type;
+        $label      = DeliveryIssueReport::typeLabel($report->issue_type);
         $driverName = $report->driver?->user?->name ?? 'Driver';
 
         $message = $driverName.' reported "'.$label.'" for job '.$code.'.';
@@ -143,9 +144,34 @@ class NotificationDispatcher
             $message .= ' Notes: '.$report->notes;
         }
 
+        if ($report->photo_path) {
+            $message .= ' Photo attached.';
+        }
+
         $this->notifyUser($assignment?->assignedBy, 'Driver issue report', $message);
         $this->notifyRole('admin', 'Driver issue report', $message);
         $this->notifyRole('dispatcher', 'Driver issue report', $message);
+        $this->notifyRole('manager', 'Driver issue report', $message);
+    }
+
+    public function delayReported(DeliveryDelayReport $report): void
+    {
+        $report->loadMissing('assignment.jobOrder', 'assignment.assignedBy', 'driver.user');
+        $assignment = $report->assignment;
+        $job        = $assignment?->jobOrder;
+        $code       = $job?->tracking_code ?? (string) $job?->id;
+        $label      = DeliveryDelayReport::REASONS[$report->delay_reason] ?? $report->delay_reason;
+        $driverName = $report->driver?->user?->name ?? 'Driver';
+
+        $message = $driverName.' reported delivery delay: "'.$label.'" for job '.$code.'.';
+        if ($report->delay_notes) {
+            $message .= ' Notes: '.$report->delay_notes;
+        }
+
+        $this->notifyUser($assignment?->assignedBy, 'Delivery delay report', $message);
+        $this->notifyRole('admin', 'Delivery delay report', $message);
+        $this->notifyRole('dispatcher', 'Delivery delay report', $message);
+        $this->notifyRole('manager', 'Delivery delay report', $message);
     }
 
     public function ocrValidated(OcrResult $ocrResult, string $action): void

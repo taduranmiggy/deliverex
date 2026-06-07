@@ -3,11 +3,17 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Models\DeliveryCompletionProof;
 use App\Models\JobOrder;
+use App\Services\Delivery\EtaEstimationService;
 use Illuminate\Support\Facades\Storage;
 
 class TrackingController extends Controller
 {
+    public function __construct(private EtaEstimationService $etaEstimation)
+    {
+    }
+
     public function show(string $trackingCode)
     {
         $normalized = strtoupper(trim($trackingCode));
@@ -27,6 +33,7 @@ class TrackingController extends Controller
                 'deliveryStatusLogs',
                 'trackingLogs',
                 'deliveryDocuments.ocrResult',
+                'completionProof.deliveryDocument.ocrResult',
             ])
             ->first();
 
@@ -42,37 +49,58 @@ class TrackingController extends Controller
         if ($latestAssignment) {
             $timeline = $latestAssignment->deliveryStatusLogs()
                 ->orderBy('created_at')
-                ->get(['status', 'notes', 'created_at'])
+                ->get(['status', 'notes', 'created_at', 'latitude', 'longitude', 'arrival_verified'])
                 ->map(fn ($row) => [
-                    'status' => $row->status,
-                    'notes'  => $row->notes,
-                    'at'     => $row->created_at?->toIso8601String(),
+                    'status'            => $row->status,
+                    'notes'             => $row->notes,
+                    'at'                => $row->created_at?->toIso8601String(),
+                    'arrival_verified'  => (bool) $row->arrival_verified,
+                    'gps_verified_at'   => $row->arrival_verified
+                        ? $row->created_at?->toIso8601String()
+                        : null,
                 ])
                 ->values()
                 ->all();
         }
 
-        // Proof-of-delivery documents (public-safe: only show POD docs from completed deliveries)
-        $proofDocuments = [];
         $currentStatus = $latestStatus?->status ?? $jobOrder->status;
-        if ($latestAssignment && $currentStatus === 'completed') {
-            $proofDocuments = $latestAssignment->deliveryDocuments
-                ->where('type', 'pod')
-                ->map(fn ($doc) => [
+        $completionProof = $latestAssignment?->completionProof;
+        $proofDocuments  = [];
+        $proofAvailable  = $currentStatus === 'completed' && $completionProof !== null;
+
+        if ($proofAvailable) {
+            $doc = $completionProof->deliveryDocument;
+            if ($doc) {
+                $proofDocuments[] = [
                     'id'          => $doc->id,
                     'type'        => $doc->type,
+                    'proof_type'  => $completionProof->proof_type,
+                    'label'       => DeliveryCompletionProof::TYPES[$completionProof->proof_type] ?? $doc->type,
                     'url'         => Storage::disk('public')->url($doc->file_path),
-                    'uploaded_at' => $doc->created_at?->toIso8601String(),
+                    'uploaded_at' => $completionProof->created_at?->toIso8601String(),
                     'ocr_ready'   => $doc->ocrResult?->is_validated ?? false,
-                ])
-                ->values()
-                ->all();
+                ];
+            }
+            if ($completionProof->receiver_signature_path) {
+                $proofDocuments[] = [
+                    'id'          => null,
+                    'type'        => 'signature',
+                    'proof_type'  => 'receiver_signature',
+                    'label'       => 'Receiver Signature',
+                    'url'         => Storage::disk('public')->url($completionProof->receiver_signature_path),
+                    'uploaded_at' => $completionProof->created_at?->toIso8601String(),
+                    'ocr_ready'   => false,
+                ];
+            }
         }
+
+        $eta = $this->etaEstimation->estimate($jobOrder, $latestTracking, $currentStatus);
 
         return response()->json([
             'tracking_code'       => $jobOrder->tracking_code,
             'status'              => $currentStatus,
             'eta_window'          => $this->etaLabel($jobOrder),
+            'eta'                 => $eta,
             'approximate_location'=> $latestTracking
                 ? [
                     'lat' => round((float) $latestTracking->latitude, 2),
@@ -80,6 +108,15 @@ class TrackingController extends Controller
                 ]
                 : null,
             'timeline'            => $timeline,
+            'proof_of_delivery_available' => $proofAvailable,
+            'completion_proof'    => $completionProof ? [
+                'proof_type'       => $completionProof->proof_type,
+                'proof_type_label' => DeliveryCompletionProof::TYPES[$completionProof->proof_type] ?? $completionProof->proof_type,
+                'receiver_name'    => $completionProof->receiver_name,
+                'receiver_contact' => $completionProof->receiver_contact,
+                'delivery_notes'   => $completionProof->delivery_notes,
+                'submitted_at'     => $completionProof->created_at?->toIso8601String(),
+            ] : null,
             'proof_documents'     => $proofDocuments,
             'delay_flag'          => $this->delayFlag($jobOrder, $latestAssignment, $latestStatus),
         ]);

@@ -12,14 +12,10 @@ class VehicleMasterSeeder extends Seeder
 {
     public function run(): void
     {
-        $tenWheelerType = VehicleType::query()
-            ->where('name', '10-Wheeler')
-            ->where('wheel_type', '10 Wheeler')
-            ->first();
-        $adtType = VehicleType::query()
-            ->where('name', 'ADT')
-            ->where('wheel_type', '12 Wheeler')
-            ->first();
+        // Resolve master vehicle types by their unique display name so the FK link is
+        // always established even if wheel_type metadata drifts.
+        $tenWheelerType = VehicleType::query()->where('name', '10-Wheeler')->first();
+        $adtType = VehicleType::query()->where('name', 'ADT')->first();
 
         $tenWheelers = [
             'CBS 6496' => 14.63,

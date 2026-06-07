@@ -30,7 +30,14 @@ class AssignmentController extends Controller
         }
 
         return response()->json(
-            $assignment->load('jobOrder', 'vehicle', 'deliveryStatusLogs', 'trackingLogs', 'deliveryDocuments.ocrResult')
+            $assignment->load(
+                'jobOrder',
+                'vehicle',
+                'deliveryStatusLogs',
+                'trackingLogs',
+                'deliveryDocuments.ocrResult',
+                'completionProof.deliveryDocument.ocrResult',
+            )
         );
     }
 }

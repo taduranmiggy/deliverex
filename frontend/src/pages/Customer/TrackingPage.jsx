@@ -108,7 +108,7 @@ function TrackingPage() {
         <div className="header-stack">
           <p className="tracking-eyebrow">Customer Tracking</p>
           <h1>Track your delivery</h1>
-          <p>View live status, ETA windows, and proof-of-delivery updates.</p>
+          <p>View live status, estimated arrival time, remaining distance, and proof-of-delivery updates.</p>
         </div>
         <div className="tracking-header-aside">
           <Link className="tracking-back" to="/customer">← Customer portal</Link>
@@ -188,14 +188,40 @@ function TrackingPage() {
                 </div>
               )}
 
+              {/* Tracking ID + ETA highlight */}
+              <div style={{ padding: '16px 18px', borderRadius: 12, background: 'linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%)', border: '1px solid #bfdbfe', marginBottom: 4 }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: 4 }}>Tracking ID</div>
+                <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '1.125rem', letterSpacing: '0.04em', marginBottom: 14 }}>
+                  {result.tracking_code}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: 4 }}>Current Status</div>
+                    <StatusBadge status={result.status} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: 4 }}>Estimated Arrival</div>
+                    <strong style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
+                      {result.eta?.estimated_arrival_label ?? result.eta_window ?? '—'}
+                    </strong>
+                  </div>
+                </div>
+                {result.eta?.remaining_distance_label && result.status !== 'completed' && (
+                  <div style={{ marginTop: 12, fontSize: '0.8125rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <MapPin size={14} />
+                    <span>
+                      <strong style={{ color: 'var(--text)' }}>{result.eta.remaining_distance_label}</strong>
+                      {' '}remaining
+                      {result.eta.average_speed_kmh ? ` · ~${result.eta.average_speed_kmh} km/h avg` : ''}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {/* Metrics */}
               <div className="tracking-metrics">
                 <div>
-                  <span>Status</span>
-                  <strong><StatusBadge status={result.status} /></strong>
-                </div>
-                <div>
-                  <span>ETA</span>
+                  <span>Scheduled Window</span>
                   <strong style={{ fontSize: '0.875rem' }}>{result.eta_window ?? '—'}</strong>
                 </div>
                 <div>
@@ -216,23 +242,52 @@ function TrackingPage() {
                 </div>
               </div>
 
-              {/* POD */}
-              {Array.isArray(result.proof_documents) && result.proof_documents.length > 0 && (
+              {result.proof_of_delivery_available && (
+                <div className="tracking-alert" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#166534' }} role="status">
+                  <CheckCircle2 size={16} style={{ display: 'inline', marginRight: 8 }} />
+                  Proof of Delivery Available
+                </div>
+              )}
+
+              {(result.completion_proof || (Array.isArray(result.proof_documents) && result.proof_documents.length > 0)) && (
                 <div className="tracking-section">
                   <h3>Proof of delivery</h3>
-                  <ul className="tracking-docs">
-                    {result.proof_documents.map((p, i) => (
-                      <li key={i}>
-                        <span style={{ fontWeight: 600 }}>{p.type}</span>
-                        <span style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                          Uploaded {p.uploaded_at ? new Date(p.uploaded_at).toLocaleString() : '—'}
-                        </span>
-                        <span className={`badge-dx ${p.ocr_ready ? 'badge-dx--completed' : 'badge-dx--dispatched'}`}>
-                          {p.ocr_ready ? 'Verified' : 'Processing'}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  {result.completion_proof && (
+                    <div style={{ fontSize: '0.8125rem', color: 'var(--muted)', marginBottom: 12 }}>
+                      {result.completion_proof.proof_type_label && (
+                        <div><strong>Type:</strong> {result.completion_proof.proof_type_label}</div>
+                      )}
+                      {result.completion_proof.receiver_name && (
+                        <div><strong>Receiver:</strong> {result.completion_proof.receiver_name}</div>
+                      )}
+                      {result.completion_proof.receiver_contact && (
+                        <div><strong>Contact:</strong> {result.completion_proof.receiver_contact}</div>
+                      )}
+                      {result.completion_proof.submitted_at && (
+                        <div><strong>Submitted:</strong> {new Date(result.completion_proof.submitted_at).toLocaleString()}</div>
+                      )}
+                      {result.completion_proof.delivery_notes && (
+                        <div style={{ marginTop: 4 }}>{result.completion_proof.delivery_notes}</div>
+                      )}
+                    </div>
+                  )}
+                  {Array.isArray(result.proof_documents) && result.proof_documents.length > 0 && (
+                    <ul className="tracking-docs">
+                      {result.proof_documents.map((p, i) => (
+                        <li key={i}>
+                          <span style={{ fontWeight: 600 }}>{p.label || p.type}</span>
+                          <span style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
+                            Uploaded {p.uploaded_at ? new Date(p.uploaded_at).toLocaleString() : '—'}
+                          </span>
+                          {p.type !== 'signature' && (
+                            <span className={`badge-dx ${p.ocr_ready ? 'badge-dx--completed' : 'badge-dx--dispatched'}`}>
+                              {p.ocr_ready ? 'Verified' : 'Processing'}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
@@ -246,6 +301,16 @@ function TrackingPage() {
                         <div className="tracking-time">{row.at ? new Date(row.at).toLocaleString() : '—'}</div>
                         <div>
                           <StatusBadge status={row.status} />
+                          {row.status === 'arrived' && row.arrival_verified && (
+                            <span className="badge-dx badge-dx--completed" style={{ marginLeft: 8, fontSize: '0.7rem' }}>
+                              GPS Verified
+                            </span>
+                          )}
+                          {row.gps_verified_at && row.status === 'arrived' && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 4 }}>
+                              Verified at {new Date(row.gps_verified_at).toLocaleString()}
+                            </div>
+                          )}
                           {row.notes && <span className="tracking-note">{row.notes}</span>}
                         </div>
                       </li>

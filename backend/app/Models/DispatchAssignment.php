@@ -70,4 +70,31 @@ class DispatchAssignment extends Model
     {
         return $this->hasMany(DeliveryIssueReport::class, 'assignment_id');
     }
+
+    public function delayReports()
+    {
+        return $this->hasMany(DeliveryDelayReport::class, 'assignment_id');
+    }
+
+    public function latestDelayReport()
+    {
+        return $this->hasOne(DeliveryDelayReport::class, 'assignment_id')->latestOfMany();
+    }
+
+    public function latestArrivedStatusLog()
+    {
+        return $this->hasOne(DeliveryStatusLog::class, 'assignment_id')
+            ->where('status', 'arrived')
+            ->latestOfMany('created_at');
+    }
+
+    public function completionProof()
+    {
+        return $this->hasOne(DeliveryCompletionProof::class, 'assignment_id');
+    }
+
+    public function auditTrail()
+    {
+        return $this->hasOne(AssignmentAuditTrail::class, 'assignment_id');
+    }
 }

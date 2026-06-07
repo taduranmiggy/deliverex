@@ -25,7 +25,7 @@ class DocumentController extends Controller
     {
         $data = $request->validate([
             'assignment_id' => 'required|exists:dispatch_assignments,id',
-            'type'          => 'nullable|in:pod,receipt,gate_pass,weighbridge,signed_doc,invoice,job_order,other',
+            'type'          => 'nullable|in:pod,receipt,gate_pass,weighbridge,signed_doc,invoice,job_order,departure,other',
             'notes'         => 'nullable|string|max:2000',
             'file'          => [
                 'required',
@@ -64,6 +64,16 @@ class DocumentController extends Controller
                 'pod_verified_at' => now(),
                 'pod_verified_by' => $request->user()?->id,
             ]);
+        }
+
+        // Departure photo is "Start Trip Verification" proof only — store it without
+        // running the OCR pipeline so OCR review and reports remain unaffected.
+        if (($data['type'] ?? 'other') === 'departure') {
+            return response()->json([
+                'document'     => $document,
+                'ocr_result'   => null,
+                'job_order_id' => $assignment->job_order_id,
+            ], 201);
         }
 
         $this->ocrService->createPending($document);

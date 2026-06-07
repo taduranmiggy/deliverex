@@ -32,3 +32,21 @@ export function createAssignment(payload) {
 export function fetchMasterDataOptions() {
   return apiRequest('/dispatch/master-data/options')
 }
+
+export function fetchClientHistory(clientId, params = {}) {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
+  ).toString()
+  return apiRequest(`/dispatch/clients/${clientId}/history${qs ? '?' + qs : ''}`)
+}
+
+export function fetchDelayReports(params = {}) {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
+  ).toString()
+  return apiRequest(`/dispatch/delays${qs ? '?' + qs : ''}`)
+}
+
+export function acknowledgeDelayReport(id) {
+  return apiRequest(`/dispatch/delays/${id}/acknowledge`, { method: 'PUT' })
+}

@@ -67,9 +67,23 @@ export function uploadDocumentWithProgress(formData, onProgress) {
   })
 }
 
-export function postIssueReport(payload) {
+export function uploadIssueReport(formData) {
   return apiRequest('/driver/issues', {
     method: 'POST',
+    body: formData,
+  })
+}
+
+export function postDelayReport(payload) {
+  return apiRequest('/driver/delays', {
+    method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export function uploadCompletionProof(formData) {
+  return apiRequest('/driver/completion-proof', {
+    method: 'POST',
+    body: formData,
   })
 }

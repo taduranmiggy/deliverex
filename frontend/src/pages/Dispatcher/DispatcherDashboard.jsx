@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchAssignments, fetchJobOrders } from '../../api/dispatcher'
+import AssignmentAuditSection from '../../components/AssignmentAuditSection'
+import IssueReportsSection from '../../components/IssueReportsSection'
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from '../../components/ui'
 import { AlertTriangle, ArrowRight, Clock, MapPin, Truck } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
+import { getDelayReasonLabel } from '../../utils/driverAssignment'
 
 function DispatcherDashboard() {
   const [summary, setSummary]   = useState({ orders: 0, pending: 0, active: 0, delayed: 0 })
@@ -68,10 +71,14 @@ function DispatcherDashboard() {
             <div className="dx-data-table-wrap">
               <table className="dx-data-table">
                 <thead><tr>
-                  <th>Job ID</th><th>Client</th><th>Route</th><th>Priority</th><th>Status</th><th>Driver</th>
+                  <th>Job ID</th><th>Client</th><th>Route</th><th>Priority</th><th>Status</th><th>Arrival</th><th>Delay Reason</th><th>Driver</th>
                 </tr></thead>
                 <tbody>
-                  {deliveries.map((item) => (
+                  {deliveries.map((item) => {
+                    const delay = item.latest_delay_report
+                    const arrivedLog = item.latest_arrived_status_log
+                    const isPastDue = item.job_order?.scheduled_end && new Date(item.job_order.scheduled_end).getTime() < Date.now()
+                    return (
                     <tr key={item.id}>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8125rem' }}>{formatJobPublicId(item.job_order_id)}</td>
                       <td style={{ fontWeight: 600 }}>{buildDisplayName(item.job_order) || '—'}</td>
@@ -80,9 +87,18 @@ function DispatcherDashboard() {
                       </td>
                       <td style={{ textTransform: 'capitalize', fontSize: '0.8125rem', color: 'var(--muted)' }}>{item.job_order?.priority ?? '—'}</td>
                       <td><StatusBadge status={item.status} /></td>
+                      <td style={{ fontSize: '0.8125rem', color: arrivedLog?.arrival_verified ? '#166534' : 'var(--muted)' }}>
+                        {arrivedLog?.arrival_verified
+                          ? `GPS Verified${arrivedLog.created_at ? ` · ${new Date(arrivedLog.created_at).toLocaleTimeString()}` : ''}`
+                          : item.status === 'arrived' || item.status === 'completed' ? 'Not verified' : '—'}
+                      </td>
+                      <td style={{ fontSize: '0.8125rem', color: delay ? '#991b1b' : isPastDue ? 'var(--color-warning)' : 'var(--muted)' }}>
+                        {delay ? getDelayReasonLabel(delay.delay_reason) : isPastDue ? 'Past due (no reason)' : '—'}
+                      </td>
                       <td style={{ fontSize: '0.875rem' }}>{item.driver?.user?.name ?? '—'}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -106,6 +122,10 @@ function DispatcherDashboard() {
           </SectionCard>
         </div>
       </div>
+
+      <AssignmentAuditSection title="Recent Assignment Decisions" />
+
+      <IssueReportsSection title="Recent Driver Issue Reports" />
     </>
   )
 }

@@ -44,6 +44,7 @@ class JobOrder extends Model
         'customer_last_name',
         'customer_suffix',
         'client_id',
+        'custom_client_name',
         'customer_email',
         'customer_contact',
         // legacy combined location fields kept for backward compat — auto-populated from parts
@@ -61,7 +62,10 @@ class JobOrder extends Model
         'dropoff_barangay',
         'dropoff_street',
         'dropoff_landmark',
+        'dropoff_latitude',
+        'dropoff_longitude',
         'quarry_id',
+        'preferred_vehicle_type_id',
         'delivery_type',
         'material_type',
         'material_type_id',
@@ -87,6 +91,15 @@ class JobOrder extends Model
      */
     public function getDisplayNameAttribute(): string
     {
+        if ($this->relationLoaded('client') && $this->client?->client_name) {
+            return $this->client->client_name;
+        }
+        if ($this->client_id && $this->client?->client_name) {
+            return $this->client->client_name;
+        }
+        if ($this->custom_client_name) {
+            return $this->custom_client_name;
+        }
         if ($this->customer_first_name || $this->customer_last_name) {
             $parts = array_filter([
                 $this->customer_first_name,
@@ -161,6 +174,11 @@ class JobOrder extends Model
     public function quarry()
     {
         return $this->belongsTo(Quarry::class);
+    }
+
+    public function preferredVehicleType()
+    {
+        return $this->belongsTo(VehicleType::class, 'preferred_vehicle_type_id');
     }
 
     public function materialTypeRef()

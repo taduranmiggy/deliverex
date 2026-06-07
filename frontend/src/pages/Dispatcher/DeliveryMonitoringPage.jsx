@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchAssignments } from '../../api/dispatcher'
+import { acknowledgeDelayReport, fetchAssignments } from '../../api/dispatcher'
 import { fetchTrackingLogs } from '../../api/tracking'
 import LiveFleetMap from '../../components/LiveFleetMap'
 import { PageHeader, StatusBadge } from '../../components/ui'
-import { Car, ExternalLink, MapPin, RefreshCw } from 'lucide-react'
+import { Car, CheckCircle2, ExternalLink, MapPin, RefreshCw, ShieldCheck } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
+import { getDelayReasonLabel } from '../../utils/driverAssignment'
 
 function formatGpsTime(iso) {
   if (!iso) return null
@@ -22,6 +23,19 @@ function DeliveryMonitoringPage() {
   const [gpsMap, setGpsMap] = useState({})
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [acknowledgingId, setAcknowledgingId] = useState(null)
+
+  const handleAcknowledge = async (reportId) => {
+    setAcknowledgingId(reportId)
+    try {
+      await acknowledgeDelayReport(reportId)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setAcknowledgingId(null)
+    }
+  }
 
   const load = async () => {
     setRefreshing(true)
@@ -102,6 +116,9 @@ function DeliveryMonitoringPage() {
             ) : (
               assignments.map((a) => {
                 const gps = gpsMap[a.id]
+                const delay = a.latest_delay_report
+                const arrivedLog = a.latest_arrived_status_log
+                const isPastDue = a.job_order?.scheduled_end && new Date(a.job_order.scheduled_end).getTime() < Date.now()
                 const mapsUrl = gps
                   ? `https://www.google.com/maps?q=${gps.lat},${gps.lng}`
                   : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '')}`
@@ -117,6 +134,19 @@ function DeliveryMonitoringPage() {
                       <div style={{ marginTop: 6, fontSize: '0.8125rem' }}>
                         <strong>Last Reported Status:</strong> {a.status?.replace(/_/g, ' ') ?? '—'}
                       </div>
+                      {arrivedLog?.arrival_verified && (
+                        <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', fontSize: '0.8125rem', color: '#166534', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <ShieldCheck size={14} />
+                          <span>
+                            Arrival GPS Verified
+                            {arrivedLog.created_at && (
+                              <span style={{ color: '#15803d', marginLeft: 6 }}>
+                                {new Date(arrivedLog.created_at).toLocaleString()}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      )}
                       <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
                         <MapPin size={13} />
                         {gps ? `Last Known Location: ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : 'No location reported yet'}
@@ -127,6 +157,47 @@ function DeliveryMonitoringPage() {
                         </div>
                       )}
                       <div style={{ marginTop: 3 }}><Car size={12} style={{ display: 'inline', marginRight: 4 }} />{a.vehicle?.plate_no}</div>
+                      {(isPastDue || delay) && (
+                        <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#991b1b' }}>
+                            {delay ? 'Reported Delay' : 'Past Scheduled Window'}
+                          </div>
+                          {delay ? (
+                            <>
+                              <div style={{ marginTop: 4, fontSize: '0.8125rem' }}>
+                                <strong>Reason:</strong> {getDelayReasonLabel(delay.delay_reason)}
+                              </div>
+                              {delay.delay_notes && (
+                                <div style={{ marginTop: 4, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                                  {delay.delay_notes}
+                                </div>
+                              )}
+                              <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--muted)' }}>
+                                Reported {delay.created_at ? new Date(delay.created_at).toLocaleString() : '—'}
+                              </div>
+                              {delay.acknowledged_at ? (
+                                <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#166534', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <CheckCircle2 size={12} /> Acknowledged
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn-dx-primary btn-sm"
+                                  style={{ marginTop: 8 }}
+                                  disabled={acknowledgingId === delay.id}
+                                  onClick={() => handleAcknowledge(delay.id)}
+                                >
+                                  {acknowledgingId === delay.id ? 'Acknowledging…' : 'Acknowledge Delay'}
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <div style={{ marginTop: 4, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                              No delay reason reported yet.
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="btn-dx-secondary btn-sm" style={{ marginTop: 8, display: 'inline-flex', gap: 4 }}>
                         <ExternalLink size={12} /> Open in Maps
                       </a>

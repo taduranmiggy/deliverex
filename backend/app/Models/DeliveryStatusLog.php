@@ -12,11 +12,17 @@ class DeliveryStatusLog extends Model
         'assignment_id',
         'status',
         'notes',
+        'latitude',
+        'longitude',
+        'arrival_verified',
         'created_at',
     ];
 
     protected $casts = [
-        'created_at' => 'datetime',
+        'latitude'         => 'float',
+        'longitude'        => 'float',
+        'arrival_verified'=> 'boolean',
+        'created_at'       => 'datetime',
     ];
 
     public function assignment()

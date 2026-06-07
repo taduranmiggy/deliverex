@@ -236,6 +236,21 @@ function OcrReviewPage() {
                   />
                 </label>
               </div>
+              {selected.document?.completion_proof && (
+                <div style={{ padding: '12px 14px', borderRadius: 10, background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: '0.8125rem' }}>
+                  <strong style={{ display: 'block', marginBottom: 6 }}>Delivery Completion Proof</strong>
+                  <div>Type: {selected.document.completion_proof.proof_type?.replace(/_/g, ' ') ?? '—'}</div>
+                  {selected.document.completion_proof.receiver_name && (
+                    <div>Receiver: {selected.document.completion_proof.receiver_name}</div>
+                  )}
+                  {selected.document.completion_proof.receiver_contact && (
+                    <div>Contact: {selected.document.completion_proof.receiver_contact}</div>
+                  )}
+                  {selected.document.completion_proof.delivery_notes && (
+                    <div style={{ marginTop: 4, color: 'var(--muted)' }}>{selected.document.completion_proof.delivery_notes}</div>
+                  )}
+                </div>
+              )}
               <label>Extracted / Corrected text
                 <textarea rows={8} value={corrected} onChange={(e) => setCorrected(e.target.value)} placeholder="Edit extracted text before approving…" />
               </label>

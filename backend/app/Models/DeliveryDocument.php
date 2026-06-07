@@ -28,4 +28,9 @@ class DeliveryDocument extends Model
     {
         return $this->hasOne(OcrResult::class, 'document_id');
     }
+
+    public function completionProof()
+    {
+        return $this->hasOne(DeliveryCompletionProof::class, 'delivery_document_id');
+    }
 }

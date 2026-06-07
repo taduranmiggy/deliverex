@@ -32,11 +32,13 @@ class TrackingController extends Controller
 
         $lastLog = $assignment->trackingLogs()->latest('captured_at')->first();
 
-        $log = TrackingLog::create([
+        // Use firstOrCreate so replaying a queued offline batch (same point + timestamp)
+        // does not create duplicate GPS logs on reconnect/auto-sync.
+        $log = TrackingLog::firstOrCreate([
             'assignment_id' => $assignment->id,
-            'latitude' => $data['latitude'],
-            'longitude' => $data['longitude'],
-            'captured_at' => $data['captured_at'] ?? now(),
+            'captured_at'   => $data['captured_at'] ?? now(),
+            'latitude'      => $data['latitude'],
+            'longitude'     => $data['longitude'],
         ]);
 
         if ($lastLog && $lastLog->captured_at && $lastLog->captured_at->diffInMinutes(now()) >= 45) {

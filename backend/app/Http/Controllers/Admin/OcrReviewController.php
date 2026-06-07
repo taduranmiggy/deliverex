@@ -17,7 +17,7 @@ class OcrReviewController extends Controller
     {
         $filter = $request->query('filter', 'all');
 
-        $query = OcrResult::with('document', 'document.assignment.jobOrder')
+        $query = OcrResult::with('document.completionProof', 'document.assignment.jobOrder')
             ->orderByDesc('created_at');
 
         switch ($filter) {

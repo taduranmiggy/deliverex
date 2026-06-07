@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchAuditLogs, fetchDrivers, fetchOcrQueue, fetchUsers, fetchVehicles } from '../../api/admin'
+import AssignmentAuditSection from '../../components/AssignmentAuditSection'
+import DriverPerformanceSection from '../../components/DriverPerformanceSection'
 import { EmptyState, PageHeader, SectionCard, StatCard } from '../../components/ui'
 import { Car, Code, FileSearch, Users } from 'lucide-react'
 
@@ -98,6 +100,10 @@ function AdminDashboard() {
           </SectionCard>
         </div>
       </div>
+
+      <AssignmentAuditSection title="Assignment Audit Trail" />
+
+      <DriverPerformanceSection />
     </>
   )
 }

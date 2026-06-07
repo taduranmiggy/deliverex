@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { createAssignment, fetchJobOrders, getBestFit } from '../../api/dispatcher'
+import BestFitExplainability, { formatScore } from '../../components/BestFitExplainability'
 import { IconCheckSmall, IconRouteArrow } from '../../components/DxIcons'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus } from '../../utils/statusLabels'
@@ -7,7 +9,7 @@ import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpe
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, User, Truck } from 'lucide-react'
 
 /* ── Confirmation modal ─────────────────────────────────────── */
-function AssignConfirmModal({ job, candidate, isOverride, onConfirm, onCancel, submitting, error }) {
+function AssignConfirmModal({ job, candidate, recommendedTop, isOverride, overrideReason, onOverrideReasonChange, onConfirm, onCancel, submitting, error }) {
   return (
     <div className="dx-modal-backdrop" onClick={onCancel}>
       <div className="dx-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal aria-labelledby="assign-modal-title">
@@ -23,10 +25,31 @@ function AssignConfirmModal({ job, candidate, isOverride, onConfirm, onCancel, s
 
         <div style={{ padding: '20px 28px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {isOverride && (
-            <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--color-warning-light, #fffbeb)', border: '1px solid var(--color-warning-mid, #fde68a)', fontSize: '0.875rem', color: 'var(--color-warning, #b45309)', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-              This selection differs from the Best-Fit recommendation. The recommended pairing optimizes capacity and availability.
-            </div>
+            <>
+              <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--color-warning-light, #fffbeb)', border: '1px solid var(--color-warning-mid, #fde68a)', fontSize: '0.875rem', color: 'var(--color-warning, #b45309)', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                This selection differs from the Best-Fit recommendation. Document why you are overriding the system suggestion.
+              </div>
+              {recommendedTop && (
+                <div style={{ background: 'var(--slate-50, #f8fafc)', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--stroke)', fontSize: '0.8125rem' }}>
+                  <p style={{ margin: '0 0 6px', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.7rem' }}>Best-Fit</p>
+                  <p style={{ margin: 0 }}>
+                    <strong>{recommendedTop.driver_name}</strong>
+                    {recommendedTop.vehicle_plate ? ` · ${recommendedTop.vehicle_plate}` : ''}
+                  </p>
+                </div>
+              )}
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>Override reason <span style={{ color: 'var(--color-error)' }}>*</span></span>
+                <textarea
+                  value={overrideReason}
+                  onChange={(e) => onOverrideReasonChange(e.target.value)}
+                  placeholder="e.g. Driver A unavailable by phone"
+                  rows={3}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--stroke)', font: 'inherit', fontSize: '0.875rem', resize: 'vertical' }}
+                />
+              </label>
+            </>
           )}
 
           {/* Job order summary */}
@@ -66,22 +89,7 @@ function AssignConfirmModal({ job, candidate, isOverride, onConfirm, onCancel, s
             </div>
           </div>
 
-          {/* Score + reasons */}
-          {(candidate.score != null || (Array.isArray(candidate.reasons) && candidate.reasons.length > 0)) && (
-            <div style={{ borderRadius: 10, border: '1px solid var(--stroke)', padding: '12px 14px' }}>
-              {candidate.score != null && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: Array.isArray(candidate.reasons) && candidate.reasons.length > 0 ? 10 : 0 }}>
-                  <span style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>Best-Fit score</span>
-                  <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--color-primary)' }}>{candidate.score}</span>
-                </div>
-              )}
-              {Array.isArray(candidate.reasons) && candidate.reasons.length > 0 && (
-                <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.8125rem', color: 'var(--muted)', lineHeight: 1.6 }}>
-                  {candidate.reasons.map((r, i) => <li key={i}>{r}</li>)}
-                </ul>
-              )}
-            </div>
-          )}
+          <BestFitExplainability candidate={candidate} compact />
 
           {error && (
             <p style={{ margin: 0, padding: '10px 14px', borderRadius: 10, background: 'var(--color-error-light, #fef2f2)', border: '1px solid var(--color-error-mid, #fca5a5)', color: 'var(--color-error)', fontSize: '0.875rem' }}>
@@ -95,7 +103,7 @@ function AssignConfirmModal({ job, candidate, isOverride, onConfirm, onCancel, s
               className="btn-dx-primary"
               style={{ flex: 1, justifyContent: 'center', background: isOverride ? 'var(--color-warning, #d97706)' : undefined, borderColor: isOverride ? 'var(--color-warning, #d97706)' : undefined }}
               onClick={onConfirm}
-              disabled={submitting}
+              disabled={submitting || (isOverride && !overrideReason.trim())}
             >
               {submitting
                 ? <><Loader2 size={15} style={{ animation: 'spin 0.7s linear infinite' }} /> Assigning…</>
@@ -124,8 +132,12 @@ function AssignDriverVehiclePage() {
 
   // Modal state
   const [pendingAssign, setPendingAssign]     = useState(null)   // { candidate, isOverride }
+  const [overrideReason, setOverrideReason]   = useState('')
   const [submitting, setSubmitting]           = useState(false)
   const [modalError, setModalError]           = useState('')
+
+  const location = useLocation()
+  const preselectJobId = location.state?.jobOrderId ?? null
 
   const loadJobs = async () => {
     try {
@@ -133,6 +145,11 @@ function AssignDriverVehiclePage() {
       const pending = (res.data || []).filter((item) => item.status === 'pending')
       setJobOrders(pending)
       setSelected((prev) => {
+        // Prefer a job explicitly requested via navigation (e.g. just created)
+        if (preselectJobId) {
+          const requested = pending.find((p) => p.id === preselectJobId)
+          if (requested) return requested
+        }
         if (prev && pending.some((p) => p.id === prev.id)) return prev
         return pending[0] ?? null
       })
@@ -160,6 +177,7 @@ function AssignDriverVehiclePage() {
   const openModal = (candidate, isOverride = false) => {
     if (!selected) { setError('Select a job order first.'); return }
     setModalError('')
+    setOverrideReason('')
     setPendingAssign({ candidate, isOverride })
   }
 
@@ -173,6 +191,7 @@ function AssignDriverVehiclePage() {
         job_order_id: selected.id,
         driver_id:    pendingAssign.candidate.driver_id,
         vehicle_id:   pendingAssign.candidate.vehicle_id,
+        ...(pendingAssign.isOverride ? { override_reason: overrideReason.trim() } : {}),
       })
       setPendingAssign(null)
       setMessage(`Assignment confirmed — ${pendingAssign.candidate.driver_name} dispatched. Driver has been notified.`)
@@ -192,7 +211,7 @@ function AssignDriverVehiclePage() {
       <header className="page-header">
         <div className="header-stack">
           <h1>Dispatch (Best-Fit)</h1>
-          <p>System-generated job assignment recommendations</p>
+          <p>System-generated recommendations with scored explainability for each match</p>
         </div>
       </header>
       {message && <p className="notice">{message}</p>}
@@ -287,14 +306,9 @@ function AssignDriverVehiclePage() {
                     </strong>
                   </div>
 
-                  {Array.isArray(top.reasons) && top.reasons.length > 0 && (
-                    <div className="dx-why-box">
-                      <strong>Why this assignment?</strong>
-                      <ul>
-                        {top.reasons.map((r, i) => <li key={i}>{r}</li>)}
-                      </ul>
-                    </div>
-                  )}
+                  <div style={{ marginTop: 14 }}>
+                    <BestFitExplainability candidate={top} />
+                  </div>
                 </>
               ) : (
                 <div className="dx-why-box">
@@ -319,7 +333,7 @@ function AssignDriverVehiclePage() {
                   <strong style={{ fontSize: '0.875rem' }}>All matches</strong>
                   <div className="dx-data-table-wrap" style={{ marginTop: 8 }}>
                     <table className="dx-data-table">
-                      <thead><tr><th>Driver</th><th>Plate</th><th>Vehicle Type</th><th>Capacity</th><th>Load</th><th>Unused</th><th>Pref.</th><th>Score</th><th>Reason</th><th /></tr></thead>
+                      <thead><tr><th>Driver</th><th>Plate</th><th>Vehicle Type</th><th>Capacity</th><th>Load</th><th>Unused</th><th>Pref.</th><th>Score</th><th>Top Factor</th><th /></tr></thead>
                       <tbody>
                         {recommendations.map((item) => {
                           const isTop = top && item.driver_id === top.driver_id && item.vehicle_id === top.vehicle_id
@@ -332,8 +346,17 @@ function AssignDriverVehiclePage() {
                               <td>{item.load_volume != null ? `${item.load_volume} m³` : '—'}</td>
                               <td>{item.unused_capacity != null ? `${item.unused_capacity} m³` : '—'}</td>
                               <td>{item.client_preference_match ? 'Match' : '—'}</td>
-                              <td><span className="badge-dx badge-dx--muted">{item.score}</span></td>
-                              <td style={{ maxWidth: 260 }}>{Array.isArray(item.reasons) && item.reasons.length > 0 ? item.reasons[0] : '—'}</td>
+                              <td><span className="badge-dx badge-dx--muted">{formatScore(item) ?? '—'}</span></td>
+                              <td style={{ maxWidth: 220, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                                {Array.isArray(item.factors) && item.factors.length > 0
+                                  ? (() => {
+                                    const topFactor = [...item.factors].sort((a, b) => b.contribution - a.contribution)[0]
+                                    return topFactor
+                                      ? `${topFactor.matched ? '✓' : '✗'} ${topFactor.label} (+${topFactor.contribution})`
+                                      : '—'
+                                  })()
+                                  : (Array.isArray(item.reasons) && item.reasons.length > 0 ? item.reasons[0] : '—')}
+                              </td>
                               <td>
                                 {isTop ? (
                                   <span className="dx-mini-badge">Recommended</span>
@@ -378,9 +401,12 @@ function AssignDriverVehiclePage() {
         <AssignConfirmModal
           job={selected}
           candidate={pendingAssign.candidate}
+          recommendedTop={top}
           isOverride={pendingAssign.isOverride}
+          overrideReason={overrideReason}
+          onOverrideReasonChange={setOverrideReason}
           onConfirm={handleConfirm}
-          onCancel={() => { if (!submitting) setPendingAssign(null) }}
+          onCancel={() => { if (!submitting) { setPendingAssign(null); setOverrideReason('') } }}
           submitting={submitting}
           error={modalError}
         />
