@@ -22,6 +22,7 @@ use App\Http\Controllers\Dispatcher\ClientHistoryController;
 use App\Http\Controllers\Dispatcher\CalendarController;
 use App\Http\Controllers\Dispatcher\DelayController as DispatcherDelayController;
 use App\Http\Controllers\Dispatcher\JobOrderController;
+use App\Http\Controllers\Dispatcher\MaterialMasterDataController;
 use App\Http\Controllers\Dispatcher\MasterDataOptionsController;
 use App\Http\Controllers\Driver\AssignmentController as DriverAssignmentController;
 use App\Http\Controllers\Driver\ProfileController as DriverProfileController;
@@ -125,6 +126,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/best-fit/{jobOrder}',           [BestFitController::class, 'show']);
         Route::get('/calendar',                      [CalendarController::class, 'index']);
         Route::get('/master-data/options',           [MasterDataOptionsController::class, 'index']);
+        Route::post('/master-data/material-types',   [MaterialMasterDataController::class, 'storeMaterialType']);
+        Route::post('/master-data/material-specifications', [MaterialMasterDataController::class, 'storeMaterialSpecification']);
         Route::get('/delays',                        [DispatcherDelayController::class, 'index']);
         Route::put('/delays/{delayReport}/acknowledge', [DispatcherDelayController::class, 'acknowledge']);
     });

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { createJobOrder, deleteJobOrder, fetchClientHistory, fetchJobOrders, fetchMasterDataOptions, updateJobOrder } from '../../api/dispatcher'
+import { createJobOrder, createMaterialSpecification, createMaterialType, deleteJobOrder, fetchClientHistory, fetchJobOrders, fetchMasterDataOptions, updateJobOrder } from '../../api/dispatcher'
 import ClientCombobox from '../../components/ClientCombobox'
+import CreatableCombobox from '../../components/CreatableCombobox'
 import CustomerHistoryIntelligence from '../../components/CustomerHistoryIntelligence'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
@@ -57,6 +58,26 @@ function AutoFilledTag() {
   )
 }
 
+function buildMaterialTypeSelection(initial, materialTypes) {
+  if (!initial?.material_type_id) return null
+  const mt = materialTypes.find((m) => String(m.id) === String(initial.material_type_id))
+  return {
+    type: 'existing',
+    id: initial.material_type_id,
+    label: mt?.name || initial.material_type || `Material #${initial.material_type_id}`,
+  }
+}
+
+function buildSpecSelection(initial, specOptions) {
+  if (!initial?.material_specification_id) return null
+  const spec = specOptions.find((s) => String(s.id) === String(initial.material_specification_id))
+  return {
+    type: 'existing',
+    id: initial.material_specification_id,
+    label: spec?.name || initial.specification_size || `Spec #${initial.material_specification_id}`,
+  }
+}
+
 function buildClientSelection(initial, clients) {
   if (!initial) return null
   if (initial.client_id) {
@@ -74,7 +95,7 @@ function buildClientSelection(initial, clients) {
 
 // ─── Job Order Form ───────────────────────────────────────────────────────────
 
-function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel }) {
+function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onRefreshOptions }) {
   const isEdit = Boolean(initial?.id)
   const clients = options.clients || []
   const materialTypes = useMemo(() => options.material_types || [], [options.material_types])
@@ -123,6 +144,14 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel }) {
   } : BLANK)
 
   const [clientSelection, setClientSelection] = useState(() => buildClientSelection(initial, clients))
+  const [materialTypeSelection, setMaterialTypeSelection] = useState(() => buildMaterialTypeSelection(initial, materialTypes))
+  const [specSelection, setSpecSelection] = useState(() => buildSpecSelection(initial, initialSpecs))
+  const [materialTypeSaving, setMaterialTypeSaving] = useState(false)
+  const [specSaving, setSpecSaving] = useState(false)
+  const [materialTypeError, setMaterialTypeError] = useState('')
+  const [specError, setSpecError] = useState('')
+  const [materialTypeSuccess, setMaterialTypeSuccess] = useState('')
+  const [specSuccess, setSpecSuccess] = useState('')
   const [autoFilled, setAutoFilled] = useState({})
   const [clientHistory, setClientHistory] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -202,6 +231,92 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel }) {
     }
   }, [clients]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!materialTypes.length) return
+    if (form.material_type_id) {
+      const mt = materialTypes.find((m) => String(m.id) === String(form.material_type_id))
+      if (mt) setMaterialTypeSelection({ type: 'existing', id: mt.id, label: mt.name })
+    }
+    if (form.material_specification_id) {
+      const spec = specOptions.find((s) => String(s.id) === String(form.material_specification_id))
+      if (spec) setSpecSelection({ type: 'existing', id: spec.id, label: spec.name })
+    }
+  }, [materialTypes]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleMaterialTypeChange = useCallback(async (selection) => {
+    setMaterialTypeError('')
+    setMaterialTypeSuccess('')
+    setSpecError('')
+    setSpecSuccess('')
+
+    if (!selection) {
+      setMaterialTypeSelection(null)
+      setSpecSelection(null)
+      setForm((f) => ({ ...f, material_type_id: '', material_specification_id: '' }))
+      return
+    }
+
+    if (selection.type === 'existing') {
+      setMaterialTypeSelection(selection)
+      setSpecSelection(null)
+      setForm((f) => ({ ...f, material_type_id: String(selection.id), material_specification_id: '' }))
+      if (autoFilled.material_type_id) setAutoFilled((p) => ({ ...p, material_type_id: false, material_specification_id: false }))
+      return
+    }
+
+    setMaterialTypeSaving(true)
+    try {
+      const res = await createMaterialType(selection.label)
+      await onRefreshOptions?.()
+      const mt = res.material_type
+      setMaterialTypeSelection({ type: 'existing', id: mt.id, label: mt.name })
+      setSpecSelection(null)
+      setForm((f) => ({ ...f, material_type_id: String(mt.id), material_specification_id: '' }))
+      setMaterialTypeSuccess(res.message || 'Material type saved.')
+    } catch (err) {
+      setMaterialTypeError(err.message)
+    } finally {
+      setMaterialTypeSaving(false)
+    }
+  }, [autoFilled.material_type_id, onRefreshOptions])
+
+  const handleSpecChange = useCallback(async (selection) => {
+    setSpecError('')
+    setSpecSuccess('')
+
+    if (!form.material_type_id) {
+      setSpecError('Select a material type first.')
+      return
+    }
+
+    if (!selection) {
+      setSpecSelection(null)
+      setForm((f) => ({ ...f, material_specification_id: '' }))
+      return
+    }
+
+    if (selection.type === 'existing') {
+      setSpecSelection(selection)
+      setForm((f) => ({ ...f, material_specification_id: String(selection.id) }))
+      if (autoFilled.material_specification_id) setAutoFilled((p) => ({ ...p, material_specification_id: false }))
+      return
+    }
+
+    setSpecSaving(true)
+    try {
+      const res = await createMaterialSpecification(Number(form.material_type_id), selection.label)
+      await onRefreshOptions?.()
+      const spec = res.material_specification
+      setSpecSelection({ type: 'existing', id: spec.id, label: spec.name })
+      setForm((f) => ({ ...f, material_specification_id: String(spec.id) }))
+      setSpecSuccess(res.message || 'Specification saved.')
+    } catch (err) {
+      setSpecError(err.message)
+    } finally {
+      setSpecSaving(false)
+    }
+  }, [form.material_type_id, autoFilled.material_specification_id, onRefreshOptions])
+
   const handleClientChange = useCallback((selection) => {
     setClientSelection(selection)
     const filled = {}
@@ -265,10 +380,6 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel }) {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
     setForm((f) => {
       const next = { ...f, [k]: value }
-
-      if (k === 'material_type_id') {
-        next.material_specification_id = ''
-      }
       return next
     })
     // Editing an auto-filled field clears its tag
@@ -277,8 +388,6 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel }) {
   }
 
   const buildPayload = () => {
-    const selectedMaterial = materialTypes.find((m) => String(m.id) === String(form.material_type_id))
-    const selectedSpecification = specOptions.find((s) => String(s.id) === String(form.material_specification_id))
     return {
       client_id: form.client_id ? Number(form.client_id) : null,
       custom_client_name: !form.client_id && form.custom_client_name?.trim() ? form.custom_client_name.trim() : null,
@@ -298,10 +407,12 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel }) {
       dropoff_barangay: form.dropoff_barangay || null,
       dropoff_street: form.dropoff_street || null,
       dropoff_landmark: form.dropoff_landmark || null,
-      material_type_id: Number(form.material_type_id),
-      material_specification_id: Number(form.material_specification_id),
-      material_type: selectedMaterial?.name ?? null,
-      specification_size: selectedSpecification?.name ?? null,
+      material_type_id: form.material_type_id ? Number(form.material_type_id) : null,
+      material_specification_id: form.material_specification_id ? Number(form.material_specification_id) : null,
+      custom_material_type_name: !form.material_type_id && materialTypeSelection?.type === 'custom' ? materialTypeSelection.label : null,
+      custom_specification_name: !form.material_specification_id && specSelection?.type === 'custom' ? specSelection.label : null,
+      material_type: materialTypeSelection?.label ?? null,
+      specification_size: specSelection?.label ?? null,
       load_volume_m3: form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
       volume_m3: form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
       special_handling_instructions: form.special_handling_instructions || null,
@@ -330,8 +441,12 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel }) {
     if (!form.dropoff_city) errs.dropoff_city = 'Drop-off city is required.'
     if (!form.dropoff_street) errs.dropoff_street = 'Drop-off street / site details are required.'
 
-    if (!form.material_type_id) errs.material_type_id = 'Material type is required.'
-    if (!form.material_specification_id) errs.material_specification_id = 'Specification / size is required.'
+    if (!form.material_type_id && materialTypeSelection?.type !== 'custom') {
+      errs.material_type = 'Material type is required.'
+    }
+    if (!form.material_specification_id && specSelection?.type !== 'custom') {
+      errs.material_specification = 'Specification / size is required.'
+    }
     if (form.load_volume_m3 === '' || Number.isNaN(Number(form.load_volume_m3))) {
       errs.load_volume_m3 = 'Load volume is required.'
     }
@@ -470,19 +585,38 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel }) {
         <SectionHeading>Material and Load</SectionHeading>
         <label>
           Material Type *{autoFilled.material_type_id && <AutoFilledTag />}
-          <select name="material_type_id" value={form.material_type_id} onChange={set('material_type_id')} aria-invalid={fieldErrors.material_type_id ? 'true' : undefined}>
-            <option value="">— Select material type —</option>
-            {materialTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-          {fe('material_type_id')}
+          <CreatableCombobox
+            items={materialTypes}
+            getItemLabel={(item) => item.name}
+            value={materialTypeSelection}
+            onChange={handleMaterialTypeChange}
+            loading={clientsLoading}
+            saving={materialTypeSaving}
+            error={fieldErrors.material_type || materialTypeError || null}
+            success={materialTypeSuccess}
+            placeholder="Search or type material type…"
+            customOptionLabel={(q) => `Use custom material: ${q}`}
+            emptyMessage="No material types in Master Data yet."
+          />
+          {fe('material_type')}
         </label>
         <label>
           Specification / Size *{autoFilled.material_specification_id && <AutoFilledTag />}
-          <select name="material_specification_id" value={form.material_specification_id} onChange={set('material_specification_id')} aria-invalid={fieldErrors.material_specification_id ? 'true' : undefined}>
-            <option value="">— Select specification —</option>
-            {specOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          {fe('material_specification_id')}
+          <CreatableCombobox
+            items={specOptions}
+            getItemLabel={(item) => item.name}
+            value={specSelection}
+            onChange={handleSpecChange}
+            saving={specSaving}
+            disabled={!form.material_type_id}
+            error={fieldErrors.material_specification || specError || null}
+            success={specSuccess}
+            placeholder={form.material_type_id ? 'Search or type specification…' : 'Select material type first'}
+            customOptionLabel={(q) => `Add new specification under ${materialTypeSelection?.label || 'Material Type'}: ${q}`}
+            emptyMessage={form.material_type_id ? 'No specifications for this material yet.' : 'Select a material type first.'}
+            hint={!form.material_type_id ? 'Select a material type before adding a specification.' : null}
+          />
+          {fe('material_specification')}
         </label>
         <label>
           Load Volume (m³) *{autoFilled.load_volume_m3 && <AutoFilledTag />}
@@ -573,8 +707,17 @@ function CreateJobOrderPage() {
 
   useEffect(() => { load() }, []) // eslint-disable-line
 
+  const refreshOptions = useCallback(async () => {
+    const optionsRes = await fetchMasterDataOptions()
+    setMasterData((prev) => ({
+      ...prev,
+      material_types: optionsRes.material_types || [],
+    }))
+  }, [])
+
   const handleSaved = (saved, isEdit, proceedToBestFit) => {
     setFormMode(null)
+    refreshOptions().catch(() => {})
     const savedOrder = saved?.data && typeof saved.data === 'object' ? saved.data : saved
     if (proceedToBestFit && savedOrder?.id) {
       navigate('/dispatcher/dispatch-best-fit', { state: { jobOrderId: savedOrder.id } })
@@ -729,10 +872,10 @@ function CreateJobOrderPage() {
       </div>
 
       {formMode === 'create' && (
-        <JobOrderForm initial={null} options={masterData} clientsLoading={clientsLoading} onSaved={handleSaved} onCancel={() => setFormMode(null)} />
+        <JobOrderForm initial={null} options={masterData} clientsLoading={clientsLoading} onRefreshOptions={refreshOptions} onSaved={handleSaved} onCancel={() => setFormMode(null)} />
       )}
       {formMode?.order && (
-        <JobOrderForm initial={formMode.order} options={masterData} clientsLoading={clientsLoading} onSaved={handleSaved} onCancel={() => setFormMode(null)} />
+        <JobOrderForm initial={formMode.order} options={masterData} clientsLoading={clientsLoading} onRefreshOptions={refreshOptions} onSaved={handleSaved} onCancel={() => setFormMode(null)} />
       )}
     </section>
   )

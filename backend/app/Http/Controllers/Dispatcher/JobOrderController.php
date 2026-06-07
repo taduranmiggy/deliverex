@@ -13,6 +13,7 @@ use App\Models\Quarry;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Delivery\DropoffGeocoder;
+use App\Services\MasterData\MaterialMasterDataService;
 use App\Support\AuditLogger;
 use App\Support\JobOrderScheduleValidator;
 use Illuminate\Http\Request;
@@ -20,6 +21,10 @@ use Illuminate\Support\Str;
 
 class JobOrderController extends Controller
 {
+    public function __construct(private MaterialMasterDataService $materialMasterData)
+    {
+    }
+
     public function index()
     {
         return response()->json(
@@ -79,8 +84,10 @@ class JobOrderController extends Controller
             'dropoff_location'           => 'required_without:dropoff_province|nullable|string',
             'quarry_id'                  => 'nullable|exists:quarries,id',
             'preferred_vehicle_type_id'  => 'nullable|exists:vehicle_types,id',
-            'material_type_id'           => 'required|exists:material_types,id',
-            'material_specification_id'  => 'required|exists:material_specifications,id',
+            'material_type_id'           => 'nullable|exists:material_types,id',
+            'custom_material_type_name'  => 'nullable|string|max:120',
+            'material_specification_id'  => 'nullable|exists:material_specifications,id',
+            'custom_specification_name'  => 'nullable|string|max:160',
             'material_type'              => 'nullable|string|max:120',
             'specification_size'         => 'nullable|string|max:120',
             'job_requirements'           => 'nullable|string',
@@ -106,11 +113,7 @@ class JobOrderController extends Controller
 
         JobOrderScheduleValidator::validatePayload($data);
 
-        $materialType = MaterialType::query()->findOrFail($data['material_type_id']);
-        $materialSpec = MaterialSpecification::query()->findOrFail($data['material_specification_id']);
-        if ((int) $materialSpec->material_type_id !== (int) $materialType->id) {
-            return response()->json(['message' => 'Specification does not belong to the selected material type.'], 422);
-        }
+        $data = $this->materialMasterData->resolveJobOrderMaterials($data);
 
         // Resolve / create the client.
         $client = null;
@@ -180,8 +183,6 @@ class JobOrderController extends Controller
         $data['customer_email']     = $normalizedEmail;
         $data['customer_user_id']   = $customerAccount?->id;
         $data['customer_contact']   = $data['customer_contact'] ?? $client?->phone;
-        $data['material_type']      = $materialType->name;
-        $data['specification_size'] = $materialSpec->name;
         $data['job_requirements']   = $data['job_requirements'] ?? $data['special_handling_instructions'] ?? null;
         $data['volume_m3']          = $data['volume_m3'] ?? $data['load_volume_m3'];
         $data['tracking_code']      = strtoupper(Str::random(10));
@@ -283,8 +284,10 @@ class JobOrderController extends Controller
             'dropoff_location'           => 'sometimes|nullable|string',
             'quarry_id'                  => 'nullable|exists:quarries,id',
             'preferred_vehicle_type_id'  => 'nullable|exists:vehicle_types,id',
-            'material_type_id'           => 'sometimes|exists:material_types,id',
-            'material_specification_id'  => 'sometimes|exists:material_specifications,id',
+            'material_type_id'           => 'sometimes|nullable|exists:material_types,id',
+            'custom_material_type_name'  => 'sometimes|nullable|string|max:120',
+            'material_specification_id'  => 'sometimes|nullable|exists:material_specifications,id',
+            'custom_specification_name'  => 'sometimes|nullable|string|max:160',
             'material_type'              => 'sometimes|string|max:120',
             'specification_size'         => 'sometimes|string|max:120',
             'job_requirements'           => 'nullable|string',
@@ -300,24 +303,10 @@ class JobOrderController extends Controller
 
         JobOrderScheduleValidator::validatePayload($data);
 
-        if (array_key_exists('material_type_id', $data)) {
-            $materialType = MaterialType::query()->findOrFail($data['material_type_id']);
-            $data['material_type'] = $materialType->name;
-        }
-
-        if (array_key_exists('material_specification_id', $data)) {
-            $materialSpec = MaterialSpecification::query()->findOrFail($data['material_specification_id']);
-            $data['specification_size'] = $materialSpec->name;
-        }
-
-        if (
-            array_key_exists('material_type_id', $data) &&
-            array_key_exists('material_specification_id', $data)
-        ) {
-            $materialSpec = MaterialSpecification::query()->findOrFail($data['material_specification_id']);
-            if ((int) $materialSpec->material_type_id !== (int) $data['material_type_id']) {
-                return response()->json(['message' => 'Specification does not belong to the selected material type.'], 422);
-            }
+        $materialFields = ['material_type_id', 'custom_material_type_name', 'material_specification_id', 'custom_specification_name'];
+        if (count(array_intersect(array_keys($data), $materialFields)) > 0) {
+            $merged = array_merge($jobOrder->only(['material_type_id', 'material_specification_id']), $data);
+            $data = array_merge($data, $this->materialMasterData->resolveJobOrderMaterials($merged));
         }
 
         if (array_key_exists('client_id', $data) || array_key_exists('custom_client_name', $data)) {

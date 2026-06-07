@@ -33,6 +33,20 @@ export function fetchMasterDataOptions() {
   return apiRequest('/dispatch/master-data/options')
 }
 
+export function createMaterialType(name) {
+  return apiRequest('/dispatch/master-data/material-types', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+}
+
+export function createMaterialSpecification(materialTypeId, name) {
+  return apiRequest('/dispatch/master-data/material-specifications', {
+    method: 'POST',
+    body: JSON.stringify({ material_type_id: materialTypeId, name }),
+  })
+}
+
 export function fetchClientHistory(clientId, params = {}) {
   const qs = new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
