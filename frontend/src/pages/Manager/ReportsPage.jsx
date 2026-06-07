@@ -3,6 +3,7 @@ import { fetchAnalytics, fetchReports } from '../../api/manager'
 import { DataTable, EmptyState, PageHeader, StatusBadge } from '../../components/ui'
 import { BarChart3, ClipboardList, Download, FileText, Users } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
+import { buildDisplayName } from '../../utils/jobOrderHelpers'
 
 function escapeCsv(v) {
   const s = String(v ?? '')
@@ -56,7 +57,7 @@ function ReportsPage() {
       downloadCsv(`deliveries-${new Date().toISOString().slice(0, 10)}.csv`,
         ['Assignment', 'Client', 'Driver', 'Vehicle', 'Status', 'Assigned', 'Completed'],
         deliveries.map((d) => [
-          d.id, d.job_order?.customer_name ?? '—', d.driver?.user?.name ?? '—', d.vehicle?.plate_no ?? '—',
+          d.id, buildDisplayName(d.job_order) || '—', d.driver?.user?.name ?? '—', d.vehicle?.plate_no ?? '—',
           d.status, d.assigned_at ? new Date(d.assigned_at).toLocaleString() : '—',
           d.completed_at ? new Date(d.completed_at).toLocaleString() : '—',
         ])
@@ -118,7 +119,7 @@ function ReportsPage() {
               {deliveries.length > 0 && deliveries.map((d) => (
                 <tr key={d.id}>
                   <td style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8125rem', color: 'var(--muted)' }}>#{d.id}</td>
-                  <td style={{ fontWeight: 600 }}>{d.job_order?.customer_name ?? '—'}</td>
+                  <td style={{ fontWeight: 600 }}>{buildDisplayName(d.job_order) || '—'}</td>
                   <td>{d.driver?.user?.name ?? '—'}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{d.vehicle?.plate_no ?? '—'}</td>
                   <td><StatusBadge status={d.status} /></td>

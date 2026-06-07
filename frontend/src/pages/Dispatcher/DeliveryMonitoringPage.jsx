@@ -5,6 +5,7 @@ import LiveFleetMap from '../../components/LiveFleetMap'
 import { PageHeader, StatusBadge } from '../../components/ui'
 import { Car, ExternalLink, MapPin, RefreshCw } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
+import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 
 function formatGpsTime(iso) {
   if (!iso) return null
@@ -103,7 +104,7 @@ function DeliveryMonitoringPage() {
                 const gps = gpsMap[a.id]
                 const mapsUrl = gps
                   ? `https://www.google.com/maps?q=${gps.lat},${gps.lng}`
-                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.job_order?.dropoff_location ?? '')}`
+                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '')}`
                 return (
                   <div key={a.id} className="dx-driver-card-dx">
                     <header>
@@ -112,7 +113,7 @@ function DeliveryMonitoringPage() {
                     </header>
                     <div className="dx-driver-muted" style={{ marginTop: 10 }}>
                       <div style={{ fontWeight: 600 }}>Job {formatJobPublicId(a.job_order_id)}</div>
-                      <div style={{ marginTop: 3 }}>{a.job_order?.pickup_location} → {a.job_order?.dropoff_location}</div>
+                      <div style={{ marginTop: 3 }}>{buildDisplayAddress('pickup', a.job_order) || a.job_order?.pickup_location || '—'} → {buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '—'}</div>
                       <div style={{ marginTop: 6, fontSize: '0.8125rem' }}>
                         <strong>Last Reported Status:</strong> {a.status?.replace(/_/g, ' ') ?? '—'}
                       </div>

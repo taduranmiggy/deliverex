@@ -4,6 +4,7 @@ import { fetchAssignments, fetchJobOrders } from '../../api/dispatcher'
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from '../../components/ui'
 import { AlertTriangle, ArrowRight, Clock, MapPin, Truck } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
+import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 
 function DispatcherDashboard() {
   const [summary, setSummary]   = useState({ orders: 0, pending: 0, active: 0, delayed: 0 })
@@ -73,9 +74,9 @@ function DispatcherDashboard() {
                   {deliveries.map((item) => (
                     <tr key={item.id}>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8125rem' }}>{formatJobPublicId(item.job_order_id)}</td>
-                      <td style={{ fontWeight: 600 }}>{item.job_order?.customer_name ?? '—'}</td>
+                      <td style={{ fontWeight: 600 }}>{buildDisplayName(item.job_order) || '—'}</td>
                       <td style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                        {item.job_order?.pickup_location ?? '—'} → {item.job_order?.dropoff_location ?? '—'}
+                        {buildDisplayAddress('pickup', item.job_order) || '—'} → {buildDisplayAddress('dropoff', item.job_order) || '—'}
                       </td>
                       <td style={{ textTransform: 'capitalize', fontSize: '0.8125rem', color: 'var(--muted)' }}>{item.job_order?.priority ?? '—'}</td>
                       <td><StatusBadge status={item.status} /></td>

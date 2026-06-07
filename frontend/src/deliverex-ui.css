@@ -2479,3 +2479,252 @@
   .driver-timeline-steps { gap: 2px; }
   .driver-timeline-step__text strong { font-size: 0.625rem; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   DELIVEREX IDENTITY LAYER
+   Custom logistics-SaaS visual language + microinteractions.
+   CSS-only (no JS dependency); honours prefers-reduced-motion.
+   Targets existing class names so every page benefits safely.
+═══════════════════════════════════════════════════════════ */
+
+/* ── Motion keyframes ────────────────────────────────────── */
+@keyframes dxPageIn   { from { opacity: 0; transform: translateY(8px); }  to { opacity: 1; transform: translateY(0); } }
+@keyframes dxCardIn    { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes dxPulse     { 0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.45); } 70% { box-shadow: 0 0 0 8px rgba(37,99,235,0); } 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); } }
+@keyframes dxPulseDot  { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(0.82); } }
+@keyframes dxShimmer   { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes dxRouteDash { to { stroke-dashoffset: -28; } }
+@keyframes dxFloat     { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+/* ── Page fade-in ────────────────────────────────────────── */
+.page-content,
+.customer-content,
+.tracking-page,
+.driver-page {
+  animation: dxPageIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Card entrance + hover elevation ─────────────────────── */
+.card,
+.dx-panel,
+.dx-stat-card,
+.dx-kpi-card,
+.dx-chart-card,
+.customer-card,
+.tracking-card,
+.dx-detail-panel {
+  animation: dxCardIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.card,
+.dx-panel,
+.dx-kpi-card,
+.dx-chart-card {
+  border-radius: var(--radius-xl);
+}
+
+.card:hover,
+.dx-panel:hover,
+.dx-kpi-card:hover,
+.dx-chart-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* Staggered entrance so grids cascade in instead of popping at once */
+.dx-stat-row > *:nth-child(1),
+.dx-kpi-grid-4 > *:nth-child(1) { animation-delay: 0.02s; }
+.dx-stat-row > *:nth-child(2),
+.dx-kpi-grid-4 > *:nth-child(2) { animation-delay: 0.07s; }
+.dx-stat-row > *:nth-child(3),
+.dx-kpi-grid-4 > *:nth-child(3) { animation-delay: 0.12s; }
+.dx-stat-row > *:nth-child(4),
+.dx-kpi-grid-4 > *:nth-child(4) { animation-delay: 0.17s; }
+.dx-stat-row > *:nth-child(5) { animation-delay: 0.22s; }
+.dx-stat-row > *:nth-child(6) { animation-delay: 0.27s; }
+
+/* Accent top-edge on stat cards = subtle brand signature */
+.dx-stat-card {
+  position: relative;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.dx-stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--brand-gradient);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.dx-stat-card:hover::after { opacity: 1; }
+.dx-stat-card__icon { background: var(--brand-gradient-soft); }
+
+/* ── Sidebar: deep navy + route motif + active accent bar ── */
+.sidebar--deliverex {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(37,99,235,0.22), transparent 60%),
+    linear-gradient(180deg, var(--navy-deep) 0%, var(--sidebar-dark2) 100%);
+}
+.sidebar-brand-icon { box-shadow: var(--shadow-brand); }
+.sidebar-link {
+  position: relative;
+  transition: background 0.18s ease, color 0.18s ease, padding-left 0.18s ease;
+}
+.sidebar-link::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 50%;
+  height: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--sky);
+  transform: translateY(-50%);
+  transition: height 0.18s ease;
+}
+.sidebar-link:hover { padding-left: 15px; }
+.sidebar-link.active::before { height: 60%; }
+.sidebar-link.active {
+  background: linear-gradient(90deg, rgba(37,99,235,0.30), rgba(37,99,235,0.10));
+}
+
+/* ── Topbar / customer nav: light glass ──────────────────── */
+.topbar,
+.customer-nav {
+  background: var(--glass);
+  backdrop-filter: saturate(140%) blur(10px);
+  -webkit-backdrop-filter: saturate(140%) blur(10px);
+}
+
+/* ── Buttons: press feedback + brand sheen ───────────────── */
+.btn-dx-primary {
+  background: var(--brand-gradient);
+  border-color: transparent;
+}
+.btn-dx-primary:hover { filter: brightness(1.04); transform: translateY(-1px); }
+.btn-dx-primary:active,
+.btn-dx-secondary:active,
+.btn:active { transform: translateY(0) scale(0.98); }
+
+/* ── Status badges: crisper + animated live dots ─────────── */
+.badge-dx { box-shadow: var(--shadow-xs); letter-spacing: 0.01em; }
+.badge-dx--enroute::before,
+.badge-dx--pending::before { animation: dxPulseDot 1.6s ease-in-out infinite; }
+
+/* Reusable live "tracking pulse" indicator */
+.dx-pulse {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--color-success);
+  animation: dxPulse 1.8s ease-out infinite;
+}
+.dx-pulse--blue { background: var(--color-primary); }
+.dx-pulse--warn { background: var(--color-warning); }
+
+/* Notification badge / dot pulse */
+.topbar-notif-badge { animation: dxPulse 2s ease-out infinite; }
+.dx-notif-dot { animation: dxPulseDot 1.6s ease-in-out infinite; }
+
+/* ── Tables: modern rounded frame + brand header ─────────── */
+.dx-data-table-wrap {
+  border: 1px solid var(--stroke);
+  background: var(--surface);
+}
+.dx-data-table thead tr {
+  background: linear-gradient(180deg, var(--slate-50), #eef3fb);
+}
+.dx-data-table tbody tr { position: relative; }
+.dx-data-table tbody tr:hover {
+  background: var(--color-primary-light);
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+/* ── Modals: scale-in entrance ───────────────────────────── */
+.dx-modal { animation: dxCardIn 0.24s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* ── Dropdown transition (customer menu) ─────────────────── */
+.customer-user-dropdown { animation: dxCardIn 0.18s ease both; transform-origin: top right; }
+
+/* ── Job / report / doc cards: lift on hover ─────────────── */
+.dx-job-card,
+.dx-report-tab,
+.dx-doc-queue-item,
+.driver-job-card,
+.driver-job-row {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.dx-job-card:hover,
+.dx-report-tab:hover,
+.driver-job-card:hover,
+.driver-job-row:hover { transform: translateY(-2px); }
+
+/* ── Best-fit banner: gentle attention float on its icon ─── */
+.dx-bestfit-banner { border-radius: 12px; }
+.dx-bestfit-banner__icon { animation: dxFloat 3s ease-in-out infinite; }
+
+/* ── Timeline polish: connector line + progressing dots ──── */
+.tracking-timeline,
+.driver-timeline { position: relative; }
+.driver-timeline-dot { animation: dxPulse 2.4s ease-out infinite; }
+
+/* ── Empty-state illustration ring ───────────────────────── */
+.dx-empty-illustration {
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+  color: var(--color-primary);
+  background: var(--brand-gradient-soft);
+  box-shadow: inset 0 0 0 1px var(--blue-200), 0 8px 20px rgba(37,99,235,0.12);
+  position: relative;
+}
+.dx-empty-illustration::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--blue-200);
+  animation: dxFloat 4s ease-in-out infinite;
+}
+
+/* ── Reusable loading skeleton ───────────────────────────── */
+.dx-skeleton {
+  background: linear-gradient(90deg, var(--slate-100) 25%, var(--slate-50) 50%, var(--slate-100) 75%);
+  background-size: 200% 100%;
+  animation: dxShimmer 1.3s infinite;
+  border-radius: var(--radius-md);
+  min-height: 14px;
+}
+
+/* ── Route accent: subtle dashed path under page headers ─── */
+.page-header { position: relative; }
+
+/* ── Larger touch targets for Driver PWA (a11y) ──────────── */
+@media (max-width: 768px) {
+  .driver-nav-link,
+  .driver-nav-logout-btn { min-height: 48px; }
+  .btn-dx-primary, .btn-dx-secondary, .btn { min-height: 44px; }
+}
+
+/* ── Reduced motion: neutralise identity-layer motion ────── */
+@media (prefers-reduced-motion: reduce) {
+  .page-content, .customer-content, .tracking-page, .driver-page,
+  .card, .dx-panel, .dx-stat-card, .dx-kpi-card, .dx-chart-card,
+  .customer-card, .tracking-card, .dx-detail-panel, .dx-modal,
+  .customer-user-dropdown {
+    animation: none !important;
+  }
+  .badge-dx--enroute::before, .badge-dx--pending::before,
+  .dx-pulse, .topbar-notif-badge, .dx-notif-dot,
+  .driver-timeline-dot, .dx-bestfit-banner__icon,
+  .dx-empty-illustration::before, .dx-skeleton {
+    animation: none !important;
+  }
+  .card:hover, .dx-panel:hover, .dx-kpi-card:hover, .dx-chart-card:hover,
+  .dx-job-card:hover, .dx-report-tab:hover, .driver-job-card:hover,
+  .driver-job-row:hover, .btn-dx-primary:hover { transform: none; }
+}

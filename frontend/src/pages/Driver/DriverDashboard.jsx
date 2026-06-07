@@ -5,6 +5,7 @@ import { enqueue } from '../../utils/offlineQueue'
 import { StatusBadge } from '../../components/ui'
 import useSyncOnReconnect from '../../hooks/useSyncOnReconnect'
 import { CheckCircle2, ChevronRight, MapPin, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 
 function DriverDashboard() {
   const [assignments, setAssignments] = useState([])
@@ -78,10 +79,10 @@ function DriverDashboard() {
           </div>
           <p className="driver-active-card__route">
             <MapPin size={16} style={{ display: 'inline', marginRight: 4 }} />
-            {active.job_order?.pickup_location ?? '—'}
+            {buildDisplayAddress('pickup', active.job_order) || '—'}
           </p>
           <p style={{ color: 'rgba(255,255,255,0.6)', margin: '4px 0 18px', fontSize: '0.875rem' }}>
-            → {active.job_order?.dropoff_location ?? '—'}
+            → {buildDisplayAddress('dropoff', active.job_order) || '—'}
           </p>
           <div className="driver-active-card__actions">
             <Link to={`/driver/jobs/${active.id}`} className="driver-btn-primary">
@@ -112,7 +113,7 @@ function DriverDashboard() {
                 <StatusBadge status={a.status} />
               </div>
               <p className="driver-job-row__route">
-                {a.job_order?.pickup_location ?? '—'} → {a.job_order?.dropoff_location ?? '—'}
+                {buildDisplayAddress('pickup', a.job_order) || '—'} → {buildDisplayAddress('dropoff', a.job_order) || '—'}
               </p>
               {a.vehicle?.plate_no && <p className="driver-job-row__vehicle">{a.vehicle.plate_no} · {a.vehicle.type}</p>}
             </Link>

@@ -2,6 +2,8 @@
 
 namespace App\Services\Assignment;
 
+use App\Models\ClientQuarryVehiclePreference;
+use App\Models\DriverVehicleAssignment;
 use App\Models\DispatchAssignment;
 use App\Models\Driver;
 use App\Models\JobOrder;
@@ -18,35 +20,63 @@ class BestFitAssignmentService
     {
         $drivers = Driver::query()
             ->with('user')
+            ->where('status', '!=', 'inactive')
             ->where('availability', '!=', 'offline')
             ->get()
             ->filter(fn (Driver $d) => ! AssignmentScheduleConflict::hasDriverConflict($d->id, $jobOrder));
 
         $vehicles = Vehicle::query()
-            ->whereNotIn('status', ['maintenance', 'unavailable'])
+            ->with('vehicleType')
+            ->whereNotIn('status', ['maintenance', 'unavailable', 'inactive'])
             ->get()
             ->filter(fn (Vehicle $v) => ! AssignmentScheduleConflict::hasVehicleConflict($v->id, $jobOrder));
 
-        $requiredWeight = $jobOrder->weight_kg !== null ? (float) $jobOrder->weight_kg : null;
-        $requiredVolume = $jobOrder->volume_m3 !== null ? (float) $jobOrder->volume_m3 : null;
+        $requiredVolume = $jobOrder->load_volume_m3 !== null
+            ? (float) $jobOrder->load_volume_m3
+            : ($jobOrder->volume_m3 !== null ? (float) $jobOrder->volume_m3 : null);
+
+        $clientPreference = $this->resolveClientPreference($jobOrder);
 
         $recommendations = [];
 
         foreach ($drivers as $driver) {
             foreach ($vehicles as $vehicle) {
-                if (! $this->isFeasible($vehicle, $requiredWeight, $requiredVolume)) {
+                $driverModel = $driver instanceof Driver ? $driver : null;
+                $vehicleModel = $vehicle instanceof Vehicle ? $vehicle : null;
+                if (! $driverModel || ! $vehicleModel) {
+                    continue;
+                }
+                if (! $this->isFeasible($vehicleModel, $requiredVolume)) {
                     continue;
                 }
 
-                ['score' => $score, 'reasons' => $reasons] = $this->scorePair($jobOrder, $driver, $vehicle);
+                ['score' => $score, 'reasons' => $reasons] = $this->scorePair(
+                    $jobOrder,
+                    $driverModel,
+                    $vehicleModel,
+                    $requiredVolume,
+                    $clientPreference,
+                );
+
+                $vehicleCapacity = $vehicleModel->cbm_capacity
+                    ?? $vehicleModel->max_volume_m3
+                    ?? $vehicleModel->rounded_cbm_capacity
+                    ?? null;
+                $unusedCapacity = $requiredVolume !== null && $vehicleCapacity !== null
+                    ? round((float) $vehicleCapacity - $requiredVolume, 3)
+                    : null;
 
                 $recommendations[] = [
-                    'driver_id'        => $driver->id,
-                    'driver_name'      => $driver->user?->name,
-                    'vehicle_id'       => $vehicle->id,
-                    'vehicle_plate'    => $vehicle->plate_no,
-                    'vehicle_type'     => $vehicle->type,
-                    'vehicle_capacity' => $vehicle->capacity,
+                    'driver_id'        => $driverModel->id,
+                    'driver_name'      => $driverModel->full_name ?: $driverModel->user?->name,
+                    'vehicle_id'       => $vehicleModel->id,
+                    'vehicle_plate'    => $vehicleModel->plate_no,
+                    'vehicle_type'     => $vehicleModel->vehicleType?->name ?? $vehicleModel->type,
+                    'vehicle_capacity' => $vehicleModel->capacity,
+                    'vehicle_cbm_capacity' => $vehicleCapacity !== null ? (float) $vehicleCapacity : null,
+                    'load_volume' => $requiredVolume,
+                    'unused_capacity' => $unusedCapacity,
+                    'client_preference_match' => $this->isClientPreferenceMatch($vehicleModel, $clientPreference),
                     'score'            => $score,
                     'reasons'          => $reasons,
                     'feasible'         => true,
@@ -59,17 +89,13 @@ class BestFitAssignmentService
         return array_slice($recommendations, 0, 10);
     }
 
-    private function isFeasible(Vehicle $vehicle, ?float $requiredWeightKg, ?float $requiredVolumeM3): bool
+    private function isFeasible(Vehicle $vehicle, ?float $requiredVolumeM3): bool
     {
-        $maxWeight = $vehicle->max_weight_kg !== null
-            ? (float) $vehicle->max_weight_kg
-            : VehicleCapacity::labelToKg($vehicle->capacity);
-
-        if ($requiredWeightKg !== null && $maxWeight !== null && $requiredWeightKg > $maxWeight) {
-            return false;
-        }
-
-        $maxVol = $vehicle->max_volume_m3 !== null ? (float) $vehicle->max_volume_m3 : null;
+        $maxVol = $vehicle->cbm_capacity !== null
+            ? (float) $vehicle->cbm_capacity
+            : ($vehicle->max_volume_m3 !== null
+                ? (float) $vehicle->max_volume_m3
+                : ($vehicle->rounded_cbm_capacity !== null ? (float) $vehicle->rounded_cbm_capacity : null));
         if ($requiredVolumeM3 !== null && $maxVol !== null && $requiredVolumeM3 > $maxVol) {
             return false;
         }
@@ -77,40 +103,59 @@ class BestFitAssignmentService
         return true;
     }
 
-    private function scorePair(JobOrder $jobOrder, Driver $driver, Vehicle $vehicle): array
-    {
+    private function scorePair(
+        JobOrder $jobOrder,
+        Driver $driver,
+        Vehicle $vehicle,
+        ?float $requiredVolumeM3,
+        ?ClientQuarryVehiclePreference $clientPreference
+    ): array {
         $score   = 30.0;
         $reasons = [];
 
         // --- Vehicle scoring ---
-        if ($jobOrder->vehicle_type_required && strcasecmp((string) $vehicle->type, (string) $jobOrder->vehicle_type_required) === 0) {
-            $score += 30;
-            $reasons[] = 'Vehicle type is an exact match ('.$vehicle->type.')';
-        } elseif ($jobOrder->vehicle_type_required && str_contains(
-            strtolower((string) $vehicle->type),
-            strtolower((string) $jobOrder->vehicle_type_required)
-        )) {
-            $score += 18;
-            $reasons[] = 'Vehicle type is a partial match ('.$vehicle->type.')';
-        }
-
-        $reqCapacityLabel = (string) ($jobOrder->vehicle_capacity_required ?? '');
-        $vehCapacityLabel = (string) ($vehicle->capacity ?? '');
-        if ($reqCapacityLabel !== '' && $vehCapacityLabel !== '' && strcasecmp($reqCapacityLabel, $vehCapacityLabel) === 0) {
-            $score += 12;
-            $reasons[] = "Capacity label matches requirement ({$vehCapacityLabel})";
+        $materialType = strtolower((string) ($jobOrder->material_type ?? ''));
+        if ($materialType !== '') {
+            $vehicleType = strtolower((string) ($vehicle->vehicleType?->name ?? $vehicle->type ?? ''));
+            $keywords = [];
+            if (str_contains($materialType, 'rock') || str_contains($materialType, 'aggregate') || str_contains($materialType, 'sand') || str_contains($materialType, 'gravel') || str_contains($materialType, 'soil')) {
+                $keywords = ['dump', 'tipper'];
+            } elseif (str_contains($materialType, 'cement') || str_contains($materialType, 'concrete')) {
+                $keywords = ['mixer', 'bulk', 'silo'];
+            }
+            if ($keywords) {
+                foreach ($keywords as $kw) {
+                    if (str_contains($vehicleType, $kw)) {
+                        $score += 14;
+                        $reasons[] = 'Vehicle type is suitable for selected material ('.$jobOrder->material_type.')';
+                        break;
+                    }
+                }
+            }
         }
 
         $maxWeight = $vehicle->max_weight_kg !== null
             ? (float) $vehicle->max_weight_kg
             : VehicleCapacity::labelToKg($vehicle->capacity);
-        $jobWeight = $jobOrder->weight_kg !== null ? (float) $jobOrder->weight_kg : null;
-        if ($maxWeight !== null && $jobWeight !== null && $jobWeight > 0) {
-            $utilization = $jobWeight / $maxWeight;
+        $maxVolume = $vehicle->cbm_capacity !== null
+            ? (float) $vehicle->cbm_capacity
+            : ($vehicle->max_volume_m3 !== null
+                ? (float) $vehicle->max_volume_m3
+                : ($vehicle->rounded_cbm_capacity !== null ? (float) $vehicle->rounded_cbm_capacity : null));
+        $jobVolume = $requiredVolumeM3;
+        if ($maxVolume !== null && $jobVolume !== null && $jobVolume > 0) {
+            $utilization = $jobVolume / $maxVolume;
             if ($utilization <= 1) {
                 $score += 10 * (1 - abs(0.82 - $utilization));
-                $reasons[] = 'Payload utilization at '.round($utilization * 100).'% of vehicle capacity';
+                $reasons[] = 'Load utilization at '.round($utilization * 100).'% of vehicle volume capacity';
+                $unused = round($maxVolume - $jobVolume, 3);
+                $score += max(0, 10 - $unused);
+                $reasons[] = 'Unused capacity: '.$unused.' m3 (tight-fit scoring)';
             }
+        } elseif ($maxWeight !== null && $jobVolume !== null && $jobVolume > 0) {
+            // Fallback where only weight metadata is available on vehicles.
+            $score += 4;
+            $reasons[] = 'Vehicle weight metadata considered as fallback capacity signal';
         }
 
         if ($vehicle->status === 'available') {
@@ -144,12 +189,15 @@ class BestFitAssignmentService
             $reasons[] = "Driver workload: {$activeCount} active assignments";
         }
 
-        // Delivery type alignment (optional field)
-        if ($jobOrder->delivery_type && $vehicle->type) {
-            if (stripos((string) $vehicle->type, (string) $jobOrder->delivery_type) !== false) {
-                $score += 6;
-                $reasons[] = 'Vehicle type aligns with delivery type ('.$jobOrder->delivery_type.')';
-            }
+        // Special handling notes increase scoring weight for more available resources.
+        if (! empty($jobOrder->job_requirements) && $driver->availability === 'available') {
+            $score += 4;
+            $reasons[] = 'Special handling instructions detected; preferred fully available driver';
+        }
+
+        if (! empty($jobOrder->specification_size)) {
+            $score += 3;
+            $reasons[] = 'Specification/size considered during matching ('.$jobOrder->specification_size.')';
         }
 
         // Priority urgency
@@ -172,10 +220,53 @@ class BestFitAssignmentService
             }
         }
 
+        if ($clientPreference && $clientPreference->vehicle_type_id) {
+            if ((int) $vehicle->vehicle_type_id === (int) $clientPreference->vehicle_type_id) {
+                $score += 18;
+                $reasons[] = 'Matches client preferred vehicle type';
+            } else {
+                $score -= 6;
+                $reasons[] = 'Does not match client preferred vehicle type';
+            }
+        }
+
+        $primaryAssignment = DriverVehicleAssignment::query()
+            ->where('driver_id', $driver->id)
+            ->where('vehicle_id', $vehicle->id)
+            ->where('is_primary', true)
+            ->where('status', 'active')
+            ->exists();
+        if ($primaryAssignment) {
+            $score += 10;
+            $reasons[] = 'Driver has primary assignment on this vehicle';
+        }
+
         if (empty($reasons)) {
             $reasons[] = 'Meets capacity and schedule requirements';
         }
 
         return ['score' => round(max(0, $score), 2), 'reasons' => $reasons];
+    }
+
+    private function resolveClientPreference(JobOrder $jobOrder): ?ClientQuarryVehiclePreference
+    {
+        if (! $jobOrder->client_id) {
+            return null;
+        }
+
+        return ClientQuarryVehiclePreference::query()
+            ->where('client_id', $jobOrder->client_id)
+            ->where('status', 'active')
+            ->where('is_default', true)
+            ->first();
+    }
+
+    private function isClientPreferenceMatch(Vehicle $vehicle, ?ClientQuarryVehiclePreference $clientPreference): bool
+    {
+        if (! $clientPreference || ! $clientPreference->vehicle_type_id) {
+            return false;
+        }
+
+        return (int) $vehicle->vehicle_type_id === (int) $clientPreference->vehicle_type_id;
     }
 }

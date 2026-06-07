@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchReports } from '../../api/manager'
+import { buildDisplayName } from '../../utils/jobOrderHelpers'
 import { DataTable, EmptyState, FilterSelect, PageHeader, SectionCard, StatusBadge } from '../../components/ui'
 import { History } from 'lucide-react'
 
@@ -44,7 +45,7 @@ function ManagerDeliveryHistoryPage() {
           {history.length > 0 && history.map((item) => (
             <tr key={item.id}>
               <td style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8125rem', color: 'var(--muted)' }}>#{item.id}</td>
-              <td style={{ fontWeight: 600 }}>{item.job_order?.customer_name ?? '—'}</td>
+              <td style={{ fontWeight: 600 }}>{buildDisplayName(item.job_order) || '—'}</td>
               <td>{item.driver?.user?.name ?? '—'}</td>
               <td style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{item.vehicle?.plate_no ?? '—'}</td>
               <td><StatusBadge status={item.status} /></td>

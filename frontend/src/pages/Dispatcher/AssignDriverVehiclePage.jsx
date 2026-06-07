@@ -3,6 +3,7 @@ import { createAssignment, fetchJobOrders, getBestFit } from '../../api/dispatch
 import { IconCheckSmall, IconRouteArrow } from '../../components/DxIcons'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus } from '../../utils/statusLabels'
+import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, User, Truck } from 'lucide-react'
 
 /* ── Confirmation modal ─────────────────────────────────────── */
@@ -35,13 +36,13 @@ function AssignConfirmModal({ job, candidate, isOverride, onConfirm, onCancel, s
               <span style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{formatJobPublicId(job.id)}</span>
               <span style={{ fontSize: '0.8125rem', color: 'var(--muted)', textTransform: 'capitalize' }}>{job.priority} priority</span>
             </div>
-            <p style={{ fontWeight: 600, marginBottom: 4 }}>{job.customer_name}</p>
+            <p style={{ fontWeight: 600, marginBottom: 4 }}>{job.client?.client_name || buildDisplayName(job)}</p>
             <p style={{ fontSize: '0.8125rem', color: 'var(--muted)', margin: 0 }}>
-              {job.pickup_location} → {job.dropoff_location}
+              {buildDisplayAddress('pickup', job)} → {buildDisplayAddress('dropoff', job)}
             </p>
-            {(job.weight_kg || job.volume_m3) && (
+            {(job.volume_m3 || job.material_type || job.specification_size) && (
               <p style={{ fontSize: '0.8125rem', color: 'var(--muted)', marginTop: 4 }}>
-                Load: {[job.weight_kg ? `${job.weight_kg} kg` : null, job.volume_m3 ? `${job.volume_m3} m³` : null].filter(Boolean).join(' · ')}
+                Load: {[job.load_volume_m3 || job.volume_m3 ? `${job.load_volume_m3 ?? job.volume_m3} m³` : null, job.material_type || null, job.specification_size || null].filter(Boolean).join(' · ')}
               </p>
             )}
           </div>
@@ -60,7 +61,7 @@ function AssignConfirmModal({ job, candidate, isOverride, onConfirm, onCancel, s
               </p>
               <p style={{ fontWeight: 700, fontSize: '0.9375rem', margin: 0 }}>{candidate.vehicle_plate}</p>
               <p style={{ fontSize: '0.8125rem', color: 'var(--muted)', margin: 0 }}>
-                {[candidate.vehicle_type, candidate.vehicle_capacity].filter(Boolean).join(' · ') || '—'}
+                {[candidate.vehicle_type, candidate.vehicle_cbm_capacity ? `${candidate.vehicle_cbm_capacity} m³` : candidate.vehicle_capacity].filter(Boolean).join(' · ') || '—'}
               </p>
             </div>
           </div>
@@ -143,7 +144,8 @@ function AssignDriverVehiclePage() {
   useEffect(() => { loadJobs() }, []) // eslint-disable-line
 
   useEffect(() => {
-    if (!selected) { setRecommendations([]); setRecommended(null); return }
+    if (!selected) { return }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     getBestFit(selected.id)
       .then((res) => {
@@ -215,14 +217,14 @@ function AssignDriverVehiclePage() {
                 <span className="dx-job-card__id">{formatJobPublicId(order.id)}</span>
                 <span className="badge-dx badge-dx--pending">{formatJobStatus(order.status)}</span>
               </div>
-              <p style={{ margin: '8px 0 4px', fontWeight: 600 }}>{order.customer_name}</p>
+              <p style={{ margin: '8px 0 4px', fontWeight: 600 }}>{order.client?.client_name || buildDisplayName(order)}</p>
               <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                {order.vehicle_type_required ?? 'Load'} · {order.vehicle_capacity_required ?? '—'}
+                {[order.material_type || null, order.specification_size ?? null].filter(Boolean).join(' · ') || 'Material not set'}
               </p>
               <p className="dx-route-inline" style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                <span>{order.pickup_location}</span>
+                <span>{buildDisplayAddress('pickup', order)}</span>
                 <span className="dx-route-inline__arrow" aria-hidden><IconRouteArrow /></span>
-                <span>{order.dropoff_location}</span>
+                <span>{buildDisplayAddress('dropoff', order)}</span>
               </p>
               {order.scheduled_start && (
                 <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>
@@ -243,14 +245,13 @@ function AssignDriverVehiclePage() {
           ) : (
             <>
               <div className="dx-kv" style={{ marginBottom: 14 }}>
-                <span>Vehicle required</span>
-                <strong>{[selected.vehicle_type_required, selected.vehicle_capacity_required].filter(Boolean).join(' · ') || '—'}</strong>
+                <span>Material profile</span>
+                <strong>{[selected.material_type || null, selected.specification_size ?? null].filter(Boolean).join(' · ') || '—'}</strong>
               </div>
               <div className="dx-kv" style={{ marginBottom: 14 }}>
-                <span>Payload</span>
+                <span>Load volume</span>
                 <strong>
-                  {[selected.weight_kg ? `${selected.weight_kg} kg` : null, selected.volume_m3 ? `${selected.volume_m3} m³` : null]
-                    .filter(Boolean).join(' · ') || '—'}
+                  {selected.load_volume_m3 || selected.volume_m3 ? `${selected.load_volume_m3 ?? selected.volume_m3} m³` : '—'}
                 </strong>
               </div>
               {selected.scheduled_end && (
@@ -275,7 +276,14 @@ function AssignDriverVehiclePage() {
                     <strong>
                       {top.vehicle_plate}
                       {top.vehicle_type ? ` — ${top.vehicle_type}` : ''}
-                      {top.vehicle_capacity ? ` (${top.vehicle_capacity})` : ''}
+                      {top.vehicle_cbm_capacity ? ` (${top.vehicle_cbm_capacity} m³)` : (top.vehicle_capacity ? ` (${top.vehicle_capacity})` : '')}
+                    </strong>
+                  </div>
+                  <div className="dx-kv" style={{ marginBottom: 12 }}>
+                    <span>Unused capacity</span>
+                    <strong>
+                      {top.unused_capacity != null ? `${top.unused_capacity} m³` : '—'}
+                      {top.client_preference_match ? ' · preference matched' : ''}
                     </strong>
                   </div>
 
@@ -311,7 +319,7 @@ function AssignDriverVehiclePage() {
                   <strong style={{ fontSize: '0.875rem' }}>All matches</strong>
                   <div className="dx-data-table-wrap" style={{ marginTop: 8 }}>
                     <table className="dx-data-table">
-                      <thead><tr><th>Driver</th><th>Vehicle</th><th>Score</th><th /></tr></thead>
+                      <thead><tr><th>Driver</th><th>Plate</th><th>Vehicle Type</th><th>Capacity</th><th>Load</th><th>Unused</th><th>Pref.</th><th>Score</th><th>Reason</th><th /></tr></thead>
                       <tbody>
                         {recommendations.map((item) => {
                           const isTop = top && item.driver_id === top.driver_id && item.vehicle_id === top.vehicle_id
@@ -319,7 +327,13 @@ function AssignDriverVehiclePage() {
                             <tr key={`${item.driver_id}-${item.vehicle_id}`}>
                               <td>{item.driver_name}</td>
                               <td>{item.vehicle_plate}</td>
+                              <td>{item.vehicle_type || '—'}</td>
+                              <td>{item.vehicle_cbm_capacity != null ? `${item.vehicle_cbm_capacity} m³` : (item.vehicle_capacity || '—')}</td>
+                              <td>{item.load_volume != null ? `${item.load_volume} m³` : '—'}</td>
+                              <td>{item.unused_capacity != null ? `${item.unused_capacity} m³` : '—'}</td>
+                              <td>{item.client_preference_match ? 'Match' : '—'}</td>
                               <td><span className="badge-dx badge-dx--muted">{item.score}</span></td>
+                              <td style={{ maxWidth: 260 }}>{Array.isArray(item.reasons) && item.reasons.length > 0 ? item.reasons[0] : '—'}</td>
                               <td>
                                 {isTop ? (
                                   <span className="dx-mini-badge">Recommended</span>

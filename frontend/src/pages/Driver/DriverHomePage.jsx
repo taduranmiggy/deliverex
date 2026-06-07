@@ -9,6 +9,7 @@ import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobSchedule } from '../../utils/driverAssignment'
 import { computeJobStats, getActiveAssignment } from '../../utils/driverStats'
 import { ChevronRight, MapPin, Truck } from 'lucide-react'
+import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 
 function DriverHomePage() {
   const { user } = useAuth()
@@ -95,11 +96,11 @@ function DriverHomePage() {
             {formatJobPublicId(active.job_order_id)}
           </p>
           <p style={{ fontSize: '1.125rem', fontWeight: 800, margin: '0 0 8px' }}>
-            {active.job_order?.customer_name ?? 'Delivery'}
+            {buildDisplayName(active.job_order) || 'Delivery'}
           </p>
           <p style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: '0.875rem', margin: '0 0 6px', opacity: 0.95 }}>
             <MapPin size={16} style={{ flexShrink: 0 }} />
-            {active.job_order?.dropoff_location ?? '—'}
+            {buildDisplayAddress('dropoff', active.job_order) || '—'}
           </p>
           <p style={{ fontSize: '0.8125rem', opacity: 0.8, margin: '0 0 16px' }}>
             {formatJobSchedule(active.job_order)}

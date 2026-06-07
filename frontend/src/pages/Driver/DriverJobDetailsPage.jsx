@@ -7,6 +7,7 @@ import DriverStatusChip from '../../components/driver/DriverStatusChip'
 import { useDriverUi } from '../../context/DriverUiContext'
 import { fetchDriverAssignment, postIssueReport, postStatusUpdate } from '../../api/driver'
 import { formatJobPublicId } from '../../utils/formatPhp'
+import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import {
   formatJobSchedule,
   formatLastUpdated,
@@ -79,7 +80,7 @@ function DriverJobDetailsPage() {
   const latestGps = [...(assignment?.tracking_logs ?? [])].sort(
     (a, b) => new Date(b.captured_at) - new Date(a.captured_at),
   )[0]
-  const dropoff = job?.dropoff_location ?? ''
+  const dropoff = buildDisplayAddress('dropoff', job) || job?.dropoff_location || ''
   const navUrl = latestGps
     ? `https://www.google.com/maps/dir/?api=1&destination=${latestGps.latitude},${latestGps.longitude}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dropoff)}`
@@ -162,7 +163,7 @@ function DriverJobDetailsPage() {
             <DeliveryTimeline status={assignment.status} />
           </div>
 
-          {job?.customer_name && (
+          {(buildDisplayName(job) || job?.customer_name) && (
             <div className="da-card">
               <p className="da-card__label">Client</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -170,7 +171,7 @@ function DriverJobDetailsPage() {
                   <User size={20} color="var(--da-primary)" />
                 </div>
                 <div>
-                  <p style={{ fontWeight: 800, margin: 0, fontSize: '1rem' }}>{job.customer_name}</p>
+                  <p style={{ fontWeight: 800, margin: 0, fontSize: '1rem' }}>{buildDisplayName(job) || job.customer_name}</p>
                   {job.customer_contact && (
                     <p style={{ fontSize: '0.8125rem', color: 'var(--da-muted)', margin: '2px 0 0' }}>{job.customer_contact}</p>
                   )}
@@ -181,8 +182,8 @@ function DriverJobDetailsPage() {
 
           <div className="da-card">
             <p className="da-card__label"><MapPin size={12} style={{ display: 'inline', marginRight: 4 }} />Route</p>
-            <div className="da-kv"><span>Pickup</span><strong>{job?.pickup_location ?? '—'}</strong></div>
-            <div className="da-kv"><span>Drop-off</span><strong>{job?.dropoff_location ?? '—'}</strong></div>
+            <div className="da-kv"><span>Pickup</span><strong>{buildDisplayAddress('pickup', job) || '—'}</strong></div>
+            <div className="da-kv"><span>Drop-off</span><strong>{buildDisplayAddress('dropoff', job) || '—'}</strong></div>
             <div className="da-kv"><span>Schedule</span><strong>{formatJobSchedule(job)}</strong></div>
             {job?.tracking_code && (
               <div className="da-kv"><span>Tracking</span><strong style={{ fontFamily: 'monospace' }}>{job.tracking_code}</strong></div>

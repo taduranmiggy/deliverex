@@ -3,8 +3,7 @@
  * Use these across all roles for visual consistency.
  */
 import {
-  AlertCircle, CheckCircle2, Clock, Loader2, Package,
-  Search, TrendingUp, TrendingDown, XCircle,
+  Loader2, Package, Search, TrendingUp, TrendingDown,
 } from 'lucide-react'
 
 /* ─── StatCard ──────────────────────────────────────────────── */
@@ -57,6 +56,8 @@ const BADGE_MAP = {
   available:   'badge-dx badge-dx--available',
   busy:        'badge-dx badge-dx--dispatched',
   offline:     'badge-dx badge-dx--muted',
+  in_use:      'badge-dx badge-dx--enroute',
+  unavailable: 'badge-dx badge-dx--cancelled',
   maintenance: 'badge-dx badge-dx--maintenance',
   // OCR
   validated:    'badge-dx badge-dx--validated',
@@ -70,14 +71,24 @@ const BADGE_MAP = {
 }
 
 const BADGE_LABELS = {
-  in_progress: 'En Route', assigned: 'Dispatched', dispatched: 'Dispatched',
+  pending: 'Pending',
+  in_progress: 'En Route',
+  en_route: 'En Route',
+  assigned: 'Dispatched',
+  dispatched: 'Dispatched',
+  arrived: 'Arrived',
+  completed: 'Completed',
+  completed_with_pod: 'Completed',
+  cancelled: 'Cancelled',
+  delayed: 'Delayed',
   available: 'Available', needs_review: 'Flagged', validated: 'Validated',
   busy: 'On Duty',
 }
 
 export function StatusBadge({ status, label }) {
-  const cls = BADGE_MAP[status] ?? 'badge-dx badge-dx--muted'
-  const txt = label ?? BADGE_LABELS[status] ?? (status ? String(status).replace(/_/g, ' ') : '—')
+  const key = String(status || '').toLowerCase().replace(/ /g, '_')
+  const cls = BADGE_MAP[key] ?? 'badge-dx badge-dx--muted'
+  const txt = label ?? BADGE_LABELS[key] ?? (status ? String(status).replace(/_/g, ' ') : '—')
   return <span className={cls}>{txt}</span>
 }
 
@@ -113,8 +124,8 @@ export function SectionCard({ title, children, action, className = '' }) {
 export function EmptyState({ icon: Icon = Package, title = 'No records', message = '', action }) {
   return (
     <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--muted)' }}>
-      <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--slate-100)', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
-        <Icon size={28} style={{ opacity: 0.4 }} />
+      <div className="dx-empty-illustration">
+        <Icon size={30} />
       </div>
       <p style={{ fontWeight: 700, color: 'var(--text)', marginBottom: 6, fontSize: '1rem' }}>{title}</p>
       {message && <p style={{ fontSize: '0.875rem', maxWidth: 320, margin: '0 auto 20px' }}>{message}</p>}

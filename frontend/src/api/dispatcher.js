@@ -28,3 +28,7 @@ export function getBestFit(jobOrderId) {
 export function createAssignment(payload) {
   return apiRequest('/dispatch/assignments', { method: 'POST', body: JSON.stringify(payload) })
 }
+
+export function fetchMasterDataOptions() {
+  return apiRequest('/dispatch/master-data/options')
+}

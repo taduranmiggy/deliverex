@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchCustomerOrders } from '../../api/customer'
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from '../../components/ui'
-import { Package, ArrowRight } from 'lucide-react'
+import { Package } from 'lucide-react'
+import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 
 function formatDate(v) {
   if (!v) return '—'
@@ -14,6 +15,7 @@ function CustomerDeliveriesPage() {
   const [rows, setRows]       = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
+  const [tab, setTab]         = useState('all')
 
   useEffect(() => {
     let cancelled = false
@@ -24,34 +26,43 @@ function CustomerDeliveriesPage() {
     return () => { cancelled = true }
   }, [])
 
-  const isTerminal = (s) => ['completed', 'cancelled'].includes(String(s || '').toLowerCase())
-  const active    = rows.filter((r) => !isTerminal(r.status))
-  const completed = rows.filter((r) => isTerminal(r.status))
+  const ACTIVE_STATUSES = new Set(['pending', 'assigned', 'dispatched', 'in_progress', 'en_route', 'arrived'])
+  const COMPLETED_STATUSES = new Set(['completed', 'completed_with_pod'])
+
+  const filteredRows = rows.filter((r) => {
+    const status = String(r.status || '').toLowerCase()
+    if (tab === 'active') return ACTIVE_STATUSES.has(status)
+    if (tab === 'completed') return COMPLETED_STATUSES.has(status)
+    return true
+  })
 
   const DeliveryRow = ({ r }) => (
     <tr>
       <td>
         <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.875rem', background: 'var(--slate-100)', padding: '3px 8px', borderRadius: 6 }}>
-          {r.tracking_code}
+          {r.tracking_code || `#${r.id}`}
         </span>
       </td>
       <td><StatusBadge status={r.status} /></td>
-      <td style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>{formatDate(r.status_at || r.updated_at)}</td>
+      <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>{formatDate(r.status_at || r.updated_at)}</td>
       <td style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
-        {r.pickup_location} → {r.dropoff_location}
+        {buildDisplayAddress('pickup', r)} → {buildDisplayAddress('dropoff', r)}
       </td>
       <td>
         {Array.isArray(r.documents) && r.documents.length > 0
-          ? r.documents.map((doc) => (
-              <a key={doc.id} href={doc.url} target="_blank" rel="noreferrer" className="auth-inline-link" style={{ fontSize: '0.8125rem' }}>
-                POD {doc.uploaded_at ? `(${formatDate(doc.uploaded_at)})` : ''}
-              </a>
-            ))
+          ? (
+            <a href={r.documents[0].url} target="_blank" rel="noreferrer" className="auth-inline-link" style={{ fontSize: '0.8125rem' }}>
+              Available
+            </a>
+            )
           : <span style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>—</span>}
       </td>
-      <td>
+      <td style={{ display: 'flex', gap: 8 }}>
         <Link className="btn-dx-secondary btn-sm" to="/customer/track" state={{ prefillTracking: r.tracking_code }}>
           Track
+        </Link>
+        <Link className="btn-dx-primary btn-sm" to="/customer/track" state={{ prefillTracking: r.tracking_code }}>
+          View
         </Link>
       </td>
     </tr>
@@ -59,7 +70,7 @@ function CustomerDeliveriesPage() {
 
   return (
     <div className="customer-content" style={{ paddingTop: 32 }}>
-      <PageHeader title="My Deliveries" subtitle="Shipments associated with your customer account.">
+      <PageHeader title="My Deliveries" subtitle="View all delivery transactions and tracking status.">
         <Link to="/customer/track" className="btn-dx-secondary btn-sm">Track another code</Link>
       </PageHeader>
 
@@ -78,44 +89,42 @@ function CustomerDeliveriesPage() {
         </SectionCard>
       ) : (
         <div style={{ display: 'grid', gap: 20 }}>
-          {active.length > 0 && (
-            <SectionCard>
-              <div className="dx-section-header">
-                <div>
-                  <h2>Active Deliveries</h2>
-                  <p>In-progress shipments and upcoming scheduled drops.</p>
-                </div>
-                <span className="dx-section-count">{active.length} active</span>
-              </div>
-              <div className="dx-data-table-wrap">
-                <table className="dx-data-table">
-                  <thead><tr>
-                    <th>Tracking</th><th>Status</th><th>Updated</th><th>Route</th><th>POD</th><th />
-                  </tr></thead>
-                  <tbody>{active.map((r) => <DeliveryRow key={r.id} r={r} />)}</tbody>
-                </table>
-              </div>
-            </SectionCard>
-          )}
-          {completed.length > 0 && (
-            <SectionCard>
-              <div className="dx-section-header">
-                <div>
-                  <h2>Delivery History</h2>
-                  <p>Completed deliveries with proof-of-delivery documents.</p>
-                </div>
-                <span className="dx-section-count">{completed.length} completed</span>
-              </div>
-              <div className="dx-data-table-wrap">
-                <table className="dx-data-table">
-                  <thead><tr>
-                    <th>Tracking</th><th>Status</th><th>Completed</th><th>Route</th><th>POD</th><th />
-                  </tr></thead>
-                  <tbody>{completed.map((r) => <DeliveryRow key={r.id} r={r} />)}</tbody>
-                </table>
-              </div>
-            </SectionCard>
-          )}
+          <SectionCard>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'active', label: 'Active' },
+                { key: 'completed', label: 'Completed' },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`dx-ocr-tab${tab === item.key ? ' dx-ocr-tab--active' : ''}`}
+                  onClick={() => setTab(item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div className="dx-data-table-wrap">
+              <table className="dx-data-table">
+                <thead><tr>
+                  <th>Job Order ID</th><th>Status</th><th>Last Update</th><th>Route</th><th>PoD</th><th>View</th>
+                </tr></thead>
+                <tbody>
+                  {filteredRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)' }}>
+                        No deliveries found for this filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRows.map((r) => <DeliveryRow key={r.id} r={r} />)
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
         </div>
       )}
     </div>

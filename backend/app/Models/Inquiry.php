@@ -10,6 +10,8 @@ class Inquiry extends Model
         'name',
         'email',
         'phone',
+        'inquiry_type',
+        'reference_job_order_id',
         'pickup_location',
         'dropoff_location',
         'message',
@@ -20,5 +22,10 @@ class Inquiry extends Model
     public function jobOrder()
     {
         return $this->belongsTo(JobOrder::class);
+    }
+
+    public function referenceJobOrder()
+    {
+        return $this->belongsTo(JobOrder::class, 'reference_job_order_id');
     }
 }

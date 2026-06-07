@@ -8,9 +8,16 @@ class Driver extends Model
 {
     protected $fillable = [
         'user_id',
+        'full_name',
         'license_no',
+        'license_expiry',
         'availability',
+        'status',
         'current_assignment_id',
+    ];
+
+    protected $casts = [
+        'license_expiry' => 'date',
     ];
 
     public function user()
@@ -21,6 +28,11 @@ class Driver extends Model
     public function assignments()
     {
         return $this->hasMany(DispatchAssignment::class);
+    }
+
+    public function vehicleAssignments()
+    {
+        return $this->hasMany(DriverVehicleAssignment::class);
     }
 
     public function currentAssignment()

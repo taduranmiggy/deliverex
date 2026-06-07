@@ -82,7 +82,7 @@ function InquiriesPage() {
           <div className="dx-data-table-wrap">
             <table className="dx-data-table">
               <thead><tr>
-                <th>Name</th><th>Email</th><th>Route</th><th>Status</th><th>Received</th>
+                <th>Name</th><th>Email</th><th>Inquiry Type</th><th>Status</th><th>Received</th>
               </tr></thead>
               <tbody>
                 {inquiries.length === 0 && (
@@ -96,8 +96,8 @@ function InquiriesPage() {
                   >
                     <td><strong>{inq.name}</strong></td>
                     <td style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>{inq.email}</td>
-                    <td style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                      {[inq.pickup_location, inq.dropoff_location].filter(Boolean).join(' → ') || '—'}
+                    <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', textTransform: 'capitalize' }}>
+                      {inq.inquiry_type ? String(inq.inquiry_type).replace(/_/g, ' ') : '—'}
                     </td>
                     <td><span className={STATUS_BADGE[inq.status] ?? 'badge-dx badge-dx--muted'} style={{ textTransform: 'capitalize' }}>{inq.status}</span></td>
                     <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
@@ -131,8 +131,8 @@ function InquiriesPage() {
                 <div className="dx-kv"><span>Name</span><strong>{selected.name}</strong></div>
                 <div className="dx-kv"><span>Email</span><strong>{selected.email}</strong></div>
                 <div className="dx-kv"><span>Phone</span><strong>{selected.phone ?? '—'}</strong></div>
-                <div className="dx-kv"><span>Pickup</span><strong>{selected.pickup_location ?? '—'}</strong></div>
-                <div className="dx-kv"><span>Drop-off</span><strong>{selected.dropoff_location ?? '—'}</strong></div>
+                <div className="dx-kv"><span>Inquiry type</span><strong style={{ textTransform: 'capitalize' }}>{selected.inquiry_type ? String(selected.inquiry_type).replace(/_/g, ' ') : '—'}</strong></div>
+                <div className="dx-kv"><span>Reference job</span><strong>{selected.reference_job_order?.tracking_code ?? (selected.reference_job_order_id ? `#${selected.reference_job_order_id}` : '—')}</strong></div>
                 <div style={{ marginTop: 12, marginBottom: 4, fontSize: '0.8125rem', fontWeight: 600, color: 'var(--muted)' }}>Message</div>
                 <div style={{ background: 'var(--surface-soft, #f8f9fa)', borderRadius: 8, padding: '10px 12px', fontSize: '0.875rem', lineHeight: 1.6 }}>
                   {selected.message}

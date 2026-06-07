@@ -2,8 +2,6 @@
 
 namespace Database\Seeders;
 
-use Database\Seeders\DemoDataSeeder;
-use App\Models\Driver;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -54,8 +52,30 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        $dispatcherRole = Role::where('name', 'dispatcher')->first();
+        User::updateOrCreate(
+            ['email' => 'dispatcher@deliverex.com'],
+            [
+                'role_id' => $dispatcherRole?->id,
+                'name' => 'Juan Dela Cruz',
+                'password' => Hash::make('dispatcher123'),
+                'status' => 'active',
+            ]
+        );
+
+        $managerRole = Role::where('name', 'manager')->first();
+        User::updateOrCreate(
+            ['email' => 'manager@deliverex.com'],
+            [
+                'role_id' => $managerRole?->id,
+                'name' => 'Demo Manager',
+                'password' => Hash::make('manager123'),
+                'status' => 'active',
+            ]
+        );
+
         $driverRole = Role::where('name', 'driver')->first();
-        $driverUser = User::updateOrCreate(
+        User::updateOrCreate(
             ['email' => 'driver@deliverex.ph'],
             [
                 'role_id' => $driverRole?->id,
@@ -65,17 +85,15 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        Driver::firstOrCreate(
-            ['user_id' => $driverUser->id],
-            [
-                'license_no' => 'LIC-DEMO-0001',
-                'availability' => 'available',
-            ]
-        );
-
         $this->call([
-            DemoDataSeeder::class,
-            DispatchDemoSeeder::class,
+            VehicleTypeSeeder::class,
+            MaterialMasterSeeder::class,
+            ClientMasterSeeder::class,
+            QuarryMasterSeeder::class,
+            ClientPreferenceSeeder::class,
+            VehicleMasterSeeder::class,
+            DriverMasterSeeder::class,
+            DriverVehicleAssignmentSeeder::class,
         ]);
     }
 }

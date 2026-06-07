@@ -1,11 +1,9 @@
-import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import ChatFab from '../components/ChatFab'
+import { NavLink, Outlet } from 'react-router-dom'
 import LogoutButton from '../components/LogoutButton'
 import useAuth from '../hooks/useAuth'
 import {
-  Bell, Bot, ChevronRight, ClipboardList, FileSearch,
-  LayoutDashboard, LogOut, Settings, Shield, Users,
+  Bell, Bot, ClipboardList, FileSearch,
+  LayoutDashboard, Settings, Shield, Users,
 } from 'lucide-react'
 
 const navCls = ({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`
@@ -13,18 +11,16 @@ const navCls = ({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`
 const NAV = [
   { to: '/admin',            label: 'Dashboard',         Icon: LayoutDashboard, end: true },
   { to: '/admin/job-orders',     label: 'Job Orders',      Icon: ClipboardList },
-  { to: '/admin/dispatch-best-fit', label: 'Fleet Dispatch', Icon: Shield },
-  { to: '/admin/ocr-validation', label: 'OCR Validation', Icon: FileSearch },
+  { to: '/admin/ocr-validation', label: 'OCR Review', Icon: FileSearch },
   { to: '/admin/master-data',    label: 'Master Data',    Icon: Settings },
-  { to: '/admin/users',          label: 'Users & Roles',  Icon: Users },
-  { to: '/admin/chatbot',        label: 'Chatbot',        Icon: Bot },
+  { to: '/admin/users',          label: 'User Management',  Icon: Users },
+  { to: '/admin/chatbot',        label: 'Chatbot Management',        Icon: Bot },
   { to: '/admin/audit-logs',     label: 'Audit Logs',     Icon: ClipboardList },
   { to: '/admin/notifications',  label: 'Notifications',  Icon: Bell },
 ]
 
 function AdminLayout() {
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
+  const { user } = useAuth()
 
   const initials = user?.name
     ? user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
@@ -80,7 +76,6 @@ function AdminLayout() {
           <Outlet />
         </main>
       </div>
-      <ChatFab />
     </div>
   )
 }

@@ -1,0 +1,34 @@
+/**
+ * Shared helpers for displaying Job Order customer names and addresses.
+ * Uses structured fields when present; falls back to legacy combined fields
+ * for older records created before the migration.
+ */
+
+/** Build a display-ready full name from structured parts or legacy field. */
+export function buildDisplayName(order) {
+  if (order?.customer_first_name || order?.customer_last_name) {
+    return [
+      order.customer_first_name,
+      order.customer_middle_name,
+      order.customer_last_name,
+      order.customer_suffix,
+    ].filter(Boolean).join(' ')
+  }
+  return order?.customer_name || ''
+}
+
+/**
+ * Build a display-ready address from structured parts or legacy combined field.
+ * @param {'pickup'|'dropoff'} prefix
+ * @param {object} order  job order record
+ */
+export function buildDisplayAddress(prefix, order) {
+  const street = order?.[`${prefix}_street`]
+  const barangay = order?.[`${prefix}_barangay`]
+  const city = order?.[`${prefix}_city`]
+  const province = order?.[`${prefix}_province`]
+  if (street || city) {
+    return [street, barangay, city, province].filter(Boolean).join(', ')
+  }
+  return order?.[`${prefix}_location`] || ''
+}

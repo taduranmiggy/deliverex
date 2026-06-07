@@ -16,11 +16,22 @@ class DriverController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'license_no' => 'required|string|max:60',
+            'user_id' => 'nullable|exists:users,id',
+            'full_name' => 'required|string|max:160',
+            'license_no' => 'nullable|string|max:60',
+            'license_expiry' => 'nullable|date',
             'availability' => 'nullable|in:available,busy,offline',
+            'status' => 'nullable|in:available,assigned,in_use,inactive',
         ]);
 
+        $data['full_name'] = trim($data['full_name']);
+        if (($data['license_no'] ?? null) !== null) {
+            $data['license_no'] = trim((string) $data['license_no']);
+            if ($data['license_no'] === '') {
+                $data['license_no'] = null;
+            }
+        }
+        $data['status'] = $data['status'] ?? ($data['availability'] ?? 'available');
         $driver = Driver::create($data);
 
         return response()->json($driver->load('user'), 201);
@@ -29,10 +40,20 @@ class DriverController extends Controller
     public function update(Request $request, Driver $driver)
     {
         $data = $request->validate([
+            'user_id' => 'nullable|exists:users,id',
+            'full_name' => 'sometimes|string|max:160',
             'license_no' => 'sometimes|string|max:60',
+            'license_expiry' => 'nullable|date',
             'availability' => 'nullable|in:available,busy,offline',
+            'status' => 'nullable|in:available,assigned,in_use,inactive',
         ]);
 
+        if (array_key_exists('full_name', $data)) {
+            $data['full_name'] = trim($data['full_name']);
+        }
+        if (array_key_exists('license_no', $data)) {
+            $data['license_no'] = trim((string) $data['license_no']) ?: null;
+        }
         $driver->update($data);
 
         return response()->json($driver->load('user'));
@@ -40,8 +61,10 @@ class DriverController extends Controller
 
     public function destroy(Driver $driver)
     {
-        $driver->delete();
-
-        return response()->json(['message' => 'Driver deleted']);
+        $driver->update([
+            'status' => 'inactive',
+            'availability' => 'offline',
+        ]);
+        return response()->json(['message' => 'Driver archived']);
     }
 }

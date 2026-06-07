@@ -26,7 +26,7 @@ class AssignmentController extends Controller
     public function index()
     {
         return response()->json(
-            DispatchAssignment::with('jobOrder', 'driver.user', 'vehicle')
+            DispatchAssignment::with('jobOrder', 'driver.user', 'vehicle.vehicleType')
                 ->latest()
                 ->paginate(20)
         );
@@ -67,11 +67,11 @@ class AssignmentController extends Controller
             return response()->json(['message' => 'This job order already has an active assignment.'], 422);
         }
 
-        if ($driver->availability === 'offline') {
+        if ($driver->availability === 'offline' || $driver->status === 'inactive') {
             return response()->json(['message' => 'Driver is offline and cannot be assigned.'], 422);
         }
 
-        if (in_array($vehicle->status, ['maintenance', 'unavailable'], true)) {
+        if (in_array($vehicle->status, ['maintenance', 'unavailable', 'inactive'], true)) {
             return response()->json(['message' => 'Vehicle is not dispatchable (maintenance or unavailable).'], 422);
         }
 
@@ -109,7 +109,7 @@ class AssignmentController extends Controller
 
         $jobOrder->update(['status' => 'assigned']);
 
-        $assignment = $assignment->load('jobOrder', 'driver.user', 'vehicle');
+        $assignment = $assignment->load('jobOrder', 'driver.user', 'vehicle.vehicleType');
 
         $this->notificationDispatcher->assignmentCreated($assignment);
 

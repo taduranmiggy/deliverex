@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { sendInquiry } from '../../api/customer'
+import { fetchCustomerOrders, sendInquiry } from '../../api/customer'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
+import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 import useAuth from '../../hooks/useAuth'
 import {
   ArrowRight, ChevronRight, HeadphonesIcon, HelpCircle,
@@ -14,12 +15,46 @@ function CustomerHomePage() {
   const [chatOpen, setChatOpen] = useState(false)
   const [trackCode, setTrackCode] = useState('')
   const [contactOpen, setContactOpen] = useState(false)
-  const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', pickup_location: '', dropoff_location: '', message: '' })
+  const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', inquiry_type: 'delivery_inquiry', reference_job_order_id: '', message: '' })
   const [contactSent, setContactSent] = useState(false)
   const [contactError, setContactError] = useState('')
   const [sending, setSending] = useState(false)
+  const [customerOrders, setCustomerOrders] = useState([])
+  const [loadingRefs, setLoadingRefs] = useState(false)
 
   const isCustomer = isAuthenticated && role === 'customer'
+
+  useEffect(() => {
+    if (!contactOpen) return
+
+    setContactForm((prev) => ({
+      ...prev,
+      name: user?.name ?? '',
+      email: user?.email ?? '',
+      phone: user?.phone ?? '',
+    }))
+
+    if (!isCustomer) return
+
+    let cancelled = false
+    setLoadingRefs(true)
+    fetchCustomerOrders()
+      .then((res) => {
+        if (!cancelled) {
+          setCustomerOrders(res?.data ?? [])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCustomerOrders([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRefs(false)
+      })
+
+    return () => { cancelled = true }
+  }, [contactOpen, isCustomer, user?.email, user?.name, user?.phone])
 
   const handleTrack = (e) => {
     e.preventDefault()
@@ -33,7 +68,10 @@ function CustomerHomePage() {
     setSending(true)
     setContactError('')
     try {
-      await sendInquiry(contactForm)
+      await sendInquiry({
+        ...contactForm,
+        reference_job_order_id: contactForm.reference_job_order_id ? Number(contactForm.reference_job_order_id) : null,
+      })
       setContactSent(true)
     } catch (err) {
       setContactError(err.message)
@@ -174,11 +212,47 @@ function CustomerHomePage() {
                   </div>
                 ) : (
                   <form className="form-grid" style={{ gridTemplateColumns: '1fr 1fr' }} onSubmit={handleContact}>
+                    <div style={{ gridColumn: '1 / -1', border: '1px solid var(--stroke)', borderRadius: 12, background: 'var(--surface-soft, #f8fafc)', padding: '12px 14px' }}>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem' }}>Official Contact Details</p>
+                      <p style={{ margin: '8px 0 0', color: 'var(--muted)', fontSize: '0.875rem' }}>
+                        Phone: <a href="tel:+639955820222" className="auth-inline-link">+639955820222</a>
+                      </p>
+                      <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.875rem' }}>
+                        Email: <a href="mailto:johannescanares28@gmail.com" className="auth-inline-link">johannescanares28@gmail.com</a>
+                      </p>
+                    </div>
                     <label style={{ gridColumn: '1 / -1' }}>Name <input required value={contactForm.name} onChange={set('name')} placeholder="Your name" /></label>
                     <label>Email <input required type="email" value={contactForm.email} onChange={set('email')} placeholder="you@example.com" /></label>
                     <label>Phone <input type="tel" value={contactForm.phone} onChange={set('phone')} placeholder="+63 9XX XXX XXXX" /></label>
-                    <label>Pickup Location <input value={contactForm.pickup_location} onChange={set('pickup_location')} placeholder="Where should we pick up?" /></label>
-                    <label>Drop-off Location <input value={contactForm.dropoff_location} onChange={set('dropoff_location')} placeholder="Where to deliver?" /></label>
+                    <label>
+                      Subject / Inquiry Type
+                      <select required value={contactForm.inquiry_type} onChange={set('inquiry_type')}>
+                        <option value="delivery_inquiry">Delivery Inquiry</option>
+                        <option value="complaint">Complaint</option>
+                        <option value="follow_up">Follow-up</option>
+                        <option value="general_question">General Question</option>
+                      </select>
+                    </label>
+                    <label>
+                      Reference Job (optional)
+                      <select
+                        value={contactForm.reference_job_order_id}
+                        onChange={set('reference_job_order_id')}
+                        disabled={!isCustomer || loadingRefs}
+                      >
+                        <option value="">{isCustomer ? '— Select Job Order ID —' : 'Sign in to link a job order'}</option>
+                        {customerOrders.map((order) => (
+                          <option key={order.id} value={order.id}>
+                            {order.tracking_code} ({buildDisplayAddress('pickup', order)} → {buildDisplayAddress('dropoff', order)})
+                          </option>
+                        ))}
+                      </select>
+                      {isCustomer && loadingRefs ? (
+                        <span style={{ display: 'block', marginTop: 6, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                          Loading your delivery references…
+                        </span>
+                      ) : null}
+                    </label>
                     <label style={{ gridColumn: '1 / -1' }}>Message <textarea required rows={3} value={contactForm.message} onChange={set('message')} placeholder="Tell us about your delivery needs…" /></label>
                     {contactError && <p className="notice error" style={{ margin: 0, gridColumn: '1 / -1' }}>{contactError}</p>}
                     <div style={{ display: 'flex', gap: 10, gridColumn: '1 / -1' }}>

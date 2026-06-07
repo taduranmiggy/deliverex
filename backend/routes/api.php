@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\DocumentFileController;
 use App\Http\Controllers\Admin\AuditLogsController;
 use App\Http\Controllers\Admin\DriverController as AdminDriverController;
+use App\Http\Controllers\Admin\MasterDataController as AdminMasterDataController;
 use App\Http\Controllers\Admin\OcrReviewController;
 use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Dispatcher\AssignmentController as DispatcherAssignment
 use App\Http\Controllers\Dispatcher\BestFitController;
 use App\Http\Controllers\Dispatcher\CalendarController;
 use App\Http\Controllers\Dispatcher\JobOrderController;
+use App\Http\Controllers\Dispatcher\MasterDataOptionsController;
 use App\Http\Controllers\Driver\AssignmentController as DriverAssignmentController;
 use App\Http\Controllers\Driver\ProfileController as DriverProfileController;
 use App\Http\Controllers\Driver\IssueController as DriverIssueController;
@@ -82,6 +84,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/vehicles/{vehicle}',   [AdminVehicleController::class, 'update']);
         Route::delete('/vehicles/{vehicle}',[AdminVehicleController::class, 'destroy']);
 
+        Route::get('/master-data',                              [AdminMasterDataController::class, 'index']);
+        Route::post('/master-data/{resource}',                  [AdminMasterDataController::class, 'upsert']);
+        Route::put('/master-data/{resource}/{id}',              [AdminMasterDataController::class, 'upsert']);
+        Route::delete('/master-data/{resource}/{id}',           [AdminMasterDataController::class, 'archive']);
+
         Route::get('/ocr/review',                       [OcrReviewController::class, 'index']);
         Route::put('/ocr/{ocrResult}/validate',         [OcrReviewController::class, 'validateResult']);
     });
@@ -108,6 +115,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/best-fit/{jobOrder}',           [BestFitController::class, 'show']);
         Route::get('/calendar',                      [CalendarController::class, 'index']);
+        Route::get('/master-data/options',           [MasterDataOptionsController::class, 'index']);
     });
 
     // ─── Driver ───────────────────────────────────────────────────────────────

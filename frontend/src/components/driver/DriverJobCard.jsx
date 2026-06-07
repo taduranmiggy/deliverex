@@ -3,6 +3,7 @@ import { Calendar, Car, ChevronRight, MapPin } from 'lucide-react'
 import DriverStatusChip from './DriverStatusChip'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobSchedule } from '../../utils/driverAssignment'
+import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 
 function DriverJobCard({ assignment, showCta = true }) {
   const job = assignment.job_order
@@ -12,10 +13,10 @@ function DriverJobCard({ assignment, showCta = true }) {
         <span className="da-job-card__id">{formatJobPublicId(assignment.job_order_id)}</span>
         <DriverStatusChip status={assignment.status} />
       </div>
-      <p className="da-job-card__client">{job?.customer_name ?? 'Client'}</p>
+      <p className="da-job-card__client">{buildDisplayName(job) || 'Client'}</p>
       <p className="da-job-card__row">
         <MapPin size={16} />
-        {job?.dropoff_location ?? '—'}
+        {buildDisplayAddress('dropoff', job) || '—'}
       </p>
       <p className="da-job-card__row">
         <Calendar size={16} />

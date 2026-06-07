@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import ChatFab from '../components/ChatFab'
 import useAuth from '../hooks/useAuth'
 import { ChevronDown, Home, HelpCircle, LogOut, MapPin, Package, Truck, User } from 'lucide-react'
 
@@ -103,7 +102,6 @@ function CustomerLayout() {
       </nav>
 
       <Outlet />
-      <ChatFab />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { fetchCalendarEvents, fetchJobOrder } from '../../api/dispatcher'
 import { EmptyState, PageHeader, StatusBadge } from '../../components/ui'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
+import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { AlertTriangle, Calendar, Search, X } from 'lucide-react'
 
 const locales = { 'en-US': enUS }
@@ -55,11 +56,13 @@ function EventDetailModal({ job, event, onClose }) {
             </p>
           )}
           <div className="dx-kv"><span>Client</span><strong>{event.customer_name ?? '—'}</strong></div>
-          <div className="dx-kv"><span>Delivery Type</span>
+          <div className="dx-kv"><span>Material Type</span>
             <strong style={{ textTransform: 'capitalize' }}>
-              {job?.delivery_type ? String(job.delivery_type).replace(/_/g, ' ') : event.delivery_type ? String(event.delivery_type).replace(/_/g, ' ') : '—'}
+              {job?.material_type ? String(job.material_type).replace(/_/g, ' ') : event.material_type ? String(event.material_type).replace(/_/g, ' ') : '—'}
             </strong>
           </div>
+          <div className="dx-kv"><span>Specification / Size</span><strong>{job?.specification_size ?? event.specification_size ?? '—'}</strong></div>
+          <div className="dx-kv"><span>Load Volume</span><strong>{job?.volume_m3 ?? event.volume_m3 ? `${job?.volume_m3 ?? event.volume_m3} m³` : '—'}</strong></div>
           <div className="dx-kv"><span>Pickup</span><strong>{event.pickup_location ?? job?.pickup_location ?? '—'}</strong></div>
           <div className="dx-kv"><span>Destination</span><strong>{event.dropoff_location ?? job?.dropoff_location ?? '—'}</strong></div>
           <div className="dx-kv"><span>Driver</span><strong>{event.driver_name ?? assignment?.driver?.user?.name ?? '—'}</strong></div>
@@ -308,14 +311,14 @@ function DispatcherCalendarPage() {
       setSelectedEvent({
         job_order_id: job.id,
         job_number: `JO-${new Date().getFullYear()}-${String(job.id).padStart(3, '0')}`,
-        customer_name: job.customer_name,
+        customer_name: buildDisplayName(job) || job.customer_name,
         status: job.status,
         category: job.status,
         start: job.scheduled_start,
         end: job.scheduled_end,
         tracking_code: job.tracking_code,
-        pickup_location: job.pickup_location,
-        dropoff_location: job.dropoff_location,
+        pickup_location: buildDisplayAddress('pickup', job) || job.pickup_location,
+        dropoff_location: buildDisplayAddress('dropoff', job) || job.dropoff_location,
       })
     } catch (err) {
       setError(err.message)

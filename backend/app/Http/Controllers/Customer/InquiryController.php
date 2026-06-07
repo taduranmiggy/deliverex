@@ -18,10 +18,37 @@ class InquiryController extends Controller
             'name'              => 'required|string|max:120',
             'email'             => 'required|email|max:255',
             'phone'             => 'nullable|string|max:50',
-            'pickup_location'   => 'nullable|string|max:255',
-            'dropoff_location'  => 'nullable|string|max:255',
+            'inquiry_type'      => 'required|string|in:delivery_inquiry,complaint,follow_up,general_question',
+            'reference_job_order_id' => 'nullable|integer|exists:job_orders,id',
             'message'           => 'required|string|max:2000',
         ]);
+        $data['email'] = Str::lower($data['email']);
+
+        $customer = $request->user();
+        if (! $customer && ! empty($data['reference_job_order_id'])) {
+            return response()->json([
+                'message' => 'Please sign in to attach a reference job order.',
+            ], 422);
+        }
+
+        if ($customer) {
+            $data['name'] = $data['name'] ?: $customer->name;
+            $data['email'] = strtolower($data['email'] ?: $customer->email);
+            $data['phone'] = $data['phone'] ?: $customer->phone;
+
+            if (! empty($data['reference_job_order_id'])) {
+                $jobExistsForCustomer = JobOrder::query()
+                    ->where('id', $data['reference_job_order_id'])
+                    ->where('customer_user_id', $customer->id)
+                    ->exists();
+
+                if (! $jobExistsForCustomer) {
+                    return response()->json([
+                        'message' => 'Reference job order is invalid for this account.',
+                    ], 422);
+                }
+            }
+        }
 
         $inquiry = Inquiry::create($data);
 
@@ -40,7 +67,8 @@ class InquiryController extends Controller
     {
         $status = $request->query('status'); // new | read | converted | all
 
-        $query = Inquiry::orderByDesc('created_at');
+        $query = Inquiry::with(['jobOrder:id,tracking_code', 'referenceJobOrder:id,tracking_code'])
+            ->orderByDesc('created_at');
 
         if ($status && $status !== 'all') {
             $query->where('status', $status);
@@ -52,7 +80,7 @@ class InquiryController extends Controller
     /** Admin/Dispatcher: view single inquiry. */
     public function show(Inquiry $inquiry)
     {
-        return response()->json($inquiry->load('jobOrder'));
+        return response()->json($inquiry->load('jobOrder:id,tracking_code', 'referenceJobOrder:id,tracking_code'));
     }
 
     /** Admin/Dispatcher: mark inquiry as read. */

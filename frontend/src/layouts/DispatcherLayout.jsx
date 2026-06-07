@@ -1,5 +1,4 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import ChatFab from '../components/ChatFab'
 import LogoutButton from '../components/LogoutButton'
 import useAuth from '../hooks/useAuth'
 import {
@@ -74,7 +73,6 @@ function DispatcherLayout() {
           <Outlet />
         </main>
       </div>
-      <ChatFab />
     </div>
   )
 }

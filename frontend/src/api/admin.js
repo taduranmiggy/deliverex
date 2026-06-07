@@ -45,6 +45,20 @@ export function createVehicle(payload)     { return apiRequest('/admin/vehicles'
 export function updateVehicle(id, payload) { return apiRequest(`/admin/vehicles/${id}`, { method: 'PUT', body: JSON.stringify(payload) }) }
 export function deleteVehicle(id)          { return apiRequest(`/admin/vehicles/${id}`, { method: 'DELETE' }) }
 
+// ─── Master Data ──────────────────────────────────────────────────────────────
+export function fetchMasterData() {
+  return apiRequest('/admin/master-data')
+}
+export function createMasterDataRecord(resource, payload) {
+  return apiRequest(`/admin/master-data/${resource}`, { method: 'POST', body: JSON.stringify(payload) })
+}
+export function updateMasterDataRecord(resource, id, payload) {
+  return apiRequest(`/admin/master-data/${resource}/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+export function archiveMasterDataRecord(resource, id) {
+  return apiRequest(`/admin/master-data/${resource}/${id}`, { method: 'DELETE' })
+}
+
 // ─── OCR ──────────────────────────────────────────────────────────────────────
 export function validateOcr(id, payload)   {
   return apiRequest(`/admin/ocr/${id}/validate`, { method: 'PUT', body: JSON.stringify(payload) })
