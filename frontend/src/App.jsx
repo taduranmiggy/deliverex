@@ -1,6 +1,7 @@
 import './App.css'
 import './deliverex-ui.css'
 import { AuthProvider } from './context/AuthContext'
+import { ToastProvider } from './context/ToastContext'
 import AppRouter from './routes/AppRouter'
 
 function App() {
@@ -10,7 +11,9 @@ function App() {
         Skip to main content
       </a>
       <AuthProvider>
-        <AppRouter />
+        <ToastProvider>
+          <AppRouter />
+        </ToastProvider>
       </AuthProvider>
     </>
   )

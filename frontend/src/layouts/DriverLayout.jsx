@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { DriverUiProvider } from '../context/DriverUiContext'
+import PageTransition from '../components/PageTransition'
 import { fetchNotifications } from '../api/notifications'
 import '../styles/driver-app.css'
 import { ArrowLeft, Bell, Briefcase, Camera, Home, Truck, User } from 'lucide-react'
@@ -84,9 +85,11 @@ function DriverLayoutInner() {
               </div>
             )}
           >
-            <div className="driver-app-content">
-              <Outlet />
-            </div>
+            <PageTransition style={{ display: 'contents' }}>
+              <div className="driver-app-content">
+                <Outlet />
+              </div>
+            </PageTransition>
           </Suspense>
         </main>
 

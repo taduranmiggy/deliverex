@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { fetchCustomerOrders, sendInquiry } from '../../api/customer'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 import useAuth from '../../hooks/useAuth'
 import {
-  ArrowRight, ChevronRight, HeadphonesIcon, HelpCircle,
-  History, MapPin, MessageSquare, Package, Search, Truck,
+  ChevronRight, HeadphonesIcon,
+  History, MapPin, MessageSquare, Package, Search,
 } from 'lucide-react'
 
 function CustomerHomePage() {
@@ -21,40 +21,53 @@ function CustomerHomePage() {
   const [sending, setSending] = useState(false)
   const [customerOrders, setCustomerOrders] = useState([])
   const [loadingRefs, setLoadingRefs] = useState(false)
+  const [ordersLoaded, setOrdersLoaded] = useState(false)
 
   const isCustomer = isAuthenticated && role === 'customer'
 
+  // Load customer orders once on mount for summary stats
+  useEffect(() => {
+    if (!isCustomer) return
+    let cancelled = false
+    setLoadingRefs(true)
+    fetchCustomerOrders()
+      .then((res) => { if (!cancelled) { setCustomerOrders(res?.data ?? []); setOrdersLoaded(true) } })
+      .catch(() => { if (!cancelled) { setCustomerOrders([]); setOrdersLoaded(true) } })
+      .finally(() => { if (!cancelled) setLoadingRefs(false) })
+    return () => { cancelled = true }
+  }, [isCustomer])
+
+  // Pre-fill contact form when opened
   useEffect(() => {
     if (!contactOpen) return
-
     setContactForm((prev) => ({
       ...prev,
       name: user?.name ?? '',
       email: user?.email ?? '',
       phone: user?.phone ?? '',
     }))
+  }, [contactOpen, user?.email, user?.name, user?.phone])
 
-    if (!isCustomer) return
+  const activeStatuses = ['pending', 'assigned', 'in_progress', 'arrived']
+  const now = new Date()
+  const thisMonth = { year: now.getFullYear(), month: now.getMonth() }
 
-    let cancelled = false
-    setLoadingRefs(true)
-    fetchCustomerOrders()
-      .then((res) => {
-        if (!cancelled) {
-          setCustomerOrders(res?.data ?? [])
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCustomerOrders([])
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingRefs(false)
-      })
-
-    return () => { cancelled = true }
-  }, [contactOpen, isCustomer, user?.email, user?.name, user?.phone])
+  const stats = useMemo(() => {
+    if (!ordersLoaded) return null
+    const active = customerOrders.filter((o) => activeStatuses.includes(o.status)).length
+    const inTransit = customerOrders.filter((o) => o.status === 'in_progress').length
+    const completedThisMonth = customerOrders.filter((o) => {
+      if (o.status !== 'completed') return false
+      const d = o.updated_at ? new Date(o.updated_at) : null
+      return d && d.getFullYear() === thisMonth.year && d.getMonth() === thisMonth.month
+    }).length
+    const delayed = customerOrders.filter((o) => {
+      if (!activeStatuses.includes(o.status)) return false
+      if (!o.scheduled_end) return false
+      return new Date(o.scheduled_end) < now
+    }).length
+    return { active, inTransit, completedThisMonth, delayed }
+  }, [customerOrders, ordersLoaded]) // eslint-disable-line
 
   const handleTrack = (e) => {
     e.preventDefault()
@@ -86,55 +99,69 @@ function CustomerHomePage() {
     <div>
       {/* ── Hero Section ── */}
       <section style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%)',
-        padding: '60px 24px 80px',
+        background: 'linear-gradient(160deg, #0f172a 0%, #1e3a8a 60%, #1d4ed8 100%)',
+        padding: isCustomer ? '48px 24px 72px' : '64px 24px 88px',
         color: '#fff',
       }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr auto', gap: 40, alignItems: 'center' }}>
-          <div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.12)', borderRadius: 99, padding: '5px 14px', fontSize: '0.8125rem', fontWeight: 600, marginBottom: 20 }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />
-              Real-time tracking active
-            </div>
-            <h1 style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.75rem)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.15, marginBottom: 16, color: '#fff' }}>
+        <div style={{ maxWidth: 860, margin: '0 auto' }}>
+
+          {/* Greeting */}
+          <div style={{ marginBottom: 24 }}>
+            <h1 style={{ fontSize: 'clamp(1.625rem, 3vw, 2.5rem)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1.18, marginBottom: 10, color: '#fff' }}>
               {isCustomer
-                ? <>Welcome back,<br /><span style={{ color: '#93c5fd' }}>{user?.name} 👋</span></>
-                : <>Track and verify your<br />site deliveries</>
+                ? <>Welcome back, <span style={{ color: '#93c5fd' }}>{user?.name}</span></>
+                : <>Track and manage<br />your site deliveries</>
               }
             </h1>
-            <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '1.0625rem', maxWidth: 480, lineHeight: 1.6, marginBottom: 32 }}>
+            <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '1rem', lineHeight: 1.6, maxWidth: 520 }}>
               {isCustomer
-                ? 'Track your deliveries in real-time, view delivery history, and stay updated every step of the way.'
-                : 'Get live status, ETA windows, and proof-of-delivery confirmation for every shipment.'}
-            </p>
-
-            {/* Quick track */}
-            <form onSubmit={handleTrack} style={{ display: 'flex', gap: 8, maxWidth: 480 }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.5)', pointerEvents: 'none' }} />
-                <input
-                  type="text"
-                  placeholder="Enter tracking ID…"
-                  value={trackCode}
-                  onChange={(e) => setTrackCode(e.target.value)}
-                  style={{ width: '100%', padding: '13px 14px 13px 40px', borderRadius: 12, border: '1.5px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '0.9375rem', backdropFilter: 'blur(10px)' }}
-                />
-              </div>
-              <button type="submit" className="btn-dx-primary" style={{ padding: '13px 22px', borderRadius: 12, background: '#fff', color: '#1e3a8a', border: 'none', fontWeight: 700, flexShrink: 0 }}>
-                Track
-              </button>
-            </form>
-            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem', marginTop: 10 }}>
-              Example: XKFP2NQRLA
+                ? 'Manage your deliveries, monitor shipment progress, and access your delivery history — all from one place.'
+                : 'Enter a tracking ID to get status, estimated arrival, and proof-of-delivery for any shipment.'}
             </p>
           </div>
 
-          {/* Hero illustration */}
-          <div style={{ display: 'none' }} className="hero-illustration" aria-hidden>
-            <div style={{ width: 280, height: 200, background: 'rgba(255,255,255,0.08)', borderRadius: 20, backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Truck size={64} style={{ opacity: 0.4 }} />
+          {/* Primary action — Tracking input */}
+          <form onSubmit={handleTrack} style={{ display: 'flex', gap: 8, maxWidth: 520, marginBottom: 10 }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.45)', pointerEvents: 'none' }} />
+              <input
+                type="text"
+                placeholder="Enter tracking ID…"
+                value={trackCode}
+                onChange={(e) => setTrackCode(e.target.value)}
+                style={{ width: '100%', padding: '13px 14px 13px 42px', borderRadius: 12, border: '1.5px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.09)', color: '#fff', fontSize: '0.9375rem', backdropFilter: 'blur(10px)', outline: 'none' }}
+              />
             </div>
-          </div>
+            <button type="submit" style={{ padding: '0 24px', borderRadius: 12, background: '#fff', color: '#1e3a8a', border: 'none', fontWeight: 700, fontSize: '0.9375rem', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+              Track Shipment
+            </button>
+          </form>
+          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.8125rem' }}>e.g. XKFP2NQRLA</p>
+
+          {/* Delivery summary stats — authenticated customers only */}
+          {isCustomer && stats && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 32 }}>
+              {[
+                { label: 'Active Deliveries', value: stats.active, color: '#60a5fa', bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.25)' },
+                { label: 'In Transit', value: stats.inTransit, color: '#34d399', bg: 'rgba(52,211,153,0.12)', border: 'rgba(52,211,153,0.25)' },
+                { label: 'Completed This Month', value: stats.completedThisMonth, color: '#a78bfa', bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.25)' },
+                { label: 'Delayed', value: stats.delayed, color: stats.delayed > 0 ? '#f87171' : 'rgba(255,255,255,0.5)', bg: stats.delayed > 0 ? 'rgba(248,113,113,0.12)' : 'rgba(255,255,255,0.06)', border: stats.delayed > 0 ? 'rgba(248,113,113,0.3)' : 'rgba(255,255,255,0.1)' },
+              ].map(({ label, value, color, bg, border }) => (
+                <div key={label} className="dx-hero-stat" style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: '14px 16px' }}>
+                  <p style={{ margin: '0 0 6px', fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.02em' }}>{label}</p>
+                  <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color, lineHeight: 1 }}>{value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {isCustomer && !stats && loadingRefs && (
+            <div style={{ marginTop: 28, display: 'flex', gap: 12 }}>
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} style={{ flex: 1, height: 72, borderRadius: 12, background: 'rgba(255,255,255,0.07)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -266,22 +293,42 @@ function CustomerHomePage() {
           </div>
         )}
 
-        {/* Features */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginTop: 8 }}>
-          {[
-            { icon: MapPin, title: 'Real-Time Tracking', desc: 'Live status updates from dispatch to delivery completion.' },
-            { icon: Truck, title: 'Fleet Management', desc: 'Complete fleet visibility for all active deliveries.' },
-            { icon: Package, title: 'Proof of Delivery', desc: 'Digital confirmation and documents for every shipment.' },
-          ].map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="card">
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--color-primary-light)', display: 'grid', placeItems: 'center', marginBottom: 14 }}>
-                <Icon size={22} style={{ color: 'var(--color-primary)' }} />
+        {/* Feature cards — guest only; authenticated customers see their live stats above */}
+        {!isCustomer && (
+          <div className="dx-feature-cards">
+            {[
+              {
+                icon: MapPin,
+                title: 'Delivery Tracking',
+                desc: 'Monitor delivery progress from dispatch to completion.',
+                color: 'var(--color-primary)',
+                bg: 'var(--color-primary-light)',
+              },
+              {
+                icon: Package,
+                title: 'Proof of Delivery',
+                desc: 'Access delivery confirmation documents for completed shipments.',
+                color: '#7c3aed',
+                bg: '#ede9fe',
+              },
+              {
+                icon: History,
+                title: 'Delivery History',
+                desc: 'Review all past deliveries, dates, routes, and status records.',
+                color: '#0891b2',
+                bg: '#e0f2fe',
+              },
+            ].map(({ icon: Icon, title, desc, color, bg }) => (
+              <div key={title} className="dx-feature-card">
+                <div className="dx-feature-card__icon" style={{ background: bg, color }}>
+                  <Icon size={22} aria-hidden />
+                </div>
+                <p className="dx-feature-card__title">{title}</p>
+                <p className="dx-feature-card__desc">{desc}</p>
               </div>
-              <p style={{ fontWeight: 700, fontSize: '0.9375rem', marginBottom: 6 }}>{title}</p>
-              <p style={{ color: 'var(--muted)', fontSize: '0.875rem', lineHeight: 1.55 }}>{desc}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {!isCustomer && (
           <div style={{ marginTop: 32, textAlign: 'center', padding: '48px 24px', background: 'var(--surface)', borderRadius: 20, border: '1px solid var(--stroke)' }}>

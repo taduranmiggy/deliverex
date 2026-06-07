@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import LogoutButton from '../components/LogoutButton'
+import PageTransition from '../components/PageTransition'
 import useAuth from '../hooks/useAuth'
 import {
   BarChart3, Bell, History, LayoutDashboard, MapPin, TrendingUp,
@@ -47,11 +48,16 @@ function ManagerLayout() {
         </nav>
 
         <div className="profile">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div className="sidebar-user">
             <div className="topbar-avatar" style={{ flexShrink: 0 }}>{initials}</div>
-            <div style={{ minWidth: 0 }}>
-              <strong>{user?.name ?? 'Manager'}</strong>
-              <span>{user?.email ?? ''}</span>
+            <div className="sidebar-user__info">
+              <span className="sidebar-user__name">{user?.name ?? 'Manager'}</span>
+              <span
+                className="sidebar-user__email"
+                title={user?.email ?? ''}
+              >
+                {user?.email ?? ''}
+              </span>
             </div>
           </div>
           <LogoutButton />
@@ -69,7 +75,9 @@ function ManagerLayout() {
           </div>
         </header>
         <main id="main-content" tabIndex={-1} className="page-content">
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </main>
       </div>
     </div>

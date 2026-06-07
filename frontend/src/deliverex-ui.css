@@ -138,28 +138,72 @@
 }
 
 .profile {
-  padding: 16px 16px;
+  padding: 14px 16px 16px;
   border-top: 1px solid rgba(255,255,255,0.07);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
-.profile strong {
+/* Avatar + user info row */
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sidebar-user__info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sidebar-user__name {
+  display: block;
   font-size: 0.875rem;
   font-weight: 600;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.3;
 }
 
-.profile span {
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.45);
+.sidebar-user__email {
+  display: block;
+  font-size: 0.6875rem;
+  color: rgba(255,255,255,0.4);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-top: 1px;
+  line-height: 1.3;
+}
+
+/* Legacy selectors still work for any existing markup */
+.profile strong {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.profile span {
+  display: block;
+  font-size: 0.6875rem;
+  color: rgba(255,255,255,0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+  line-height: 1.3;
 }
 
 /* ── TOPBAR ──────────────────────────────────────────────── */
@@ -244,8 +288,9 @@
 
 .page-content {
   flex: 1;
-  padding: 24px 28px 40px;
+  padding: 28px 28px 48px;
   overflow-y: auto;
+  overflow-x: hidden;          /* prevent accidental horizontal overflow */
 }
 
 /* Legacy class compatibility */
@@ -489,22 +534,137 @@
 
 /* Legacy button compat */
 .btn-dx-logout {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 8px 12px;
   border-radius: 8px;
-  background: rgba(255,255,255,0.07);
-  color: rgba(255,255,255,0.65);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.6);
   border: 1px solid rgba(255,255,255,0.1);
   font: inherit;
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   width: 100%;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  text-align: center;
 }
-.btn-dx-logout:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.btn-dx-logout:hover {
+  background: rgba(239,68,68,0.15);
+  border-color: rgba(239,68,68,0.3);
+  color: #fca5a5;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL TOAST NOTIFICATION SYSTEM
+   Applies to all roles (Admin, Dispatcher, Manager, Customer).
+   Driver PWA uses its own .da-toast via DriverUiContext.
+═══════════════════════════════════════════════════════════ */
+
+@keyframes dx-toast-in {
+  from { opacity: 0; transform: translateX(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0)    scale(1);    }
+}
+
+.dx-toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  max-width: 380px;
+  width: calc(100vw - 40px);
+}
+
+.dx-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 14px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--stroke);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.05);
+  pointer-events: all;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  animation: dx-toast-in 0.2s cubic-bezier(0.22, 0.68, 0, 1.2) both;
+  min-width: 0;
+  border-left-width: 4px;
+  border-left-style: solid;
+}
+
+.dx-toast--success { border-left-color: var(--color-success, #16a34a); }
+.dx-toast--error   { border-left-color: var(--color-error,   #dc2626); }
+.dx-toast--warning { border-left-color: #f59e0b; }
+.dx-toast--info    { border-left-color: var(--color-primary, #2563eb); }
+
+.dx-toast__icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.dx-toast--success .dx-toast__icon { color: var(--color-success, #16a34a); }
+.dx-toast--error   .dx-toast__icon { color: var(--color-error,   #dc2626); }
+.dx-toast--warning .dx-toast__icon { color: #f59e0b; }
+.dx-toast--info    .dx-toast__icon { color: var(--color-primary, #2563eb); }
+
+.dx-toast__msg {
+  flex: 1;
+  color: var(--text);
+  min-width: 0;
+}
+
+.dx-toast__close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  transition: background 0.12s, color 0.12s;
+  line-height: 1;
+}
+.dx-toast__close:hover {
+  background: var(--slate-100);
+  color: var(--text);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AUTH BOOTSTRAP LOADING SCREEN
+   Shown by ProtectedRoutes while session is being restored.
+═══════════════════════════════════════════════════════════ */
+
+.dx-boot-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg, #f8fafc);
+  z-index: 9998;
+}
+
+.dx-boot-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--muted, #64748b);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.dx-boot-spinner svg {
+  animation: spin 0.8s linear infinite;
+  color: var(--color-primary, #2563eb);
+}
 
 .dx-icon-btn {
   display: inline-flex;
@@ -1457,6 +1617,79 @@
   max-width: 1280px;
   margin: 0 auto;
   padding: 0 24px 48px;
+}
+
+/* ── Feature cards (guest landing) ──────────────────────── */
+.dx-feature-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.dx-feature-card {
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 28px 24px 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  transition: box-shadow 0.18s, transform 0.18s, border-color 0.18s;
+  animation: dx-fade-up 0.22s ease both;
+}
+.dx-feature-card:nth-child(1) { animation-delay: 0ms; }
+.dx-feature-card:nth-child(2) { animation-delay: 60ms; }
+.dx-feature-card:nth-child(3) { animation-delay: 120ms; }
+
+.dx-feature-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+  border-color: var(--slate-300);
+}
+
+.dx-feature-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 18px;
+  flex-shrink: 0;
+  transition: transform 0.18s;
+}
+.dx-feature-card:hover .dx-feature-card__icon {
+  transform: scale(1.08);
+}
+
+.dx-feature-card__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+
+.dx-feature-card__desc {
+  font-size: 0.875rem;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .dx-feature-cards {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
+@media (min-width: 480px) and (max-width: 768px) {
+  .dx-feature-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* Customer portal card */
@@ -2710,18 +2943,554 @@
   .btn-dx-primary, .btn-dx-secondary, .btn { min-height: 44px; }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   ANIMATION SYSTEM — Deliverex Motion Design
+   Philosophy: fast, subtle, enterprise SaaS. Nothing distracting.
+   All motion gated by prefers-reduced-motion at the bottom.
+═══════════════════════════════════════════════════════════ */
+
+/* ── Core keyframes ──────────────────────────────────────── */
+@keyframes dx-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dx-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes dx-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes dx-slide-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dx-shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position:  600px 0; }
+}
+@keyframes dx-pulse-dot {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+@keyframes dx-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(37,99,235,0.35); }
+  70%  { box-shadow: 0 0 0 6px rgba(37,99,235,0);  }
+  100% { box-shadow: 0 0 0 0 rgba(37,99,235,0);    }
+}
+@keyframes dx-progress-grow {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+
+/* ── Page entrance ───────────────────────────────────────── */
+/* Applied by PageTransition wrapper on every route change   */
+.dx-page-enter {
+  animation: dx-fade-up 0.2s ease both;
+}
+
+/* ── Stat card staggered entrance ────────────────────────── */
+.dx-stat-row .dx-stat-card {
+  animation: dx-fade-up 0.22s ease both;
+}
+.dx-stat-row .dx-stat-card:nth-child(1) { animation-delay: 0ms; }
+.dx-stat-row .dx-stat-card:nth-child(2) { animation-delay: 45ms; }
+.dx-stat-row .dx-stat-card:nth-child(3) { animation-delay: 90ms; }
+.dx-stat-row .dx-stat-card:nth-child(4) { animation-delay: 135ms; }
+.dx-stat-row .dx-stat-card:nth-child(5) { animation-delay: 180ms; }
+.dx-stat-row .dx-stat-card:nth-child(6) { animation-delay: 225ms; }
+
+/* ── Panel + card entrance ───────────────────────────────── */
+.dx-panel  { animation: dx-fade-up 0.2s ease both; }
+.card      { animation: dx-fade-up 0.2s ease both; }
+
+/* ── Table row entrance + stagger ────────────────────────── */
+.dx-data-table tbody tr {
+  animation: dx-fade-in 0.18s ease both;
+}
+.dx-data-table tbody tr:nth-child(1)  { animation-delay: 0ms;  }
+.dx-data-table tbody tr:nth-child(2)  { animation-delay: 25ms; }
+.dx-data-table tbody tr:nth-child(3)  { animation-delay: 50ms; }
+.dx-data-table tbody tr:nth-child(4)  { animation-delay: 75ms; }
+.dx-data-table tbody tr:nth-child(5)  { animation-delay: 100ms; }
+.dx-data-table tbody tr:nth-child(6)  { animation-delay: 125ms; }
+.dx-data-table tbody tr:nth-child(n+7){ animation-delay: 150ms; }
+
+/* Richer row hover */
+.dx-data-table tbody tr {
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.dx-data-table tbody tr:hover {
+  background: var(--color-primary-light);
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+/* ── Modal upgrade: scale-in + backdrop ─────────────────── */
+.dx-modal-backdrop {
+  animation: dx-fade-in 0.16s ease both;
+}
+.dx-modal {
+  animation: dx-scale-in 0.2s cubic-bezier(0.34,1.1,0.64,1) both;
+}
+
+/* ── Notice / alert fade in ──────────────────────────────── */
+.notice { animation: dx-fade-in 0.2s ease both; }
+
+/* ── Dropdown / combobox slide down ─────────────────────── */
+[role="listbox"] {
+  animation: dx-slide-down 0.14s ease both;
+}
+.customer-user-dropdown {
+  animation: dx-slide-down 0.15s ease both;
+}
+
+/* ── Status badge active pulse ───────────────────────────── */
+/* in_progress / en-route — slow pulse dot, not aggressive  */
+.badge-dx--enroute::before {
+  animation: dx-pulse-dot 2s ease-in-out infinite;
+}
+/* syncing / processing states */
+.badge-dx--dispatched::before {
+  animation: dx-pulse-dot 2.4s ease-in-out infinite;
+}
+/* Notification dot pulse ring */
+.topbar-notif-badge {
+  animation: dx-pulse-ring 2s ease-out infinite;
+}
+.dx-notif-dot {
+  animation: dx-pulse-ring 2s ease-out infinite;
+}
+
+/* ── Button press scale ──────────────────────────────────── */
+.btn-dx-primary:active  { transform: scale(0.97) translateY(0); transition-duration: 0.05s; }
+.btn-dx-secondary:active { transform: scale(0.97);             transition-duration: 0.05s; }
+
+/* ── Card lift upgrade ───────────────────────────────────── */
+.card      { transition: box-shadow 0.18s, transform 0.18s; }
+.card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.dx-kpi-card  { transition: box-shadow 0.18s, transform 0.18s; }
+.dx-kpi-card:hover  { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.dx-chart-card { transition: box-shadow 0.18s, transform 0.18s; }
+.dx-chart-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+
+/* ── Sidebar link active indicator ──────────────────────── */
+/* Subtle left-border gutter on active item, no layout shift */
+.sidebar-link { transition: background 0.15s, color 0.15s; }
+.sidebar-link.active {
+  box-shadow: inset 3px 0 0 #60a5fa;
+}
+
+/* ── Skeleton loading ────────────────────────────────────── */
+.dx-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--slate-100) 25%,
+    var(--slate-200) 50%,
+    var(--slate-100) 75%
+  );
+  background-size: 600px 100%;
+  border-radius: var(--radius-md);
+  animation: dx-shimmer 1.5s ease-in-out infinite;
+}
+.dx-skeleton-text {
+  height: 13px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  animation: dx-shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(90deg, var(--slate-100) 25%, var(--slate-200) 50%, var(--slate-100) 75%);
+  background-size: 600px 100%;
+}
+.dx-skeleton-text:last-child { width: 65%; }
+.dx-skeleton-avatar {
+  border-radius: 50%;
+  animation: dx-shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(90deg, var(--slate-100) 25%, var(--slate-200) 50%, var(--slate-100) 75%);
+  background-size: 600px 100%;
+}
+
+/* Skeleton row helper — use inside a table/list while loading */
+.dx-skeleton-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--stroke);
+}
+.dx-skeleton-row + .dx-skeleton-row { animation-delay: 0.15s; }
+
+/* ── Tracking timeline entrance ──────────────────────────── */
+.tracking-timeline li {
+  animation: dx-fade-up 0.2s ease both;
+}
+.tracking-timeline li:nth-child(1) { animation-delay: 0ms;   }
+.tracking-timeline li:nth-child(2) { animation-delay: 70ms;  }
+.tracking-timeline li:nth-child(3) { animation-delay: 140ms; }
+.tracking-timeline li:nth-child(4) { animation-delay: 210ms; }
+.tracking-timeline li:nth-child(5) { animation-delay: 280ms; }
+.tracking-timeline li:nth-child(n+6) { animation-delay: 350ms; }
+
+/* Tracking card entrance */
+.tracking-card {
+  animation: dx-fade-up 0.22s ease both;
+}
+.tracking-card:nth-of-type(2) { animation-delay: 60ms; }
+
+/* ── Customer hero stat cards ────────────────────────────── */
+/* Hero stats (inline-styled divs in CustomerHomePage) */
+/* Use utility class dx-hero-stat on each stat card */
+.dx-hero-stat {
+  animation: dx-fade-up 0.22s ease both;
+}
+.dx-hero-stat:nth-child(1) { animation-delay: 100ms; }
+.dx-hero-stat:nth-child(2) { animation-delay: 150ms; }
+.dx-hero-stat:nth-child(3) { animation-delay: 200ms; }
+.dx-hero-stat:nth-child(4) { animation-delay: 250ms; }
+
+/* ── Empty state ─────────────────────────────────────────── */
+.dx-empty-state { animation: dx-fade-in 0.3s ease both; }
+.dx-why-box { animation: dx-fade-in 0.25s ease both; }
+
+/* ── Job cards (Best-Fit page) ───────────────────────────── */
+.dx-job-card {
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+.dx-job-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.07);
+  transform: translateX(2px);
+}
+
+/* ── Detail panel slide in ───────────────────────────────── */
+.dx-detail-panel {
+  animation: dx-fade-up 0.2s ease both;
+}
+
+/* ── Bestfit banner ──────────────────────────────────────── */
+.dx-bestfit-banner {
+  animation: dx-fade-in 0.2s ease both;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   QUICK NAVIGATION CARD — Admin Dashboard
+   Polished, clickable items with hover/focus/active states.
+═══════════════════════════════════════════════════════════ */
+
+.dx-quicknav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  margin: 0 -12px;
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, transform 0.12s;
+  cursor: pointer;
+  border-bottom: 1px solid var(--stroke);
+  position: relative;
+}
+
+.dx-quicknav-item:last-child {
+  border-bottom: none;
+}
+
+.dx-quicknav-item:hover {
+  background: #eff6ff;
+  color: var(--color-primary);
+}
+
+.dx-quicknav-item:hover .dx-quicknav-item__label {
+  color: var(--color-primary);
+}
+
+.dx-quicknav-item:hover .dx-quicknav-item__arrow {
+  transform: translateX(3px);
+  color: var(--color-primary);
+}
+
+.dx-quicknav-item:active {
+  background: #dbeafe;
+  transform: scale(0.99);
+}
+
+.dx-quicknav-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  background: #eff6ff;
+}
+
+.dx-quicknav-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dx-quicknav-item__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+  transition: color 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dx-quicknav-item__hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dx-quicknav-item__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.dx-quicknav-item__arrow {
+  color: var(--muted);
+  transition: transform 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.dx-quicknav-badge {
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--slate-100);
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.dx-quicknav-badge--urgent {
+  background: #fef3c7;
+  color: #92400e;
+  animation: dx-pulse-dot 2s ease-in-out infinite;
+}
+
+/* ── Admin read-only notice ──────────────────────────────── */
+.dx-readonly-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.dx-readonly-notice svg {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AUDIT LOGS TABLE — compact, scrollable, sticky header
+═══════════════════════════════════════════════════════════ */
+
+/* Scrollable container — table stays inside, page doesn't grow */
+.dx-audit-table-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 560px;
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+}
+
+/* Sticky header inside the scrollable wrap */
+.dx-audit-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--slate-50);
+  border-bottom: 2px solid var(--stroke);
+}
+
+/* Compact table variant */
+.dx-data-table--compact thead th {
+  padding: 10px 14px;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.dx-data-table--compact tbody td {
+  padding: 10px 14px;
+  font-size: 0.8125rem;
+}
+
+/* Clickable audit row */
+.dx-audit-row {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.dx-audit-row:hover {
+  background: #eff6ff !important;
+}
+.dx-audit-row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* Remove outer table border since wrap has it */
+.dx-audit-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.dx-audit-table-wrap .dx-data-table-wrap {
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+/* Pagination button micro-size */
+.btn-sm {
+  padding: 5px 10px !important;
+  font-size: 0.8125rem !important;
+  height: auto !important;
+  min-height: 0 !important;
+  border-radius: 7px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL SPACING & LAYOUT POLISH
+   Applied after audit of all role dashboards.
+═══════════════════════════════════════════════════════════ */
+
+/* ── Consistent panel stack spacing ─────────────────────── */
+.dx-panel + .dx-panel { margin-top: 0; }        /* gap is handled by parent grid/flex */
+.dx-stat-row { margin-bottom: 28px; }
+
+/* Prevent any container from causing horizontal scroll */
+.dx-split-bestfit,
+.dx-data-table-wrap,
+.dx-panel,
+.card,
+.customer-content {
+  max-width: 100%;
+}
+
+/* ── Page header consistency ─────────────────────────────── */
+.page-header {
+  padding-bottom: 4px;
+}
+.header-stack h1 {
+  font-size: 1.5rem;
+}
+.header-stack p {
+  margin-top: 2px;
+}
+
+/* ── Form grid: collapse to 1 column on narrow screens ───── */
+@media (max-width: 600px) {
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .form-grid label[style*="gridColumn"] {
+    grid-column: 1 !important;
+  }
+  .page-content {
+    padding: 16px 16px 40px;
+  }
+}
+
+/* ── Table padding upgrade ───────────────────────────────── */
+.dx-data-table thead th {
+  padding: 12px 16px;
+}
+.dx-data-table tbody td {
+  padding: 14px 16px;
+}
+
+/* ── Notice spacing ──────────────────────────────────────── */
+.notice { margin-bottom: 20px; }
+
+/* ── Topbar active route breadcrumb ─────────────────────── */
+.topbar { gap: 12px; }
+
+/* ── Section card (customer portal) ─────────────────────── */
+.dx-section-gap { margin-bottom: 28px; }
+
+/* ── Sidebar nav gap — slightly more breathing room ──────── */
+.sidebar nav {
+  padding: 10px 10px;
+  gap: 3px;
+}
+
+/* ── Brand block bottom margin ───────────────────────────── */
+.sidebar-brand-block {
+  padding: 18px 16px 14px;
+}
+
+/* ── Sidebar role label refinement ──────────────────────── */
+.sidebar-role-label {
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+}
+
+/* ── Sidebar active item — blue-gutter indicator ─────────── */
+/* Already applied via .sidebar-link.active { box-shadow: inset 3px 0 0 #60a5fa } */
+/* This gives a visible tab-stop indicator without layout shift */
+
+/* ── Tables: sticky header for long lists ────────────────── */
+.dx-data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--slate-50);
+}
+
+/* ── Quick-action row spacing ────────────────────────────── */
+.dx-action-row {
+  gap: 12px;
+  padding-top: 16px;
+}
+
+/* ── Detail panel body padding ───────────────────────────── */
+.dx-detail-panel__body {
+  padding: 20px 20px 24px;
+}
+
+/* ── Responsive: hide sidebar on very narrow viewports ─────  */
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 200px 1fr;
+  }
+  .brand { font-size: 1rem; }
+  .sidebar-link { font-size: 0.8125rem; padding: 8px 10px; gap: 8px; }
+}
+
 /* ── Reduced motion: neutralise identity-layer motion ────── */
 @media (prefers-reduced-motion: reduce) {
+  .dx-page-enter,
   .page-content, .customer-content, .tracking-page, .driver-page,
   .card, .dx-panel, .dx-stat-card, .dx-kpi-card, .dx-chart-card,
   .customer-card, .tracking-card, .dx-detail-panel, .dx-modal,
-  .customer-user-dropdown {
+  .customer-user-dropdown, .dx-stat-row .dx-stat-card,
+  .dx-data-table tbody tr, .notice, [role="listbox"],
+  .tracking-timeline li, .dx-empty-state, .dx-why-box,
+  .dx-bestfit-banner, .dx-hero-stat, .dx-job-card,
+  .dx-toast, .dx-feature-card {
     animation: none !important;
+    animation-delay: 0ms !important;
   }
-  .badge-dx--enroute::before, .badge-dx--pending::before,
+  .badge-dx--enroute::before, .badge-dx--dispatched::before,
   .dx-pulse, .topbar-notif-badge, .dx-notif-dot,
   .driver-timeline-dot, .dx-bestfit-banner__icon,
-  .dx-empty-illustration::before, .dx-skeleton {
+  .dx-empty-illustration::before, .dx-skeleton,
+  .dx-skeleton-text, .dx-skeleton-avatar,
+  .dx-boot-spinner svg {
     animation: none !important;
   }
   .card:hover, .dx-panel:hover, .dx-kpi-card:hover, .dx-chart-card:hover,

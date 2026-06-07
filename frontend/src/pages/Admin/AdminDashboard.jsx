@@ -4,7 +4,7 @@ import { fetchAuditLogs, fetchDrivers, fetchOcrQueue, fetchUsers, fetchVehicles 
 import AssignmentAuditSection from '../../components/AssignmentAuditSection'
 import DriverPerformanceSection from '../../components/DriverPerformanceSection'
 import { EmptyState, PageHeader, SectionCard, StatCard } from '../../components/ui'
-import { Car, Code, FileSearch, Users } from 'lucide-react'
+import { Car, ChevronRight, Code, FileSearch, Users } from 'lucide-react'
 
 function AdminDashboard() {
   const [summary, setSummary]   = useState({ users: 0, drivers: 0, vehicles: 0, ocr: 0 })
@@ -80,23 +80,37 @@ function AdminDashboard() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <SectionCard title="Quick Navigation">
-            {[
-              { label: 'OCR Validation Queue', to: '/admin/ocr-validation', count: summary.ocr, urgent: summary.ocr > 0 },
-              { label: 'Manage Users and Roles', to: '/admin/users', count: summary.users },
-              { label: 'Master Data', to: '/admin/master-data', count: null },
-              { label: 'Audit Logs', to: '/admin/audit-logs', count: null },
-              { label: 'Chatbot Management', to: '/admin/chatbot', count: null },
-              { label: 'Notifications', to: '/admin/notifications', count: null },
-            ].map(({ label, to, count, urgent }) => (
-              <Link key={to} to={to} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--stroke)', color: 'var(--text)', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500 }}>
-                <span>{label}</span>
-                {count != null && (
-                  <span style={{ padding: '2px 8px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 700, background: urgent ? 'var(--color-warning-light)' : 'var(--slate-100)', color: urgent ? 'var(--color-warning)' : 'var(--muted)' }}>
-                    {count}
-                  </span>
-                )}
-              </Link>
-            ))}
+            <nav aria-label="Admin quick navigation">
+              {[
+                { label: 'OCR Validation Queue',  to: '/admin/ocr-validation', count: summary.ocr,   urgent: summary.ocr > 0, hint: 'Review scanned documents' },
+                { label: 'Job Orders',             to: '/admin/job-orders',     count: null,          hint: 'View and monitor orders' },
+                { label: 'Manage Users & Roles',   to: '/admin/users',          count: summary.users, hint: 'Accounts and permissions' },
+                { label: 'Master Data',            to: '/admin/master-data',    count: null,          hint: 'Clients, vehicles, quarries' },
+                { label: 'Audit Logs',             to: '/admin/audit-logs',     count: null,          hint: 'System activity history' },
+                { label: 'Chatbot Management',     to: '/admin/chatbot',        count: null,          hint: 'AI assistant configuration' },
+                { label: 'Notifications',          to: '/admin/notifications',  count: null,          hint: 'System alerts and messages' },
+              ].map(({ label, to, count, urgent, hint }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className="dx-quicknav-item"
+                  aria-label={label}
+                >
+                  <div className="dx-quicknav-item__body">
+                    <span className="dx-quicknav-item__label">{label}</span>
+                    {hint && <span className="dx-quicknav-item__hint">{hint}</span>}
+                  </div>
+                  <div className="dx-quicknav-item__right">
+                    {count != null && (
+                      <span className={`dx-quicknav-badge${urgent ? ' dx-quicknav-badge--urgent' : ''}`}>
+                        {count}
+                      </span>
+                    )}
+                    <ChevronRight size={15} className="dx-quicknav-item__arrow" aria-hidden />
+                  </div>
+                </Link>
+              ))}
+            </nav>
           </SectionCard>
         </div>
       </div>

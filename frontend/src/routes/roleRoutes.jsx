@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { Route, Navigate } from 'react-router-dom'
 import AdminDashboard from '../pages/Admin/AdminDashboard'
+import AdminJobOrdersPage from '../pages/Admin/AdminJobOrdersPage'
 import UserManagementPage from '../pages/Admin/UserManagementPage'
 import OcrReviewPage from '../pages/Admin/OcrReviewPage'
 import AdminMasterDataPage from '../pages/Admin/AdminMasterDataPage'
@@ -36,15 +37,15 @@ import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
 
 export const roleRoutes = {
   admin: [
-    <Route key="admin-home" index element={<AdminDashboard />} />,
-    <Route key="admin-ocr" path="ocr-validation" element={<OcrReviewPage />} />,
-    <Route key="admin-master" path="master-data" element={<AdminMasterDataPage />} />,
-    <Route key="admin-job-orders" path="job-orders" element={<CreateJobOrderPage />} />,
-    <Route key="admin-dispatch" path="dispatch-best-fit" element={<AssignDriverVehiclePage />} />,
-    <Route key="admin-users" path="users" element={<UserManagementPage />} />,
-    <Route key="admin-chatbot" path="chatbot" element={<AdminChatbotPage />} />,
-    <Route key="admin-audit" path="audit-logs" element={<AdminAuditLogsPage />} />,
-    <Route key="admin-notifs" path="notifications" element={<NotificationsPage />} />,
+    <Route key="admin-home"       index                  element={<AdminDashboard />} />,
+    <Route key="admin-ocr"        path="ocr-validation"  element={<OcrReviewPage />} />,
+    <Route key="admin-master"     path="master-data"     element={<AdminMasterDataPage />} />,
+    <Route key="admin-job-orders" path="job-orders"      element={<AdminJobOrdersPage />} />,
+    /* admin-dispatch intentionally removed — dispatch is Dispatcher-role only */
+    <Route key="admin-users"      path="users"           element={<UserManagementPage />} />,
+    <Route key="admin-chatbot"    path="chatbot"         element={<AdminChatbotPage />} />,
+    <Route key="admin-audit"      path="audit-logs"      element={<AdminAuditLogsPage />} />,
+    <Route key="admin-notifs"     path="notifications"   element={<NotificationsPage />} />,
   ],
   dispatcher: [
     <Route key="dispatcher-home" index element={<DispatcherDashboard />} />,

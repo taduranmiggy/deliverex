@@ -111,24 +111,31 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{inquiry}',            [InquiryController::class, 'destroy']);
     });
 
-    // ─── Dispatcher + Admin: job orders & fleet dispatch ─────────────────────
+    // ─── Dispatcher + Admin: READ-ONLY job order & assignment data ───────────
+    // Admin can view job orders and assignments for monitoring purposes only.
     Route::middleware('role:admin|dispatcher')->prefix('dispatch')->group(function () {
-        Route::get('/job-orders',                    [JobOrderController::class, 'index']);
-        Route::get('/job-orders/{jobOrder}',         [JobOrderController::class, 'show']);
-        Route::post('/job-orders',                   [JobOrderController::class, 'store']);
-        Route::put('/job-orders/{jobOrder}',         [JobOrderController::class, 'update']);
-        Route::delete('/job-orders/{jobOrder}',      [JobOrderController::class, 'destroy']);
+        Route::get('/job-orders',               [JobOrderController::class, 'index']);
+        Route::get('/job-orders/{jobOrder}',    [JobOrderController::class, 'show']);
+        Route::get('/assignments',              [DispatcherAssignmentController::class, 'index']);
+        Route::get('/master-data/options',      [MasterDataOptionsController::class, 'index']);
+        Route::get('/delays',                   [DispatcherDelayController::class, 'index']);
+    });
 
-        Route::get('/assignments',                   [DispatcherAssignmentController::class, 'index']);
-        Route::post('/assignments',                  [DispatcherAssignmentController::class, 'store']);
+    // ─── Dispatcher ONLY: write operations — Admin is intentionally excluded ─
+    // Assignment creation, job order mutation, and Best-Fit dispatch are
+    // restricted to the Dispatcher role. Admin receives 403 if attempted.
+    Route::middleware('role:dispatcher')->prefix('dispatch')->group(function () {
+        Route::post('/job-orders',                    [JobOrderController::class, 'store']);
+        Route::put('/job-orders/{jobOrder}',          [JobOrderController::class, 'update']);
+        Route::delete('/job-orders/{jobOrder}',       [JobOrderController::class, 'destroy']);
 
-        Route::get('/clients/{client}/history',      [ClientHistoryController::class, 'show']);
-        Route::get('/best-fit/{jobOrder}',           [BestFitController::class, 'show']);
-        Route::get('/calendar',                      [CalendarController::class, 'index']);
-        Route::get('/master-data/options',           [MasterDataOptionsController::class, 'index']);
-        Route::post('/master-data/material-types',   [MaterialMasterDataController::class, 'storeMaterialType']);
+        Route::post('/assignments',                   [DispatcherAssignmentController::class, 'store']);
+
+        Route::get('/clients/{client}/history',       [ClientHistoryController::class, 'show']);
+        Route::get('/best-fit/{jobOrder}',            [BestFitController::class, 'show']);
+        Route::get('/calendar',                       [CalendarController::class, 'index']);
+        Route::post('/master-data/material-types',    [MaterialMasterDataController::class, 'storeMaterialType']);
         Route::post('/master-data/material-specifications', [MaterialMasterDataController::class, 'storeMaterialSpecification']);
-        Route::get('/delays',                        [DispatcherDelayController::class, 'index']);
         Route::put('/delays/{delayReport}/acknowledge', [DispatcherDelayController::class, 'acknowledge']);
     });
 

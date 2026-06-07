@@ -4,6 +4,7 @@ import { createJobOrder, createMaterialSpecification, createMaterialType, delete
 import ClientCombobox from '../../components/ClientCombobox'
 import CreatableCombobox from '../../components/CreatableCombobox'
 import CustomerHistoryIntelligence from '../../components/CustomerHistoryIntelligence'
+import { useToast } from '../../context/ToastContext'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
 import {
@@ -479,198 +480,262 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
   }
 
   const fe = (k) => fieldErrors[k] ? (
-    <span className="notice error" style={{ display: 'block', marginTop: 4, fontSize: '0.8125rem', padding: '3px 8px' }}>
+    <span style={{ display: 'block', marginTop: 3, fontSize: '0.75rem', color: 'var(--color-error)', paddingLeft: 2 }}>
       {fieldErrors[k]}
     </span>
   ) : null
 
+  const Row = ({ children, style }) => <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px 14px', marginBottom: 10, ...style }}>{children}</div>
+
+  const Field = ({ label, span = 1, required, children, error: fieldErr }) => (
+    <label style={{ gridColumn: `span ${span}`, display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 0 }}>
+      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.02em' }}>
+        {label}{required ? <span style={{ color: 'var(--color-error)', marginLeft: 2 }}>*</span> : null}
+      </span>
+      {children}
+      {fieldErr && <span style={{ fontSize: '0.75rem', color: 'var(--color-error)' }}>{fieldErr}</span>}
+    </label>
+  )
+
+  const Sep = ({ label, hint }) => (
+    <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderBottom: '1px solid var(--stroke)', paddingBottom: 5, marginTop: 8, marginBottom: 2 }}>
+      <span style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>{label}</span>
+      {hint && <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>{hint}</span>}
+    </div>
+  )
+
   return (
-    <form className="dx-panel" style={{ marginTop: 20 }} onSubmit={(e) => { e.preventDefault(); submit(false) }}>
-      <h3 style={{ margin: '0 0 8px', fontSize: '1rem' }}>
-        {isEdit ? `Edit Job Order — ${formatJobPublicId(initial.id)}` : 'Create Job Order'}
-      </h3>
+    <div className="dx-panel" style={{ marginTop: 16, padding: '18px 20px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>
+            {isEdit ? `Edit Job Order — ${formatJobPublicId(initial.id)}` : 'New Job Order'}
+          </h3>
+          <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>
+            Fill in all required fields. Auto-filled fields come from client history or Master Data.
+          </p>
+        </div>
+        <button type="button" onClick={onCancel} style={{ border: 'none', background: 'none', fontSize: '1.25rem', color: 'var(--muted)', cursor: 'pointer', padding: '4px 8px', borderRadius: 6 }}>×</button>
+      </div>
 
-      <div className="form-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-        {/* ── Client ── */}
-        <SectionHeading hint="Search existing clients or type a new company name">Client</SectionHeading>
+      <form onSubmit={(e) => { e.preventDefault(); submit(false) }}>
 
-        <label style={{ gridColumn: '1 / -1' }}>
-          Client *
-          <ClientCombobox
-            clients={clients}
-            value={clientSelection}
-            onChange={handleClientChange}
-            loading={clientsLoading}
-            error={fieldErrors.client}
-          />
-          {fe('client')}
-        </label>
+        {/* ── ROW 1: Client + Contacts ── */}
+        <Row>
+          <Sep label="Client" hint="Search existing or type a new company name" />
+          <Field label="Client" span={2} required error={fieldErrors.client}>
+            <ClientCombobox
+              clients={clients}
+              value={clientSelection}
+              onChange={handleClientChange}
+              loading={clientsLoading}
+              error={fieldErrors.client}
+            />
+          </Field>
+          <Field label={<>Contact Person{autoFilled.contact_person && <AutoFilledTag />}</>}>
+            <input value={form.contact_person} onChange={set('contact_person')} placeholder="Optional" style={{ height: 41, padding: '0 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
+          </Field>
+          <Field label={<>Contact No.{autoFilled.customer_contact && <AutoFilledTag />}</>} error={fieldErrors.customer_contact}>
+            <input value={form.customer_contact} onChange={set('customer_contact')} style={{ height: 41, padding: '0 10px', border: `1.5px solid ${fieldErrors.customer_contact ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
+          </Field>
+        </Row>
+
+        <Row>
+          <Field label={<>Email{autoFilled.customer_email && <AutoFilledTag />}</>} span={2} error={fieldErrors.customer_email}>
+            <input type="email" value={form.customer_email} onChange={set('customer_email')} style={{ height: 41, padding: '0 10px', border: `1.5px solid ${fieldErrors.customer_email ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
+          </Field>
+          {isCustomClient && (
+            <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.8125rem', paddingTop: 22 }}>
+              <input type="checkbox" checked={form.save_as_client} onChange={set('save_as_client')} style={{ width: 'auto' }} />
+              Save to Master Data for future orders
+            </label>
+          )}
+        </Row>
 
         {form.client_id && (
-          <CustomerHistoryIntelligence history={clientHistory} loading={historyLoading} error={historyError} />
+          <div style={{ marginBottom: 10 }}>
+            <CustomerHistoryIntelligence history={clientHistory} loading={historyLoading} error={historyError} />
+          </div>
         )}
 
-        <label>
-          Contact Person{autoFilled.contact_person && <AutoFilledTag />}
-          <input value={form.contact_person} onChange={set('contact_person')} placeholder="Optional" />
-        </label>
-        <label>
-          Email{autoFilled.customer_email && <AutoFilledTag />}
-          <input type="email" value={form.customer_email} onChange={set('customer_email')} aria-invalid={fieldErrors.customer_email ? 'true' : undefined} />
-          {fe('customer_email')}
-        </label>
-        <label>
-          Contact Number{autoFilled.customer_contact && <AutoFilledTag />}
-          <input value={form.customer_contact} onChange={set('customer_contact')} aria-invalid={fieldErrors.customer_contact ? 'true' : undefined} />
-          {fe('customer_contact')}
-        </label>
+        {/* ── ROW 2: Source ── */}
+        <Row>
+          <Sep label="Source &amp; Material" hint="Auto-filled from history" />
+          <Field label={<>Quarry / Supplier{autoFilled.quarry_id && <AutoFilledTag />}</>}>
+            <select name="quarry_id" value={form.quarry_id} onChange={set('quarry_id')} style={{ height: 41, padding: '0 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }}>
+              <option value="">— Select quarry —</option>
+              {quarries.map((q) => <option key={q.id} value={q.id}>{q.quarry_name}</option>)}
+            </select>
+          </Field>
+          <Field label={<>Preferred Vehicle{autoFilled.preferred_vehicle_type_id && <AutoFilledTag />}</>}>
+            <select name="preferred_vehicle_type_id" value={form.preferred_vehicle_type_id} onChange={set('preferred_vehicle_type_id')} style={{ height: 41, padding: '0 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }}>
+              <option value="">— Best-Fit decides —</option>
+              {vehicleTypes.map((vt) => <option key={vt.id} value={vt.id}>{vt.name}{vt.wheel_type ? ` (${vt.wheel_type})` : ''}</option>)}
+            </select>
+          </Field>
+          <Field label={<>Material Type *{autoFilled.material_type_id && <AutoFilledTag />}</>} error={fieldErrors.material_type || materialTypeError}>
+            <CreatableCombobox
+              items={materialTypes}
+              getItemLabel={(item) => item.name}
+              value={materialTypeSelection}
+              onChange={handleMaterialTypeChange}
+              loading={clientsLoading}
+              saving={materialTypeSaving}
+              error={fieldErrors.material_type || materialTypeError || null}
+              success={materialTypeSuccess}
+              placeholder="Search or type…"
+              customOptionLabel={(q) => `Add: ${q}`}
+              emptyMessage="No material types yet."
+            />
+          </Field>
+          <Field label={<>Specification *{autoFilled.material_specification_id && <AutoFilledTag />}</>} error={fieldErrors.material_specification || specError}>
+            <CreatableCombobox
+              items={specOptions}
+              getItemLabel={(item) => item.name}
+              value={specSelection}
+              onChange={handleSpecChange}
+              saving={specSaving}
+              disabled={!form.material_type_id}
+              error={fieldErrors.material_specification || specError || null}
+              success={specSuccess}
+              placeholder={form.material_type_id ? 'Search or type…' : 'Pick material first'}
+              customOptionLabel={(q) => `Add: ${q}`}
+              emptyMessage="No specs for this material."
+            />
+          </Field>
+        </Row>
 
-        {isCustomClient && (
-          <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, flexDirection: 'row', cursor: 'pointer' }}>
-            <input type="checkbox" checked={form.save_as_client} onChange={set('save_as_client')} style={{ width: 'auto' }} />
-            Save this client to Master Data for future job orders
+        {/* ── ROW 3: Pickup + Dropoff side by side ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px', marginBottom: 10 }}>
+          {/* Pickup */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderBottom: '1px solid var(--stroke)', paddingBottom: 5, marginBottom: 8 }}>
+              <span style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>Pickup Source</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Optional if quarry selected</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 10px' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Province</span>
+                <input value={form.pickup_province} onChange={set('pickup_province')} placeholder="Optional" style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>City / Municipality</span>
+                <input value={form.pickup_city} onChange={set('pickup_city')} placeholder="Optional" style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Barangay</span>
+                <input value={form.pickup_barangay} onChange={set('pickup_barangay')} placeholder="Optional" style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Landmark</span>
+                <input value={form.pickup_landmark} onChange={set('pickup_landmark')} placeholder="Optional" style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: 'span 2' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Street / Site Details</span>
+                <input value={form.pickup_street} onChange={set('pickup_street')} placeholder="Optional if quarry selected" aria-invalid={fieldErrors.pickup_street ? 'true' : undefined}
+                  style={{ height: 38, padding: '0 9px', border: `1.5px solid ${fieldErrors.pickup_street ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
+                {fe('pickup_street')}
+              </label>
+            </div>
+          </div>
+
+          {/* Drop-off */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderBottom: '1px solid var(--stroke)', paddingBottom: 5, marginBottom: 8 }}>
+              <span style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>Delivery Destination</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Required</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 10px' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Province *</span>
+                <input value={form.dropoff_province} onChange={set('dropoff_province')} aria-invalid={fieldErrors.dropoff_province ? 'true' : undefined}
+                  style={{ height: 38, padding: '0 9px', border: `1.5px solid ${fieldErrors.dropoff_province ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
+                {autoFilled.dropoff_province && <AutoFilledTag />}
+                {fe('dropoff_province')}
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>City / Municipality *</span>
+                <input value={form.dropoff_city} onChange={set('dropoff_city')} aria-invalid={fieldErrors.dropoff_city ? 'true' : undefined}
+                  style={{ height: 38, padding: '0 9px', border: `1.5px solid ${fieldErrors.dropoff_city ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
+                {autoFilled.dropoff_city && <AutoFilledTag />}
+                {fe('dropoff_city')}
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Barangay</span>
+                <input value={form.dropoff_barangay} onChange={set('dropoff_barangay')} placeholder="Optional"
+                  style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Landmark</span>
+                <input value={form.dropoff_landmark} onChange={set('dropoff_landmark')} placeholder="Optional"
+                  style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: 'span 2' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Street / Site Details *</span>
+                <input value={form.dropoff_street} onChange={set('dropoff_street')} placeholder="e.g. Construction Site, EDSA cor. Shaw" aria-invalid={fieldErrors.dropoff_street ? 'true' : undefined}
+                  style={{ height: 38, padding: '0 9px', border: `1.5px solid ${fieldErrors.dropoff_street ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
+                {autoFilled.dropoff_street && <AutoFilledTag />}
+                {fe('dropoff_street')}
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* ── ROW 4: Schedule + Load + Priority ── */}
+        <Row>
+          <Sep label="Schedule &amp; Load" />
+          <Field label="Load Volume (m³) *" error={fieldErrors.load_volume_m3}>
+            <input type="number" step="0.001" min="0" value={form.load_volume_m3} onChange={set('load_volume_m3')} aria-invalid={fieldErrors.load_volume_m3 ? 'true' : undefined}
+              style={{ height: 41, padding: '0 10px', border: `1.5px solid ${fieldErrors.load_volume_m3 ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
+          </Field>
+          <Field label="Scheduled Start *" error={fieldErrors.scheduled_start}>
+            <input type="datetime-local" min={scheduleMin} value={form.scheduled_start} onChange={set('scheduled_start')} aria-invalid={fieldErrors.scheduled_start ? 'true' : undefined}
+              style={{ height: 41, padding: '0 10px', border: `1.5px solid ${fieldErrors.scheduled_start ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
+          </Field>
+          <Field label="Scheduled End" error={fieldErrors.scheduled_end}>
+            <input type="datetime-local" min={form.scheduled_start || scheduleMin} value={form.scheduled_end} onChange={set('scheduled_end')} aria-invalid={fieldErrors.scheduled_end ? 'true' : undefined}
+              style={{ height: 41, padding: '0 10px', border: `1.5px solid ${fieldErrors.scheduled_end ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
+          </Field>
+          <Field label="Priority">
+            <select name="priority" value={form.priority} onChange={set('priority')} style={{ height: 41, padding: '0 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }}>
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </Field>
+        </Row>
+
+        {/* ── ROW 5: Instructions ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px', marginBottom: 14 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.02em' }}>Special Handling Instructions</span>
+            <textarea rows="2" placeholder="Permits, handling, site access…" value={form.special_handling_instructions} onChange={set('special_handling_instructions')}
+              style={{ padding: '8px 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem', resize: 'vertical' }} />
           </label>
-        )}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.02em' }}>Notes</span>
+            <textarea rows="2" placeholder="Internal dispatcher notes…" value={form.notes} onChange={set('notes')}
+              style={{ padding: '8px 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem', resize: 'vertical' }} />
+          </label>
+        </div>
 
-        {/* ── Source / Pickup Details ── */}
-        <SectionHeading hint="Auto-filled from customer order history">Source / Pickup Details</SectionHeading>
-        <label>
-          Quarry / Supplier{autoFilled.quarry_id && <AutoFilledTag />}
-          <select name="quarry_id" value={form.quarry_id} onChange={set('quarry_id')}>
-            <option value="">— Select quarry / supplier —</option>
-            {quarries.map((q) => <option key={q.id} value={q.id}>{q.quarry_name}</option>)}
-          </select>
-        </label>
-        <label>
-          Preferred Vehicle Type{autoFilled.preferred_vehicle_type_id && <AutoFilledTag />}
-          <select name="preferred_vehicle_type_id" value={form.preferred_vehicle_type_id} onChange={set('preferred_vehicle_type_id')}>
-            <option value="">— Auto-determine by Best-Fit —</option>
-            {vehicleTypes.map((vt) => <option key={vt.id} value={vt.id}>{vt.name}{vt.wheel_type ? ` (${vt.wheel_type})` : ''}</option>)}
-          </select>
-        </label>
-        <label style={{ gridColumn: '1 / -1', fontSize: '0.8125rem', color: 'var(--muted)' }}>
-          Optionally specify a pickup source address if no quarry is selected:
-        </label>
-        <label>Province <input value={form.pickup_province} onChange={set('pickup_province')} placeholder="Optional if quarry chosen" /></label>
-        <label>City / Municipality <input value={form.pickup_city} onChange={set('pickup_city')} placeholder="Optional if quarry chosen" /></label>
-        <label>Barangay <input value={form.pickup_barangay} onChange={set('pickup_barangay')} placeholder="Optional" /></label>
-        <label>Landmark <input value={form.pickup_landmark} onChange={set('pickup_landmark')} placeholder="Optional" /></label>
-        <label style={{ gridColumn: '1 / -1' }}>
-          Street / Lot / Building / Site Details
-          <input value={form.pickup_street} onChange={set('pickup_street')} placeholder="Optional if quarry chosen" aria-invalid={fieldErrors.pickup_street ? 'true' : undefined} />
-          {fe('pickup_street')}
-        </label>
-
-        {/* ── Section 4: Delivery Destination ── */}
-        <SectionHeading>Delivery Destination</SectionHeading>
-        <label>
-          Province *{autoFilled.dropoff_province && <AutoFilledTag />}
-          <input value={form.dropoff_province} onChange={set('dropoff_province')} aria-invalid={fieldErrors.dropoff_province ? 'true' : undefined} />
-          {fe('dropoff_province')}
-        </label>
-        <label>
-          City / Municipality *{autoFilled.dropoff_city && <AutoFilledTag />}
-          <input value={form.dropoff_city} onChange={set('dropoff_city')} aria-invalid={fieldErrors.dropoff_city ? 'true' : undefined} />
-          {fe('dropoff_city')}
-        </label>
-        <label>Barangay{autoFilled.dropoff_barangay && <AutoFilledTag />} <input value={form.dropoff_barangay} onChange={set('dropoff_barangay')} placeholder="Optional" /></label>
-        <label>Landmark{autoFilled.dropoff_landmark && <AutoFilledTag />} <input value={form.dropoff_landmark} onChange={set('dropoff_landmark')} placeholder="Optional" /></label>
-        <label style={{ gridColumn: '1 / -1' }}>
-          Street / Lot / Building / Site Details *{autoFilled.dropoff_street && <AutoFilledTag />}
-          <input value={form.dropoff_street} onChange={set('dropoff_street')} placeholder="e.g. Construction Site, EDSA cor. Shaw" aria-invalid={fieldErrors.dropoff_street ? 'true' : undefined} />
-          {fe('dropoff_street')}
-        </label>
-
-        {/* ── Section 5: Material and Load ── */}
-        <SectionHeading>Material and Load</SectionHeading>
-        <label>
-          Material Type *{autoFilled.material_type_id && <AutoFilledTag />}
-          <CreatableCombobox
-            items={materialTypes}
-            getItemLabel={(item) => item.name}
-            value={materialTypeSelection}
-            onChange={handleMaterialTypeChange}
-            loading={clientsLoading}
-            saving={materialTypeSaving}
-            error={fieldErrors.material_type || materialTypeError || null}
-            success={materialTypeSuccess}
-            placeholder="Search or type material type…"
-            customOptionLabel={(q) => `Use custom material: ${q}`}
-            emptyMessage="No material types in Master Data yet."
-          />
-          {fe('material_type')}
-        </label>
-        <label>
-          Specification / Size *{autoFilled.material_specification_id && <AutoFilledTag />}
-          <CreatableCombobox
-            items={specOptions}
-            getItemLabel={(item) => item.name}
-            value={specSelection}
-            onChange={handleSpecChange}
-            saving={specSaving}
-            disabled={!form.material_type_id}
-            error={fieldErrors.material_specification || specError || null}
-            success={specSuccess}
-            placeholder={form.material_type_id ? 'Search or type specification…' : 'Select material type first'}
-            customOptionLabel={(q) => `Add new specification under ${materialTypeSelection?.label || 'Material Type'}: ${q}`}
-            emptyMessage={form.material_type_id ? 'No specifications for this material yet.' : 'Select a material type first.'}
-            hint={!form.material_type_id ? 'Select a material type before adding a specification.' : null}
-          />
-          {fe('material_specification')}
-        </label>
-        <label>
-          Load Volume (m³) *{autoFilled.load_volume_m3 && <AutoFilledTag />}
-          <input type="number" step="0.001" min="0" value={form.load_volume_m3} onChange={set('load_volume_m3')} aria-invalid={fieldErrors.load_volume_m3 ? 'true' : undefined} />
-          {fe('load_volume_m3')}
-        </label>
-        <div />
-
-        {/* ── Section 6: Schedule and Instructions ── */}
-        <SectionHeading>Schedule and Instructions</SectionHeading>
-        <label>
-          Scheduled Start *
-          <input type="datetime-local" min={scheduleMin} value={form.scheduled_start} onChange={set('scheduled_start')} aria-invalid={fieldErrors.scheduled_start ? 'true' : undefined} />
-          {fe('scheduled_start')}
-        </label>
-        <label>
-          Scheduled End
-          <input type="datetime-local" min={form.scheduled_start || scheduleMin} value={form.scheduled_end} onChange={set('scheduled_end')} aria-invalid={fieldErrors.scheduled_end ? 'true' : undefined} />
-          {fe('scheduled_end')}
-        </label>
-        <label>
-          Priority
-          <select name="priority" value={form.priority} onChange={set('priority')}>
-            <option value="low">Low</option>
-            <option value="normal">Normal</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        </label>
-        <div />
-        <label style={{ gridColumn: '1 / -1' }}>
-          Special Handling Instructions
-          <textarea rows="2" placeholder="Permits, handling, site access…" value={form.special_handling_instructions} onChange={set('special_handling_instructions')} />
-        </label>
-        <label style={{ gridColumn: '1 / -1' }}>
-          Notes
-          <textarea rows="2" placeholder="Internal dispatcher notes…" value={form.notes} onChange={set('notes')} />
-        </label>
-
-        {/* ── Section 7: Submit ── */}
-        {error && <p className="notice error" style={{ gridColumn: '1 / -1' }}>{error}</p>}
-        <div style={{ display: 'flex', gap: 10, gridColumn: '1 / -1', flexWrap: 'wrap' }}>
-          <button type="submit" className="btn-dx-secondary" disabled={saving}>
-            {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create Job Order'}
-          </button>
+        {/* ── Submit ── */}
+        {error && <p className="notice error" style={{ marginBottom: 10 }}>{error}</p>}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', paddingTop: 4, borderTop: '1px solid var(--stroke)' }}>
           {!isEdit && (
-            <button type="button" className="btn-dx-primary" disabled={saving} onClick={() => submit(true)}>
-              {saving ? 'Saving…' : 'Create and Proceed to Best-Fit'}
+            <button type="button" className="btn-dx-primary" disabled={saving} onClick={() => submit(true)} style={{ flexShrink: 0 }}>
+              {saving ? 'Saving…' : '✓ Create & Dispatch (Best-Fit)'}
             </button>
           )}
-          <button type="button" className="btn-dx-secondary" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn-dx-secondary" disabled={saving} style={{ flexShrink: 0 }}>
+            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Job Order'}
+          </button>
+          <button type="button" className="btn-dx-secondary" onClick={onCancel} style={{ marginLeft: 'auto' }}>Cancel</button>
         </div>
-      </div>
-    </form>
+      </form>
+    </div>
   )
 }
 
@@ -678,12 +743,12 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
 
 function CreateJobOrderPage() {
   const navigate = useNavigate()
+  const toast = useToast()
   const [orders, setOrders] = useState([])
   const [masterData, setMasterData] = useState({ clients: [], material_types: [], quarries: [], vehicle_types: [], client_preferences: [] })
   const [clientsLoading, setClientsLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [formMode, setFormMode] = useState(null)
-  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
@@ -723,8 +788,11 @@ function CreateJobOrderPage() {
       navigate('/dispatcher/dispatch-best-fit', { state: { jobOrderId: savedOrder.id } })
       return
     }
-    setMessage(`Job order ${isEdit ? 'updated' : 'created'}. Tracking code: ${savedOrder?.tracking_code ?? ''}`)
-    setTimeout(() => setMessage(''), 5000)
+    const trackingCode = savedOrder?.tracking_code ?? ''
+    toast(
+      `Job order ${isEdit ? 'updated' : 'created'} successfully.${trackingCode ? ` Tracking code: ${trackingCode}` : ''}`,
+      'success',
+    )
     load()
     setSelected(savedOrder)
   }
@@ -734,33 +802,52 @@ function CreateJobOrderPage() {
     setError('')
     try {
       await deleteJobOrder(order.id)
-      setMessage(`Job order ${formatJobPublicId(order.id)} deleted.`)
-      setTimeout(() => setMessage(''), 3000)
+      toast(`Job order ${formatJobPublicId(order.id)} deleted.`, 'warning')
       setSelected(null)
       load()
     } catch (err) {
-      setError(err.message)
+      toast(err.message || 'Failed to delete job order.', 'error')
     }
   }
 
   const firstAssignment = selected?.assignments?.[0]
+  const isCreating = formMode === 'create'
+  const isEditing = Boolean(formMode?.order)
 
   return (
     <section>
       <header className="page-header">
         <div className="header-stack">
           <h1>Job Orders</h1>
-          <p>View and manage all job orders</p>
+          <p>Create, manage, and dispatch job orders to the fleet</p>
         </div>
-        <button className="btn-dx-primary" type="button" onClick={() => { setFormMode('create'); setSelected(null) }}
-          style={{ height: 'fit-content', alignSelf: 'center' }}>
-          + New Job Order
+        <button
+          className={isCreating ? 'btn-dx-secondary' : 'btn-dx-primary'}
+          type="button"
+          style={{ height: 'fit-content', alignSelf: 'center' }}
+          onClick={() => {
+            if (isCreating) { setFormMode(null) } else { setFormMode('create'); setSelected(null) }
+          }}
+        >
+          {isCreating ? '✕ Cancel New Order' : '+ New Job Order'}
         </button>
       </header>
-      {error && <p className="notice error">{error}</p>}
-      {message && <p className="notice">{message}</p>}
 
-      <div className="dx-split-bestfit" style={{ gridTemplateColumns: '1fr 360px', gap: 20 }}>
+      {error && <p className="notice error" style={{ marginBottom: 12 }}>{error}</p>}
+
+      {/* Inline form — appears above the table, no page redirect */}
+      {(isCreating || isEditing) && (
+        <JobOrderForm
+          initial={isEditing ? formMode.order : null}
+          options={masterData}
+          clientsLoading={clientsLoading}
+          onRefreshOptions={refreshOptions}
+          onSaved={handleSaved}
+          onCancel={() => setFormMode(null)}
+        />
+      )}
+
+      <div className="dx-split-bestfit" style={{ gridTemplateColumns: '1fr 360px', gap: 20, marginTop: 16 }}>
         <div className="dx-panel" style={{ marginBottom: 0 }}>
           <div className="dx-data-table-wrap">
             <table className="dx-data-table">
@@ -772,13 +859,19 @@ function CreateJobOrderPage() {
               </thead>
               <tbody>
                 {orders.length === 0 && (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)' }}>No job orders yet.</td></tr>
+                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: '24px 0' }}>
+                    No job orders yet.{' '}
+                    <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline', padding: 0 }}
+                      onClick={() => setFormMode('create')}>
+                      Create the first one →
+                    </button>
+                  </td></tr>
                 )}
                 {orders.map((order) => (
                   <tr key={order.id} role="button" tabIndex={0}
                     onClick={() => { setSelected(order); setFormMode(null) }}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(order); setFormMode(null) } }}
-                    style={{ cursor: 'pointer', outline: selected?.id === order.id ? '2px solid var(--primary)' : 'none' }}
+                    style={{ cursor: 'pointer', background: selected?.id === order.id ? '#eff6ff' : undefined }}
                   >
                     <td><span className="job-link">{formatJobPublicId(order.id)}</span></td>
                     <td>{order.client?.client_name || order.custom_client_name || buildDisplayName(order)}</td>
@@ -811,7 +904,6 @@ function CreateJobOrderPage() {
             {selected ? (
               <>
                 <div className="dx-kv"><span>Client</span><strong>{selected.client?.client_name || selected.custom_client_name || buildDisplayName(selected)}</strong></div>
-                <div className="dx-kv"><span>Customer</span><strong>{buildDisplayName(selected) || '—'}</strong></div>
                 <div className="dx-kv"><span>Contact</span><strong>{selected.customer_contact ?? selected.customer_email ?? '—'}</strong></div>
                 <div className="dx-kv" style={{ alignItems: 'flex-start' }}>
                   <span>Pickup</span><strong style={{ textAlign: 'right' }}>{buildDisplayAddress('pickup', selected) || '—'}</strong>
@@ -820,40 +912,36 @@ function CreateJobOrderPage() {
                   <span>Drop-off</span><strong style={{ textAlign: 'right' }}>{buildDisplayAddress('dropoff', selected) || '—'}</strong>
                 </div>
                 {selected.material_type && (
-                  <div className="dx-kv"><span>Material type</span><strong>{selected.material_type}</strong></div>
+                  <div className="dx-kv"><span>Material</span><strong>{selected.material_type}{selected.specification_size ? ` · ${selected.specification_size}` : ''}</strong></div>
                 )}
-                <div className="dx-kv"><span>Quarry / Supplier</span><strong>{selected.quarry?.quarry_name || '—'}</strong></div>
-                {selected.preferred_vehicle_type?.name && (
-                  <div className="dx-kv"><span>Preferred vehicle</span><strong>{selected.preferred_vehicle_type.name}</strong></div>
-                )}
-                <div className="dx-kv"><span>Specification</span><strong>{selected.specification_size || '—'}</strong></div>
                 <div className="dx-kv"><span>Load</span>
                   <strong>{selected.load_volume_m3 || selected.volume_m3 ? `${selected.load_volume_m3 ?? selected.volume_m3} m³` : '—'}</strong>
                 </div>
+                <div className="dx-kv"><span>Quarry</span><strong>{selected.quarry?.quarry_name || '—'}</strong></div>
                 <div className="dx-kv"><span>Schedule</span>
                   <strong>
                     {selected.scheduled_start ? new Date(selected.scheduled_start).toLocaleString() : '—'}
-                    {selected.scheduled_end ? ` – ${new Date(selected.scheduled_end).toLocaleString()}` : ''}
+                    {selected.scheduled_end ? ` – ${new Date(selected.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
                   </strong>
                 </div>
                 <div className="dx-kv"><span>Priority</span><strong style={{ textTransform: 'capitalize' }}>{selected.priority}</strong></div>
-                <div><span className={jobStatusBadgeClass(selected.status)}>{formatJobStatus(selected.status)}</span></div>
-                <div className="dx-kv"><span>Tracking code</span><strong>{selected.tracking_code}</strong></div>
-                <div className="dx-kv"><span>Assigned driver</span><strong>{firstAssignment?.driver?.user?.name ?? '—'}</strong></div>
-                <div className="dx-kv"><span>Assigned vehicle</span><strong>{firstAssignment?.vehicle?.plate_no ?? '—'}</strong></div>
+                <div style={{ marginBottom: 4 }}><span className={jobStatusBadgeClass(selected.status)}>{formatJobStatus(selected.status)}</span></div>
+                <div className="dx-kv"><span>Tracking</span><strong style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>{selected.tracking_code}</strong></div>
+                <div className="dx-kv"><span>Driver</span><strong>{firstAssignment?.driver?.user?.name ?? '—'}</strong></div>
+                <div className="dx-kv"><span>Vehicle</span><strong>{firstAssignment?.vehicle?.plate_no ?? '—'}</strong></div>
                 {selected.job_requirements && (
                   <div className="dx-kv" style={{ alignItems: 'flex-start' }}>
-                    <span>Special handling</span><strong>{selected.job_requirements}</strong>
+                    <span>Handling</span><strong>{selected.job_requirements}</strong>
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
                   <button type="button" className="btn-dx-secondary" style={{ fontSize: '0.8rem', padding: '6px 12px' }}
-                    onClick={() => setFormMode({ order: selected })}>
+                    onClick={() => { setFormMode({ order: selected }) }}>
                     Edit
                   </button>
                   {selected.status === 'pending' && (
                     <Link to="/dispatcher/dispatch-best-fit" state={{ jobOrderId: selected.id }} className="btn-dx-primary" style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
-                      Dispatch
+                      ⚡ Dispatch
                     </Link>
                   )}
                   {['pending', 'cancelled'].includes(selected.status) && (
@@ -870,13 +958,6 @@ function CreateJobOrderPage() {
           </div>
         </div>
       </div>
-
-      {formMode === 'create' && (
-        <JobOrderForm initial={null} options={masterData} clientsLoading={clientsLoading} onRefreshOptions={refreshOptions} onSaved={handleSaved} onCancel={() => setFormMode(null)} />
-      )}
-      {formMode?.order && (
-        <JobOrderForm initial={formMode.order} options={masterData} clientsLoading={clientsLoading} onRefreshOptions={refreshOptions} onSaved={handleSaved} onCancel={() => setFormMode(null)} />
-      )}
     </section>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import PageTransition from '../components/PageTransition'
 import useAuth from '../hooks/useAuth'
 import { ChevronDown, Home, HelpCircle, LogOut, MapPin, Package, Truck, User } from 'lucide-react'
 
@@ -101,7 +102,9 @@ function CustomerLayout() {
         </div>
       </nav>
 
-      <Outlet />
+      <PageTransition>
+        <Outlet />
+      </PageTransition>
     </div>
   )
 }

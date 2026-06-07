@@ -108,7 +108,7 @@ function TrackingPage() {
         <div className="header-stack">
           <p className="tracking-eyebrow">Customer Tracking</p>
           <h1>Track your delivery</h1>
-          <p>View live status, estimated arrival time, remaining distance, and proof-of-delivery updates.</p>
+          <p>Monitor delivery progress, estimated arrival time, and proof-of-delivery information.</p>
         </div>
         <div className="tracking-header-aside">
           <Link className="tracking-back" to="/customer">← Customer portal</Link>
@@ -148,7 +148,7 @@ function TrackingPage() {
           {/* How it works */}
           <div style={{ marginTop: 24, padding: '18px', background: 'var(--slate-50)', borderRadius: 12, border: '1px solid var(--stroke)' }}>
             <p style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: 12 }}>How it works</p>
-            {['Get your Tracking ID from your dispatcher or provider.', 'Enter it above and click Track.', 'View live status, ETA window, and proof-of-delivery documents.'].map((step, i) => (
+            {['Get your Tracking ID from your dispatcher or provider.', 'Enter it above and click Track.', 'View delivery status, ETA window, and proof-of-delivery documents.'].map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 8, fontSize: '0.8125rem', color: 'var(--muted)' }}>
                 <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--color-primary-light)', color: 'var(--color-primary)', display: 'grid', placeItems: 'center', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
                 {step}

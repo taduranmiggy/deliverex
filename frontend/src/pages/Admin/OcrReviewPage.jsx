@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, validateOcr } from '../../api/admin'
 import { EmptyState, PageHeader } from '../../components/ui'
-import { Check, FileSearch, Flag, RefreshCw, X } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
+import { Check, FileSearch, Flag, Loader2, RefreshCw, X } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 
 const FILTER_TABS = [
@@ -26,9 +27,9 @@ function isReadyToApprove(status) {
 }
 
 function OcrReviewPage() {
+  const toast = useToast()
   const [queue, setQueue]           = useState([])
   const [error, setError]           = useState('')
-  const [msg, setMsg]               = useState('')
   const [selected, setSelected]     = useState(null)
   const [tab, setTab]               = useState('all')
   const [corrected, setCorrected]   = useState('')
@@ -99,18 +100,22 @@ function OcrReviewPage() {
   const handleAction = async (action) => {
     if (!selected) return
     setSubmitting(true)
-    setMsg('')
     setError('')
+    const ACTION_MSGS = {
+      approve: 'Document validated and saved.',
+      reject:  'Document rejected.',
+      flag:    'Document flagged for review.',
+    }
     try {
       await validateOcr(selected.id, {
         action,
         corrected_text: action === 'approve' ? corrected : undefined,
         reject_reason:  action !== 'approve' ? rejectReason : undefined,
       })
-      setMsg({ approve: 'Document validated and saved.', reject: 'Document rejected.', flag: 'Document flagged for review.' }[action])
+      toast(ACTION_MSGS[action] ?? 'Action completed.', 'success')
       load(tab)
     } catch (err) {
-      setError(err.message)
+      toast(err.message || 'Action failed. Please try again.', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -119,14 +124,13 @@ function OcrReviewPage() {
   const handleReprocess = async () => {
     if (!documentId) return
     setSubmitting(true)
-    setMsg('')
     setError('')
     try {
       await reprocessOcr(documentId)
-      setMsg('OCR reprocessed. Results will refresh shortly.')
+      toast('OCR reprocessing started. Results will refresh shortly.', 'info')
       await load(tab)
     } catch (err) {
-      setError(err.message)
+      toast(err.message || 'Reprocessing failed.', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -142,7 +146,6 @@ function OcrReviewPage() {
     <>
       <PageHeader title="OCR Validation" subtitle="Review scanned delivery documents and validate extracted text" />
       {error && <p className="notice error">{error}</p>}
-      {msg   && <p className="notice">{msg}</p>}
 
       {showTesseractWarning && (
         <p className="notice error" style={{ marginBottom: 16 }}>
@@ -161,7 +164,12 @@ function OcrReviewPage() {
               </button>
             ))}
           </div>
-          {loading ? <p style={{ color: 'var(--muted)', fontSize: '0.875rem', padding: '12px 0' }}>Loading…</p> :
+          {loading ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 0', color: 'var(--muted)', fontSize: '0.875rem' }}>
+              <Loader2 size={16} style={{ animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+              Loading queue…
+            </div>
+          ) :
             queue.length === 0 ? <EmptyState icon={FileSearch} title="Queue empty" message="No documents in this category." /> :
             queue.map((item) => {
               const b = getBadge(item)
@@ -268,22 +276,26 @@ function OcrReviewPage() {
                 <button className="btn-dx-primary" type="button" disabled={submitting || !isReadyToApprove(selected.processing_status)} onClick={() => handleAction('approve')}
                   style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
                   title={!isReadyToApprove(selected.processing_status) ? 'Wait until OCR completes or reprocess failed items' : 'Save validated record'}>
-                  <Check size={15} /> Validate
+                  {submitting
+                    ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Validating…</>
+                    : <><Check size={15} /> Validate</>}
                 </button>
                 <button className="btn-dx-secondary" type="button" disabled={submitting} onClick={() => handleAction('reject')}
                   style={{ color: 'var(--color-error)', borderColor: 'var(--color-error-mid)' }}>
-                  <X size={15} /> Reject
+                  {submitting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Rejecting…</> : <><X size={15} /> Reject</>}
                 </button>
                 <button className="btn-dx-secondary" type="button" disabled={submitting} onClick={() => handleAction('flag')}>
-                  <Flag size={15} /> Flag
+                  {submitting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Flagging…</> : <><Flag size={15} /> Flag</>}
                 </button>
                 {canReprocess && (
                   <button className="btn-dx-secondary" type="button" disabled={submitting} onClick={handleReprocess}>
-                    <RefreshCw size={15} /> Reprocess OCR
+                    {submitting
+                      ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Processing OCR…</>
+                      : <><RefreshCw size={15} /> Reprocess OCR</>}
                   </button>
                 )}
-                <button className="btn-dx-secondary" type="button" disabled={loading} onClick={() => load(tab)}>
-                  <RefreshCw size={15} /> Refresh
+                <button className="btn-dx-secondary" type="button" disabled={loading || submitting} onClick={() => load(tab)}>
+                  {loading ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Refreshing…</> : <><RefreshCw size={15} /> Refresh</>}
                 </button>
               </div>
             </div>

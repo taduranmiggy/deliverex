@@ -13,7 +13,7 @@ const ASIDE_SLIDES = [
   },
   {
     title: 'Proof and tracking you can rely on.',
-    subtitle: 'ETAs, live status, and delivery documents when your team needs them.',
+    subtitle: 'ETAs, status updates, and delivery documents when your team needs them.',
   },
   {
     title: 'Built for field and office teams alike.',

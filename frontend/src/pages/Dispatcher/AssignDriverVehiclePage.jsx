@@ -1,89 +1,74 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { createAssignment, fetchJobOrders, getBestFit } from '../../api/dispatcher'
+import { useToast } from '../../context/ToastContext'
 import BestFitExplainability, { formatScore } from '../../components/BestFitExplainability'
-import { IconCheckSmall, IconRouteArrow } from '../../components/DxIcons'
+import { IconRouteArrow } from '../../components/DxIcons'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus } from '../../utils/statusLabels'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
-import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, User, Truck } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-react'
 
-/* ── Confirmation modal ─────────────────────────────────────── */
+/* ── Confirm / Override Modal ──────────────────────────────── */
 function AssignConfirmModal({ job, candidate, recommendedTop, isOverride, overrideReason, onOverrideReasonChange, onConfirm, onCancel, submitting, error }) {
   return (
     <div className="dx-modal-backdrop" onClick={onCancel}>
-      <div className="dx-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal aria-labelledby="assign-modal-title">
+      <div className="dx-modal" style={{ maxWidth: 500 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal aria-labelledby="assign-modal-title">
         <div className="dx-modal-header">
           <h2 id="assign-modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {isOverride
               ? <><AlertTriangle size={18} style={{ color: 'var(--color-warning)' }} /> Override Assignment</>
-              : <><CheckCircle2 size={18} style={{ color: 'var(--color-success)' }} /> Confirm Assignment</>
-            }
+              : <><CheckCircle2 size={18} style={{ color: 'var(--color-success)' }} /> Confirm Assignment</>}
           </h2>
           <button type="button" className="dx-modal-close" onClick={onCancel} disabled={submitting}>×</button>
         </div>
 
-        <div style={{ padding: '20px 28px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ padding: '18px 24px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {isOverride && (
             <>
-              <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--color-warning-light, #fffbeb)', border: '1px solid var(--color-warning-mid, #fde68a)', fontSize: '0.875rem', color: 'var(--color-warning, #b45309)', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.875rem', color: '#92400e', display: 'flex', gap: 8 }}>
                 <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-                This selection differs from the Best-Fit recommendation. Document why you are overriding the system suggestion.
+                This overrides the Best-Fit recommendation. Document your reason below.
               </div>
               {recommendedTop && (
-                <div style={{ background: 'var(--slate-50, #f8fafc)', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--stroke)', fontSize: '0.8125rem' }}>
-                  <p style={{ margin: '0 0 6px', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.7rem' }}>Best-Fit</p>
-                  <p style={{ margin: 0 }}>
-                    <strong>{recommendedTop.driver_name}</strong>
-                    {recommendedTop.vehicle_plate ? ` · ${recommendedTop.vehicle_plate}` : ''}
-                  </p>
+                <div style={{ background: 'var(--slate-50)', borderRadius: 10, padding: '10px 14px', border: '1px solid var(--stroke)', fontSize: '0.8125rem' }}>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)' }}>System recommendation</p>
+                  <strong>{recommendedTop.driver_name}</strong>{recommendedTop.vehicle_plate ? ` · ${recommendedTop.vehicle_plate}` : ''}
+                  {recommendedTop.score != null && <span style={{ marginLeft: 8, fontSize: '0.75rem', color: 'var(--muted)' }}>Score: {formatScore(recommendedTop)}</span>}
                 </div>
               )}
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>Override reason <span style={{ color: 'var(--color-error)' }}>*</span></span>
-                <textarea
-                  value={overrideReason}
-                  onChange={(e) => onOverrideReasonChange(e.target.value)}
-                  placeholder="e.g. Driver A unavailable by phone"
-                  rows={3}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--stroke)', font: 'inherit', fontSize: '0.875rem', resize: 'vertical' }}
-                />
+                <textarea value={overrideReason} onChange={(e) => onOverrideReasonChange(e.target.value)}
+                  placeholder="e.g. Driver A unavailable by phone" rows={3}
+                  style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--stroke)', font: 'inherit', fontSize: '0.875rem', resize: 'vertical' }} />
               </label>
             </>
           )}
 
-          {/* Job order summary */}
-          <div style={{ background: 'var(--slate-50, #f8fafc)', borderRadius: 12, padding: '14px 16px', border: '1px solid var(--stroke)' }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', marginBottom: 10 }}>Job Order</p>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-              <span style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{formatJobPublicId(job.id)}</span>
-              <span style={{ fontSize: '0.8125rem', color: 'var(--muted)', textTransform: 'capitalize' }}>{job.priority} priority</span>
+          {/* Summary */}
+          <div style={{ background: 'var(--slate-50)', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--stroke)', fontSize: '0.8125rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontWeight: 700 }}>{formatJobPublicId(job.id)}</span>
+              <span style={{ color: 'var(--muted)', textTransform: 'capitalize' }}>{job.priority} priority</span>
             </div>
-            <p style={{ fontWeight: 600, marginBottom: 4 }}>{job.client?.client_name || buildDisplayName(job)}</p>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--muted)', margin: 0 }}>
-              {buildDisplayAddress('pickup', job)} → {buildDisplayAddress('dropoff', job)}
-            </p>
-            {(job.volume_m3 || job.material_type || job.specification_size) && (
-              <p style={{ fontSize: '0.8125rem', color: 'var(--muted)', marginTop: 4 }}>
-                Load: {[job.load_volume_m3 || job.volume_m3 ? `${job.load_volume_m3 ?? job.volume_m3} m³` : null, job.material_type || null, job.specification_size || null].filter(Boolean).join(' · ')}
-              </p>
-            )}
+            <p style={{ fontWeight: 600, margin: '0 0 3px' }}>{job.client?.client_name || job.custom_client_name || buildDisplayName(job)}</p>
+            <p style={{ color: 'var(--muted)', margin: 0 }}>{buildDisplayAddress('pickup', job)} → {buildDisplayAddress('dropoff', job)}</p>
           </div>
 
-          {/* Driver + Vehicle row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div style={{ background: 'var(--color-primary-light, #eff6ff)', borderRadius: 12, padding: '14px 16px', border: '1px solid var(--color-primary-border, #bfdbfe)' }}>
-              <p style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <User size={12} /> Driver
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ background: '#eff6ff', borderRadius: 10, padding: '12px 14px', border: '1px solid #bfdbfe' }}>
+              <p style={{ margin: '0 0 5px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <User size={11} /> Driver
               </p>
-              <p style={{ fontWeight: 700, fontSize: '0.9375rem', margin: 0 }}>{candidate.driver_name}</p>
+              <strong style={{ fontSize: '0.9375rem' }}>{candidate.driver_name}</strong>
             </div>
-            <div style={{ background: 'var(--color-primary-light, #eff6ff)', borderRadius: 12, padding: '14px 16px', border: '1px solid var(--color-primary-border, #bfdbfe)' }}>
-              <p style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <Truck size={12} /> Vehicle
+            <div style={{ background: '#eff6ff', borderRadius: 10, padding: '12px 14px', border: '1px solid #bfdbfe' }}>
+              <p style={{ margin: '0 0 5px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Truck size={11} /> Vehicle
               </p>
-              <p style={{ fontWeight: 700, fontSize: '0.9375rem', margin: 0 }}>{candidate.vehicle_plate}</p>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--muted)', margin: 0 }}>
+              <strong style={{ fontSize: '0.9375rem' }}>{candidate.vehicle_plate}</strong>
+              <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>
                 {[candidate.vehicle_type, candidate.vehicle_cbm_capacity ? `${candidate.vehicle_cbm_capacity} m³` : candidate.vehicle_capacity].filter(Boolean).join(' · ') || '—'}
               </p>
             </div>
@@ -92,27 +77,15 @@ function AssignConfirmModal({ job, candidate, recommendedTop, isOverride, overri
           <BestFitExplainability candidate={candidate} compact />
 
           {error && (
-            <p style={{ margin: 0, padding: '10px 14px', borderRadius: 10, background: 'var(--color-error-light, #fef2f2)', border: '1px solid var(--color-error-mid, #fca5a5)', color: 'var(--color-error)', fontSize: '0.875rem' }}>
-              {error}
-            </p>
+            <p style={{ margin: 0, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fca5a5', color: 'var(--color-error)', fontSize: '0.875rem' }}>{error}</p>
           )}
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <button
-              type="button"
-              className="btn-dx-primary"
-              style={{ flex: 1, justifyContent: 'center', background: isOverride ? 'var(--color-warning, #d97706)' : undefined, borderColor: isOverride ? 'var(--color-warning, #d97706)' : undefined }}
-              onClick={onConfirm}
-              disabled={submitting || (isOverride && !overrideReason.trim())}
-            >
-              {submitting
-                ? <><Loader2 size={15} style={{ animation: 'spin 0.7s linear infinite' }} /> Assigning…</>
-                : isOverride ? 'Confirm Override' : 'Confirm Assignment'
-              }
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" className="btn-dx-primary" style={{ flex: 1, justifyContent: 'center', background: isOverride ? '#d97706' : undefined, borderColor: isOverride ? '#d97706' : undefined }}
+              onClick={onConfirm} disabled={submitting || (isOverride && !overrideReason.trim())}>
+              {submitting ? <><Loader2 size={15} style={{ animation: 'spin 0.7s linear infinite' }} /> Assigning…</> : isOverride ? 'Confirm Override' : 'Confirm Assignment'}
             </button>
-            <button type="button" className="btn-dx-secondary" onClick={onCancel} disabled={submitting}>
-              Cancel
-            </button>
+            <button type="button" className="btn-dx-secondary" onClick={onCancel} disabled={submitting}>Cancel</button>
           </div>
         </div>
       </div>
@@ -120,21 +93,106 @@ function AssignConfirmModal({ job, candidate, recommendedTop, isOverride, overri
   )
 }
 
+/* ── Candidate Card ─────────────────────────────────────────── */
+function CandidateCard({ item, isTop, onAssign, onOverride }) {
+  const topFactor = Array.isArray(item.factors) && item.factors.length > 0
+    ? [...item.factors].sort((a, b) => b.contribution - a.contribution)[0]
+    : null
+
+  return (
+    <div style={{
+      border: `1.5px solid ${isTop ? 'var(--color-primary)' : 'var(--stroke)'}`,
+      borderRadius: 12,
+      padding: '14px 16px',
+      background: isTop ? 'linear-gradient(135deg, #eff6ff, #fff)' : '#fff',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 10,
+      position: 'relative',
+    }}>
+      {isTop && (
+        <span style={{ position: 'absolute', top: -11, left: 12, background: 'var(--color-primary)', color: '#fff', fontSize: '0.6875rem', fontWeight: 700, padding: '2px 10px', borderRadius: 99, letterSpacing: '0.04em' }}>
+          ★ RECOMMENDED
+        </span>
+      )}
+
+      {/* Driver + Vehicle */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: isTop ? 4 : 0 }}>
+        <div>
+          <p style={{ margin: '0 0 2px', fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <User size={10} /> Driver
+          </p>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9375rem' }}>{item.driver_name}</p>
+        </div>
+        <div>
+          <p style={{ margin: '0 0 2px', fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Truck size={10} /> Vehicle
+          </p>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9375rem' }}>{item.vehicle_plate}</p>
+          <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--muted)' }}>
+            {[item.vehicle_type, item.vehicle_cbm_capacity != null ? `${item.vehicle_cbm_capacity} m³` : item.vehicle_capacity].filter(Boolean).join(' · ') || '—'}
+          </p>
+        </div>
+      </div>
+
+      {/* Score + Top Factor */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontSize: '1.125rem', fontWeight: 800, color: isTop ? 'var(--color-primary)' : 'var(--text)',
+            background: isTop ? '#dbeafe' : 'var(--slate-100)', padding: '2px 10px', borderRadius: 8, letterSpacing: '-0.01em',
+          }}>
+            {formatScore(item) ?? '—'}
+          </span>
+          {item.unused_capacity != null && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+              {item.unused_capacity} m³ unused
+              {item.client_preference_match ? ' · ✓ pref' : ''}
+            </span>
+          )}
+        </div>
+        {topFactor && (
+          <span style={{ fontSize: '0.75rem', color: topFactor.matched ? 'var(--color-success)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+            {topFactor.matched ? '✓' : '✗'} {topFactor.label}
+          </span>
+        )}
+      </div>
+
+      {/* Explainability (top card only) */}
+      {isTop && <BestFitExplainability candidate={item} compact />}
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        {isTop ? (
+          <button type="button" className="btn-dx-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={onAssign}>
+            <CheckCircle2 size={15} /> Assign Recommended
+          </button>
+        ) : (
+          <>
+            <button type="button" className="btn-dx-secondary" style={{ flex: 1, justifyContent: 'center', fontSize: '0.8125rem' }} onClick={onOverride}>
+              <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} /> Override &amp; Assign
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /* ── Page ───────────────────────────────────────────────────── */
 function AssignDriverVehiclePage() {
-  const [jobOrders, setJobOrders]             = useState([])
-  const [selected, setSelected]               = useState(null)
-  const [recommended, setRecommended]         = useState(null)
+  const toast = useToast()
+  const [jobOrders, setJobOrders] = useState([])
+  const [selected, setSelected] = useState(null)
+  const [recommended, setRecommended] = useState(null)
   const [recommendations, setRecommendations] = useState([])
-  const [loading, setLoading]                 = useState(false)
-  const [message, setMessage]                 = useState('')
-  const [error, setError]                     = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  // Modal state
-  const [pendingAssign, setPendingAssign]     = useState(null)   // { candidate, isOverride }
-  const [overrideReason, setOverrideReason]   = useState('')
-  const [submitting, setSubmitting]           = useState(false)
-  const [modalError, setModalError]           = useState('')
+  const [pendingAssign, setPendingAssign] = useState(null)
+  const [overrideReason, setOverrideReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [modalError, setModalError] = useState('')
 
   const location = useLocation()
   const preselectJobId = location.state?.jobOrderId ?? null
@@ -145,7 +203,6 @@ function AssignDriverVehiclePage() {
       const pending = (res.data || []).filter((item) => item.status === 'pending')
       setJobOrders(pending)
       setSelected((prev) => {
-        // Prefer a job explicitly requested via navigation (e.g. just created)
         if (preselectJobId) {
           const requested = pending.find((p) => p.id === preselectJobId)
           if (requested) return requested
@@ -161,9 +218,10 @@ function AssignDriverVehiclePage() {
   useEffect(() => { loadJobs() }, []) // eslint-disable-line
 
   useEffect(() => {
-    if (!selected) { return }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!selected) return
     setLoading(true)
+    setRecommended(null)
+    setRecommendations([])
     getBestFit(selected.id)
       .then((res) => {
         setRecommended(res.recommended || null)
@@ -173,7 +231,6 @@ function AssignDriverVehiclePage() {
       .finally(() => setLoading(false))
   }, [selected])
 
-  // Open modal instead of immediately assigning
   const openModal = (candidate, isOverride = false) => {
     if (!selected) { setError('Select a job order first.'); return }
     setModalError('')
@@ -181,7 +238,6 @@ function AssignDriverVehiclePage() {
     setPendingAssign({ candidate, isOverride })
   }
 
-  // Called when dispatcher clicks "Confirm" inside the modal
   const handleConfirm = async () => {
     if (!pendingAssign || !selected) return
     setSubmitting(true)
@@ -189,13 +245,15 @@ function AssignDriverVehiclePage() {
     try {
       await createAssignment({
         job_order_id: selected.id,
-        driver_id:    pendingAssign.candidate.driver_id,
-        vehicle_id:   pendingAssign.candidate.vehicle_id,
+        driver_id: pendingAssign.candidate.driver_id,
+        vehicle_id: pendingAssign.candidate.vehicle_id,
         ...(pendingAssign.isOverride ? { override_reason: overrideReason.trim() } : {}),
       })
       setPendingAssign(null)
-      setMessage(`Assignment confirmed — ${pendingAssign.candidate.driver_name} dispatched. Driver has been notified.`)
-      setTimeout(() => setMessage(''), 6000)
+      toast(
+        `Dispatched — ${pendingAssign.candidate.driver_name} assigned. Driver has been notified.`,
+        'success',
+      )
       await loadJobs()
     } catch (err) {
       setModalError(err.message)
@@ -205,194 +263,165 @@ function AssignDriverVehiclePage() {
   }
 
   const top = recommended || recommendations[0]
+  const alternatives = recommendations.filter((r) =>
+    !(top && r.driver_id === top.driver_id && r.vehicle_id === top.vehicle_id)
+  )
 
   return (
     <section>
       <header className="page-header">
         <div className="header-stack">
-          <h1>Dispatch (Best-Fit)</h1>
-          <p>System-generated recommendations with scored explainability for each match</p>
+          <h1>Fleet Dispatch</h1>
+          <p>Best-Fit recommendations with scored explainability — assign or override</p>
         </div>
       </header>
-      {message && <p className="notice">{message}</p>}
-      {error   && <p className="notice error">{error}</p>}
 
-      <div className="dx-split-bestfit">
+      {error && <p className="notice error" style={{ marginBottom: 14 }}>{error}</p>}
+
+      {/* 3-column layout: Jobs | Recommended | Alternatives */}
+      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 340px', gap: 16, alignItems: 'flex-start' }}>
+
+        {/* ── Column 1: Job Queue ── */}
         <div>
-          <div className="dx-panel" style={{ marginBottom: 12 }}>
-            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.875rem' }}>
-              <strong style={{ color: 'var(--navy)' }}>{jobOrders.length}</strong> jobs pending assignment
-            </p>
+          <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>
+              <strong style={{ color: 'var(--navy)' }}>{jobOrders.length}</strong> pending
+            </span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Select job ↓</span>
           </div>
           {jobOrders.length === 0 && (
-            <div className="dx-panel"><p style={{ margin: 0, color: 'var(--muted)' }}>No unassigned jobs.</p></div>
+            <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '24px 16px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.875rem' }}>
+              No unassigned jobs.
+            </div>
           )}
-          {jobOrders.map((order) => (
-            <button key={order.id} type="button"
-              className={`dx-job-card ${selected?.id === order.id ? 'dx-job-card--selected' : ''}`}
-              onClick={() => setSelected(order)}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <span className="dx-job-card__id">{formatJobPublicId(order.id)}</span>
-                <span className="badge-dx badge-dx--pending">{formatJobStatus(order.status)}</span>
-              </div>
-              <p style={{ margin: '8px 0 4px', fontWeight: 600 }}>{order.client?.client_name || buildDisplayName(order)}</p>
-              <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                {[order.material_type || null, order.specification_size ?? null].filter(Boolean).join(' · ') || 'Material not set'}
-              </p>
-              <p className="dx-route-inline" style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                <span>{buildDisplayAddress('pickup', order)}</span>
-                <span className="dx-route-inline__arrow" aria-hidden><IconRouteArrow /></span>
-                <span>{buildDisplayAddress('dropoff', order)}</span>
-              </p>
-              {order.scheduled_start && (
-                <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>
-                  {new Date(order.scheduled_start).toLocaleString()}
-                  {order.scheduled_end ? ` — ${new Date(order.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-                </p>
-              )}
-            </button>
-          ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {jobOrders.map((order) => {
+              const isActive = selected?.id === order.id
+              return (
+                <button key={order.id} type="button"
+                  onClick={() => setSelected(order)}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    border: `2px solid ${isActive ? 'var(--color-primary)' : 'var(--stroke)'}`,
+                    borderRadius: 12, padding: '12px 14px', cursor: 'pointer',
+                    background: isActive ? '#eff6ff' : '#fff',
+                    boxShadow: isActive ? '0 0 0 3px rgba(37,99,235,0.1)' : 'none',
+                    transition: 'all 0.15s',
+                  }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.8125rem', color: isActive ? 'var(--color-primary)' : 'var(--muted)' }}>
+                      {formatJobPublicId(order.id)}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', background: '#fef3c7', color: '#92400e', padding: '1px 7px', borderRadius: 99, fontWeight: 600 }}>
+                      {formatJobStatus(order.status)}
+                    </span>
+                  </div>
+                  <p style={{ margin: '0 0 3px', fontWeight: 600, fontSize: '0.875rem' }}>
+                    {order.client?.client_name || order.custom_client_name || buildDisplayName(order)}
+                  </p>
+                  <p style={{ margin: '0 0 3px', color: 'var(--muted)', fontSize: '0.75rem' }}>
+                    {[order.material_type, order.specification_size].filter(Boolean).join(' · ') || 'Material not set'}
+                  </p>
+                  <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>{buildDisplayAddress('pickup', order)}</span>
+                    <span style={{ flexShrink: 0 }}><IconRouteArrow /></span>
+                    <span>{buildDisplayAddress('dropoff', order)}</span>
+                  </p>
+                  {order.scheduled_start && (
+                    <p style={{ margin: '3px 0 0', fontSize: '0.7rem', color: 'var(--muted)' }}>
+                      {new Date(order.scheduled_start).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
-        <div className="dx-panel">
-          <h3 className="dx-panel-title">Recommendation Panel</h3>
+        {/* ── Column 2: Recommended ── */}
+        <div>
           {!selected ? (
-            <p style={{ color: 'var(--muted)' }}>Select a job to view recommendations.</p>
+            <div style={{ background: '#fff', border: '1px dashed var(--stroke)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: 'var(--muted)' }}>
+              <Zap size={28} style={{ marginBottom: 10, opacity: 0.3 }} />
+              <p style={{ margin: 0, fontWeight: 600 }}>Select a job order to see the Best-Fit recommendation</p>
+            </div>
           ) : loading ? (
-            <p style={{ color: 'var(--muted)' }}>Analyzing available resources…</p>
+            <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <Loader2 size={20} style={{ animation: 'spin 0.7s linear infinite' }} />
+              Analyzing fleet…
+            </div>
+          ) : top ? (
+            <div>
+              {/* Job context strip */}
+              <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '12px 16px', marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div>
+                    <p style={{ margin: '0 0 2px', fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600 }}>
+                      {formatJobPublicId(selected.id)} · {selected.client?.client_name || selected.custom_client_name || buildDisplayName(selected)}
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                      {[selected.material_type, selected.specification_size].filter(Boolean).join(' · ')}
+                      {(selected.load_volume_m3 || selected.volume_m3) ? ` · ${selected.load_volume_m3 ?? selected.volume_m3} m³` : ''}
+                    </p>
+                  </div>
+                  {selected.scheduled_end && (
+                    <span style={{ fontSize: '0.75rem', color: '#991b1b', background: '#fef2f2', padding: '2px 8px', borderRadius: 8, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      By {new Date(selected.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Top recommendation card */}
+              <CandidateCard
+                item={top}
+                isTop
+                onAssign={() => openModal(top, false)}
+                onOverride={() => openModal(top, false)}
+              />
+            </div>
           ) : (
-            <>
-              <div className="dx-kv" style={{ marginBottom: 14 }}>
-                <span>Material profile</span>
-                <strong>{[selected.material_type || null, selected.specification_size ?? null].filter(Boolean).join(' · ') || '—'}</strong>
-              </div>
-              <div className="dx-kv" style={{ marginBottom: 14 }}>
-                <span>Load volume</span>
-                <strong>
-                  {selected.load_volume_m3 || selected.volume_m3 ? `${selected.load_volume_m3 ?? selected.volume_m3} m³` : '—'}
-                </strong>
-              </div>
-              {selected.scheduled_end && (
-                <div className="dx-kv" style={{ marginBottom: 14 }}>
-                  <span>Deadline</span>
-                  <strong>{new Date(selected.scheduled_end).toLocaleString()}</strong>
-                </div>
-              )}
+            <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '32px 24px', textAlign: 'center' }}>
+              <p style={{ fontWeight: 700, marginBottom: 8 }}>No recommendations available</p>
+              <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginBottom: 14 }}>No available drivers or vehicles match the requirements.</p>
+              <a href="/admin/master-data" target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--color-primary)', fontSize: '0.875rem', fontWeight: 600 }}>
+                Check fleet availability in Master Data →
+              </a>
+            </div>
+          )}
+        </div>
 
-              {top ? (
-                <>
-                  <div className="dx-bestfit-banner" role="status">
-                    <span className="dx-bestfit-banner__icon" aria-hidden><IconCheckSmall /></span>
-                    Recommended assignment
-                  </div>
-                  <div className="dx-kv" style={{ marginBottom: 8 }}>
-                    <span>Driver</span>
-                    <strong>{top.driver_name}</strong>
-                  </div>
-                  <div className="dx-kv" style={{ marginBottom: 12 }}>
-                    <span>Vehicle</span>
-                    <strong>
-                      {top.vehicle_plate}
-                      {top.vehicle_type ? ` — ${top.vehicle_type}` : ''}
-                      {top.vehicle_cbm_capacity ? ` (${top.vehicle_cbm_capacity} m³)` : (top.vehicle_capacity ? ` (${top.vehicle_capacity})` : '')}
-                    </strong>
-                  </div>
-                  <div className="dx-kv" style={{ marginBottom: 12 }}>
-                    <span>Unused capacity</span>
-                    <strong>
-                      {top.unused_capacity != null ? `${top.unused_capacity} m³` : '—'}
-                      {top.client_preference_match ? ' · preference matched' : ''}
-                    </strong>
-                  </div>
+        {/* ── Column 3: Alternative Matches ── */}
+        <div>
+          <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '10px 14px', marginBottom: 10 }}>
+            <p style={{ margin: 0, fontSize: '0.8125rem', fontWeight: 700 }}>
+              {alternatives.length > 0 ? `${alternatives.length} alternative ${alternatives.length === 1 ? 'match' : 'matches'}` : 'Alternative Matches'}
+            </p>
+            {alternatives.length > 0 && (
+              <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>Override the recommendation by assigning any match below</p>
+            )}
+          </div>
 
-                  <div style={{ marginTop: 14 }}>
-                    <BestFitExplainability candidate={top} />
-                  </div>
-                </>
-              ) : (
-                <div className="dx-why-box">
-                  <strong>No recommendations available</strong>
-                  <p style={{ margin: '8px 0 0', color: 'var(--muted)', fontSize: '0.875rem' }}>
-                    No available drivers or vehicles match the requirements for this job.
-                  </p>
-                  <a
-                    href="/admin/master-data"
-                    title="Fleet master data is managed by Admin"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, fontSize: '0.8125rem', color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none' }}
-                  >
-                    <ExternalLink size={13} /> Check fleet availability in Master Data
-                  </a>
-                </div>
-              )}
-
-              {recommendations.length > 0 && (
-                <div style={{ marginTop: 14 }}>
-                  <strong style={{ fontSize: '0.875rem' }}>All matches</strong>
-                  <div className="dx-data-table-wrap" style={{ marginTop: 8 }}>
-                    <table className="dx-data-table">
-                      <thead><tr><th>Driver</th><th>Plate</th><th>Vehicle Type</th><th>Capacity</th><th>Load</th><th>Unused</th><th>Pref.</th><th>Score</th><th>Top Factor</th><th /></tr></thead>
-                      <tbody>
-                        {recommendations.map((item) => {
-                          const isTop = top && item.driver_id === top.driver_id && item.vehicle_id === top.vehicle_id
-                          return (
-                            <tr key={`${item.driver_id}-${item.vehicle_id}`}>
-                              <td>{item.driver_name}</td>
-                              <td>{item.vehicle_plate}</td>
-                              <td>{item.vehicle_type || '—'}</td>
-                              <td>{item.vehicle_cbm_capacity != null ? `${item.vehicle_cbm_capacity} m³` : (item.vehicle_capacity || '—')}</td>
-                              <td>{item.load_volume != null ? `${item.load_volume} m³` : '—'}</td>
-                              <td>{item.unused_capacity != null ? `${item.unused_capacity} m³` : '—'}</td>
-                              <td>{item.client_preference_match ? 'Match' : '—'}</td>
-                              <td><span className="badge-dx badge-dx--muted">{formatScore(item) ?? '—'}</span></td>
-                              <td style={{ maxWidth: 220, fontSize: '0.8125rem', color: 'var(--muted)' }}>
-                                {Array.isArray(item.factors) && item.factors.length > 0
-                                  ? (() => {
-                                    const topFactor = [...item.factors].sort((a, b) => b.contribution - a.contribution)[0]
-                                    return topFactor
-                                      ? `${topFactor.matched ? '✓' : '✗'} ${topFactor.label} (+${topFactor.contribution})`
-                                      : '—'
-                                  })()
-                                  : (Array.isArray(item.reasons) && item.reasons.length > 0 ? item.reasons[0] : '—')}
-                              </td>
-                              <td>
-                                {isTop ? (
-                                  <span className="dx-mini-badge">Recommended</span>
-                                ) : (
-                                  <button type="button" className="btn-dx-primary"
-                                    style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                                    onClick={() => openModal(item, true)}>
-                                    Override
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <div className="dx-action-row">
-                {top && (
-                  <button
-                    type="button"
-                    className="btn-dx-primary"
-                    style={{ flex: 1, justifyContent: 'center' }}
-                    onClick={() => openModal(top, false)}
-                  >
-                    <CheckCircle2 size={16} /> Assign This Driver
-                  </button>
-                )}
-                <button type="button" className="btn-dx-secondary" onClick={() => setPendingAssign(null)}>
-                  Cancel
-                </button>
-              </div>
-            </>
+          {!selected || loading ? (
+            <div style={{ background: '#fff', border: '1px dashed var(--stroke)', borderRadius: 12, padding: '32px 16px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.875rem' }}>
+              {loading ? 'Loading…' : 'Select a job to see alternatives.'}
+            </div>
+          ) : alternatives.length === 0 ? (
+            <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '24px 16px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.875rem' }}>
+              {top ? 'Only one match available.' : 'No matches found.'}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {alternatives.map((item) => (
+                <CandidateCard
+                  key={`${item.driver_id}-${item.vehicle_id}`}
+                  item={item}
+                  isTop={false}
+                  onOverride={() => openModal(item, true)}
+                />
+              ))}
+            </div>
           )}
         </div>
       </div>

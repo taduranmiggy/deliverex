@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react'
 import { Navigate, useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { roleHome } from '../utils/roleUtils'
@@ -7,7 +8,14 @@ function ProtectedRoutes({ children, roles }) {
   const location = useLocation()
 
   if (!bootstrapped) {
-    return null
+    return (
+      <div className="dx-boot-loading" aria-label="Loading Deliverex…">
+        <div className="dx-boot-spinner">
+          <Loader2 size={36} aria-hidden />
+          <span>Loading…</span>
+        </div>
+      </div>
+    )
   }
 
   if (!isAuthenticated) {
