@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { acknowledgeDelayReport, fetchAssignments } from '../../api/dispatcher'
 import { fetchTrackingLogs } from '../../api/tracking'
 import LiveFleetMap from '../../components/LiveFleetMap'
@@ -11,38 +11,40 @@ import { getDelayReasonLabel } from '../../utils/driverAssignment'
 function formatGpsTime(iso) {
   if (!iso) return null
   return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
 }
 
 function DeliveryMonitoringPage() {
-  const [assignments, setAssignments] = useState([])
-  const [gpsMap, setGpsMap] = useState({})
-  const [error, setError] = useState('')
-  const [refreshing, setRefreshing] = useState(false)
+  const [assignments, setAssignments]   = useState([])
+  const [gpsMap, setGpsMap]             = useState({})
+  const [error, setError]               = useState('')
+  const [refreshing, setRefreshing]     = useState(false)
   const [acknowledgingId, setAcknowledgingId] = useState(null)
 
-  const handleAcknowledge = async (reportId) => {
-    setAcknowledgingId(reportId)
-    try {
-      await acknowledgeDelayReport(reportId)
-      await load()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setAcknowledgingId(null)
-    }
-  }
+  // ── Two-way selection state ────────────────────────────────────────────
+  const [selectedId, setSelectedId]     = useState(null)
+  const cardRefs                        = useRef({})   // { [assignmentId]: DOMElement }
 
-  const load = async () => {
+  // Scroll the selected card into view whenever selectedId changes
+  useEffect(() => {
+    if (!selectedId) return
+    const el = cardRefs.current[selectedId]
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [selectedId])
+
+  const handleSelect = useCallback((id) => {
+    setSelectedId((prev) => (prev === id ? null : id))   // click again to deselect
+  }, [])
+
+  // ── Data loading ───────────────────────────────────────────────────────
+  const load = useCallback(async () => {
     setRefreshing(true)
     try {
-      const res = await fetchAssignments(1)
+      const res    = await fetchAssignments(1)
       const active = (res.data || []).filter((a) => !['completed', 'cancelled'].includes(a.status))
       setAssignments(active)
+
       const entries = await Promise.allSettled(
         active.map((a) =>
           fetchTrackingLogs(a.id, 1)
@@ -66,27 +68,46 @@ function DeliveryMonitoringPage() {
     } finally {
       setRefreshing(false)
     }
-  }
-
-  useEffect(() => {
-    load()
   }, [])
 
+  useEffect(() => { load() }, [load])
+
+  const handleAcknowledge = async (reportId) => {
+    setAcknowledgingId(reportId)
+    try {
+      await acknowledgeDelayReport(reportId)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setAcknowledgingId(null)
+    }
+  }
+
+  // ── Map markers — enriched with all popup data ─────────────────────────
   const mapMarkers = useMemo(
-    () => assignments
-      .map((a) => {
-        const gps = gpsMap[a.id]
-        if (!gps) return null
-        return {
-          id: a.id,
-          lat: gps.lat,
-          lng: gps.lng,
-          label: a.driver?.user?.name ?? 'Driver',
-          sublabel: `${formatJobPublicId(a.job_order_id)} · ${a.status}`,
-        }
-      })
-      .filter(Boolean),
-    [assignments, gpsMap],
+    () =>
+      assignments
+        .map((a) => {
+          const gps = gpsMap[a.id]
+          if (!gps) return null
+          return {
+            id:      a.id,
+            lat:     gps.lat,
+            lng:     gps.lng,
+            label:   a.driver?.user?.name ?? 'Driver',
+            sublabel: `${formatJobPublicId(a.job_order_id)} · ${a.status}`,
+            // enriched fields for popup
+            jobId:    formatJobPublicId(a.job_order_id),
+            vehicle:  a.vehicle?.plate_no ?? '—',
+            status:   a.status,
+            gpsAt:    gps.at,
+            mapsUrl:  `https://www.google.com/maps?q=${gps.lat},${gps.lng}`,
+            onViewDetails: handleSelect,
+          }
+        })
+        .filter(Boolean),
+    [assignments, gpsMap, handleSelect],
   )
 
   return (
@@ -99,41 +120,85 @@ function DeliveryMonitoringPage() {
       </PageHeader>
       {error && <p className="notice error">{error}</p>}
 
+      {/* Sync hint */}
+      {assignments.length > 0 && (
+        <p style={{ fontSize: '0.8125rem', color: 'var(--muted)', marginBottom: 14 }}>
+          Click a delivery card to locate it on the map — or click a map pin to highlight the card below.
+        </p>
+      )}
+
       <div className="dx-split-bestfit">
+        {/* ── Map panel ── */}
         <div className="dx-panel" style={{ marginBottom: 0 }}>
           <h3 className="dx-panel-title">Last Known Locations</h3>
-          <LiveFleetMap markers={mapMarkers} />
+          <LiveFleetMap
+            markers={mapMarkers}
+            selectedId={selectedId}
+            onSelect={handleSelect}
+          />
         </div>
 
+        {/* ── Delivery cards panel ── */}
         <div className="dx-panel" style={{ marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
             <h3 className="dx-panel-title" style={{ margin: 0 }}>Active Deliveries</h3>
             <span style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>{assignments.length} active</span>
           </div>
-          <div className="dx-driver-cards" style={{ maxHeight: 420 }}>
+
+          <div className="dx-driver-cards" style={{ maxHeight: 480 }}>
             {assignments.length === 0 ? (
-              <p style={{ color: 'var(--muted)', fontSize: '0.875rem', textAlign: 'center', padding: '32px 0' }}>No active deliveries.</p>
+              <p style={{ color: 'var(--muted)', fontSize: '0.875rem', textAlign: 'center', padding: '32px 0' }}>
+                No active deliveries.
+              </p>
             ) : (
               assignments.map((a) => {
-                const gps = gpsMap[a.id]
-                const delay = a.latest_delay_report
+                const gps       = gpsMap[a.id]
+                const delay     = a.latest_delay_report
                 const arrivedLog = a.latest_arrived_status_log
                 const isPastDue = a.job_order?.scheduled_end && new Date(a.job_order.scheduled_end).getTime() < Date.now()
-                const mapsUrl = gps
+                const isActive  = selectedId === a.id
+                const mapsUrl   = gps
                   ? `https://www.google.com/maps?q=${gps.lat},${gps.lng}`
-                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '')}`
+                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '',
+                    )}`
+
                 return (
-                  <div key={a.id} className="dx-driver-card-dx">
-                    <header>
-                      <strong style={{ fontSize: '0.875rem' }}>{a.driver?.user?.name ?? 'Driver'}</strong>
+                  <div
+                    key={a.id}
+                    ref={(el) => { if (el) cardRefs.current[a.id] = el }}
+                    className={`dx-driver-card-dx${isActive ? ' dx-driver-card-dx--active' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isActive}
+                    onClick={() => handleSelect(a.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelect(a.id) }
+                    }}
+                  >
+                    <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <strong style={{ fontSize: '0.875rem' }}>{a.driver?.user?.name ?? 'Driver'}</strong>
+                        {isActive && (
+                          <span className="dx-card-active-badge">
+                            ● Selected
+                          </span>
+                        )}
+                      </div>
                       <StatusBadge status={a.status} />
                     </header>
+
                     <div className="dx-driver-muted" style={{ marginTop: 10 }}>
                       <div style={{ fontWeight: 600 }}>Job {formatJobPublicId(a.job_order_id)}</div>
-                      <div style={{ marginTop: 3 }}>{buildDisplayAddress('pickup', a.job_order) || a.job_order?.pickup_location || '—'} → {buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '—'}</div>
+                      <div style={{ marginTop: 3 }}>
+                        {buildDisplayAddress('pickup', a.job_order) || a.job_order?.pickup_location || '—'}
+                        {' → '}
+                        {buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '—'}
+                      </div>
                       <div style={{ marginTop: 6, fontSize: '0.8125rem' }}>
                         <strong>Last Reported Status:</strong> {a.status?.replace(/_/g, ' ') ?? '—'}
                       </div>
+
                       {arrivedLog?.arrival_verified && (
                         <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', fontSize: '0.8125rem', color: '#166534', display: 'flex', alignItems: 'center', gap: 6 }}>
                           <ShieldCheck size={14} />
@@ -147,16 +212,23 @@ function DeliveryMonitoringPage() {
                           </span>
                         </div>
                       )}
+
                       <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
                         <MapPin size={13} />
-                        {gps ? `Last Known Location: ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : 'No location reported yet'}
+                        {gps
+                          ? `${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}`
+                          : 'No location reported yet'}
                       </div>
                       {gps?.at && (
                         <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--muted)' }}>
                           Last Updated: {formatGpsTime(gps.at)}
                         </div>
                       )}
-                      <div style={{ marginTop: 3 }}><Car size={12} style={{ display: 'inline', marginRight: 4 }} />{a.vehicle?.plate_no}</div>
+                      <div style={{ marginTop: 3 }}>
+                        <Car size={12} style={{ display: 'inline', marginRight: 4 }} />
+                        {a.vehicle?.plate_no ?? '—'}
+                      </div>
+
                       {(isPastDue || delay) && (
                         <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca' }}>
                           <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#991b1b' }}>
@@ -168,9 +240,7 @@ function DeliveryMonitoringPage() {
                                 <strong>Reason:</strong> {getDelayReasonLabel(delay.delay_reason)}
                               </div>
                               {delay.delay_notes && (
-                                <div style={{ marginTop: 4, fontSize: '0.8125rem', color: 'var(--muted)' }}>
-                                  {delay.delay_notes}
-                                </div>
+                                <div style={{ marginTop: 4, fontSize: '0.8125rem', color: 'var(--muted)' }}>{delay.delay_notes}</div>
                               )}
                               <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--muted)' }}>
                                 Reported {delay.created_at ? new Date(delay.created_at).toLocaleString() : '—'}
@@ -185,7 +255,7 @@ function DeliveryMonitoringPage() {
                                   className="btn-dx-primary btn-sm"
                                   style={{ marginTop: 8 }}
                                   disabled={acknowledgingId === delay.id}
-                                  onClick={() => handleAcknowledge(delay.id)}
+                                  onClick={(e) => { e.stopPropagation(); handleAcknowledge(delay.id) }}
                                 >
                                   {acknowledgingId === delay.id ? 'Acknowledging…' : 'Acknowledge Delay'}
                                 </button>
@@ -198,7 +268,15 @@ function DeliveryMonitoringPage() {
                           )}
                         </div>
                       )}
-                      <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="btn-dx-secondary btn-sm" style={{ marginTop: 8, display: 'inline-flex', gap: 4 }}>
+
+                      <a
+                        href={mapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-dx-secondary btn-sm"
+                        style={{ marginTop: 8, display: 'inline-flex', gap: 4 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <ExternalLink size={12} /> Open in Maps
                       </a>
                     </div>

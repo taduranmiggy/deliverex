@@ -256,6 +256,9 @@ function DriverJobDetailsPage() {
       return
     }
 
+    // Capture the action timestamp before any async work (preserves original timing)
+    const actionTs = new Date().toISOString()
+
     setStatusSubmitting(true)
     try {
       const statusPayload = { assignment_id: assignment.id, status: pendingStatus }
@@ -283,7 +286,7 @@ function DriverJobDetailsPage() {
             proofPayload.signatureName = signatureFile.name
             proofPayload.signatureType = signatureFile.type
           }
-          enqueue({ type: 'completion_proof', payload: proofPayload })
+          enqueue({ type: 'completion_proof', payload: proofPayload, action_timestamp: actionTs })
         }
         if (departureFile) {
           const fileBase64 = await readFileAsBase64(departureFile)
@@ -297,9 +300,10 @@ function DriverJobDetailsPage() {
               fileType: departureFile.type,
               fileBase64,
             },
+            action_timestamp: actionTs,
           })
         }
-        enqueue({ type: 'status', payload: statusPayload })
+        enqueue({ type: 'status', payload: statusPayload, action_timestamp: actionTs })
         const offlineMsg = isCompleteProof
           ? 'Completion proof and status queued — will sync when online'
           : isArrivalVerify
@@ -349,6 +353,7 @@ function DriverJobDetailsPage() {
       setIssueError('Select an issue type.')
       return
     }
+    const actionTs = new Date().toISOString()
     setIssueSubmitting(true)
     setIssueError('')
     try {
@@ -363,7 +368,7 @@ function DriverJobDetailsPage() {
           payload.fileName = issuePhoto.name
           payload.fileType = issuePhoto.type
         }
-        enqueue({ type: 'issue', payload })
+        enqueue({ type: 'issue', payload, action_timestamp: actionTs })
         showToast('Issue report queued — will sync when online')
       } else {
         const fd = new FormData()
@@ -395,6 +400,7 @@ function DriverJobDetailsPage() {
       setDelayError('Notes are required when selecting Other.')
       return
     }
+    const actionTs = new Date().toISOString()
     setDelaySubmitting(true)
     setDelayError('')
     const payload = {
@@ -404,7 +410,7 @@ function DriverJobDetailsPage() {
     }
     try {
       if (!isOnline) {
-        enqueue({ type: 'delay', payload })
+        enqueue({ type: 'delay', payload, action_timestamp: actionTs })
         showToast('Delay report queued — will sync when online')
       } else {
         await postDelayReport(payload)

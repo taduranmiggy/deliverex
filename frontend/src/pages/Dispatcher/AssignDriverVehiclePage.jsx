@@ -7,7 +7,31 @@ import { IconRouteArrow } from '../../components/DxIcons'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus } from '../../utils/statusLabels'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
-import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, Star, Truck, User, Zap } from 'lucide-react'
+
+// ─── Priority helpers ──────────────────────────────────────────────────────────
+const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 }
+
+const PRIORITY_BADGE = {
+  urgent: { label: 'URGENT', color: '#7f1d1d', bg: '#fee2e2', border: '#fca5a5' },
+  high:   { label: 'HIGH',   color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
+  normal: { label: 'NORMAL', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
+  low:    { label: 'LOW',    color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
+}
+
+function PriorityBadge({ priority }) {
+  const cfg = PRIORITY_BADGE[priority] ?? PRIORITY_BADGE.normal
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center',
+      fontSize: '0.625rem', fontWeight: 800, letterSpacing: '0.06em',
+      padding: '1px 7px', borderRadius: 99,
+      color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`,
+    }}>
+      {cfg.label}
+    </span>
+  )
+}
 
 /* ── Confirm / Override Modal ──────────────────────────────── */
 function AssignConfirmModal({ job, candidate, recommendedTop, isOverride, overrideReason, onOverrideReasonChange, onConfirm, onCancel, submitting, error }) {
@@ -137,7 +161,7 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
 
       {/* Score + Top Factor */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{
             fontSize: '1.125rem', fontWeight: 800, color: isTop ? 'var(--color-primary)' : 'var(--text)',
             background: isTop ? '#dbeafe' : 'var(--slate-100)', padding: '2px 10px', borderRadius: 8, letterSpacing: '-0.01em',
@@ -147,7 +171,17 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
           {item.unused_capacity != null && (
             <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
               {item.unused_capacity} m³ unused
-              {item.client_preference_match ? ' · ✓ pref' : ''}
+            </span>
+          )}
+          {item.client_preference_match && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: '0.6875rem', fontWeight: 700,
+              color: '#15803d', background: '#f0fdf4',
+              border: '1px solid #bbf7d0', borderRadius: 99,
+              padding: '1px 8px',
+            }}>
+              <Star size={10} /> Client Preference Match
             </span>
           )}
         </div>
@@ -201,7 +235,16 @@ function AssignDriverVehiclePage() {
     try {
       const res = await fetchJobOrders(1)
       const pending = (res.data || []).filter((item) => item.status === 'pending')
-      setJobOrders(pending)
+      // Sort: priority (urgent → high → normal → low) then scheduled_start asc
+      const sorted = [...pending].sort((a, b) => {
+        const pa = PRIORITY_ORDER[a.priority] ?? 2
+        const pb = PRIORITY_ORDER[b.priority] ?? 2
+        if (pa !== pb) return pa - pb
+        const ta = a.scheduled_start ? new Date(a.scheduled_start).getTime() : Infinity
+        const tb = b.scheduled_start ? new Date(b.scheduled_start).getTime() : Infinity
+        return ta - tb
+      })
+      setJobOrders(sorted)
       setSelected((prev) => {
         if (preselectJobId) {
           const requested = pending.find((p) => p.id === preselectJobId)
@@ -308,13 +351,11 @@ function AssignDriverVehiclePage() {
                     boxShadow: isActive ? '0 0 0 3px rgba(37,99,235,0.1)' : 'none',
                     transition: 'all 0.15s',
                   }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 5 }}>
                     <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.8125rem', color: isActive ? 'var(--color-primary)' : 'var(--muted)' }}>
                       {formatJobPublicId(order.id)}
                     </span>
-                    <span style={{ fontSize: '0.7rem', background: '#fef3c7', color: '#92400e', padding: '1px 7px', borderRadius: 99, fontWeight: 600 }}>
-                      {formatJobStatus(order.status)}
-                    </span>
+                    <PriorityBadge priority={order.priority} />
                   </div>
                   <p style={{ margin: '0 0 3px', fontWeight: 600, fontSize: '0.875rem' }}>
                     {order.client?.client_name || order.custom_client_name || buildDisplayName(order)}
@@ -370,6 +411,20 @@ function AssignDriverVehiclePage() {
                     </span>
                   )}
                 </div>
+
+                {/* Client vehicle preference notice */}
+                {top?.client_preference_match && (
+                  <div style={{
+                    marginTop: 10,
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '7px 11px', borderRadius: 8,
+                    background: '#f0fdf4', border: '1px solid #bbf7d0',
+                    fontSize: '0.75rem', color: '#15803d', fontWeight: 600,
+                  }}>
+                    <Star size={12} style={{ flexShrink: 0 }} />
+                    Client vehicle preference applied — recommended vehicle received a score boost.
+                  </div>
+                )}
               </div>
 
               {/* Top recommendation card */}

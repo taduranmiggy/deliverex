@@ -16,7 +16,7 @@ export async function fetchDocumentPreviewBlob(documentId) {
 }
 
 // ─── Fetch (list) ─────────────────────────────────────────────────────────────
-export function fetchUsers(page = 1)       { return apiRequest(`/admin/users?page=${page}`) }
+export function fetchUsers(page = 1, perPage = 15) { return apiRequest(`/admin/users?page=${page}&per_page=${perPage}`) }
 export function fetchDrivers(page = 1)     { return apiRequest(`/admin/drivers?page=${page}`) }
 export function fetchVehicles(page = 1)    { return apiRequest(`/admin/vehicles?page=${page}`) }
 export function fetchOcrQueue(page = 1, filter = 'all') {

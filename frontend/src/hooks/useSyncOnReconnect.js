@@ -1,19 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getQueue } from '../utils/offlineQueue'
+import { getConflictLog, getQueue } from '../utils/offlineQueue'
 import { syncQueue } from '../utils/syncQueue'
 import useOnlineStatus from './useOnlineStatus'
 
+const SYNCED_DISMISS_MS = 4000 // auto-hide "Synced" banner after 4 s
+
 /**
- * Automatically flushes the offline queue whenever the device comes back online.
- * Returns { syncState, lastSynced, pendingCount, manualSync }.
- * syncState: 'idle' | 'syncing' | 'synced' | 'failed'
+ * Manages offline queue synchronisation.
+ *
+ * Returned values:
+ *   syncState     — 'idle' | 'syncing' | 'synced' | 'failed'
+ *   lastSynced    — Date | null  (timestamp of most recent successful sync)
+ *   pendingCount  — number of items still in the queue
+ *   conflictCount — number of logged conflicts
+ *   isOnline      — current connectivity
+ *   manualSync    — () => void  (trigger sync programmatically)
  */
 function useSyncOnReconnect() {
-  const isOnline = useOnlineStatus()
-  const wasOnlineRef = useRef(isOnline)
-  const [syncState, setSyncState] = useState('idle')
-  const [lastSynced, setLastSynced] = useState(null)
-  const [pendingCount, setPendingCount] = useState(() => getQueue().length)
+  const isOnline      = useOnlineStatus()
+  const wasOnlineRef  = useRef(isOnline)
+  const dismissTimer  = useRef(null)
+
+  const [syncState,     setSyncState]     = useState('idle')
+  const [lastSynced,    setLastSynced]    = useState(null)
+  const [pendingCount,  setPendingCount]  = useState(() => getQueue().length)
+  const [conflictCount, setConflictCount] = useState(() => getConflictLog().length)
+
+  const refreshCounts = useCallback(() => {
+    setPendingCount(getQueue().length)
+    setConflictCount(getConflictLog().length)
+  }, [])
+
+  const scheduleAutoDismiss = useCallback(() => {
+    if (dismissTimer.current) clearTimeout(dismissTimer.current)
+    dismissTimer.current = setTimeout(() => {
+      setSyncState((s) => (s === 'synced' ? 'idle' : s))
+    }, SYNCED_DISMISS_MS)
+  }, [])
 
   const runSync = useCallback(async () => {
     const queue = getQueue()
@@ -25,16 +48,23 @@ function useSyncOnReconnect() {
     setSyncState('syncing')
     try {
       const result = await syncQueue()
-      setPendingCount(result.remaining)
-      setSyncState(result.remaining === 0 ? 'synced' : 'failed')
       setLastSynced(new Date())
+      setPendingCount(result.remaining)
+      setConflictCount(getConflictLog().length)
+
+      if (result.remaining === 0) {
+        setSyncState('synced')
+        scheduleAutoDismiss()
+      } else {
+        setSyncState('failed')
+      }
     } catch {
       setSyncState('failed')
-      setPendingCount(getQueue().length)
+      refreshCounts()
     }
-  }, [])
+  }, [refreshCounts, scheduleAutoDismiss])
 
-  // Auto-sync when coming back online
+  // Auto-sync on reconnect
   useEffect(() => {
     const wasOnline = wasOnlineRef.current
     wasOnlineRef.current = isOnline
@@ -45,18 +75,31 @@ function useSyncOnReconnect() {
 
     if (!isOnline) {
       setSyncState('idle')
+      if (dismissTimer.current) clearTimeout(dismissTimer.current)
     }
   }, [isOnline, runSync])
 
-  // Keep pendingCount in sync with queue
+  // Listen for Background Sync trigger from service worker
   useEffect(() => {
-    setPendingCount(getQueue().length)
-  })
+    if (!('serviceWorker' in navigator)) return
+    const handleMessage = (event) => {
+      if (event.data?.type === 'BG_SYNC' && navigator.onLine) runSync()
+    }
+    navigator.serviceWorker.addEventListener('message', handleMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', handleMessage)
+  }, [runSync])
+
+  // Keep counts current on every render (queue changes from same tab)
+  useEffect(() => { refreshCounts() })
+
+  // Cleanup timer on unmount
+  useEffect(() => () => { if (dismissTimer.current) clearTimeout(dismissTimer.current) }, [])
 
   return {
     syncState,
     lastSynced,
     pendingCount,
+    conflictCount,
     isOnline,
     manualSync: runSync,
   }

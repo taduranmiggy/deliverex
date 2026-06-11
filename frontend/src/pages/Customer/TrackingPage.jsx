@@ -161,8 +161,8 @@ function TrackingPage() {
         <div className="tracking-card tracking-status" aria-live="polite">
           <div className="tracking-status-header">
             <div>
-              <h2>Status overview</h2>
-              <p>Latest updates from dispatch and delivery logs.</p>
+              <h2>Delivery Status</h2>
+              <p>Current status, estimated arrival, and delivery confirmation.</p>
             </div>
             <span className="tracking-pill tracking-pill--muted" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <Clock size={11} />

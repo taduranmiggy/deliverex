@@ -10,9 +10,10 @@ use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(User::with('role', 'driver')->paginate(20));
+        $perPage = max(1, min(500, (int) $request->input('per_page', 15)));
+        return response()->json(User::with('role', 'driver')->paginate($perPage));
     }
 
     public function store(Request $request)
@@ -31,11 +32,12 @@ class UserController extends Controller
         $user = User::create($data);
         $user->load('role');
 
-        if ($user->role?->name === 'driver') {
-            DriverAccount::resolve($user);
-        }
+        // Always call resolve (it checks role internally); builds a complete
+        // driver profile including full_name + status so the driver appears
+        // immediately on dispatcher and Best-Fit screens.
+        DriverAccount::resolve($user);
 
-        return response()->json($user->load('role', 'driver'), 201);
+        return response()->json($user->fresh()->load('role', 'driver'), 201);
     }
 
     public function update(Request $request, User $user)
@@ -57,7 +59,12 @@ class UserController extends Controller
 
         $user->update($data);
 
-        return response()->json($user->load('role'));
+        // Ensure a driver profile exists (and stays in sync) whenever:
+        //  - the user's role is (or becomes) driver, OR
+        //  - the user's display name changed (keeps full_name consistent)
+        DriverAccount::sync($user->fresh());
+
+        return response()->json($user->fresh()->load('role', 'driver'));
     }
 
     public function destroy(User $user)

@@ -37,10 +37,16 @@ class MasterDataController extends Controller
                     ->where('status', '!=', 'inactive')
                     ->orderBy('plate_no')
                     ->get(),
+                // Include all non-inactive drivers. full_name is now always
+                // populated by DriverAccount::resolve(), so the old
+                // whereNotNull('full_name') guard is no longer needed.
                 'drivers' => Driver::query()
                     ->with('user:id,name,email')
-                    ->whereNotNull('full_name')
-                    ->orderBy('full_name')
+                    ->where(function ($q) {
+                        $q->where('status', '!=', 'inactive')
+                          ->orWhereNull('status');
+                    })
+                    ->orderByRaw('COALESCE(full_name, "") ASC')
                     ->get(),
                 'driver_vehicle_assignments' => DriverVehicleAssignment::query()
                     ->with(['driver:id,full_name', 'vehicle:id,plate_no', 'vehicle.vehicleType:id,name'])

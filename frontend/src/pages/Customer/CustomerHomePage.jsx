@@ -110,13 +110,13 @@ function CustomerHomePage() {
             <h1 style={{ fontSize: 'clamp(1.625rem, 3vw, 2.5rem)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1.18, marginBottom: 10, color: '#fff' }}>
               {isCustomer
                 ? <>Welcome back, <span style={{ color: '#93c5fd' }}>{user?.name}</span></>
-                : <>Track and manage<br />your site deliveries</>
+                : 'Track Your Delivery'
               }
             </h1>
             <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '1rem', lineHeight: 1.6, maxWidth: 520 }}>
               {isCustomer
-                ? 'Manage your deliveries, monitor shipment progress, and access your delivery history — all from one place.'
-                : 'Enter a tracking ID to get status, estimated arrival, and proof-of-delivery for any shipment.'}
+                ? 'Monitor your delivery progress, estimated arrivals, and proof-of-delivery records — all in one place.'
+                : 'Enter your Job Order ID to view delivery status, estimated arrival, and proof-of-delivery updates.'}
             </p>
           </div>
 
@@ -300,28 +300,28 @@ function CustomerHomePage() {
               {
                 icon: MapPin,
                 title: 'Delivery Tracking',
-                desc: 'Monitor delivery progress from dispatch to completion.',
+                desc: 'Enter your Job Order ID to view current delivery status and estimated arrival time.',
                 color: 'var(--color-primary)',
                 bg: 'var(--color-primary-light)',
               },
               {
                 icon: Package,
                 title: 'Proof of Delivery',
-                desc: 'Access delivery confirmation documents for completed shipments.',
+                desc: 'Access signed delivery confirmation records once your shipment is completed.',
                 color: '#7c3aed',
                 bg: '#ede9fe',
               },
               {
                 icon: History,
                 title: 'Delivery History',
-                desc: 'Review all past deliveries, dates, routes, and status records.',
+                desc: 'Review your past deliveries, routes, schedules, and completion records.',
                 color: '#0891b2',
                 bg: '#e0f2fe',
               },
             ].map(({ icon: Icon, title, desc, color, bg }) => (
               <div key={title} className="dx-feature-card">
                 <div className="dx-feature-card__icon" style={{ background: bg, color }}>
-                  <Icon size={22} aria-hidden />
+                  <Icon size={24} aria-hidden />
                 </div>
                 <p className="dx-feature-card__title">{title}</p>
                 <p className="dx-feature-card__desc">{desc}</p>
@@ -333,7 +333,7 @@ function CustomerHomePage() {
         {!isCustomer && (
           <div style={{ marginTop: 32, textAlign: 'center', padding: '48px 24px', background: 'var(--surface)', borderRadius: 20, border: '1px solid var(--stroke)' }}>
             <p style={{ fontWeight: 800, fontSize: '1.375rem', marginBottom: 8 }}>Ready to track your deliveries?</p>
-            <p style={{ color: 'var(--muted)', marginBottom: 24 }}>Create an account to see all shipments linked to your email, manage bookings, and receive delivery alerts.</p>
+            <p style={{ color: 'var(--muted)', marginBottom: 24 }}>Create an account to view all deliveries linked to your email and access your full delivery history and status records.</p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Link to="/customer/signup" className="btn-dx-primary btn-lg">Create free account</Link>
               <Link to="/login" className="btn-dx-secondary btn-lg">Sign in</Link>

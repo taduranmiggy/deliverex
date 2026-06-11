@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { createJobOrder, createMaterialSpecification, createMaterialType, deleteJobOrder, fetchClientHistory, fetchJobOrders, fetchMasterDataOptions, updateJobOrder } from '../../api/dispatcher'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import {
+  createJobOrder, createMaterialSpecification, createMaterialType,
+  deleteJobOrder, fetchClientHistory, fetchJobOrders,
+  fetchMasterDataOptions, updateJobOrder,
+} from '../../api/dispatcher'
 import ClientCombobox from '../../components/ClientCombobox'
 import CreatableCombobox from '../../components/CreatableCombobox'
 import CustomerHistoryIntelligence from '../../components/CustomerHistoryIntelligence'
@@ -13,210 +17,335 @@ import {
   validateJobSchedule,
 } from '../../utils/scheduleValidation'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
+import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
+import { FilterSelect } from '../../components/ui'
 
-// ─── Blank form state ─────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const BLANK = {
-  client_id: '',
-  custom_client_name: '',
+  client_id: '', custom_client_name: '',
   contact_person: '', customer_email: '', customer_contact: '',
   save_as_client: true,
   quarry_id: '', preferred_vehicle_type_id: '',
   pickup_province: '', pickup_city: '', pickup_barangay: '', pickup_street: '', pickup_landmark: '',
-  // Drop-off
   dropoff_province: '', dropoff_city: '', dropoff_barangay: '', dropoff_street: '', dropoff_landmark: '',
-  // Material & load
   material_type_id: '', material_specification_id: '', load_volume_m3: '',
-  // Schedule & instructions
   scheduled_start: '', scheduled_end: '',
   priority: 'normal', special_handling_instructions: '', notes: '',
 }
 
-function SectionHeading({ children, hint }) {
-  return (
-    <div style={{
-      gridColumn: '1 / -1',
-      borderBottom: '1px solid var(--border, #e5e7eb)',
-      paddingBottom: 6, marginTop: 14, marginBottom: 2,
-      display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8,
-    }}>
-      <span style={{ fontWeight: 600, fontSize: '0.8125rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--muted)' }}>
-        {children}
-      </span>
-      {hint ? <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{hint}</span> : null}
-    </div>
-  )
-}
+const STEPS = [
+  { id: 1, label: 'Client',    hint: 'Client & contacts' },
+  { id: 2, label: 'Material',  hint: 'Type, spec & load' },
+  { id: 3, label: 'Route',     hint: 'Pickup & delivery' },
+  { id: 4, label: 'Schedule',  hint: 'Dates & notes' },
+  { id: 5, label: 'Review',    hint: 'Confirm & submit' },
+]
 
-function AutoFilledTag() {
-  return (
-    <span style={{
-      fontSize: '0.6875rem', fontWeight: 600, color: '#0369a1', background: '#e0f2fe',
-      borderRadius: 6, padding: '1px 6px', marginLeft: 6,
-    }}>
-      Auto-filled
-    </span>
-  )
-}
+const DRAFT_KEY = 'dx_jo_wizard_draft'
+
+// ─── Tab filter groups ─────────────────────────────────────────────────────────
+const ACTIVE_STATUSES    = ['pending', 'assigned', 'in_progress', 'arrived']
+const COMPLETED_STATUSES = ['completed']
+
+const TABS = [
+  { id: 'all',       label: 'All' },
+  { id: 'active',    label: 'Active Deliveries' },
+  { id: 'completed', label: 'Completed' },
+]
+
+const STATUS_OPTIONS_ALL = [
+  { value: 'all',         label: 'All Statuses' },
+  { value: 'pending',     label: 'Pending' },
+  { value: 'assigned',    label: 'Assigned' },
+  { value: 'in_progress', label: 'En Route' },
+  { value: 'arrived',     label: 'Arrived' },
+  { value: 'completed',   label: 'Completed' },
+  { value: 'cancelled',   label: 'Cancelled' },
+]
+const STATUS_OPTIONS_ACTIVE = [
+  { value: 'all',         label: 'All Active' },
+  { value: 'pending',     label: 'Pending' },
+  { value: 'assigned',    label: 'Assigned' },
+  { value: 'in_progress', label: 'En Route' },
+  { value: 'arrived',     label: 'Arrived' },
+]
+const STATUS_OPTIONS_COMPLETED = [
+  { value: 'all',       label: 'All Completed' },
+  { value: 'completed', label: 'Completed' },
+]
+
+const PAGE_SIZE = 15
+
+// ─── Helper builders ──────────────────────────────────────────────────────────
 
 function buildMaterialTypeSelection(initial, materialTypes) {
   if (!initial?.material_type_id) return null
   const mt = materialTypes.find((m) => String(m.id) === String(initial.material_type_id))
-  return {
-    type: 'existing',
-    id: initial.material_type_id,
-    label: mt?.name || initial.material_type || `Material #${initial.material_type_id}`,
-  }
+  return { type: 'existing', id: initial.material_type_id, label: mt?.name || initial.material_type || `Material #${initial.material_type_id}` }
 }
 
 function buildSpecSelection(initial, specOptions) {
   if (!initial?.material_specification_id) return null
   const spec = specOptions.find((s) => String(s.id) === String(initial.material_specification_id))
-  return {
-    type: 'existing',
-    id: initial.material_specification_id,
-    label: spec?.name || initial.specification_size || `Spec #${initial.material_specification_id}`,
-  }
+  return { type: 'existing', id: initial.material_specification_id, label: spec?.name || initial.specification_size || `Spec #${initial.material_specification_id}` }
 }
 
 function buildClientSelection(initial, clients) {
   if (!initial) return null
   if (initial.client_id) {
     const client = clients.find((c) => String(c.id) === String(initial.client_id))
-    return {
-      type: 'existing',
-      clientId: initial.client_id,
-      label: client?.client_name || initial.client?.client_name || `Client #${initial.client_id}`,
-    }
+    return { type: 'existing', clientId: initial.client_id, label: client?.client_name || initial.client?.client_name || `Client #${initial.client_id}` }
   }
   const custom = initial.custom_client_name || initial.customer_name || buildDisplayName(initial)
   if (custom) return { type: 'custom', label: custom }
   return null
 }
 
-// ─── Job Order Form ───────────────────────────────────────────────────────────
+// ─── Micro components ─────────────────────────────────────────────────────────
+
+function AutoFilledTag() {
+  return <span className="dx-autofill-tag">Auto-filled</span>
+}
+
+function WizLabel({ children, required }) {
+  return (
+    <span className="dx-wiz-label-text">
+      {children}
+      {required && <span className="dx-wiz-required">*</span>}
+    </span>
+  )
+}
+
+function FieldWrap({ label, required, error, full, children, style }) {
+  return (
+    <label className={`dx-wiz-label${full ? ' dx-wiz-full' : ''}`} style={style}>
+      <WizLabel required={required}>{label}</WizLabel>
+      {children}
+      {error && <span className="dx-wiz-error-text">{error}</span>}
+    </label>
+  )
+}
+
+function WizInput({ value, onChange, placeholder, type = 'text', min, step, error, ...rest }) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      min={min}
+      step={step}
+      className={`dx-wiz-input${error ? ' dx-wiz-input--error' : ''}`}
+      {...rest}
+    />
+  )
+}
+
+// ─── Step Indicator ───────────────────────────────────────────────────────────
+
+function StepIndicator({ current }) {
+  return (
+    <div className="dx-stepper" role="list" aria-label="Form progress">
+      {STEPS.map((step, i) => {
+        const done   = step.id < current
+        const active = step.id === current
+        return (
+          <div key={step.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 0, flex: step.id < STEPS.length ? 1 : 0 }}>
+            <div
+              className={`dx-stepper__step${done ? ' done' : ''}${active ? ' active' : ''}`}
+              role="listitem"
+              aria-current={active ? 'step' : undefined}
+            >
+              <div className="dx-stepper__dot">
+                {done ? <Check size={13} /> : step.id}
+              </div>
+              <div className="dx-stepper__info">
+                <span className="dx-stepper__label">{step.label}</span>
+                <span className="dx-stepper__hint">{step.hint}</span>
+              </div>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div className={`dx-stepper__connector${done ? ' done' : ''}`} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Review Section ───────────────────────────────────────────────────────────
+
+function ReviewBlock({ title, onEdit, stepNum, children, cols = 2 }) {
+  return (
+    <div className="dx-review-block">
+      <div className="dx-review-block__header">
+        <span className="dx-review-block__title">{title}</span>
+        <button type="button" className="dx-review-block__edit" onClick={() => onEdit(stepNum)}>
+          Edit
+        </button>
+      </div>
+      <div className={`dx-review-block__body${cols === 1 ? ' dx-review-block__body--1col' : cols === 3 ? ' dx-review-block__body--3col' : ''}`}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function RR({ label, value }) {
+  return (
+    <div className="dx-review-row">
+      <span className="dx-review-row__label">{label}</span>
+      <span className={`dx-review-row__value${!value ? ' dx-review-row__empty' : ''}`}>{value || 'Not provided'}</span>
+    </div>
+  )
+}
+
+// ─── Job Order Wizard Form ─────────────────────────────────────────────────────
 
 function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onRefreshOptions }) {
-  const isEdit = Boolean(initial?.id)
-  const clients = options.clients || []
+  const isEdit       = Boolean(initial?.id)
+  const clients      = options.clients         || []
   const materialTypes = useMemo(() => options.material_types || [], [options.material_types])
-  const quarries = options.quarries || []
-  const vehicleTypes = options.vehicle_types || []
-  const findMaterialTypeById = (id) => materialTypes.find((m) => String(m.id) === String(id))
-  const findClientById = (id) => clients.find((c) => String(c.id) === String(id))
+  const quarries     = options.quarries        || []
+  const vehicleTypes = options.vehicle_types   || []
+  const toast        = useToast()
+
+  const findClientById       = (id) => clients.find((c) => String(c.id) === String(id))
   const findDefaultPreference = (clientId) => (options.client_preferences || []).find(
     (p) => String(p.client_id) === String(clientId) && p.is_default,
   )
 
-  const initialMaterialTypeId = initial?.material_type_id ?? materialTypes.find((m) => m.name === initial?.material_type)?.id ?? ''
-  const initialSpecs = findMaterialTypeById(initialMaterialTypeId)?.specifications ?? []
-  const initialSpecificationId = initial?.material_specification_id
-    ?? initialSpecs.find((s) => s.name === initial?.specification_size)?.id
-    ?? ''
+  // ── Init from initial data or draft ────────────────────────────────────────
+  const initialMaterialTypeId    = initial?.material_type_id ?? materialTypes.find((m) => m.name === initial?.material_type)?.id ?? ''
+  const initialSpecs             = materialTypes.find((m) => String(m.id) === String(initialMaterialTypeId))?.specifications ?? []
+  const initialSpecificationId   = initial?.material_specification_id ?? initialSpecs.find((s) => s.name === initial?.specification_size)?.id ?? ''
 
-  const [form, setForm] = useState(initial ? {
-    ...BLANK,
-    client_id: initial.client_id ? String(initial.client_id) : '',
-    custom_client_name: initial.custom_client_name ?? (initial.client_id ? '' : (initial.customer_name || buildDisplayName(initial) || '')),
-    contact_person: initial.contact_person ?? initial.client?.contact_person ?? '',
-    customer_email: initial.customer_email ?? initial.client?.email ?? '',
-    customer_contact: initial.customer_contact ?? initial.client?.phone ?? '',
-    save_as_client: !initial.client_id,
-    quarry_id: initial.quarry_id ?? '',
-    preferred_vehicle_type_id: initial.preferred_vehicle_type_id ?? '',
-    pickup_province: initial.pickup_province ?? '',
-    pickup_city: initial.pickup_city ?? '',
-    pickup_barangay: initial.pickup_barangay ?? '',
-    pickup_street: initial.pickup_street ?? '',
-    pickup_landmark: initial.pickup_landmark ?? '',
-    dropoff_province: initial.dropoff_province ?? '',
-    dropoff_city: initial.dropoff_city ?? '',
-    dropoff_barangay: initial.dropoff_barangay ?? '',
-    dropoff_street: initial.dropoff_street ?? '',
-    dropoff_landmark: initial.dropoff_landmark ?? '',
-    material_type_id: initialMaterialTypeId,
-    material_specification_id: initialSpecificationId,
-    load_volume_m3: initial.load_volume_m3 ?? initial.volume_m3 ?? '',
-    scheduled_start: initial.scheduled_start ? new Date(initial.scheduled_start).toISOString().slice(0, 16) : '',
-    scheduled_end: initial.scheduled_end ? new Date(initial.scheduled_end).toISOString().slice(0, 16) : '',
-    priority: initial.priority ?? 'normal',
-    special_handling_instructions: initial.special_handling_instructions ?? initial.job_requirements ?? '',
-    notes: initial.notes ?? '',
-  } : BLANK)
+  const buildInitialForm = () => {
+    if (!initial) {
+      // Try to restore new-order draft from sessionStorage
+      if (!isEdit) {
+        try {
+          const raw = sessionStorage.getItem(DRAFT_KEY)
+          if (raw) return JSON.parse(raw)
+        } catch { /* ignore */ }
+      }
+      return BLANK
+    }
+    return {
+      ...BLANK,
+      client_id: initial.client_id ? String(initial.client_id) : '',
+      custom_client_name: initial.custom_client_name ?? (initial.client_id ? '' : (initial.customer_name || buildDisplayName(initial) || '')),
+      contact_person: initial.contact_person ?? initial.client?.contact_person ?? '',
+      customer_email: initial.customer_email ?? initial.client?.email ?? '',
+      customer_contact: initial.customer_contact ?? initial.client?.phone ?? '',
+      save_as_client: !initial.client_id,
+      quarry_id: initial.quarry_id ?? '',
+      preferred_vehicle_type_id: initial.preferred_vehicle_type_id ?? '',
+      pickup_province: initial.pickup_province ?? '',
+      pickup_city: initial.pickup_city ?? '',
+      pickup_barangay: initial.pickup_barangay ?? '',
+      pickup_street: initial.pickup_street ?? '',
+      pickup_landmark: initial.pickup_landmark ?? '',
+      dropoff_province: initial.dropoff_province ?? '',
+      dropoff_city: initial.dropoff_city ?? '',
+      dropoff_barangay: initial.dropoff_barangay ?? '',
+      dropoff_street: initial.dropoff_street ?? '',
+      dropoff_landmark: initial.dropoff_landmark ?? '',
+      material_type_id: String(initialMaterialTypeId),
+      material_specification_id: String(initialSpecificationId),
+      load_volume_m3: initial.load_volume_m3 ?? initial.volume_m3 ?? '',
+      scheduled_start: initial.scheduled_start ? new Date(initial.scheduled_start).toISOString().slice(0, 16) : '',
+      scheduled_end: initial.scheduled_end ? new Date(initial.scheduled_end).toISOString().slice(0, 16) : '',
+      priority: initial.priority ?? 'normal',
+      special_handling_instructions: initial.special_handling_instructions ?? initial.job_requirements ?? '',
+      notes: initial.notes ?? '',
+    }
+  }
 
-  const [clientSelection, setClientSelection] = useState(() => buildClientSelection(initial, clients))
-  const [materialTypeSelection, setMaterialTypeSelection] = useState(() => buildMaterialTypeSelection(initial, materialTypes))
-  const [specSelection, setSpecSelection] = useState(() => buildSpecSelection(initial, initialSpecs))
-  const [materialTypeSaving, setMaterialTypeSaving] = useState(false)
-  const [specSaving, setSpecSaving] = useState(false)
-  const [materialTypeError, setMaterialTypeError] = useState('')
-  const [specError, setSpecError] = useState('')
-  const [materialTypeSuccess, setMaterialTypeSuccess] = useState('')
-  const [specSuccess, setSpecSuccess] = useState('')
-  const [autoFilled, setAutoFilled] = useState({})
-  const [clientHistory, setClientHistory] = useState(null)
-  const [historyLoading, setHistoryLoading] = useState(false)
-  const [historyError, setHistoryError] = useState('')
-  const [error, setError] = useState('')
-  const [fieldErrors, setFieldErrors] = useState({})
-  const [saving, setSaving] = useState(false)
+  const [form, setForm]         = useState(buildInitialForm)
+  const [currentStep, setStep]  = useState(1)
+  const [fieldErrors, setFE]    = useState({})
+  const [error, setError]       = useState('')
+  const [saving, setSaving]     = useState(false)
+  const [hasDraft, setHasDraft] = useState(() => {
+    if (isEdit) return false
+    try { return Boolean(sessionStorage.getItem(DRAFT_KEY)) } catch { return false }
+  })
+
+  const [clientSelection, setClientSelection]               = useState(() => buildClientSelection(initial, clients))
+  const [materialTypeSelection, setMaterialTypeSelection]   = useState(() => buildMaterialTypeSelection(initial, materialTypes))
+  const [specSelection, setSpecSelection]                   = useState(() => buildSpecSelection(initial, initialSpecs))
+  const [materialTypeSaving, setMaterialTypeSaving]         = useState(false)
+  const [specSaving, setSpecSaving]                         = useState(false)
+  const [materialTypeError, setMaterialTypeError]           = useState('')
+  const [specError, setSpecError]                           = useState('')
+  const [autoFilled, setAutoFilled]                         = useState({})
+  const [clientHistory, setClientHistory]                   = useState(null)
+  const [historyLoading, setHistoryLoading]                 = useState(false)
+  const [historyError, setHistoryError]                     = useState('')
+
   const scheduleMin = minDatetimeLocalValue()
   const isCustomClient = !form.client_id && Boolean(form.custom_client_name?.trim())
 
+  const stepPanelRef  = useRef(null)
+  // Tracks every field the dispatcher has manually typed into.
+  // applyHistoryAutoFill will never overwrite these, preventing async
+  // history responses from clobbering in-progress user input.
+  const userEditedRef = useRef(new Set())
+
+  // ── Draft auto-save ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (isEdit) return
+    try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(form)) } catch { /* ignore */ }
+  }, [form, isEdit])
+
+  const clearDraft = () => {
+    try { sessionStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
+    setHasDraft(false)
+  }
+
+  // ── Spec options ───────────────────────────────────────────────────────────
   const specOptions = useMemo(() => {
-    const selectedType = materialTypes.find((m) => String(m.id) === String(form.material_type_id))
-    return selectedType?.specifications || []
+    const selected = materialTypes.find((m) => String(m.id) === String(form.material_type_id))
+    return selected?.specifications || []
   }, [materialTypes, form.material_type_id])
 
+  // ── Auto-fill from history ─────────────────────────────────────────────────
   const applyHistoryAutoFill = useCallback((autoFill) => {
     if (!autoFill || Object.keys(autoFill).length === 0) return
-
     const filled = {}
     const stringFields = [
       'quarry_id', 'preferred_vehicle_type_id', 'material_type_id', 'material_specification_id',
       'load_volume_m3', 'dropoff_province', 'dropoff_city', 'dropoff_barangay', 'dropoff_street', 'dropoff_landmark',
       'pickup_province', 'pickup_city', 'pickup_barangay', 'pickup_street', 'pickup_landmark',
     ]
-
     setForm((f) => {
       const next = { ...f }
       for (const key of stringFields) {
-        if (autoFill[key] != null && autoFill[key] !== '') {
-          next[key] = String(autoFill[key])
-          filled[key] = true
-        }
+        // Never overwrite a field the user has already typed into manually
+        if (userEditedRef.current.has(key)) continue
+        if (autoFill[key] != null && autoFill[key] !== '') { next[key] = String(autoFill[key]); filled[key] = true }
       }
       return next
     })
-    setAutoFilled((prev) => ({ ...prev, ...filled }))
+    if (Object.keys(filled).length > 0) setAutoFilled((prev) => ({ ...prev, ...filled }))
   }, [])
 
   useEffect(() => {
-    if (!form.client_id) {
-      setClientHistory(null)
-      setHistoryError('')
-      return undefined
-    }
-
+    if (!form.client_id) { setClientHistory(null); setHistoryError(''); return undefined }
     let cancelled = false
-    setHistoryLoading(true)
-    setHistoryError('')
-
+    setHistoryLoading(true); setHistoryError('')
     const params = isEdit && initial?.id ? { exclude_job_order_id: initial.id } : {}
-
     fetchClientHistory(form.client_id, params)
       .then((history) => {
         if (cancelled) return
         setClientHistory(history)
         if (!isEdit) applyHistoryAutoFill(history?.auto_fill)
       })
-      .catch((err) => {
-        if (!cancelled) setHistoryError(err.message)
-      })
-      .finally(() => {
-        if (!cancelled) setHistoryLoading(false)
-      })
-
+      .catch((err) => { if (!cancelled) setHistoryError(err.message) })
+      .finally(() => { if (!cancelled) setHistoryLoading(false) })
     return () => { cancelled = true }
   }, [form.client_id, isEdit, initial?.id, applyHistoryAutoFill])
 
@@ -224,9 +353,7 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
     if (!clients.length) return
     if (form.client_id) {
       const client = findClientById(form.client_id)
-      if (client) {
-        setClientSelection({ type: 'existing', clientId: client.id, label: client.client_name })
-      }
+      if (client) setClientSelection({ type: 'existing', clientId: client.id, label: client.client_name })
     } else if (form.custom_client_name?.trim()) {
       setClientSelection({ type: 'custom', label: form.custom_client_name.trim() })
     }
@@ -244,65 +371,39 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
     }
   }, [materialTypes]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Material type handler ──────────────────────────────────────────────────
   const handleMaterialTypeChange = useCallback(async (selection) => {
     setMaterialTypeError('')
-    setMaterialTypeSuccess('')
-    setSpecError('')
-    setSpecSuccess('')
-
     if (!selection) {
-      setMaterialTypeSelection(null)
-      setSpecSelection(null)
-      setForm((f) => ({ ...f, material_type_id: '', material_specification_id: '' }))
-      return
+      setMaterialTypeSelection(null); setSpecSelection(null)
+      setForm((f) => ({ ...f, material_type_id: '', material_specification_id: '' })); return
     }
-
     if (selection.type === 'existing') {
-      setMaterialTypeSelection(selection)
-      setSpecSelection(null)
+      setMaterialTypeSelection(selection); setSpecSelection(null)
       setForm((f) => ({ ...f, material_type_id: String(selection.id), material_specification_id: '' }))
-      if (autoFilled.material_type_id) setAutoFilled((p) => ({ ...p, material_type_id: false, material_specification_id: false }))
-      return
+      if (autoFilled.material_type_id) setAutoFilled((p) => ({ ...p, material_type_id: false, material_specification_id: false })); return
     }
-
     setMaterialTypeSaving(true)
     try {
       const res = await createMaterialType(selection.label)
       await onRefreshOptions?.()
       const mt = res.material_type
-      setMaterialTypeSelection({ type: 'existing', id: mt.id, label: mt.name })
-      setSpecSelection(null)
+      setMaterialTypeSelection({ type: 'existing', id: mt.id, label: mt.name }); setSpecSelection(null)
       setForm((f) => ({ ...f, material_type_id: String(mt.id), material_specification_id: '' }))
-      setMaterialTypeSuccess(res.message || 'Material type saved.')
-    } catch (err) {
-      setMaterialTypeError(err.message)
-    } finally {
-      setMaterialTypeSaving(false)
-    }
-  }, [autoFilled.material_type_id, onRefreshOptions])
+      toast(`Material type "${mt.name}" saved.`, 'success', 3000)
+    } catch (err) { setMaterialTypeError(err.message) } finally { setMaterialTypeSaving(false) }
+  }, [autoFilled.material_type_id, onRefreshOptions, toast])
 
+  // ── Spec handler ───────────────────────────────────────────────────────────
   const handleSpecChange = useCallback(async (selection) => {
     setSpecError('')
-    setSpecSuccess('')
-
-    if (!form.material_type_id) {
-      setSpecError('Select a material type first.')
-      return
-    }
-
-    if (!selection) {
-      setSpecSelection(null)
-      setForm((f) => ({ ...f, material_specification_id: '' }))
-      return
-    }
-
+    if (!form.material_type_id) { setSpecError('Select a material type first.'); return }
+    if (!selection) { setSpecSelection(null); setForm((f) => ({ ...f, material_specification_id: '' })); return }
     if (selection.type === 'existing') {
       setSpecSelection(selection)
       setForm((f) => ({ ...f, material_specification_id: String(selection.id) }))
-      if (autoFilled.material_specification_id) setAutoFilled((p) => ({ ...p, material_specification_id: false }))
-      return
+      if (autoFilled.material_specification_id) setAutoFilled((p) => ({ ...p, material_specification_id: false })); return
     }
-
     setSpecSaving(true)
     try {
       const res = await createMaterialSpecification(Number(form.material_type_id), selection.label)
@@ -310,167 +411,162 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
       const spec = res.material_specification
       setSpecSelection({ type: 'existing', id: spec.id, label: spec.name })
       setForm((f) => ({ ...f, material_specification_id: String(spec.id) }))
-      setSpecSuccess(res.message || 'Specification saved.')
-    } catch (err) {
-      setSpecError(err.message)
-    } finally {
-      setSpecSaving(false)
-    }
-  }, [form.material_type_id, autoFilled.material_specification_id, onRefreshOptions])
+      toast(`Specification "${spec.name}" saved.`, 'success', 3000)
+    } catch (err) { setSpecError(err.message) } finally { setSpecSaving(false) }
+  }, [form.material_type_id, autoFilled.material_specification_id, onRefreshOptions, toast])
 
+  // ── Client handler ─────────────────────────────────────────────────────────
   const handleClientChange = useCallback((selection) => {
     setClientSelection(selection)
     const filled = {}
-
     if (selection?.type === 'existing') {
       const client = findClientById(selection.clientId)
-      const pref = findDefaultPreference(selection.clientId)
+      const pref   = findDefaultPreference(selection.clientId)
+      // Client changed — allow contact fields to be re-filled even if user
+      // had previously edited them for a different client.
+      userEditedRef.current.delete('contact_person')
+      userEditedRef.current.delete('customer_email')
+      userEditedRef.current.delete('customer_contact')
       setForm((f) => ({
         ...f,
-        client_id: String(selection.clientId),
-        custom_client_name: '',
-        save_as_client: false,
-        contact_person: client?.contact_person || '',
-        customer_email: client?.email || '',
-        customer_contact: client?.phone || '',
-        quarry_id: pref?.quarry_id ? String(pref.quarry_id) : f.quarry_id,
+        client_id: String(selection.clientId), custom_client_name: '', save_as_client: false,
+        contact_person:   client?.contact_person || '',
+        customer_email:   client?.email          || '',
+        customer_contact: client?.phone          || '',
+        quarry_id:         pref?.quarry_id      ? String(pref.quarry_id)      : f.quarry_id,
         preferred_vehicle_type_id: pref?.vehicle_type_id ? String(pref.vehicle_type_id) : f.preferred_vehicle_type_id,
       }))
       if (client) {
-        filled.contact_person = Boolean(client.contact_person)
-        filled.customer_email = Boolean(client.email)
+        filled.contact_person   = Boolean(client.contact_person)
+        filled.customer_email   = Boolean(client.email)
         filled.customer_contact = Boolean(client.phone)
       }
-      if (pref?.quarry_id) filled.quarry_id = true
+      if (pref?.quarry_id)      filled.quarry_id = true
       if (pref?.vehicle_type_id) filled.preferred_vehicle_type_id = true
       setAutoFilled(filled)
     } else if (selection?.type === 'custom') {
-      setForm((f) => ({
-        ...f,
-        client_id: '',
-        custom_client_name: selection.label,
-        save_as_client: true,
-      }))
-      setAutoFilled({})
-      setClientHistory(null)
-      setHistoryError('')
+      userEditedRef.current.clear()
+      setForm((f) => ({ ...f, client_id: '', custom_client_name: selection.label, save_as_client: true }))
+      setAutoFilled({}); setClientHistory(null); setHistoryError('')
     } else {
-      setForm((f) => ({
-        ...f,
-        client_id: '',
-        custom_client_name: '',
-        save_as_client: true,
-        contact_person: '',
-        customer_email: '',
-        customer_contact: '',
-      }))
-      setAutoFilled({})
-      setClientHistory(null)
-      setHistoryError('')
+      userEditedRef.current.clear()
+      setForm((f) => ({ ...f, client_id: '', custom_client_name: '', save_as_client: true, contact_person: '', customer_email: '', customer_contact: '' }))
+      setAutoFilled({}); setClientHistory(null); setHistoryError('')
     }
-
-    setFieldErrors((prev) => {
-      if (!prev.client) return prev
-      const next = { ...prev }
-      delete next.client
-      return next
-    })
+    setFE((prev) => { if (!prev.client) return prev; const n = { ...prev }; delete n.client; return n })
   }, [findClientById, findDefaultPreference])
 
+  // ── Field change ───────────────────────────────────────────────────────────
   const set = (k) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
-    setForm((f) => {
-      const next = { ...f, [k]: value }
-      return next
-    })
-    // Editing an auto-filled field clears its tag
+    // Mark this field as manually edited so async auto-fill cannot overwrite it
+    userEditedRef.current.add(k)
+    // Batch form + side-effect state into a single setForm call to avoid
+    // a second state setter (setAutoFilled) triggering a separate re-render
+    // cycle that can disturb focus on the currently typed-in input.
+    setForm((f) => ({ ...f, [k]: value }))
+    // Clear autofill badge and field error in separate updates; React 18
+    // batches all setStates called synchronously in one event handler.
     if (autoFilled[k]) setAutoFilled((p) => ({ ...p, [k]: false }))
-    if (fieldErrors[k]) setFieldErrors((prev) => { const n = { ...prev }; delete n[k]; return n })
+    if (fieldErrors[k]) setFE((prev) => { const n = { ...prev }; delete n[k]; return n })
   }
 
-  const buildPayload = () => {
-    return {
-      client_id: form.client_id ? Number(form.client_id) : null,
-      custom_client_name: !form.client_id && form.custom_client_name?.trim() ? form.custom_client_name.trim() : null,
-      contact_person: form.contact_person || null,
-      customer_email: form.customer_email || null,
-      customer_contact: form.customer_contact || null,
-      save_as_client: isCustomClient ? Boolean(form.save_as_client) : false,
-      quarry_id: form.quarry_id ? Number(form.quarry_id) : null,
-      preferred_vehicle_type_id: form.preferred_vehicle_type_id ? Number(form.preferred_vehicle_type_id) : null,
-      pickup_province: form.pickup_province || null,
-      pickup_city: form.pickup_city || null,
-      pickup_barangay: form.pickup_barangay || null,
-      pickup_street: form.pickup_street || null,
-      pickup_landmark: form.pickup_landmark || null,
-      dropoff_province: form.dropoff_province || null,
-      dropoff_city: form.dropoff_city || null,
-      dropoff_barangay: form.dropoff_barangay || null,
-      dropoff_street: form.dropoff_street || null,
-      dropoff_landmark: form.dropoff_landmark || null,
-      material_type_id: form.material_type_id ? Number(form.material_type_id) : null,
-      material_specification_id: form.material_specification_id ? Number(form.material_specification_id) : null,
-      custom_material_type_name: !form.material_type_id && materialTypeSelection?.type === 'custom' ? materialTypeSelection.label : null,
-      custom_specification_name: !form.material_specification_id && specSelection?.type === 'custom' ? specSelection.label : null,
-      material_type: materialTypeSelection?.label ?? null,
-      specification_size: specSelection?.label ?? null,
-      load_volume_m3: form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
-      volume_m3: form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
-      special_handling_instructions: form.special_handling_instructions || null,
-      job_requirements: form.special_handling_instructions || null,
-      scheduled_start: form.scheduled_start || null,
-      scheduled_end: form.scheduled_end || null,
-      priority: form.priority,
+  // ── Per-step validation ────────────────────────────────────────────────────
+  const validateStep = (step) => {
+    const errs = {}
+    if (step === 1) {
+      if (!form.client_id && !form.custom_client_name?.trim())
+        errs.client = 'Select an existing client or enter a custom client name.'
+    }
+    if (step === 2) {
+      if (!form.material_type_id && materialTypeSelection?.type !== 'custom')
+        errs.material_type = 'Material type is required.'
+      if (!form.material_specification_id && specSelection?.type !== 'custom')
+        errs.material_specification = 'Specification / size is required.'
+      if (form.load_volume_m3 === '' || Number.isNaN(Number(form.load_volume_m3)))
+        errs.load_volume_m3 = 'Load volume is required.'
+    }
+    if (step === 3) {
+      if (!form.quarry_id && !form.pickup_street && !form.pickup_city)
+        errs.pickup_street = 'Select a quarry/supplier or enter pickup source details.'
+      if (!form.dropoff_province) errs.dropoff_province = 'Drop-off province is required.'
+      if (!form.dropoff_city)     errs.dropoff_city     = 'Drop-off city is required.'
+      if (!form.dropoff_street)   errs.dropoff_street   = 'Drop-off street / site details are required.'
+    }
+    if (step === 4) {
+      const schedErrs = validateJobSchedule({ scheduled_start: form.scheduled_start, scheduled_end: form.scheduled_end })
+      Object.assign(errs, schedErrs)
+      if (!form.scheduled_start) errs.scheduled_start = 'Scheduled start is required.'
+    }
+    setFE(errs)
+    return Object.keys(errs).length === 0
+  }
+
+  const goNext = () => {
+    if (validateStep(currentStep)) {
+      setError('')
+      setStep((s) => Math.min(s + 1, 5))
+      stepPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
 
-  const validate = () => {
-    const scheduleErrors = validateJobSchedule({ scheduled_start: form.scheduled_start, scheduled_end: form.scheduled_end })
-    const errs = { ...scheduleErrors }
-
-    if (!form.client_id && !form.custom_client_name?.trim()) {
-      errs.client = 'Select an existing client or enter a custom client name.'
-    }
-
-    // Source: either a quarry or pickup details
-    if (!form.quarry_id && !form.pickup_street && !form.pickup_city) {
-      errs.pickup_street = 'Select a quarry/supplier or enter pickup source details.'
-    }
-
-    // Drop-off always required
-    if (!form.dropoff_province) errs.dropoff_province = 'Drop-off province is required.'
-    if (!form.dropoff_city) errs.dropoff_city = 'Drop-off city is required.'
-    if (!form.dropoff_street) errs.dropoff_street = 'Drop-off street / site details are required.'
-
-    if (!form.material_type_id && materialTypeSelection?.type !== 'custom') {
-      errs.material_type = 'Material type is required.'
-    }
-    if (!form.material_specification_id && specSelection?.type !== 'custom') {
-      errs.material_specification = 'Specification / size is required.'
-    }
-    if (form.load_volume_m3 === '' || Number.isNaN(Number(form.load_volume_m3))) {
-      errs.load_volume_m3 = 'Load volume is required.'
-    }
-    if (!form.scheduled_start) errs.scheduled_start = 'Scheduled start is required.'
-    return errs
+  const goBack = () => {
+    setFE({}); setError('')
+    setStep((s) => Math.max(s - 1, 1))
+    stepPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
+  const goToStep = (n) => { setFE({}); setError(''); setStep(n) }
+
+  // ── Final payload + submit ─────────────────────────────────────────────────
+  const buildPayload = () => ({
+    client_id:                form.client_id ? Number(form.client_id) : null,
+    custom_client_name:       !form.client_id && form.custom_client_name?.trim() ? form.custom_client_name.trim() : null,
+    contact_person:           form.contact_person || null,
+    customer_email:           form.customer_email || null,
+    customer_contact:         form.customer_contact || null,
+    save_as_client:           isCustomClient ? Boolean(form.save_as_client) : false,
+    quarry_id:                form.quarry_id ? Number(form.quarry_id) : null,
+    preferred_vehicle_type_id: form.preferred_vehicle_type_id ? Number(form.preferred_vehicle_type_id) : null,
+    pickup_province:          form.pickup_province || null,
+    pickup_city:              form.pickup_city || null,
+    pickup_barangay:          form.pickup_barangay || null,
+    pickup_street:            form.pickup_street || null,
+    pickup_landmark:          form.pickup_landmark || null,
+    dropoff_province:         form.dropoff_province || null,
+    dropoff_city:             form.dropoff_city || null,
+    dropoff_barangay:         form.dropoff_barangay || null,
+    dropoff_street:           form.dropoff_street || null,
+    dropoff_landmark:         form.dropoff_landmark || null,
+    material_type_id:         form.material_type_id ? Number(form.material_type_id) : null,
+    material_specification_id: form.material_specification_id ? Number(form.material_specification_id) : null,
+    custom_material_type_name: !form.material_type_id && materialTypeSelection?.type === 'custom' ? materialTypeSelection.label : null,
+    custom_specification_name: !form.material_specification_id && specSelection?.type === 'custom' ? specSelection.label : null,
+    material_type:            materialTypeSelection?.label ?? null,
+    specification_size:       specSelection?.label ?? null,
+    load_volume_m3:           form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
+    volume_m3:                form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
+    special_handling_instructions: form.special_handling_instructions || null,
+    job_requirements:         form.special_handling_instructions || null,
+    scheduled_start:          form.scheduled_start || null,
+    scheduled_end:            form.scheduled_end || null,
+    priority:                 form.priority,
+  })
 
   const submit = async (proceedToBestFit) => {
-    setSaving(true)
-    setError('')
-    setFieldErrors({})
-
-    const errs = validate()
-    if (Object.keys(errs).length > 0) {
-      setFieldErrors(errs)
-      setError(firstScheduleError(errs) || 'Please complete all required fields.')
-      setSaving(false)
-      return
+    // Final guard — run all step validations
+    for (let s = 1; s <= 4; s++) {
+      if (!validateStep(s)) {
+        setError('Some required fields are incomplete. Please review each step.')
+        goToStep(s)
+        return
+      }
     }
-
+    setSaving(true); setError('')
     try {
       const payload = buildPayload()
       const saved = isEdit ? await updateJobOrder(initial.id, payload) : await createJobOrder(payload)
+      clearDraft()
       onSaved(saved, isEdit, proceedToBestFit)
     } catch (err) {
       setError(err.message)
@@ -479,262 +575,396 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
     }
   }
 
-  const fe = (k) => fieldErrors[k] ? (
-    <span style={{ display: 'block', marginTop: 3, fontSize: '0.75rem', color: 'var(--color-error)', paddingLeft: 2 }}>
-      {fieldErrors[k]}
-    </span>
-  ) : null
+  // ── Lookup helpers for review ──────────────────────────────────────────────
+  const quarryName = quarries.find((q) => String(q.id) === String(form.quarry_id))?.quarry_name
+  const vtName     = vehicleTypes.find((v) => String(v.id) === String(form.preferred_vehicle_type_id))?.name
+  const pickupAddr = [form.pickup_province, form.pickup_city, form.pickup_street].filter(Boolean).join(', ')
+  const dropAddr   = [form.dropoff_province, form.dropoff_city, form.dropoff_street].filter(Boolean).join(', ')
+  const clientLabel = clientSelection?.label || '—'
+  const materialLabel = [materialTypeSelection?.label, specSelection?.label].filter(Boolean).join(' · ')
 
-  const Row = ({ children, style }) => <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px 14px', marginBottom: 10, ...style }}>{children}</div>
+  // ─ PRIORITY label
+  const PRIORITY_LABELS = { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' }
 
-  const Field = ({ label, span = 1, required, children, error: fieldErr }) => (
-    <label style={{ gridColumn: `span ${span}`, display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 0 }}>
-      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.02em' }}>
-        {label}{required ? <span style={{ color: 'var(--color-error)', marginLeft: 2 }}>*</span> : null}
-      </span>
-      {children}
-      {fieldErr && <span style={{ fontSize: '0.75rem', color: 'var(--color-error)' }}>{fieldErr}</span>}
-    </label>
-  )
-
-  const Sep = ({ label, hint }) => (
-    <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderBottom: '1px solid var(--stroke)', paddingBottom: 5, marginTop: 8, marginBottom: 2 }}>
-      <span style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>{label}</span>
-      {hint && <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>{hint}</span>}
-    </div>
-  )
-
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="dx-panel" style={{ marginTop: 16, padding: '18px 20px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+    <div className="dx-panel" style={{ padding: '22px 24px', marginTop: 16 }} ref={stepPanelRef}>
+
+      {/* Title row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
             {isEdit ? `Edit Job Order — ${formatJobPublicId(initial.id)}` : 'New Job Order'}
           </h3>
-          <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>
-            Fill in all required fields. Auto-filled fields come from client history or Master Data.
+          <p style={{ margin: '2px 0 0', fontSize: '0.8125rem', color: 'var(--muted)' }}>
+            Step {currentStep} of {STEPS.length} — {STEPS[currentStep - 1].hint}
           </p>
         </div>
-        <button type="button" onClick={onCancel} style={{ border: 'none', background: 'none', fontSize: '1.25rem', color: 'var(--muted)', cursor: 'pointer', padding: '4px 8px', borderRadius: 6 }}>×</button>
+        <button type="button" onClick={() => { clearDraft(); onCancel() }}
+          style={{ border: 'none', background: 'none', fontSize: '1.375rem', color: 'var(--muted)', cursor: 'pointer', padding: '2px 6px', borderRadius: 6, lineHeight: 1 }}>
+          ×
+        </button>
       </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); submit(false) }}>
+      {/* Draft banner */}
+      {hasDraft && !isEdit && (
+        <div className="dx-draft-banner">
+          <RotateCcw size={14} />
+          Draft restored from your last session.
+          <button type="button" onClick={() => { setForm(BLANK); setClientSelection(null); setMaterialTypeSelection(null); setSpecSelection(null); clearDraft() }}>
+            Start fresh
+          </button>
+        </div>
+      )}
 
-        {/* ── ROW 1: Client + Contacts ── */}
-        <Row>
-          <Sep label="Client" hint="Search existing or type a new company name" />
-          <Field label="Client" span={2} required error={fieldErrors.client}>
-            <ClientCombobox
-              clients={clients}
-              value={clientSelection}
-              onChange={handleClientChange}
-              loading={clientsLoading}
-              error={fieldErrors.client}
-            />
-          </Field>
-          <Field label={<>Contact Person{autoFilled.contact_person && <AutoFilledTag />}</>}>
-            <input value={form.contact_person} onChange={set('contact_person')} placeholder="Optional" style={{ height: 41, padding: '0 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
-          </Field>
-          <Field label={<>Contact No.{autoFilled.customer_contact && <AutoFilledTag />}</>} error={fieldErrors.customer_contact}>
-            <input value={form.customer_contact} onChange={set('customer_contact')} style={{ height: 41, padding: '0 10px', border: `1.5px solid ${fieldErrors.customer_contact ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
-          </Field>
-        </Row>
+      {/* Stepper */}
+      <StepIndicator current={currentStep} />
 
-        <Row>
-          <Field label={<>Email{autoFilled.customer_email && <AutoFilledTag />}</>} span={2} error={fieldErrors.customer_email}>
-            <input type="email" value={form.customer_email} onChange={set('customer_email')} style={{ height: 41, padding: '0 10px', border: `1.5px solid ${fieldErrors.customer_email ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
-          </Field>
-          {isCustomClient && (
-            <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.8125rem', paddingTop: 22 }}>
-              <input type="checkbox" checked={form.save_as_client} onChange={set('save_as_client')} style={{ width: 'auto' }} />
-              Save to Master Data for future orders
-            </label>
-          )}
-        </Row>
+      {/* ── Step panels ── */}
+      <div key={currentStep} className="dx-wizard-step">
 
-        {form.client_id && (
-          <div style={{ marginBottom: 10 }}>
-            <CustomerHistoryIntelligence history={clientHistory} loading={historyLoading} error={historyError} />
-          </div>
+        {/* ── STEP 1: Client Information ── */}
+        {currentStep === 1 && (
+          <>
+            <p className="dx-wizard-step-title">Client Information</p>
+            <p className="dx-wizard-step-subtitle">Who is this delivery for? Select an existing client or enter a new one.</p>
+
+            <div className="dx-wiz-grid" style={{ marginBottom: 14 }}>
+              <FieldWrap label={<>Client {autoFilled.client_id && <AutoFilledTag />}</>} required full error={fieldErrors.client}>
+                <ClientCombobox
+                  clients={clients}
+                  value={clientSelection}
+                  onChange={handleClientChange}
+                  loading={clientsLoading}
+                  error={fieldErrors.client}
+                />
+              </FieldWrap>
+
+              <FieldWrap label={<>Contact Person {autoFilled.contact_person && <AutoFilledTag />}</>}>
+                <WizInput value={form.contact_person} onChange={set('contact_person')} placeholder="Optional" />
+              </FieldWrap>
+
+              <FieldWrap label={<>Contact Number {autoFilled.customer_contact && <AutoFilledTag />}</>} error={fieldErrors.customer_contact}>
+                <WizInput
+                  type="text"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={form.customer_contact}
+                  onChange={set('customer_contact')}
+                  placeholder="Optional"
+                  error={fieldErrors.customer_contact}
+                />
+              </FieldWrap>
+
+              <FieldWrap label={<>Email {autoFilled.customer_email && <AutoFilledTag />}</>} error={fieldErrors.customer_email}>
+                <WizInput
+                  type="text"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={form.customer_email}
+                  onChange={set('customer_email')}
+                  placeholder="Optional"
+                  error={fieldErrors.customer_email}
+                />
+              </FieldWrap>
+
+              {isCustomClient && (
+                <label className="dx-wiz-label dx-wiz-full" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer', paddingTop: 4 }}>
+                  <input type="checkbox" checked={form.save_as_client} onChange={set('save_as_client')} style={{ width: 'auto', accentColor: 'var(--color-primary)' }} />
+                  <span style={{ fontSize: '0.875rem', color: 'var(--text)' }}>Save this client to Master Data for future orders</span>
+                </label>
+              )}
+            </div>
+
+            {form.client_id && (
+              <CustomerHistoryIntelligence history={clientHistory} loading={historyLoading} error={historyError} />
+            )}
+          </>
         )}
 
-        {/* ── ROW 2: Source ── */}
-        <Row>
-          <Sep label="Source &amp; Material" hint="Auto-filled from history" />
-          <Field label={<>Quarry / Supplier{autoFilled.quarry_id && <AutoFilledTag />}</>}>
-            <select name="quarry_id" value={form.quarry_id} onChange={set('quarry_id')} style={{ height: 41, padding: '0 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }}>
-              <option value="">— Select quarry —</option>
-              {quarries.map((q) => <option key={q.id} value={q.id}>{q.quarry_name}</option>)}
-            </select>
-          </Field>
-          <Field label={<>Preferred Vehicle{autoFilled.preferred_vehicle_type_id && <AutoFilledTag />}</>}>
-            <select name="preferred_vehicle_type_id" value={form.preferred_vehicle_type_id} onChange={set('preferred_vehicle_type_id')} style={{ height: 41, padding: '0 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }}>
-              <option value="">— Best-Fit decides —</option>
-              {vehicleTypes.map((vt) => <option key={vt.id} value={vt.id}>{vt.name}{vt.wheel_type ? ` (${vt.wheel_type})` : ''}</option>)}
-            </select>
-          </Field>
-          <Field label={<>Material Type *{autoFilled.material_type_id && <AutoFilledTag />}</>} error={fieldErrors.material_type || materialTypeError}>
-            <CreatableCombobox
-              items={materialTypes}
-              getItemLabel={(item) => item.name}
-              value={materialTypeSelection}
-              onChange={handleMaterialTypeChange}
-              loading={clientsLoading}
-              saving={materialTypeSaving}
-              error={fieldErrors.material_type || materialTypeError || null}
-              success={materialTypeSuccess}
-              placeholder="Search or type…"
-              customOptionLabel={(q) => `Add: ${q}`}
-              emptyMessage="No material types yet."
-            />
-          </Field>
-          <Field label={<>Specification *{autoFilled.material_specification_id && <AutoFilledTag />}</>} error={fieldErrors.material_specification || specError}>
-            <CreatableCombobox
-              items={specOptions}
-              getItemLabel={(item) => item.name}
-              value={specSelection}
-              onChange={handleSpecChange}
-              saving={specSaving}
-              disabled={!form.material_type_id}
-              error={fieldErrors.material_specification || specError || null}
-              success={specSuccess}
-              placeholder={form.material_type_id ? 'Search or type…' : 'Pick material first'}
-              customOptionLabel={(q) => `Add: ${q}`}
-              emptyMessage="No specs for this material."
-            />
-          </Field>
-        </Row>
+        {/* ── STEP 2: Material & Load ── */}
+        {currentStep === 2 && (
+          <>
+            <p className="dx-wizard-step-title">Material &amp; Load Details</p>
+            <p className="dx-wizard-step-subtitle">What material is being delivered, and how much?</p>
 
-        {/* ── ROW 3: Pickup + Dropoff side by side ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px', marginBottom: 10 }}>
-          {/* Pickup */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderBottom: '1px solid var(--stroke)', paddingBottom: 5, marginBottom: 8 }}>
-              <span style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>Pickup Source</span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Optional if quarry selected</span>
+            <div className="dx-wiz-grid" style={{ marginBottom: 14 }}>
+              <FieldWrap
+                label={<>Material Type {autoFilled.material_type_id && <AutoFilledTag />}</>}
+                required error={fieldErrors.material_type || materialTypeError}
+              >
+                <CreatableCombobox
+                  items={materialTypes}
+                  getItemLabel={(item) => item.name}
+                  value={materialTypeSelection}
+                  onChange={handleMaterialTypeChange}
+                  loading={clientsLoading}
+                  saving={materialTypeSaving}
+                  error={fieldErrors.material_type || materialTypeError || null}
+                  placeholder="Search or type new material…"
+                  customOptionLabel={(q) => `Add: ${q}`}
+                  emptyMessage="No material types yet."
+                />
+              </FieldWrap>
+
+              <FieldWrap
+                label={<>Specification / Size {autoFilled.material_specification_id && <AutoFilledTag />}</>}
+                required error={fieldErrors.material_specification || specError}
+              >
+                <CreatableCombobox
+                  items={specOptions}
+                  getItemLabel={(item) => item.name}
+                  value={specSelection}
+                  onChange={handleSpecChange}
+                  saving={specSaving}
+                  disabled={!form.material_type_id}
+                  error={fieldErrors.material_specification || specError || null}
+                  placeholder={form.material_type_id ? 'Search or type new spec…' : 'Pick material first'}
+                  customOptionLabel={(q) => `Add: ${q}`}
+                  emptyMessage="No specs for this material."
+                />
+              </FieldWrap>
+
+              <FieldWrap label="Load Volume (m³)" required error={fieldErrors.load_volume_m3}>
+                <WizInput
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*\.?[0-9]*"
+                  autoComplete="off"
+                  value={form.load_volume_m3}
+                  onChange={set('load_volume_m3')}
+                  placeholder="e.g. 12.5"
+                  error={fieldErrors.load_volume_m3}
+                />
+              </FieldWrap>
+
+              <FieldWrap label="Priority">
+                <select value={form.priority} onChange={set('priority')} className="dx-wiz-input" style={{ cursor: 'pointer' }}>
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </FieldWrap>
+
+              <FieldWrap label={<>Quarry / Supplier {autoFilled.quarry_id && <AutoFilledTag />}</>} full>
+                <select value={form.quarry_id} onChange={set('quarry_id')} className="dx-wiz-input" style={{ cursor: 'pointer' }}>
+                  <option value="">— Select quarry (optional) —</option>
+                  {quarries.map((q) => <option key={q.id} value={q.id}>{q.quarry_name}</option>)}
+                </select>
+              </FieldWrap>
+
+              {/* Vehicle type is intentionally absent here — it is determined by
+                  Best-Fit during dispatch. If the client has a vehicle preference
+                  in Master Data, it is already stored in preferred_vehicle_type_id
+                  via handleClientChange and is silently passed to the backend as a
+                  scoring factor. */}
+              {form.preferred_vehicle_type_id && (
+                <div className="dx-wiz-full" style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 12px', borderRadius: 10,
+                  background: '#f0fdf4', border: '1px solid #bbf7d0',
+                  fontSize: '0.8125rem', color: '#166534',
+                }}>
+                  <span style={{ fontWeight: 700 }}>✓</span>
+                  Client vehicle preference noted — Best-Fit will apply a score boost for the preferred type during dispatch.
+                </div>
+              )}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 10px' }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Province</span>
-                <input value={form.pickup_province} onChange={set('pickup_province')} placeholder="Optional" style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>City / Municipality</span>
-                <input value={form.pickup_city} onChange={set('pickup_city')} placeholder="Optional" style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Barangay</span>
-                <input value={form.pickup_barangay} onChange={set('pickup_barangay')} placeholder="Optional" style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Landmark</span>
-                <input value={form.pickup_landmark} onChange={set('pickup_landmark')} placeholder="Optional" style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: 'span 2' }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Street / Site Details</span>
-                <input value={form.pickup_street} onChange={set('pickup_street')} placeholder="Optional if quarry selected" aria-invalid={fieldErrors.pickup_street ? 'true' : undefined}
-                  style={{ height: 38, padding: '0 9px', border: `1.5px solid ${fieldErrors.pickup_street ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
-                {fe('pickup_street')}
-              </label>
+          </>
+        )}
+
+        {/* ── STEP 3: Route ── */}
+        {currentStep === 3 && (
+          <>
+            <p className="dx-wizard-step-title">Source &amp; Destination</p>
+            <p className="dx-wizard-step-subtitle">Where is the material coming from, and where does it need to go?</p>
+
+            <div className="dx-wiz-route-grid">
+              {/* Pickup */}
+              <div>
+                <div className="dx-wiz-route-col-title">
+                  Pickup Source
+                  <span>Optional if quarry selected</span>
+                </div>
+                <div className="dx-wiz-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 0 }}>
+                  <FieldWrap label="Province">
+                    <WizInput value={form.pickup_province} onChange={set('pickup_province')} placeholder="Optional" />
+                  </FieldWrap>
+                  <FieldWrap label="City / Municipality">
+                    <WizInput value={form.pickup_city} onChange={set('pickup_city')} placeholder="Optional" />
+                  </FieldWrap>
+                  <FieldWrap label="Barangay">
+                    <WizInput value={form.pickup_barangay} onChange={set('pickup_barangay')} placeholder="Optional" />
+                  </FieldWrap>
+                  <FieldWrap label="Landmark">
+                    <WizInput value={form.pickup_landmark} onChange={set('pickup_landmark')} placeholder="Optional" />
+                  </FieldWrap>
+                  <FieldWrap label="Street / Site Details" full error={fieldErrors.pickup_street}>
+                    <WizInput value={form.pickup_street} onChange={set('pickup_street')} placeholder="Optional if quarry selected" error={fieldErrors.pickup_street} />
+                  </FieldWrap>
+                </div>
+              </div>
+
+              {/* Drop-off */}
+              <div>
+                <div className="dx-wiz-route-col-title">
+                  Delivery Destination
+                  <span style={{ color: 'var(--color-error)', fontWeight: 600 }}>Required</span>
+                </div>
+                <div className="dx-wiz-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 0 }}>
+                  <FieldWrap label={<>Province {autoFilled.dropoff_province && <AutoFilledTag />}</>} required error={fieldErrors.dropoff_province}>
+                    <WizInput value={form.dropoff_province} onChange={set('dropoff_province')} error={fieldErrors.dropoff_province} />
+                  </FieldWrap>
+                  <FieldWrap label={<>City / Municipality {autoFilled.dropoff_city && <AutoFilledTag />}</>} required error={fieldErrors.dropoff_city}>
+                    <WizInput value={form.dropoff_city} onChange={set('dropoff_city')} error={fieldErrors.dropoff_city} />
+                  </FieldWrap>
+                  <FieldWrap label="Barangay">
+                    <WizInput value={form.dropoff_barangay} onChange={set('dropoff_barangay')} placeholder="Optional" />
+                  </FieldWrap>
+                  <FieldWrap label="Landmark">
+                    <WizInput value={form.dropoff_landmark} onChange={set('dropoff_landmark')} placeholder="Optional" />
+                  </FieldWrap>
+                  <FieldWrap label={<>Street / Site Details {autoFilled.dropoff_street && <AutoFilledTag />}</>} required full error={fieldErrors.dropoff_street}>
+                    <WizInput value={form.dropoff_street} onChange={set('dropoff_street')} placeholder="e.g. Construction Site, EDSA cor. Shaw" error={fieldErrors.dropoff_street} />
+                  </FieldWrap>
+                </div>
+              </div>
             </div>
-          </div>
+          </>
+        )}
 
-          {/* Drop-off */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderBottom: '1px solid var(--stroke)', paddingBottom: 5, marginBottom: 8 }}>
-              <span style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>Delivery Destination</span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Required</span>
+        {/* ── STEP 4: Schedule ── */}
+        {currentStep === 4 && (
+          <>
+            <p className="dx-wizard-step-title">Schedule &amp; Instructions</p>
+            <p className="dx-wizard-step-subtitle">When should this delivery happen? Add any special handling notes.</p>
+
+            <div className="dx-wiz-grid" style={{ marginBottom: 16 }}>
+              <FieldWrap label="Scheduled Start" required error={fieldErrors.scheduled_start}>
+                <WizInput type="datetime-local" min={scheduleMin} value={form.scheduled_start} onChange={set('scheduled_start')} error={fieldErrors.scheduled_start} />
+              </FieldWrap>
+              <FieldWrap label="Scheduled End" error={fieldErrors.scheduled_end}>
+                <WizInput type="datetime-local" min={form.scheduled_start || scheduleMin} value={form.scheduled_end} onChange={set('scheduled_end')} error={fieldErrors.scheduled_end} />
+              </FieldWrap>
+              <FieldWrap label="Special Handling Instructions" full>
+                <textarea
+                  rows={3}
+                  value={form.special_handling_instructions}
+                  onChange={set('special_handling_instructions')}
+                  placeholder="Permits, handling requirements, site access conditions…"
+                  className="dx-wiz-textarea"
+                />
+              </FieldWrap>
+              <FieldWrap label="Internal Notes" full>
+                <textarea
+                  rows={2}
+                  value={form.notes}
+                  onChange={set('notes')}
+                  placeholder="Dispatcher-only notes (not visible to customer)…"
+                  className="dx-wiz-textarea"
+                />
+              </FieldWrap>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 10px' }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Province *</span>
-                <input value={form.dropoff_province} onChange={set('dropoff_province')} aria-invalid={fieldErrors.dropoff_province ? 'true' : undefined}
-                  style={{ height: 38, padding: '0 9px', border: `1.5px solid ${fieldErrors.dropoff_province ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
-                {autoFilled.dropoff_province && <AutoFilledTag />}
-                {fe('dropoff_province')}
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>City / Municipality *</span>
-                <input value={form.dropoff_city} onChange={set('dropoff_city')} aria-invalid={fieldErrors.dropoff_city ? 'true' : undefined}
-                  style={{ height: 38, padding: '0 9px', border: `1.5px solid ${fieldErrors.dropoff_city ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
-                {autoFilled.dropoff_city && <AutoFilledTag />}
-                {fe('dropoff_city')}
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Barangay</span>
-                <input value={form.dropoff_barangay} onChange={set('dropoff_barangay')} placeholder="Optional"
-                  style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Landmark</span>
-                <input value={form.dropoff_landmark} onChange={set('dropoff_landmark')} placeholder="Optional"
-                  style={{ height: 38, padding: '0 9px', border: '1.5px solid var(--stroke)', borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: 'span 2' }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>Street / Site Details *</span>
-                <input value={form.dropoff_street} onChange={set('dropoff_street')} placeholder="e.g. Construction Site, EDSA cor. Shaw" aria-invalid={fieldErrors.dropoff_street ? 'true' : undefined}
-                  style={{ height: 38, padding: '0 9px', border: `1.5px solid ${fieldErrors.dropoff_street ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 9, font: 'inherit', fontSize: '0.8125rem' }} />
-                {autoFilled.dropoff_street && <AutoFilledTag />}
-                {fe('dropoff_street')}
-              </label>
-            </div>
-          </div>
-        </div>
+          </>
+        )}
 
-        {/* ── ROW 4: Schedule + Load + Priority ── */}
-        <Row>
-          <Sep label="Schedule &amp; Load" />
-          <Field label="Load Volume (m³) *" error={fieldErrors.load_volume_m3}>
-            <input type="number" step="0.001" min="0" value={form.load_volume_m3} onChange={set('load_volume_m3')} aria-invalid={fieldErrors.load_volume_m3 ? 'true' : undefined}
-              style={{ height: 41, padding: '0 10px', border: `1.5px solid ${fieldErrors.load_volume_m3 ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
-          </Field>
-          <Field label="Scheduled Start *" error={fieldErrors.scheduled_start}>
-            <input type="datetime-local" min={scheduleMin} value={form.scheduled_start} onChange={set('scheduled_start')} aria-invalid={fieldErrors.scheduled_start ? 'true' : undefined}
-              style={{ height: 41, padding: '0 10px', border: `1.5px solid ${fieldErrors.scheduled_start ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
-          </Field>
-          <Field label="Scheduled End" error={fieldErrors.scheduled_end}>
-            <input type="datetime-local" min={form.scheduled_start || scheduleMin} value={form.scheduled_end} onChange={set('scheduled_end')} aria-invalid={fieldErrors.scheduled_end ? 'true' : undefined}
-              style={{ height: 41, padding: '0 10px', border: `1.5px solid ${fieldErrors.scheduled_end ? 'var(--color-error)' : 'var(--stroke)'}`, borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
-          </Field>
-          <Field label="Priority">
-            <select name="priority" value={form.priority} onChange={set('priority')} style={{ height: 41, padding: '0 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }}>
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </Field>
-        </Row>
+        {/* ── STEP 5: Review ── */}
+        {currentStep === 5 && (
+          <>
+            <p className="dx-wizard-step-title">Review &amp; Confirm</p>
+            <p className="dx-wizard-step-subtitle">Everything looks good? Review the details below before creating the job order.</p>
 
-        {/* ── ROW 5: Instructions ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px', marginBottom: 14 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.02em' }}>Special Handling Instructions</span>
-            <textarea rows="2" placeholder="Permits, handling, site access…" value={form.special_handling_instructions} onChange={set('special_handling_instructions')}
-              style={{ padding: '8px 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem', resize: 'vertical' }} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.02em' }}>Notes</span>
-            <textarea rows="2" placeholder="Internal dispatcher notes…" value={form.notes} onChange={set('notes')}
-              style={{ padding: '8px 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem', resize: 'vertical' }} />
-          </label>
-        </div>
+            <ReviewBlock title="Client Information" onEdit={goToStep} stepNum={1}>
+              <RR label="Client"         value={clientLabel} />
+              <RR label="Contact Person" value={form.contact_person} />
+              <RR label="Contact Number" value={form.customer_contact} />
+              <RR label="Email"          value={form.customer_email} />
+            </ReviewBlock>
 
-        {/* ── Submit ── */}
-        {error && <p className="notice error" style={{ marginBottom: 10 }}>{error}</p>}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', paddingTop: 4, borderTop: '1px solid var(--stroke)' }}>
-          {!isEdit && (
-            <button type="button" className="btn-dx-primary" disabled={saving} onClick={() => submit(true)} style={{ flexShrink: 0 }}>
-              {saving ? 'Saving…' : '✓ Create & Dispatch (Best-Fit)'}
-            </button>
-          )}
-          <button type="submit" className="btn-dx-secondary" disabled={saving} style={{ flexShrink: 0 }}>
-            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Job Order'}
+            <ReviewBlock title="Material & Load" onEdit={goToStep} stepNum={2} cols={3}>
+              <RR label="Material Type"    value={materialTypeSelection?.label} />
+              <RR label="Specification"    value={specSelection?.label} />
+              <RR label="Load Volume"      value={form.load_volume_m3 ? `${form.load_volume_m3} m³` : null} />
+              <RR label="Priority"         value={PRIORITY_LABELS[form.priority] ?? form.priority} />
+              <RR label="Quarry/Supplier"  value={quarryName} />
+              <RR label="Preferred Vehicle" value={vtName} />
+            </ReviewBlock>
+
+            <ReviewBlock title="Route" onEdit={goToStep} stepNum={3} cols={2}>
+              <RR label="Pickup Source"
+                value={pickupAddr || (quarryName ? `Via quarry: ${quarryName}` : null)} />
+              <RR label="Drop-off Destination"
+                value={dropAddr} />
+            </ReviewBlock>
+
+            <ReviewBlock title="Schedule" onEdit={goToStep} stepNum={4} cols={2}>
+              <RR label="Scheduled Start" value={form.scheduled_start ? new Date(form.scheduled_start).toLocaleString() : null} />
+              <RR label="Scheduled End"   value={form.scheduled_end   ? new Date(form.scheduled_end).toLocaleString()   : null} />
+              {form.special_handling_instructions && (
+                <div className="dx-review-row" style={{ gridColumn: '1 / -1' }}>
+                  <span className="dx-review-row__label">Special Instructions</span>
+                  <span className="dx-review-row__value" style={{ whiteSpace: 'pre-line' }}>{form.special_handling_instructions}</span>
+                </div>
+              )}
+              {form.notes && (
+                <div className="dx-review-row" style={{ gridColumn: '1 / -1' }}>
+                  <span className="dx-review-row__label">Notes</span>
+                  <span className="dx-review-row__value" style={{ whiteSpace: 'pre-line' }}>{form.notes}</span>
+                </div>
+              )}
+            </ReviewBlock>
+
+            {error && <p className="notice error" style={{ marginTop: 6 }}>{error}</p>}
+          </>
+        )}
+      </div>
+
+      {/* ── Navigation ── */}
+      <div className="dx-wizard-nav">
+        {currentStep > 1 && (
+          <button type="button" className="btn-dx-secondary" onClick={goBack} disabled={saving}>
+            ← Back
           </button>
-          <button type="button" className="btn-dx-secondary" onClick={onCancel} style={{ marginLeft: 'auto' }}>Cancel</button>
-        </div>
-      </form>
+        )}
+
+        <span className="dx-wizard-nav__step-label">
+          {currentStep < 5 && `Step ${currentStep} of ${STEPS.length}`}
+        </span>
+
+        <div className="dx-wizard-nav__spacer" />
+
+        {currentStep < 4 && (
+          <button type="button" className="btn-dx-primary" onClick={goNext}>
+            Next <ChevronRight size={15} style={{ marginLeft: 2 }} />
+          </button>
+        )}
+
+        {currentStep === 4 && (
+          <button type="button" className="btn-dx-primary" onClick={goNext}>
+            Review Order <ChevronRight size={15} style={{ marginLeft: 2 }} />
+          </button>
+        )}
+
+        {currentStep === 5 && (
+          <>
+            {!isEdit && (
+              <button type="button" className="btn-dx-primary"
+                style={{ background: '#16a34a', borderColor: '#16a34a' }}
+                disabled={saving} onClick={() => submit(true)}>
+                {saving
+                  ? <><Loader2 size={15} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving…</>
+                  : '⚡ Create & Dispatch (Best-Fit)'}
+              </button>
+            )}
+            <button type="button" className="btn-dx-secondary" disabled={saving} onClick={() => submit(false)}>
+              {saving
+                ? <><Loader2 size={15} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving…</>
+                : <><FileText size={14} /> {isEdit ? 'Save Changes' : 'Create Job Order'}</>}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -742,14 +972,20 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function CreateJobOrderPage() {
-  const navigate = useNavigate()
-  const toast = useToast()
-  const [orders, setOrders] = useState([])
+  const navigate  = useNavigate()
+  const location  = useLocation()
+  const toast     = useToast()
+  const [orders, setOrders]         = useState([])
   const [masterData, setMasterData] = useState({ clients: [], material_types: [], quarries: [], vehicle_types: [], client_preferences: [] })
   const [clientsLoading, setClientsLoading] = useState(true)
-  const [selected, setSelected] = useState(null)
-  const [formMode, setFormMode] = useState(null)
-  const [error, setError] = useState('')
+  const [selected, setSelected]     = useState(null)
+  const [formMode, setFormMode]     = useState(null)
+  const [error, setError]           = useState('')
+  // Allow dashboard KPI cards to pre-select a tab via navigation state
+  const [activeTab, setActiveTab]   = useState(location.state?.initialTab || 'active')
+  const [search, setSearch]         = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [page, setPage]             = useState(1)
 
   const load = useCallback(async () => {
     setClientsLoading(true)
@@ -757,28 +993,84 @@ function CreateJobOrderPage() {
       const [jobsRes, optionsRes] = await Promise.all([fetchJobOrders(1), fetchMasterDataOptions()])
       setOrders(jobsRes.data || [])
       setMasterData({
-        clients: optionsRes.clients || [],
-        material_types: optionsRes.material_types || [],
-        quarries: optionsRes.quarries || [],
-        vehicle_types: optionsRes.vehicle_types || [],
+        clients:            optionsRes.clients            || [],
+        material_types:     optionsRes.material_types     || [],
+        quarries:           optionsRes.quarries           || [],
+        vehicle_types:      optionsRes.vehicle_types      || [],
         client_preferences: optionsRes.client_preferences || [],
       })
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setClientsLoading(false)
-    }
+    } catch (err) { setError(err.message) }
+    finally { setClientsLoading(false) }
   }, [])
 
   useEffect(() => { load() }, []) // eslint-disable-line
 
   const refreshOptions = useCallback(async () => {
     const optionsRes = await fetchMasterDataOptions()
-    setMasterData((prev) => ({
-      ...prev,
-      material_types: optionsRes.material_types || [],
-    }))
+    setMasterData((prev) => ({ ...prev, material_types: optionsRes.material_types || [] }))
   }, [])
+
+  // ── Tab counts ────────────────────────────────────────────────────────────
+  const counts = useMemo(() => ({
+    all:       orders.length,
+    active:    orders.filter((o) => ACTIVE_STATUSES.includes(o.status)).length,
+    completed: orders.filter((o) => COMPLETED_STATUSES.includes(o.status)).length,
+  }), [orders])
+
+  // ── Status options scoped to current tab ─────────────────────────────────
+  const statusOptions = useMemo(() => {
+    if (activeTab === 'active')    return STATUS_OPTIONS_ACTIVE
+    if (activeTab === 'completed') return STATUS_OPTIONS_COMPLETED
+    return STATUS_OPTIONS_ALL
+  }, [activeTab])
+
+  // ── Filtered + searched rows ───────────────────────────────────────────────
+  const filteredOrders = useMemo(() => {
+    let list = orders
+    if (activeTab === 'active')    list = list.filter((o) => ACTIVE_STATUSES.includes(o.status))
+    if (activeTab === 'completed') list = list.filter((o) => COMPLETED_STATUSES.includes(o.status))
+    if (statusFilter !== 'all')    list = list.filter((o) => o.status === statusFilter)
+    const q = search.trim().toLowerCase()
+    if (q) {
+      list = list.filter((o) => {
+        const clientName = (o.client?.client_name || o.custom_client_name || buildDisplayName(o) || '').toLowerCase()
+        const trackCode  = (o.tracking_code || '').toLowerCase()
+        const jobId      = formatJobPublicId(o.id).toLowerCase()
+        const material   = (o.material_type || '').toLowerCase()
+        const dropoff    = buildDisplayAddress('dropoff', o).toLowerCase()
+        const quarry     = (o.quarry?.quarry_name || '').toLowerCase()
+        const driver     = (o.assignments?.[0]?.driver?.user?.name || '').toLowerCase()
+        return clientName.includes(q) || trackCode.includes(q) || jobId.includes(q)
+          || material.includes(q) || dropoff.includes(q) || quarry.includes(q) || driver.includes(q)
+      })
+    }
+    return list
+  }, [orders, activeTab, search, statusFilter])
+
+  // ── Pagination ────────────────────────────────────────────────────────────
+  const totalPages  = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE))
+  const pagedOrders = useMemo(
+    () => filteredOrders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredOrders, page],
+  )
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => { setPage(1) }, [activeTab, search, statusFilter])
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    setSearch('')
+    setStatusFilter('all')
+    setPage(1)
+    // Deselect if the current selection is no longer in the new tab's results
+    if (selected) {
+      const inTab = tab === 'all'       ? true
+        : tab === 'active'    ? ACTIVE_STATUSES.includes(selected.status)
+        : tab === 'completed' ? COMPLETED_STATUSES.includes(selected.status)
+        : true
+      if (!inTab) setSelected(null)
+    }
+  }
 
   const handleSaved = (saved, isEdit, proceedToBestFit) => {
     setFormMode(null)
@@ -812,7 +1104,7 @@ function CreateJobOrderPage() {
 
   const firstAssignment = selected?.assignments?.[0]
   const isCreating = formMode === 'create'
-  const isEditing = Boolean(formMode?.order)
+  const isEditing  = Boolean(formMode?.order)
 
   return (
     <section>
@@ -835,7 +1127,7 @@ function CreateJobOrderPage() {
 
       {error && <p className="notice error" style={{ marginBottom: 12 }}>{error}</p>}
 
-      {/* Inline form — appears above the table, no page redirect */}
+      {/* ── Wizard form — slides in above the table ── */}
       {(isCreating || isEditing) && (
         <JobOrderForm
           initial={isEditing ? formMode.order : null}
@@ -849,7 +1141,78 @@ function CreateJobOrderPage() {
 
       <div className="dx-split-bestfit" style={{ gridTemplateColumns: '1fr 360px', gap: 20, marginTop: 16 }}>
         <div className="dx-panel" style={{ marginBottom: 0 }}>
-          <div className="dx-data-table-wrap">
+
+          {/* ── Tab pills ── */}
+          <div className="dx-filter-bar">
+            <div className="dx-filter-tabs" role="tablist" aria-label="Filter job orders">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  className={`dx-filter-tab${activeTab === tab.id ? ' dx-filter-tab--active' : ''}`}
+                  onClick={() => handleTabChange(tab.id)}
+                >
+                  {tab.label}
+                  <span className="dx-filter-tab__badge">{counts[tab.id]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Toolbar: search + status + refresh + count ── */}
+          <div className="dx-filter-toolbar">
+            <div className="dx-filter-search" role="search" aria-label="Search job orders">
+              <span className="dx-filter-search__icon" aria-hidden>
+                <Search size={14} />
+              </span>
+              <input
+                type="text"
+                placeholder="Search ID, client, material, quarry, driver…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search within filtered orders"
+                autoComplete="off"
+              />
+              {search && (
+                <button
+                  type="button"
+                  className="dx-filter-search__clear"
+                  onClick={() => setSearch('')}
+                  aria-label="Clear search"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            <FilterSelect
+              value={statusFilter}
+              onChange={(v) => { setStatusFilter(v); setPage(1) }}
+              label="Status"
+              options={statusOptions}
+              style={{ flexShrink: 0 }}
+            />
+
+            <button
+              type="button"
+              className="btn-dx-secondary"
+              onClick={load}
+              disabled={clientsLoading}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+            >
+              <RefreshCw size={13} style={clientsLoading ? { animation: 'spin 0.8s linear infinite' } : {}} />
+              {clientsLoading ? 'Loading…' : 'Refresh'}
+            </button>
+
+            <span className="dx-filter-count">
+              {filteredOrders.length}{filteredOrders.length !== counts[activeTab] ? ` of ${counts[activeTab]}` : ''} {activeTab === 'active' ? 'active' : activeTab === 'completed' ? 'completed' : 'total'}
+            </span>
+          </div>
+
+          {/* ── Table ── */}
+          <div className="dx-data-table-wrap" style={{ overflowY: 'auto', maxHeight: 500 }}>
             <table className="dx-data-table">
               <thead>
                 <tr>
@@ -858,36 +1221,59 @@ function CreateJobOrderPage() {
                 </tr>
               </thead>
               <tbody>
-                {orders.length === 0 && (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: '24px 0' }}>
-                    No job orders yet.{' '}
-                    <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline', padding: 0 }}
-                      onClick={() => setFormMode('create')}>
-                      Create the first one →
-                    </button>
+                {clientsLoading ? (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <tr key={i}>
+                      {Array.from({ length: 6 }).map((_, j) => (
+                        <td key={j}><div style={{ height: 14, borderRadius: 6, background: 'var(--slate-200)', width: j === 0 ? '70%' : '55%', animation: 'shimmer 1.4s infinite' }} /></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : filteredOrders.length === 0 ? (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0' }}>
+                    {orders.length === 0
+                      ? <>No job orders yet.{' '}
+                          <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline', padding: 0 }}
+                            onClick={() => setFormMode('create')}>Create the first one →</button>
+                        </>
+                      : (search || statusFilter !== 'all')
+                        ? `No results match your filter in ${TABS.find(t => t.id === activeTab)?.label}.`
+                        : `No ${activeTab === 'active' ? 'active deliveries' : activeTab === 'completed' ? 'completed orders' : 'orders'} found.`
+                    }
                   </td></tr>
+                ) : (
+                  pagedOrders.map((order) => (
+                    <tr key={order.id} role="button" tabIndex={0}
+                      onClick={() => { setSelected(order); setFormMode(null) }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(order); setFormMode(null) } }}
+                      className={selected?.id === order.id ? 'is-selected' : undefined}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td><span className="job-link">{formatJobPublicId(order.id)}</span></td>
+                      <td style={{ fontWeight: 500 }}>{order.client?.client_name || order.custom_client_name || buildDisplayName(order)}</td>
+                      <td style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                        {buildDisplayAddress('pickup', order)} → {buildDisplayAddress('dropoff', order)}
+                      </td>
+                      <td style={{ textTransform: 'capitalize', fontSize: '0.875rem' }}>{order.priority}</td>
+                      <td style={{ fontSize: '0.8125rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                        {order.scheduled_start ? new Date(order.scheduled_start).toLocaleDateString() : '—'}
+                      </td>
+                      <td><span className={jobStatusBadgeClass(order.status)}>{formatJobStatus(order.status)}</span></td>
+                    </tr>
+                  ))
                 )}
-                {orders.map((order) => (
-                  <tr key={order.id} role="button" tabIndex={0}
-                    onClick={() => { setSelected(order); setFormMode(null) }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(order); setFormMode(null) } }}
-                    style={{ cursor: 'pointer', background: selected?.id === order.id ? '#eff6ff' : undefined }}
-                  >
-                    <td><span className="job-link">{formatJobPublicId(order.id)}</span></td>
-                    <td>{order.client?.client_name || order.custom_client_name || buildDisplayName(order)}</td>
-                    <td style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>
-                      {buildDisplayAddress('pickup', order)} → {buildDisplayAddress('dropoff', order)}
-                    </td>
-                    <td style={{ textTransform: 'capitalize' }}>{order.priority}</td>
-                    <td style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>
-                      {order.scheduled_start ? new Date(order.scheduled_start).toLocaleDateString() : '—'}
-                    </td>
-                    <td><span className={jobStatusBadgeClass(order.status)}>{formatJobStatus(order.status)}</span></td>
-                  </tr>
-                ))}
               </tbody>
             </table>
           </div>
+
+          {/* ── Pagination ── */}
+          {totalPages > 1 && (
+            <div className="dx-pager">
+              <button type="button" className="dx-pager__btn" disabled={page === 1} onClick={() => setPage(page - 1)} aria-label="Previous page">‹</button>
+              <span className="dx-pager__info">Page {page} of {totalPages}</span>
+              <button type="button" className="dx-pager__btn" disabled={page === totalPages} onClick={() => setPage(page + 1)} aria-label="Next page">›</button>
+            </div>
+          )}
         </div>
 
         {/* ── Detail panel ── */}

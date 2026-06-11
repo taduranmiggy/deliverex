@@ -6,9 +6,9 @@
  *
  * Dispatch and assignment actions are Dispatcher-role only.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchJobOrders } from '../../api/dispatcher'
-import { EmptyState, FilterSelect, PageHeader, SearchInput } from '../../components/ui'
+import { EmptyState, FilterSelect, PageHeader, PaginationBar, SearchInput } from '../../components/ui'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
@@ -120,6 +120,8 @@ function AdminJobOrdersPage() {
   const [selected, setSelected] = useState(null)
   const [search, setSearch]     = useState('')
   const [status, setStatus]     = useState('all')
+  const [page, setPage]         = useState(1)
+  const [perPage, setPerPage]   = useState(25)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -137,7 +139,7 @@ function AdminJobOrdersPage() {
   useEffect(() => { load() }, [load])
 
   /* Client-side filter */
-  const filtered = orders.filter((o) => {
+  const filtered = useMemo(() => orders.filter((o) => {
     const matchStatus = status === 'all' || o.status === status
     const q = search.toLowerCase()
     const matchSearch = !q || [
@@ -149,7 +151,16 @@ function AdminJobOrdersPage() {
       formatJobPublicId(o.id),
     ].some((v) => v && String(v).toLowerCase().includes(q))
     return matchStatus && matchSearch
-  })
+  }), [orders, search, status])
+
+  /* Reset page when filters change */
+  useEffect(() => { setPage(1) }, [search, status, perPage])
+
+  /* Paginated slice */
+  const pagedOrders = useMemo(
+    () => filtered.slice((page - 1) * perPage, page * perPage),
+    [filtered, page, perPage],
+  )
 
   return (
     <section>
@@ -168,9 +179,6 @@ function AdminJobOrdersPage() {
         <button type="button" className="btn-dx-secondary" onClick={load} disabled={loading} style={{ alignSelf: 'flex-end' }}>
           {loading ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Refreshing…</> : 'Refresh'}
         </button>
-        <span style={{ alignSelf: 'flex-end', fontSize: '0.8125rem', color: 'var(--muted)' }}>
-          {filtered.length} of {orders.length} orders
-        </span>
       </div>
 
       <div className="dx-split-bestfit" style={{ gridTemplateColumns: '1fr 340px', gap: 20 }}>
@@ -210,17 +218,15 @@ function AdminJobOrdersPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((order) => (
+                  pagedOrders.map((order) => (
                     <tr
                       key={order.id}
                       role="button"
                       tabIndex={0}
                       onClick={() => setSelected(order)}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(order) } }}
-                      style={{
-                        cursor: 'pointer',
-                        background: selected?.id === order.id ? '#eff6ff' : undefined,
-                      }}
+                      className={selected?.id === order.id ? 'is-selected' : undefined}
+                      style={{ cursor: 'pointer' }}
                     >
                       <td>
                         <span className="job-link">{formatJobPublicId(order.id)}</span>
@@ -246,6 +252,16 @@ function AdminJobOrdersPage() {
               </tbody>
             </table>
           </div>
+
+          {!loading && filtered.length > 0 && (
+            <PaginationBar
+              page={page}
+              perPage={perPage}
+              total={filtered.length}
+              onPage={setPage}
+              onPerPage={(n) => { setPerPage(n); setPage(1) }}
+            />
+          )}
         </div>
 
         {/* Read-only detail panel */}

@@ -1,9 +1,34 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createUser, deleteUser, fetchRoles, fetchUsers, updateUser } from '../../api/admin'
-import { DataTable, EmptyState, PageHeader, SearchInput, StatusBadge } from '../../components/ui'
+import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
 import { Plus, Users } from 'lucide-react'
 
 const BLANK = { name: '', email: '', password: '', phone: '', role_id: '', status: 'active' }
+
+// Role tabs config — values match role.name (lowercase) from the backend
+const ROLE_TABS = [
+  { value: 'all',        label: 'All' },
+  { value: 'admin',      label: 'Admin' },
+  { value: 'dispatcher', label: 'Dispatcher' },
+  { value: 'manager',    label: 'Manager' },
+  { value: 'driver',     label: 'Driver' },
+  { value: 'customer',   label: 'Customer' },
+]
+
+const STATUS_OPTS = [
+  { value: 'all',      label: 'All Statuses' },
+  { value: 'active',   label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+]
+
+// Role badge colour map
+const ROLE_COLORS = {
+  admin:      { bg: '#fef3c7', color: '#92400e' },
+  dispatcher: { bg: '#dbeafe', color: '#1d4ed8' },
+  manager:    { bg: '#dcfce7', color: '#15803d' },
+  driver:     { bg: '#ede9fe', color: '#6d28d9' },
+  customer:   { bg: '#fee2e2', color: '#b91c1c' },
+}
 
 function UserModal({ user, roles, onClose, onSaved }) {
   const isEdit = Boolean(user?.id)
@@ -64,59 +89,95 @@ function UserModal({ user, roles, onClose, onSaved }) {
 }
 
 function UserManagementPage() {
-  const [users, setUsers]   = useState([])
-  const [roles, setRoles]   = useState([])
-  const [error, setError]   = useState('')
-  const [msg, setMsg]       = useState('')
-  const [modal, setModal]   = useState(null)
-  const [search, setSearch] = useState('')
-  const [page, setPage]     = useState(1)
-  const [meta, setMeta]     = useState({ last_page: 1, total: 0 })
-  const [loading, setLoading] = useState(false)
+  const [users, setUsers]       = useState([])
+  const [roles, setRoles]       = useState([])
+  const [error, setError]       = useState('')
+  const [msg, setMsg]           = useState('')
+  const [modal, setModal]       = useState(null)
+  const [loading, setLoading]   = useState(false)
+  // Filters
+  const [search, setSearch]     = useState('')
+  const [roleTab, setRoleTab]   = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  // Pagination
+  const [page, setPage]         = useState(1)
+  const [perPage, setPerPage]   = useState(15)
 
-  const load = useCallback(async (p = 1) => {
+  // Load all users once (high per_page) so counts + filters work client-side
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const [res, rolesRes] = await Promise.all([fetchUsers(p), fetchRoles()])
+      const [res, rolesRes] = await Promise.all([fetchUsers(1, 500), fetchRoles()])
       setUsers(res.data || [])
-      setMeta({ last_page: res.last_page ?? 1, total: res.total ?? 0 })
       setRoles(rolesRes || [])
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { load(page) }, [page]) // eslint-disable-line
+  useEffect(() => { load() }, [load])
+
+  // Reset to page 1 when any filter changes
+  useEffect(() => { setPage(1) }, [search, roleTab, statusFilter, perPage])
 
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3500) }
 
   const handleSaved = (saved, isEdit) => {
     setModal(null)
     flash(`User "${saved.name}" ${isEdit ? 'updated' : 'created'}.`)
-    load(page)
+    load()
   }
 
   const handleToggle = async (user) => {
     try {
       await updateUser(user.id, { status: user.status === 'active' ? 'inactive' : 'active' })
       flash('User status updated.')
-      load(page)
+      load()
     } catch (err) { setError(err.message) }
   }
 
   const handleDelete = async (user) => {
     if (!window.confirm(`Delete user "${user.name}"?`)) return
-    try { await deleteUser(user.id); flash('User deleted.'); load(page) }
+    try { await deleteUser(user.id); flash('User deleted.'); load() }
     catch (err) { setError(err.message) }
   }
 
-  const filtered = users.filter((u) =>
-    !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase())
+  // Role counts from the full unfiltered list (for tab badges)
+  const roleCounts = useMemo(() => {
+    const counts = {}
+    users.forEach((u) => {
+      const r = u.role?.name?.toLowerCase() ?? 'unknown'
+      counts[r] = (counts[r] || 0) + 1
+    })
+    return counts
+  }, [users])
+
+  // Apply all filters
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return users.filter((u) => {
+      const roleName = u.role?.name?.toLowerCase() ?? ''
+      if (roleTab !== 'all' && roleName !== roleTab) return false
+      if (statusFilter !== 'all' && u.status !== statusFilter) return false
+      if (q && !u.name?.toLowerCase().includes(q) && !u.email?.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [users, roleTab, statusFilter, search])
+
+  // Paginate
+  const pagedUsers = useMemo(
+    () => filtered.slice((page - 1) * perPage, page * perPage),
+    [filtered, page, perPage],
   )
+
+  const hasActiveFilters = roleTab !== 'all' || statusFilter !== 'all' || search
 
   return (
     <>
-      <PageHeader title="Users & Roles" subtitle={`Manage user accounts and permissions${meta.total ? ` · ${meta.total} total` : ''}`}>
+      <PageHeader
+        title="Users & Roles"
+        subtitle={`Manage user accounts and permissions · ${users.length} total`}
+      >
         <button className="btn-dx-primary" type="button" onClick={() => setModal({ user: null })}>
           <Plus size={16} /> Add User
         </button>
@@ -125,52 +186,137 @@ function UserManagementPage() {
       {msg   && <p className="notice">{msg}</p>}
 
       <div className="dx-panel">
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <SearchInput value={search} onChange={setSearch} placeholder="Search by name or email…" style={{ maxWidth: 320, flex: 1 }} />
-          <span style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>{filtered.length} users</span>
+        {/* ── Role tabs ── */}
+        <div className="dx-filter-tabs" style={{ marginBottom: 14 }}>
+          {ROLE_TABS.map(({ value, label }) => {
+            const count = value === 'all' ? users.length : (roleCounts[value] ?? 0)
+            return (
+              <button
+                key={value}
+                type="button"
+                className={`dx-filter-tab${roleTab === value ? ' dx-filter-tab--active' : ''}`}
+                onClick={() => setRoleTab(value)}
+              >
+                {label}
+                {count > 0 && (
+                  <span className="dx-filter-tab__badge">{count}</span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
+        {/* ── Search + status filter bar ── */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search by name or email…"
+            style={{ flex: 1, maxWidth: 320 }}
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{
+              padding: '8px 12px', border: '1.5px solid var(--stroke)', borderRadius: 10,
+              font: 'inherit', fontSize: '0.875rem', background: 'var(--surface)',
+              color: 'var(--text)', cursor: 'pointer',
+            }}
+          >
+            {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn-dx-secondary"
+              style={{ fontSize: '0.8125rem', padding: '7px 12px' }}
+              onClick={() => { setSearch(''); setRoleTab('all'); setStatusFilter('all') }}
+            >
+              Clear filters
+            </button>
+          )}
+          <span style={{ fontSize: '0.8125rem', color: 'var(--muted)', marginLeft: 'auto' }}>
+            {filtered.length === users.length
+              ? `${users.length} users`
+              : `${filtered.length} of ${users.length} users`}
+          </span>
+        </div>
+
+        {/* ── Table ── */}
         <DataTable
           headers={['Name', 'Email', 'Role', 'Status', 'Actions']}
           loading={loading}
-          empty={<EmptyState icon={Users} title="No users found" />}
+          empty={
+            <EmptyState
+              icon={Users}
+              title={hasActiveFilters ? 'No users match your filters' : 'No users found'}
+              message={hasActiveFilters ? 'Try adjusting your role tab, status, or search.' : undefined}
+            />
+          }
         >
-          {filtered.length > 0 && filtered.map((user) => (
-            <tr key={user.id}>
-              <td>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div className="topbar-avatar" style={{ width: 32, height: 32, fontSize: '0.75rem', borderRadius: 8, flexShrink: 0 }}>
-                    {user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+          {pagedUsers.map((user) => {
+            const roleName = user.role?.name?.toLowerCase() ?? ''
+            const roleStyle = ROLE_COLORS[roleName] ?? { bg: 'var(--slate-100)', color: 'var(--slate-600)' }
+            return (
+              <tr key={user.id}>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="topbar-avatar" style={{ width: 32, height: 32, fontSize: '0.75rem', borderRadius: 8, flexShrink: 0 }}>
+                      {user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p style={{ fontWeight: 600, fontSize: '0.875rem', margin: 0 }}>{user.name}</p>
+                      {user.phone && <p style={{ fontSize: '0.75rem', color: 'var(--muted)', margin: 0 }}>{user.phone}</p>}
+                    </div>
                   </div>
-                  <div>
-                    <p style={{ fontWeight: 600, fontSize: '0.875rem' }}>{user.name}</p>
+                </td>
+                <td style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>{user.email}</td>
+                <td>
+                  <span style={{
+                    padding: '3px 10px', borderRadius: 6,
+                    background: roleStyle.bg, color: roleStyle.color,
+                    fontSize: '0.75rem', fontWeight: 700, textTransform: 'capitalize',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {user.role?.name ?? '—'}
+                  </span>
+                </td>
+                <td><StatusBadge status={user.status === 'active' ? 'active' : 'inactive'} /></td>
+                <td>
+                  <div className="dx-text-actions">
+                    <button type="button" onClick={() => setModal({ user })}>Edit</button>
+                    <button type="button" onClick={() => handleToggle(user)}>
+                      {user.status === 'active' ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button type="button" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(user)}>
+                      Delete
+                    </button>
                   </div>
-                </div>
-              </td>
-              <td style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>{user.email}</td>
-              <td><span style={{ padding: '3px 10px', borderRadius: 6, background: 'var(--slate-100)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'capitalize' }}>{user.role?.name ?? '—'}</span></td>
-              <td><StatusBadge status={user.status === 'active' ? 'active' : 'inactive'} /></td>
-              <td>
-                <div className="dx-text-actions">
-                  <button type="button" onClick={() => setModal({ user })}>Edit</button>
-                  <button type="button" onClick={() => handleToggle(user)}>{user.status === 'active' ? 'Deactivate' : 'Activate'}</button>
-                  <button type="button" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(user)}>Delete</button>
-                </div>
-              </td>
-            </tr>
-          ))}
+                </td>
+              </tr>
+            )
+          })}
         </DataTable>
 
-        {meta.last_page > 1 && (
-          <div className="dx-pagination">
-            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
-            <span>Page {page} of {meta.last_page}</span>
-            <button disabled={page >= meta.last_page} onClick={() => setPage((p) => p + 1)}>Next</button>
-          </div>
+        {filtered.length > 0 && (
+          <PaginationBar
+            page={page}
+            perPage={perPage}
+            total={filtered.length}
+            onPage={setPage}
+            onPerPage={(n) => { setPerPage(n); setPage(1) }}
+          />
         )}
       </div>
 
-      {modal !== null && <UserModal user={modal.user} roles={roles} onClose={() => setModal(null)} onSaved={handleSaved} />}
+      {modal !== null && (
+        <UserModal
+          user={modal.user}
+          roles={roles}
+          onClose={() => setModal(null)}
+          onSaved={handleSaved}
+        />
+      )}
     </>
   )
 }

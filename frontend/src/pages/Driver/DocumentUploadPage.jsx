@@ -129,6 +129,7 @@ function DocumentUploadPage() {
             fileType: file.type,
             fileBase64: base64,
           },
+          action_timestamp: new Date().toISOString(),
         })
         showToast(`Document queued (${pendingCount + 1} pending sync)`)
         clearFile()

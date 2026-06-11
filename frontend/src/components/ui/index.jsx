@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 
 /* ─── StatCard ──────────────────────────────────────────────── */
-export function StatCard({ label, value, icon: Icon, delta, deltaType = 'up', iconVariant = 'default', suffix = '' }) {
+export function StatCard({ label, value, icon: Icon, delta, deltaType = 'up', iconVariant = 'default', suffix = '', onClick, hint, secondary = false }) {
   const variantMap = {
     default: 'dx-stat-card__icon',
     green:   'dx-stat-card__icon dx-stat-card__icon--green',
@@ -17,11 +17,21 @@ export function StatCard({ label, value, icon: Icon, delta, deltaType = 'up', ic
     orange:  'dx-stat-card__icon dx-stat-card__icon--orange',
   }
 
+  const Tag = onClick ? 'button' : 'div'
+  const cls = [
+    'dx-stat-card',
+    onClick    ? 'dx-stat-card--clickable' : '',
+    secondary  ? 'dx-stat-card--secondary' : '',
+  ].filter(Boolean).join(' ')
+
   return (
-    <div className="dx-stat-card">
+    <Tag
+      className={cls}
+      {...(onClick ? { type: 'button', onClick } : {})}
+    >
       {Icon && (
         <div className={variantMap[iconVariant] ?? variantMap.default} aria-hidden>
-          <Icon size={22} />
+          <Icon size={secondary ? 18 : 22} />
         </div>
       )}
       <div className="dx-stat-card__meta">
@@ -33,8 +43,11 @@ export function StatCard({ label, value, icon: Icon, delta, deltaType = 'up', ic
             {delta}
           </div>
         )}
+        {hint && onClick && (
+          <div className="dx-stat-card__hint">{hint} →</div>
+        )}
       </div>
-    </div>
+    </Tag>
   )
 }
 
@@ -213,6 +226,75 @@ export function DataTable({ headers, children, loading, empty }) {
           )}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/* ─── PaginationBar ─────────────────────────────────────────── */
+const PER_PAGE_OPTIONS_DEFAULT = [10, 25, 50, 100]
+
+/**
+ * Universal pagination footer.
+ * Props:
+ *   page, perPage, total — numbers
+ *   onPage(n)            — called when user navigates to page n
+ *   onPerPage(n)         — called when user changes rows-per-page
+ *   perPageOptions       — array of integers (default [10, 25, 50, 100])
+ */
+export function PaginationBar({
+  page, perPage, total, onPage, onPerPage,
+  perPageOptions = PER_PAGE_OPTIONS_DEFAULT,
+}) {
+  const totalPages  = Math.max(1, Math.ceil(total / perPage))
+  const from        = total === 0 ? 0 : (page - 1) * perPage + 1
+  const to          = Math.min(page * perPage, total)
+  const winStart    = Math.max(1, page - 2)
+  const winEnd      = Math.min(totalPages, page + 2)
+  const pageNums    = Array.from({ length: winEnd - winStart + 1 }, (_, i) => winStart + i)
+
+  return (
+    <div className="dx-pagination-bar">
+      {/* Per-page selector */}
+      <div className="dx-pagination-bar__perpage">
+        <span className="dx-pagination-bar__label">Rows per page:</span>
+        <select
+          value={perPage}
+          onChange={(e) => onPerPage(Number(e.target.value))}
+          className="dx-pagination-bar__pp-select"
+        >
+          {perPageOptions.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </div>
+
+      {/* Showing X–Y of Z */}
+      <span className="dx-pagination-bar__info">
+        {total === 0
+          ? 'No records'
+          : `Showing ${from.toLocaleString()}–${to.toLocaleString()} of ${total.toLocaleString()}`}
+      </span>
+
+      {/* Page navigation */}
+      {totalPages > 1 && (
+        <nav className="dx-pagination-bar__nav" aria-label="Page navigation">
+          <button type="button" className="dx-pager__btn" disabled={page <= 1} onClick={() => onPage(1)} title="First page" aria-label="First page">«</button>
+          <button type="button" className="dx-pager__btn" disabled={page <= 1} onClick={() => onPage(page - 1)} title="Previous page" aria-label="Previous page">‹</button>
+          {winStart > 1 && <span className="dx-pagination-bar__ellipsis">…</span>}
+          {pageNums.map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={`dx-pager__btn${p === page ? ' dx-pager__btn--active' : ''}`}
+              onClick={() => onPage(p)}
+              aria-current={p === page ? 'page' : undefined}
+            >
+              {p}
+            </button>
+          ))}
+          {winEnd < totalPages && <span className="dx-pagination-bar__ellipsis">…</span>}
+          <button type="button" className="dx-pager__btn" disabled={page >= totalPages} onClick={() => onPage(page + 1)} title="Next page" aria-label="Next page">›</button>
+          <button type="button" className="dx-pager__btn" disabled={page >= totalPages} onClick={() => onPage(totalPages)} title="Last page" aria-label="Last page">»</button>
+        </nav>
+      )}
     </div>
   )
 }

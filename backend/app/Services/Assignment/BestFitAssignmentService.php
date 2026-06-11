@@ -22,8 +22,16 @@ class BestFitAssignmentService
     {
         $drivers = Driver::query()
             ->with('user')
-            ->where('status', '!=', 'inactive')
-            ->where('availability', '!=', 'offline')
+            // Exclude inactive drivers; treat NULL status as available (auto-provisioned accounts)
+            ->where(function ($q) {
+                $q->where('status', '!=', 'inactive')
+                  ->orWhereNull('status');
+            })
+            // Exclude drivers explicitly marked offline; treat NULL availability as available
+            ->where(function ($q) {
+                $q->where('availability', '!=', 'offline')
+                  ->orWhereNull('availability');
+            })
             ->get()
             ->filter(fn (Driver $d) => ! AssignmentScheduleConflict::hasDriverConflict($d->id, $jobOrder));
 
