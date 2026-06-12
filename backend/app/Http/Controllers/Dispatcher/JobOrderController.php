@@ -37,13 +37,14 @@ class JobOrderController extends Controller
                 'materialSpecification',
                 'assignments.driver.user',
                 'assignments.vehicle.vehicleType',
+                'assignments.deliveryDocuments' => fn ($q) => $q->where('type', 'departure'),
             ])->latest()->paginate(20)
         );
     }
 
     public function show(JobOrder $jobOrder)
     {
-        return response()->json($jobOrder->load(
+        return response()->json($jobOrder->load([
             'creator',
             'client',
             'quarry',
@@ -52,7 +53,8 @@ class JobOrderController extends Controller
             'materialSpecification',
             'assignments.driver.user',
             'assignments.vehicle.vehicleType',
-        ));
+            'assignments.deliveryDocuments' => fn ($q) => $q->where('type', 'departure'),
+        ]));
     }
 
     public function store(Request $request)
@@ -362,7 +364,7 @@ class JobOrderController extends Controller
 
         AuditLogger::record($request->user(), 'job_order.updated', JobOrder::class, $jobOrder->id, [], $request);
 
-        return response()->json($jobOrder->fresh()->load(
+        return response()->json($jobOrder->fresh()->load([
             'creator',
             'client',
             'quarry',
@@ -371,7 +373,8 @@ class JobOrderController extends Controller
             'materialSpecification',
             'assignments.driver.user',
             'assignments.vehicle.vehicleType',
-        ));
+            'assignments.deliveryDocuments' => fn ($q) => $q->where('type', 'departure'),
+        ]));
     }
 
     public function destroy(Request $request, JobOrder $jobOrder)

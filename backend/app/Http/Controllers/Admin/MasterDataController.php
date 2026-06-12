@@ -10,11 +10,15 @@ use App\Models\DriverVehicleAssignment;
 use App\Models\MaterialSpecification;
 use App\Models\MaterialType;
 use App\Models\Quarry;
+use App\Models\Role;
+use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class MasterDataController extends Controller
@@ -286,6 +290,153 @@ class MasterDataController extends Controller
             'client-preferences' => ClientQuarryVehiclePreference::query()->findOrFail($id),
             default => null,
         };
+    }
+
+    // ─── Driver Account Generation ────────────────────────────────────────────────
+
+    /**
+     * POST /admin/master-data/drivers/{driver}/generate-account
+     *
+     * Creates (or reuses) a login account for a Master Data driver record and links
+     * drivers.user_id to the account.  Idempotent — calling it multiple times is safe.
+     */
+    public function generateDriverAccount(Driver $driver): \Illuminate\Http\JsonResponse
+    {
+        // Already linked — return current state without touching anything
+        if ($driver->user_id && $driver->user) {
+            return response()->json([
+                'message'  => 'Driver already has a linked account.',
+                'driver'   => $driver->load('user:id,name,email,status'),
+                'created'  => false,
+                'reused'   => true,
+            ]);
+        }
+
+        $driverRole = Role::where('name', 'driver')->first();
+        if (!$driverRole) {
+            return response()->json(['message' => 'Driver role not found in roles table.'], 500);
+        }
+
+        $email    = $this->makeDriverEmail($driver->full_name);
+        $password = 'Password123!';
+
+        $user = User::updateOrCreate(
+            ['email' => $email],
+            [
+                'name'     => $driver->full_name,
+                'password' => Hash::make($password),
+                'role_id'  => $driverRole->id,
+                'status'   => 'active',
+            ]
+        );
+
+        $wasCreated = $user->wasRecentlyCreated;
+
+        // Link the driver record to this account
+        $driver->update(['user_id' => $user->id]);
+
+        // Also patch missing status/availability fields on the driver row
+        $patch = [];
+        if (empty($driver->status))       $patch['status']       = 'available';
+        if (empty($driver->availability)) $patch['availability'] = 'available';
+        if (!empty($patch))               $driver->update($patch);
+
+        return response()->json([
+            'message'          => $wasCreated
+                ? "Account created and linked: {$email}"
+                : "Existing account found and linked: {$email}",
+            'driver'           => $driver->fresh()->load('user:id,name,email,status'),
+            'email'            => $email,
+            'default_password' => $wasCreated ? $password : null,
+            'created'          => $wasCreated,
+            'reused'           => !$wasCreated,
+        ]);
+    }
+
+    /**
+     * POST /admin/master-data/drivers/generate-all-accounts
+     *
+     * Bulk-generate login accounts for every driver that has no user_id.
+     * Safe to re-run — already-linked drivers are skipped.
+     */
+    public function generateAllDriverAccounts(): \Illuminate\Http\JsonResponse
+    {
+        $driverRole = Role::where('name', 'driver')->first();
+        if (!$driverRole) {
+            return response()->json(['message' => 'Driver role not found in roles table.'], 500);
+        }
+
+        $unlinked = Driver::whereNull('user_id')
+            ->whereNotNull('full_name')
+            ->where(fn ($q) => $q->where('status', '!=', 'inactive')->orWhereNull('status'))
+            ->get();
+
+        $results = [
+            'processed'  => 0,
+            'created'    => 0,
+            'reused'     => 0,
+            'skipped'    => 0,
+            'accounts'   => [],
+        ];
+
+        foreach ($unlinked as $driver) {
+            $email = $this->makeDriverEmail($driver->full_name);
+
+            $user = User::updateOrCreate(
+                ['email' => $email],
+                [
+                    'name'     => $driver->full_name,
+                    'password' => Hash::make('Password123!'),
+                    'role_id'  => $driverRole->id,
+                    'status'   => 'active',
+                ]
+            );
+
+            $driver->update([
+                'user_id'      => $user->id,
+                'status'       => $driver->status       ?? 'available',
+                'availability' => $driver->availability ?? 'available',
+            ]);
+
+            $results['processed']++;
+            if ($user->wasRecentlyCreated) {
+                $results['created']++;
+            } else {
+                $results['reused']++;
+            }
+
+            $results['accounts'][] = [
+                'driver_id'   => $driver->id,
+                'driver_name' => $driver->full_name,
+                'email'       => $email,
+                'created'     => $user->wasRecentlyCreated,
+            ];
+        }
+
+        return response()->json([
+            'message' => "Processed {$results['processed']} drivers: {$results['created']} accounts created, {$results['reused']} existing accounts reused.",
+            ...$results,
+        ]);
+    }
+
+    /**
+     * Derive a unique driver login email from a display name.
+     * Example: "Juan Dela Cruz" → "juan.dela.cruz@deliverex.driver"
+     */
+    private function makeDriverEmail(string $fullName): string
+    {
+        $slug  = Str::slug(trim($fullName), '.');
+        $email = "{$slug}@deliverex.driver";
+
+        // Append an incrementing suffix if the email is already taken
+        $base = $slug;
+        $i    = 2;
+        while (User::where('email', $email)->exists()) {
+            $email = "{$base}.{$i}@deliverex.driver";
+            $i++;
+        }
+
+        return $email;
     }
 
     private function validateEntity(array $payload, array $rules): array

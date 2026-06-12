@@ -56,14 +56,14 @@ class DriverMasterSeeder extends Seeder
         $keptDriverIds = [];
 
         foreach ($drivers as $fullName) {
-            $driver = Driver::updateOrCreate(
+            // Use firstOrCreate so that re-seeding never overwrites an existing driver's
+            // user_id linkage, license details, or other fields that may have been set
+            // via Master Data management or account-generation.
+            $driver = Driver::firstOrCreate(
                 ['full_name' => trim($fullName)],
                 [
-                    'user_id' => null,
-                    'license_no' => null,
-                    'license_expiry' => null,
                     'availability' => 'available',
-                    'status' => 'available',
+                    'status'       => 'available',
                 ]
             );
             $keptDriverIds[] = $driver->id;

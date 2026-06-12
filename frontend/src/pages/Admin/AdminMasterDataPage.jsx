@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { archiveMasterDataRecord, createMasterDataRecord, fetchMasterData, updateMasterDataRecord } from '../../api/admin'
+import { archiveMasterDataRecord, createMasterDataRecord, fetchMasterData, generateAllDriverAccounts, generateDriverAccount, updateMasterDataRecord } from '../../api/admin'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
-import { ChevronRight, Database, Plus } from 'lucide-react'
+import { ChevronRight, Database, Link2, Plus, RefreshCw, UserPlus } from 'lucide-react'
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
 // material-specifications is kept for modal reference but NOT in the visible tab strip.
@@ -12,7 +12,7 @@ const TAB_CONFIG = {
   quarries:                     { label: 'Quarries',        title: 'Quarries / Suppliers',        headers: ['Quarry', 'Contact', 'Email', 'Status', 'Actions'] },
   'vehicle-types':              { label: 'Vehicle Types',   title: 'Vehicle Types',               headers: ['Name', 'Wheel Type', 'CBM Range', 'Status', 'Actions'] },
   vehicles:                     { label: 'Vehicles',        title: 'Vehicles',                    headers: ['Plate', 'Type', 'CBM', 'Status', 'Actions'] },
-  drivers:                      { label: 'Drivers',         title: 'Drivers',                     headers: ['Name', 'License', 'Availability', 'Status', 'Actions'] },
+  drivers:                      { label: 'Drivers',         title: 'Drivers',                     headers: ['Name', 'License', 'Linked Account', 'Link Status', 'Actions'] },
   'driver-vehicle-assignments':  { label: 'Driver-Vehicle', title: 'Driver-Vehicle Assignments',  headers: ['Driver', 'Vehicle', 'Primary', 'Status', 'Actions'] },
   'client-preferences':         { label: 'Preferences',    title: 'Client Preferences',          headers: ['Client', 'Quarry', 'Vehicle Type', 'Default', 'Status', 'Actions'] },
 }
@@ -414,6 +414,10 @@ function AdminMasterDataPage() {
     clients: [], quarries: [], vehicle_types: [],
     vehicles: [], drivers: [], driver_vehicle_assignments: [], client_preferences: [],
   })
+  // Driver account generation
+  const [generatingId, setGeneratingId]   = useState(null) // per-row spinner
+  const [generatingAll, setGeneratingAll] = useState(false)
+  const [genResult, setGenResult]         = useState(null)  // bulk result summary
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -483,7 +487,38 @@ function AdminMasterDataPage() {
 
   const paginationTotal = tab === 'material-types' ? filteredMatsTotal : tabRows.length
 
-  const flash = (text) => { setMsg(text); setTimeout(() => setMsg(''), 3000) }
+  const flash = (text) => { setMsg(text); setTimeout(() => setMsg(''), 5000) }
+
+  const onGenerateAccount = async (driverId) => {
+    setGeneratingId(driverId)
+    setError('')
+    try {
+      const res = await generateDriverAccount(driverId)
+      flash(res.message || 'Account linked.')
+      load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setGeneratingId(null)
+    }
+  }
+
+  const onGenerateAll = async () => {
+    if (!window.confirm('Generate login accounts for all unlinked drivers? Default password: Password123!')) return
+    setGeneratingAll(true)
+    setError('')
+    setGenResult(null)
+    try {
+      const res = await generateAllDriverAccounts()
+      setGenResult(res)
+      flash(res.message || 'Done.')
+      load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setGeneratingAll(false)
+    }
+  }
 
   // archive accepts an explicit tabKey so accordion spec rows can archive correctly
   const onArchive = async (item, tabKey = tab) => {
@@ -507,6 +542,20 @@ function AdminMasterDataPage() {
   return (
     <>
       <PageHeader title="Master Data" subtitle="Operational materials, clients, suppliers, fleet, drivers, and preference mappings">
+        {tab === 'drivers' && (
+          <button
+            className="btn-dx-secondary"
+            type="button"
+            disabled={generatingAll}
+            onClick={onGenerateAll}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            {generatingAll
+              ? <><RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} /> Generating…</>
+              : <><UserPlus size={15} /> Generate All Accounts</>
+            }
+          </button>
+        )}
         <button
           className="btn-dx-primary"
           type="button"
@@ -517,6 +566,15 @@ function AdminMasterDataPage() {
       </PageHeader>
       {error && <p className="notice error">{error}</p>}
       {msg   && <p className="notice">{msg}</p>}
+      {genResult && (
+        <div className="notice" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+          <strong>Bulk account generation complete:</strong>
+          <span>{genResult.processed} drivers processed</span>
+          <span style={{ color: '#16a34a' }}>{genResult.created} accounts created</span>
+          <span style={{ color: '#2563eb' }}>{genResult.reused} existing accounts reused</span>
+          <button type="button" style={{ marginLeft: 'auto', fontSize: '0.75rem', opacity: 0.6 }} onClick={() => setGenResult(null)}>Dismiss</button>
+        </div>
+      )}
 
       <div className="dx-panel">
         {/* ── Tab strip + search ── */}
@@ -574,12 +632,56 @@ function AdminMasterDataPage() {
                 {tab === 'quarries' && <><td>{row.quarry_name}</td><td>{row.contact_person || '—'}</td><td>{row.email || '—'}</td><td><StatusBadge status={row.status} /></td></>}
                 {tab === 'vehicle-types' && <><td>{row.name}</td><td>{row.wheel_type || '—'}</td><td>{row.min_cbm != null && row.max_cbm != null ? `${row.min_cbm} - ${row.max_cbm} m³` : '—'}</td><td><StatusBadge status={row.status} /></td></>}
                 {tab === 'vehicles' && <><td>{row.plate_no}</td><td>{row.vehicleType?.name || row.type || '—'}</td><td>{row.cbm_capacity ? `${row.cbm_capacity} m³` : '—'}</td><td><StatusBadge status={row.status} /></td></>}
-                {tab === 'drivers' && <><td>{row.full_name || row.user?.name || '—'}</td><td>{row.license_no || '—'}</td><td><StatusBadge status={row.availability || 'available'} /></td><td><StatusBadge status={row.status || 'available'} /></td></>}
+                {tab === 'drivers' && (
+                  <>
+                    <td>
+                      <div style={{ fontWeight: 500 }}>{row.full_name || row.user?.name || '—'}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 2 }}>
+                        <StatusBadge status={row.availability || 'available'} />
+                      </div>
+                    </td>
+                    <td>{row.license_no || '—'}</td>
+                    <td>
+                      {row.user ? (
+                        <div>
+                          <div style={{ fontSize: '0.85rem', fontFamily: 'monospace' }}>{row.user.email}</div>
+                          <StatusBadge status={row.user.status || 'active'} />
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>No account</span>
+                      )}
+                    </td>
+                    <td>
+                      {row.user_id ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', fontWeight: 600, color: '#16a34a' }}>
+                          <Link2 size={12} /> Linked
+                        </span>
+                      ) : (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', fontWeight: 600, color: '#d97706' }}>
+                          Unlinked
+                        </span>
+                      )}
+                    </td>
+                  </>
+                )}
                 {tab === 'driver-vehicle-assignments' && <><td>{row.driver?.full_name || '—'}</td><td>{row.vehicle?.plate_no || '—'}</td><td>{row.is_primary ? 'Yes' : 'No'}</td><td><StatusBadge status={row.status} /></td></>}
                 {tab === 'client-preferences' && <><td>{row.client?.client_name || '—'}</td><td>{row.quarry?.quarry_name || '—'}</td><td>{row.vehicleType?.name || '—'}</td><td>{row.is_default ? 'Yes' : 'No'}</td><td><StatusBadge status={row.status} /></td></>}
                 <td>
                   <div className="dx-text-actions">
                     <button type="button" onClick={() => setModal({ item: row, tab })}>Edit</button>
+                    {tab === 'drivers' && !row.user_id && (
+                      <button
+                        type="button"
+                        style={{ color: '#2563eb', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        disabled={generatingId === row.id}
+                        onClick={() => onGenerateAccount(row.id)}
+                      >
+                        {generatingId === row.id
+                          ? <><RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> Generating…</>
+                          : <><UserPlus size={12} /> Generate Account</>
+                        }
+                      </button>
+                    )}
                     <button type="button" style={{ color: 'var(--color-error)' }} onClick={() => onArchive(row)}>Archive</button>
                   </div>
                 </td>

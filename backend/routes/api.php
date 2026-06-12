@@ -94,6 +94,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/vehicles/{vehicle}',[AdminVehicleController::class, 'destroy']);
 
         Route::get('/master-data',                              [AdminMasterDataController::class, 'index']);
+        // Driver account-generation helpers (must come before the generic {resource}/{id} routes)
+        Route::post('/master-data/drivers/generate-all-accounts',   [AdminMasterDataController::class, 'generateAllDriverAccounts']);
+        Route::post('/master-data/drivers/{driver}/generate-account', [AdminMasterDataController::class, 'generateDriverAccount']);
         Route::post('/master-data/{resource}',                  [AdminMasterDataController::class, 'upsert']);
         Route::put('/master-data/{resource}/{id}',              [AdminMasterDataController::class, 'upsert']);
         Route::delete('/master-data/{resource}/{id}',           [AdminMasterDataController::class, 'archive']);
@@ -183,7 +186,11 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::middleware('role:admin|dispatcher')->group(function () {
-        Route::post('/ocr/process/{document}',           [OcrController::class, 'process']);
-        Route::get('/documents/{document}/file',         [DocumentFileController::class, 'show']);
+        Route::post('/ocr/process/{document}', [OcrController::class, 'process']);
+    });
+
+    // Admin, Dispatcher, and Manager can all view uploaded proof images
+    Route::middleware('role:admin|dispatcher|manager')->group(function () {
+        Route::get('/documents/{document}/file', [DocumentFileController::class, 'show']);
     });
 });

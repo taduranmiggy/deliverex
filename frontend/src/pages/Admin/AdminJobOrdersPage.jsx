@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchJobOrders } from '../../api/dispatcher'
-import { EmptyState, FilterSelect, PageHeader, PaginationBar, SearchInput } from '../../components/ui'
+import { EmptyState, FilterSelect, PageHeader, PaginationBar, ProofImageModal, SearchInput } from '../../components/ui'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
@@ -25,6 +25,8 @@ const STATUS_OPTIONS = [
 ]
 
 function DetailPanel({ order }) {
+  const [proofDocId, setProofDocId] = useState(null)
+
   if (!order) {
     return (
       <div className="dx-detail-panel" style={{ marginBottom: 0 }}>
@@ -41,6 +43,7 @@ function DetailPanel({ order }) {
   }
 
   const assignment = order.assignments?.[0]
+  const departureDoc = assignment?.delivery_documents?.find((d) => d.type === 'departure')
 
   const kv = (label, value) => (
     <div className="dx-kv" key={label}>
@@ -50,6 +53,7 @@ function DetailPanel({ order }) {
   )
 
   return (
+    <>
     <div className="dx-detail-panel" style={{ marginBottom: 0 }}>
       <div className="dx-detail-panel__top">
         <h2 style={{ margin: 0, fontSize: '1.0625rem' }}>
@@ -102,6 +106,29 @@ function DetailPanel({ order }) {
           )}
         </div>
 
+        {/* En Route Proof */}
+        {assignment && (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--stroke)' }}>
+            <p style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', marginBottom: 8 }}>
+              En Route Proof
+            </p>
+            {departureDoc ? (
+              <button
+                type="button"
+                className="btn-dx-secondary btn-sm"
+                onClick={() => setProofDocId(departureDoc.id)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                🖼 View En Route Proof
+              </button>
+            ) : (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--muted)', margin: 0 }}>
+                No departure photo uploaded.
+              </p>
+            )}
+          </div>
+        )}
+
         {order.job_requirements && (
           <div className="dx-kv" style={{ alignItems: 'flex-start', marginTop: 8 }}>
             <span>Handling</span>
@@ -110,6 +137,15 @@ function DetailPanel({ order }) {
         )}
       </div>
     </div>
+
+    {proofDocId && (
+      <ProofImageModal
+        documentId={proofDocId}
+        title="En Route Proof"
+        onClose={() => setProofDocId(null)}
+      />
+    )}
+    </>
   )
 }
 

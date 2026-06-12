@@ -58,6 +58,12 @@ export function updateMasterDataRecord(resource, id, payload) {
 export function archiveMasterDataRecord(resource, id) {
   return apiRequest(`/admin/master-data/${resource}/${id}`, { method: 'DELETE' })
 }
+export function generateDriverAccount(driverId) {
+  return apiRequest(`/admin/master-data/drivers/${driverId}/generate-account`, { method: 'POST' })
+}
+export function generateAllDriverAccounts() {
+  return apiRequest('/admin/master-data/drivers/generate-all-accounts', { method: 'POST' })
+}
 
 // ─── OCR ──────────────────────────────────────────────────────────────────────
 export function validateOcr(id, payload)   {

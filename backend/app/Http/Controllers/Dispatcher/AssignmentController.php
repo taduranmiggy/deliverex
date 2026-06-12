@@ -27,7 +27,14 @@ class AssignmentController extends Controller
     public function index()
     {
         return response()->json(
-            DispatchAssignment::with('jobOrder', 'driver.user', 'vehicle.vehicleType', 'latestDelayReport', 'latestArrivedStatusLog')
+            DispatchAssignment::with([
+                'jobOrder',
+                'driver.user',
+                'vehicle.vehicleType',
+                'latestDelayReport',
+                'latestArrivedStatusLog',
+                'deliveryDocuments' => fn ($q) => $q->where('type', 'departure'),
+            ])
                 ->latest()
                 ->paginate(20)
         );

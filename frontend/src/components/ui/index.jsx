@@ -2,6 +2,7 @@
  * Deliverex Shared UI Components
  * Use these across all roles for visual consistency.
  */
+import { useEffect, useState } from 'react'
 import {
   Loader2, Package, Search, TrendingUp, TrendingDown,
 } from 'lucide-react'
@@ -295,6 +296,125 @@ export function PaginationBar({
           <button type="button" className="dx-pager__btn" disabled={page >= totalPages} onClick={() => onPage(totalPages)} title="Last page" aria-label="Last page">»</button>
         </nav>
       )}
+    </div>
+  )
+}
+
+/* ─── ProofImageModal ───────────────────────────────────────── */
+/**
+ * Fetches and displays an authenticated proof image in a modal.
+ *
+ * Props:
+ *   documentId  — delivery_documents.id to fetch
+ *   title       — modal heading (default: "En Route Proof")
+ *   onClose     — called when user dismisses the modal
+ */
+export function ProofImageModal({ documentId, title = 'En Route Proof', onClose }) {
+  const [blobUrl, setBlobUrl] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!documentId) return
+    let active = true
+    let objectUrl = null
+    const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:8000/api'
+    const token = localStorage.getItem('deliverex_token')
+
+    setLoading(true)
+    setError('')
+    setBlobUrl(null)
+
+    fetch(`${apiBase}/documents/${documentId}/file`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        Accept: 'image/*,*/*',
+      },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status === 404 ? 'Proof image not found.' : `Could not load proof image (${res.status}).`)
+        return res.blob()
+      })
+      .then((blob) => {
+        if (!active) return
+        objectUrl = URL.createObjectURL(blob)
+        setBlobUrl(objectUrl)
+      })
+      .catch((err) => {
+        if (active) setError(err.message || 'Proof image not found.')
+      })
+      .finally(() => { if (active) setLoading(false) })
+
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [documentId])
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  if (!documentId) return null
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1200,
+        background: 'rgba(15,23,42,0.72)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: 'var(--card, #fff)', borderRadius: 14, overflow: 'hidden',
+          maxWidth: 720, width: '100%', maxHeight: '88vh',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.45)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--stroke, #e2e8f0)' }}>
+          <span style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{title}</span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted, #64748b)', fontSize: '1.125rem', lineHeight: 1, padding: '4px 6px', borderRadius: 6 }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, minHeight: 220 }}>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: 'var(--muted, #64748b)' }}>
+              <Loader2 size={32} style={{ animation: 'spin 0.7s linear infinite' }} />
+              <span style={{ fontSize: '0.875rem' }}>Loading proof image…</span>
+            </div>
+          ) : error ? (
+            <div style={{ textAlign: 'center', color: 'var(--danger, #dc2626)', fontSize: '0.875rem', padding: '16px 0' }}>
+              <div style={{ fontSize: '2rem', marginBottom: 8 }}>🖼️</div>
+              {error}
+            </div>
+          ) : (
+            <img
+              src={blobUrl}
+              alt="En Route Proof"
+              style={{ maxWidth: '100%', maxHeight: '72vh', borderRadius: 8, objectFit: 'contain', display: 'block' }}
+            />
+          )}
+        </div>
+      </div>
     </div>
   )
 }

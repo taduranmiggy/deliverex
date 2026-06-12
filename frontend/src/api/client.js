@@ -21,6 +21,10 @@ export async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('deliverex_token')
   const isForm = options.body instanceof FormData
   const headers = {
+    // Always tell Laravel this is an API client so that unauthenticated requests
+    // receive HTTP 401 JSON instead of a redirect to route('login') (which does
+    // not exist in this API-only app and would crash with HTTP 500 otherwise).
+    Accept: 'application/json',
     ...(isForm ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   }

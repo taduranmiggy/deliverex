@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { acknowledgeDelayReport, fetchAssignments } from '../../api/dispatcher'
 import { fetchTrackingLogs } from '../../api/tracking'
 import LiveFleetMap from '../../components/LiveFleetMap'
-import { PageHeader, StatusBadge } from '../../components/ui'
+import { PageHeader, ProofImageModal, StatusBadge } from '../../components/ui'
 import { Car, CheckCircle2, ExternalLink, MapPin, RefreshCw, ShieldCheck } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
@@ -24,6 +24,7 @@ function DeliveryMonitoringPage() {
 
   // ── Two-way selection state ────────────────────────────────────────────
   const [selectedId, setSelectedId]     = useState(null)
+  const [proofDocId, setProofDocId]     = useState(null)
   const cardRefs                        = useRef({})   // { [assignmentId]: DOMElement }
 
   // Scroll the selected card into view whenever selectedId changes
@@ -269,6 +270,21 @@ function DeliveryMonitoringPage() {
                         </div>
                       )}
 
+                      {/* En Route departure proof */}
+                      {(() => {
+                        const depDoc = a.delivery_documents?.find((d) => d.type === 'departure')
+                        return depDoc ? (
+                          <button
+                            type="button"
+                            className="btn-dx-secondary btn-sm"
+                            style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            onClick={(e) => { e.stopPropagation(); setProofDocId(depDoc.id) }}
+                          >
+                            🖼 View En Route Proof
+                          </button>
+                        ) : null
+                      })()}
+
                       <a
                         href={mapsUrl}
                         target="_blank"
@@ -287,6 +303,14 @@ function DeliveryMonitoringPage() {
           </div>
         </div>
       </div>
+
+      {proofDocId && (
+        <ProofImageModal
+          documentId={proofDocId}
+          title="En Route Proof"
+          onClose={() => setProofDocId(null)}
+        />
+      )}
     </>
   )
 }
