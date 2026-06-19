@@ -5,8 +5,8 @@ import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 import useAuth from '../../hooks/useAuth'
 import {
-  ChevronRight, HeadphonesIcon,
-  History, MapPin, MessageSquare, Package, Search,
+  BriefcaseBusiness, ChevronRight, HeadphonesIcon, History, Info,
+  MapPin, MessageSquare, Package, Search,
 } from 'lucide-react'
 
 function CustomerHomePage() {
@@ -15,8 +15,8 @@ function CustomerHomePage() {
   const [chatOpen, setChatOpen] = useState(false)
   const [trackCode, setTrackCode] = useState('')
   const [contactOpen, setContactOpen] = useState(false)
-  const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', inquiry_type: 'delivery_inquiry', reference_job_order_id: '', message: '' })
-  const [contactSent, setContactSent] = useState(false)
+  const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', inquiry_type: 'delivery_inquiry', subject: '', reference_job_order_id: '', message: '' })
+  const [contactResult, setContactResult] = useState(null)
   const [contactError, setContactError] = useState('')
   const [sending, setSending] = useState(false)
   const [customerOrders, setCustomerOrders] = useState([])
@@ -81,11 +81,11 @@ function CustomerHomePage() {
     setSending(true)
     setContactError('')
     try {
-      await sendInquiry({
+      const res = await sendInquiry({
         ...contactForm,
         reference_job_order_id: contactForm.reference_job_order_id ? Number(contactForm.reference_job_order_id) : null,
       })
-      setContactSent(true)
+      setContactResult(res)
     } catch (err) {
       setContactError(err.message)
     } finally {
@@ -196,6 +196,8 @@ function CustomerHomePage() {
               { icon: MapPin, label: 'Track a Delivery', to: '/customer/track' },
               { icon: Package, label: 'View My Deliveries', to: isCustomer ? '/customer/deliveries' : '/login' },
               { icon: History, label: 'Delivery History', to: isCustomer ? '/customer/deliveries' : '/login' },
+              { icon: Info, label: 'About Deliverex', to: '/customer/about' },
+              { icon: BriefcaseBusiness, label: 'Our Services', to: '/customer/services' },
               { icon: MessageSquare, label: 'Contact Support', action: () => setContactOpen(true) },
             ].map(({ icon: Icon, label, to, action }) => (
               to ? (
@@ -228,14 +230,21 @@ function CustomerHomePage() {
                 <button type="button" className="dx-modal-close" onClick={() => setContactOpen(false)}>×</button>
               </div>
               <div style={{ padding: '20px 28px 28px' }}>
-                {contactSent ? (
+                {contactResult ? (
                   <div style={{ textAlign: 'center', padding: '24px 0' }}>
                     <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--color-success-light)', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
                       <Package size={26} style={{ color: 'var(--color-success)' }} />
                     </div>
-                    <p style={{ fontWeight: 700, fontSize: '1.0625rem', marginBottom: 8 }}>Message sent!</p>
-                    <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>Our team will follow up shortly.</p>
-                    <button type="button" className="btn-dx-primary" style={{ marginTop: 20 }} onClick={() => { setContactOpen(false); setContactSent(false) }}>Close</button>
+                    <p style={{ fontWeight: 700, fontSize: '1.0625rem', marginBottom: 8 }}>Concern submitted</p>
+                    <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+                      {contactResult?.message || 'Your concern has been submitted successfully.'}
+                    </p>
+                    {contactResult?.reference_no && (
+                      <p style={{ marginTop: 8, fontSize: '0.875rem' }}>
+                        <strong>Reference No:</strong> {contactResult.reference_no}
+                      </p>
+                    )}
+                    <button type="button" className="btn-dx-primary" style={{ marginTop: 20 }} onClick={() => { setContactOpen(false); setContactResult(null) }}>Close</button>
                   </div>
                 ) : (
                   <form className="form-grid" style={{ gridTemplateColumns: '1fr 1fr' }} onSubmit={handleContact}>
@@ -245,12 +254,25 @@ function CustomerHomePage() {
                         Phone: <a href="tel:+639955820222" className="auth-inline-link">+639955820222</a>
                       </p>
                       <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.875rem' }}>
-                        Email: <a href="mailto:johannescanares28@gmail.com" className="auth-inline-link">johannescanares28@gmail.com</a>
+                        Email: <a href="mailto:deliverex.support@gmail.com" className="auth-inline-link">deliverex.support@gmail.com</a>
                       </p>
                     </div>
                     <label style={{ gridColumn: '1 / -1' }}>Name <input required value={contactForm.name} onChange={set('name')} placeholder="Your name" /></label>
-                    <label>Email <input required type="email" value={contactForm.email} onChange={set('email')} placeholder="you@example.com" /></label>
+                    <label>Email
+                      <input
+                        required
+                        type="email"
+                        value={contactForm.email}
+                        onChange={set('email')}
+                        placeholder="you@example.com"
+                        onInvalid={(e) => e.currentTarget.setCustomValidity(
+                          e.currentTarget.validity.valueMissing ? 'Email is required.' : 'Please enter a valid email address.',
+                        )}
+                        onInput={(e) => e.currentTarget.setCustomValidity('')}
+                      />
+                    </label>
                     <label>Phone <input type="tel" value={contactForm.phone} onChange={set('phone')} placeholder="+63 9XX XXX XXXX" /></label>
+                    <label style={{ gridColumn: '1 / -1' }}>Subject <input required value={contactForm.subject} onChange={set('subject')} placeholder="Enter concern subject" /></label>
                     <label>
                       Subject / Inquiry Type
                       <select required value={contactForm.inquiry_type} onChange={set('inquiry_type')}>
@@ -283,7 +305,7 @@ function CustomerHomePage() {
                     <label style={{ gridColumn: '1 / -1' }}>Message <textarea required rows={3} value={contactForm.message} onChange={set('message')} placeholder="Tell us about your delivery needs…" /></label>
                     {contactError && <p className="notice error" style={{ margin: 0, gridColumn: '1 / -1' }}>{contactError}</p>}
                     <div style={{ display: 'flex', gap: 10, gridColumn: '1 / -1' }}>
-                      <button type="submit" className="btn-dx-primary" disabled={sending}>{sending ? 'Sending…' : 'Send Inquiry'}</button>
+                      <button type="submit" className="btn-dx-primary" disabled={sending}>{sending ? 'Submitting…' : 'Submit Concern'}</button>
                       <button type="button" className="btn-dx-secondary" onClick={() => setContactOpen(false)}>Cancel</button>
                     </div>
                   </form>

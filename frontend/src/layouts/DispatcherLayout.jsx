@@ -3,7 +3,7 @@ import LogoutButton from '../components/LogoutButton'
 import PageTransition from '../components/PageTransition'
 import useAuth from '../hooks/useAuth'
 import {
-  Bell, Calendar, LayoutDashboard, Mail, Map, Route, Truck,
+  Bell, Calendar, FileSearch, LayoutDashboard, Map, Route, Truck,
 } from 'lucide-react'
 
 const navCls = ({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`
@@ -14,8 +14,8 @@ const NAV = [
   { to: '/dispatcher/dispatch-best-fit', label: 'Fleet Dispatch',  Icon: Route },
   { to: '/dispatcher/calendar',          label: 'Calendar',        Icon: Calendar },
   { to: '/dispatcher/live-tracking',     label: 'Tracking',        Icon: Map },
+  { to: '/dispatcher/ocr-review',        label: 'OCR Review',      Icon: FileSearch },
   { to: '/dispatcher/notifications',     label: 'Notifications',   Icon: Bell },
-  { to: '/dispatcher/inquiries',         label: 'Inquiries',       Icon: Mail },
 ]
 
 function DispatcherLayout() {

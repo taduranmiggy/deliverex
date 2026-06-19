@@ -7,10 +7,15 @@ use App\Models\Inquiry;
 use App\Models\JobOrder;
 use App\Support\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Throwable;
 
 class InquiryController extends Controller
 {
+    private const SUPPORT_EMAIL = 'deliverex.support@gmail.com';
+
     /** Public: customer submits a contact / delivery inquiry. */
     public function store(Request $request)
     {
@@ -19,8 +24,11 @@ class InquiryController extends Controller
             'email'             => 'required|email|max:255',
             'phone'             => 'nullable|string|max:50',
             'inquiry_type'      => 'required|string|in:delivery_inquiry,complaint,follow_up,general_question',
+            'subject'           => 'required|string|max:200',
             'reference_job_order_id' => 'nullable|integer|exists:job_orders,id',
             'message'           => 'required|string|max:2000',
+        ], [
+            'email.required' => 'Email is required.',
         ]);
         $data['email'] = Str::lower($data['email']);
 
@@ -51,14 +59,23 @@ class InquiryController extends Controller
         }
 
         $inquiry = Inquiry::create($data);
+        $inquiry->update([
+            'reference_no' => $this->buildReferenceNo($inquiry->id),
+        ]);
 
         AuditLogger::record(null, 'inquiry.created', Inquiry::class, $inquiry->id, [
             'email' => $inquiry->email,
         ], $request);
 
+        $mailSent = $this->sendSupportEmail($inquiry);
+
         return response()->json([
-            'message'    => 'Your inquiry has been received. A dispatcher will follow up shortly.',
+            'message'    => $mailSent
+                ? 'Your concern has been submitted successfully. For follow-up, you may contact deliverex.support@gmail.com.'
+                : 'Your concern has been saved. Email notification could not be sent.',
             'inquiry_id' => $inquiry->id,
+            'reference_no' => $inquiry->reference_no,
+            'email_notification_sent' => $mailSent,
         ], 201);
     }
 
@@ -139,5 +156,46 @@ class InquiryController extends Controller
         $inquiry->delete();
 
         return response()->json(['message' => 'Inquiry deleted.']);
+    }
+
+    private function buildReferenceNo(int $id): string
+    {
+        return 'INQ-'.now()->format('Y').'-'.str_pad((string) $id, 4, '0', STR_PAD_LEFT);
+    }
+
+    private function sendSupportEmail(Inquiry $inquiry): bool
+    {
+        try {
+            Mail::raw($this->buildSupportEmailBody($inquiry), function ($message) use ($inquiry) {
+                $message->to(self::SUPPORT_EMAIL)
+                    ->subject('Customer Support Inquiry '.$inquiry->reference_no);
+            });
+
+            return true;
+        } catch (Throwable $e) {
+            Log::error('Inquiry support email failed', [
+                'inquiry_id' => $inquiry->id,
+                'reference_no' => $inquiry->reference_no,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    private function buildSupportEmailBody(Inquiry $inquiry): string
+    {
+        return implode("\n", [
+            'New customer concern submitted',
+            '',
+            'Reference No: '.($inquiry->reference_no ?? '—'),
+            'Inquiry Type: '.($inquiry->inquiry_type ?? '—'),
+            'Customer Name: '.($inquiry->name ?? '—'),
+            'Customer Email: '.($inquiry->email ?? '—'),
+            'Customer Phone: '.($inquiry->phone ?? '—'),
+            'Subject: '.($inquiry->subject ?? '—'),
+            'Message: '.($inquiry->message ?? '—'),
+            'Timestamp: '.($inquiry->created_at?->toDateTimeString() ?? now()->toDateTimeString()),
+        ]);
     }
 }

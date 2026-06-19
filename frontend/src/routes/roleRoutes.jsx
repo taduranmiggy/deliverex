@@ -14,7 +14,6 @@ import AssignDriverVehiclePage from '../pages/Dispatcher/AssignDriverVehiclePage
 import DeliveryMonitoringPage from '../pages/Dispatcher/DeliveryMonitoringPage'
 import DispatcherCalendarPage from '../pages/Dispatcher/DispatcherCalendarPage'
 import DispatcherNotificationsPage from '../pages/Dispatcher/DispatcherNotificationsPage'
-import InquiriesPage from '../pages/Dispatcher/InquiriesPage'
 import DriverHomePage from '../pages/Driver/DriverHomePage'
 import DriverJobsPage from '../pages/Driver/DriverJobsPage'
 import DriverNotificationsPage from '../pages/Driver/DriverNotificationsPage'
@@ -33,6 +32,8 @@ import CustomerHomePage from '../pages/Customer/CustomerHomePage'
 import TrackingPage from '../pages/Customer/TrackingPage'
 import CustomerSignupPage from '../pages/Customer/CustomerSignupPage'
 import CustomerDeliveriesPage from '../pages/Customer/CustomerDeliveriesPage'
+import AboutUsPage from '../pages/Customer/AboutUsPage'
+import ServicesPage from '../pages/Customer/ServicesPage'
 import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
 
 export const roleRoutes = {
@@ -51,7 +52,7 @@ export const roleRoutes = {
     <Route key="dispatcher-home" index element={<DispatcherDashboard />} />,
     <Route key="dispatcher-job" path="job-orders" element={<CreateJobOrderPage />} />,
     <Route key="dispatcher-calendar" path="calendar" element={<DispatcherCalendarPage />} />,
-    <Route key="dispatcher-inquiries" path="inquiries" element={<InquiriesPage />} />,
+    <Route key="dispatcher-ocr" path="ocr-review" element={<OcrReviewPage />} />,
     <Route key="dispatcher-assign" path="dispatch-best-fit" element={<AssignDriverVehiclePage />} />,
     <Route key="dispatcher-monitor" path="live-tracking" element={<DeliveryMonitoringPage />} />,
     <Route key="dispatcher-notifs" path="notifications" element={<DispatcherNotificationsPage />} />,
@@ -75,6 +76,8 @@ export const roleRoutes = {
   ],
   customer: [
     <Route key="customer-home" index element={<CustomerHomePage />} />,
+    <Route key="customer-about" path="about" element={<AboutUsPage />} />,
+    <Route key="customer-services" path="services" element={<ServicesPage />} />,
     <Route key="customer-login" path="login" element={<Navigate to="/login" replace />} />,
     <Route key="customer-signup" path="signup" element={<CustomerSignupPage />} />,
     <Route key="customer-track" path="track" element={<TrackingPage />} />,

@@ -2,12 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   createJobOrder, createMaterialSpecification, createMaterialType,
-  deleteJobOrder, fetchClientHistory, fetchJobOrders,
+  deleteJobOrder, fetchJobOrder, fetchJobOrders,
   fetchMasterDataOptions, updateJobOrder,
 } from '../../api/dispatcher'
 import ClientCombobox from '../../components/ClientCombobox'
 import CreatableCombobox from '../../components/CreatableCombobox'
-import CustomerHistoryIntelligence from '../../components/CustomerHistoryIntelligence'
 import { useToast } from '../../context/ToastContext'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
@@ -27,6 +26,7 @@ const BLANK = {
   contact_person: '', customer_email: '', customer_contact: '',
   save_as_client: true,
   quarry_id: '', preferred_vehicle_type_id: '',
+  pickup_location: '', dropoff_location: '',
   pickup_province: '', pickup_city: '', pickup_barangay: '', pickup_street: '', pickup_landmark: '',
   dropoff_province: '', dropoff_city: '', dropoff_barangay: '', dropoff_street: '', dropoff_landmark: '',
   material_type_id: '', material_specification_id: '', load_volume_m3: '',
@@ -37,9 +37,9 @@ const BLANK = {
 const STEPS = [
   { id: 1, label: 'Client',    hint: 'Client & contacts' },
   { id: 2, label: 'Material',  hint: 'Type, spec & load' },
-  { id: 3, label: 'Route',     hint: 'Pickup & delivery' },
-  { id: 4, label: 'Schedule',  hint: 'Dates & notes' },
-  { id: 5, label: 'Review',    hint: 'Confirm & submit' },
+  { id: 3, label: 'Source & Destination', hint: 'Quarry, pickup & delivery' },
+  { id: 4, label: 'Schedule',  hint: 'Start, end & priority' },
+  { id: 5, label: 'Review & Confirm', hint: 'Check and submit' },
 ]
 
 const DRAFT_KEY = 'dx_jo_wizard_draft'
@@ -204,13 +204,26 @@ function RR({ label, value }) {
 
 // ─── Job Order Wizard Form ─────────────────────────────────────────────────────
 
-function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onRefreshOptions }) {
+function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading, onSaved, onCancel, onRefreshOptions }) {
   const isEdit       = Boolean(initial?.id)
   const clients      = options.clients         || []
   const materialTypes = useMemo(() => options.material_types || [], [options.material_types])
   const quarries     = options.quarries        || []
-  const vehicleTypes = options.vehicle_types   || []
   const toast        = useToast()
+  const pickupLocationItems = useMemo(() => {
+    const map = new Map()
+    ;(pickupLocationOptions || []).forEach((item, idx) => {
+      const name = (item?.name || '').trim()
+      if (!name) return
+      if (!map.has(name.toLowerCase())) map.set(name.toLowerCase(), { id: item.id || `opt-${idx}`, name })
+    })
+    quarries.forEach((q) => {
+      const name = (q.quarry_name || '').trim()
+      if (!name) return
+      if (!map.has(name.toLowerCase())) map.set(name.toLowerCase(), { id: `quarry-${q.id}`, name })
+    })
+    return Array.from(map.values())
+  }, [pickupLocationOptions, quarries])
 
   const findClientById       = (id) => clients.find((c) => String(c.id) === String(id))
   const findDefaultPreference = (clientId) => (options.client_preferences || []).find(
@@ -243,6 +256,8 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
       save_as_client: !initial.client_id,
       quarry_id: initial.quarry_id ?? '',
       preferred_vehicle_type_id: initial.preferred_vehicle_type_id ?? '',
+      pickup_location: initial.pickup_location ?? buildDisplayAddress('pickup', initial) ?? '',
+      dropoff_location: initial.dropoff_location ?? buildDisplayAddress('dropoff', initial) ?? '',
       pickup_province: initial.pickup_province ?? '',
       pickup_city: initial.pickup_city ?? '',
       pickup_barangay: initial.pickup_barangay ?? '',
@@ -282,17 +297,16 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
   const [materialTypeError, setMaterialTypeError]           = useState('')
   const [specError, setSpecError]                           = useState('')
   const [autoFilled, setAutoFilled]                         = useState({})
-  const [clientHistory, setClientHistory]                   = useState(null)
-  const [historyLoading, setHistoryLoading]                 = useState(false)
-  const [historyError, setHistoryError]                     = useState('')
+  const [showLocationDetails, setShowLocationDetails]       = useState(false)
+  const [pickupLocationSelection, setPickupLocationSelection] = useState(
+    form.pickup_location ? { type: 'custom', label: form.pickup_location } : null,
+  )
 
   const scheduleMin = minDatetimeLocalValue()
   const isCustomClient = !form.client_id && Boolean(form.custom_client_name?.trim())
 
   const stepPanelRef  = useRef(null)
   // Tracks every field the dispatcher has manually typed into.
-  // applyHistoryAutoFill will never overwrite these, preventing async
-  // history responses from clobbering in-progress user input.
   const userEditedRef = useRef(new Set())
 
   // ── Draft auto-save ────────────────────────────────────────────────────────
@@ -312,42 +326,13 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
     return selected?.specifications || []
   }, [materialTypes, form.material_type_id])
 
-  // ── Auto-fill from history ─────────────────────────────────────────────────
-  const applyHistoryAutoFill = useCallback((autoFill) => {
-    if (!autoFill || Object.keys(autoFill).length === 0) return
-    const filled = {}
-    const stringFields = [
-      'quarry_id', 'preferred_vehicle_type_id', 'material_type_id', 'material_specification_id',
-      'load_volume_m3', 'dropoff_province', 'dropoff_city', 'dropoff_barangay', 'dropoff_street', 'dropoff_landmark',
-      'pickup_province', 'pickup_city', 'pickup_barangay', 'pickup_street', 'pickup_landmark',
-    ]
-    setForm((f) => {
-      const next = { ...f }
-      for (const key of stringFields) {
-        // Never overwrite a field the user has already typed into manually
-        if (userEditedRef.current.has(key)) continue
-        if (autoFill[key] != null && autoFill[key] !== '') { next[key] = String(autoFill[key]); filled[key] = true }
-      }
-      return next
-    })
-    if (Object.keys(filled).length > 0) setAutoFilled((prev) => ({ ...prev, ...filled }))
-  }, [])
-
   useEffect(() => {
-    if (!form.client_id) { setClientHistory(null); setHistoryError(''); return undefined }
-    let cancelled = false
-    setHistoryLoading(true); setHistoryError('')
-    const params = isEdit && initial?.id ? { exclude_job_order_id: initial.id } : {}
-    fetchClientHistory(form.client_id, params)
-      .then((history) => {
-        if (cancelled) return
-        setClientHistory(history)
-        if (!isEdit) applyHistoryAutoFill(history?.auto_fill)
-      })
-      .catch((err) => { if (!cancelled) setHistoryError(err.message) })
-      .finally(() => { if (!cancelled) setHistoryLoading(false) })
-    return () => { cancelled = true }
-  }, [form.client_id, isEdit, initial?.id, applyHistoryAutoFill])
+    if (form.pickup_location) {
+      setPickupLocationSelection({ type: 'custom', label: form.pickup_location })
+    } else {
+      setPickupLocationSelection(null)
+    }
+  }, [form.pickup_location])
 
   useEffect(() => {
     if (!clients.length) return
@@ -447,14 +432,28 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
     } else if (selection?.type === 'custom') {
       userEditedRef.current.clear()
       setForm((f) => ({ ...f, client_id: '', custom_client_name: selection.label, save_as_client: true }))
-      setAutoFilled({}); setClientHistory(null); setHistoryError('')
+      setAutoFilled({})
     } else {
       userEditedRef.current.clear()
       setForm((f) => ({ ...f, client_id: '', custom_client_name: '', save_as_client: true, contact_person: '', customer_email: '', customer_contact: '' }))
-      setAutoFilled({}); setClientHistory(null); setHistoryError('')
+      setAutoFilled({})
     }
     setFE((prev) => { if (!prev.client) return prev; const n = { ...prev }; delete n.client; return n })
   }, [findClientById, findDefaultPreference])
+
+  const handlePickupLocationChange = useCallback((selection) => {
+    setPickupLocationSelection(selection)
+    userEditedRef.current.add('pickup_location')
+    setForm((f) => ({
+      ...f,
+      pickup_location: selection?.label || '',
+      // Mirror to street field for backward-compatible payload consumers.
+      pickup_street: selection?.label || '',
+    }))
+    if (fieldErrors.pickup_location) {
+      setFE((prev) => { const n = { ...prev }; delete n.pickup_location; return n })
+    }
+  }, [fieldErrors.pickup_location])
 
   // ── Field change ───────────────────────────────────────────────────────────
   const set = (k) => (e) => {
@@ -487,11 +486,10 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
         errs.load_volume_m3 = 'Load volume is required.'
     }
     if (step === 3) {
-      if (!form.quarry_id && !form.pickup_street && !form.pickup_city)
-        errs.pickup_street = 'Select a quarry/supplier or enter pickup source details.'
-      if (!form.dropoff_province) errs.dropoff_province = 'Drop-off province is required.'
-      if (!form.dropoff_city)     errs.dropoff_city     = 'Drop-off city is required.'
-      if (!form.dropoff_street)   errs.dropoff_street   = 'Drop-off street / site details are required.'
+      if (!form.quarry_id && !form.pickup_location?.trim())
+        errs.pickup_location = 'Select a quarry/supplier or enter pickup location.'
+      if (!form.dropoff_location?.trim())
+        errs.dropoff_location = 'Delivery location is required.'
     }
     if (step === 4) {
       const schedErrs = validateJobSchedule({ scheduled_start: form.scheduled_start, scheduled_end: form.scheduled_end })
@@ -528,6 +526,8 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
     save_as_client:           isCustomClient ? Boolean(form.save_as_client) : false,
     quarry_id:                form.quarry_id ? Number(form.quarry_id) : null,
     preferred_vehicle_type_id: form.preferred_vehicle_type_id ? Number(form.preferred_vehicle_type_id) : null,
+    pickup_location:          form.pickup_location || null,
+    dropoff_location:         form.dropoff_location || null,
     pickup_province:          form.pickup_province || null,
     pickup_city:              form.pickup_city || null,
     pickup_barangay:          form.pickup_barangay || null,
@@ -577,9 +577,8 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
 
   // ── Lookup helpers for review ──────────────────────────────────────────────
   const quarryName = quarries.find((q) => String(q.id) === String(form.quarry_id))?.quarry_name
-  const vtName     = vehicleTypes.find((v) => String(v.id) === String(form.preferred_vehicle_type_id))?.name
-  const pickupAddr = [form.pickup_province, form.pickup_city, form.pickup_street].filter(Boolean).join(', ')
-  const dropAddr   = [form.dropoff_province, form.dropoff_city, form.dropoff_street].filter(Boolean).join(', ')
+  const pickupAddr = form.pickup_location || [form.pickup_province, form.pickup_city, form.pickup_street].filter(Boolean).join(', ')
+  const dropAddr   = form.dropoff_location || [form.dropoff_province, form.dropoff_city, form.dropoff_street].filter(Boolean).join(', ')
   const clientLabel = clientSelection?.label || '—'
   const materialLabel = [materialTypeSelection?.label, specSelection?.label].filter(Boolean).join(' · ')
 
@@ -675,10 +674,6 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
                 </label>
               )}
             </div>
-
-            {form.client_id && (
-              <CustomerHistoryIntelligence history={clientHistory} loading={historyLoading} error={historyError} />
-            )}
           </>
         )}
 
@@ -737,39 +732,6 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
                   error={fieldErrors.load_volume_m3}
                 />
               </FieldWrap>
-
-              <FieldWrap label="Priority">
-                <select value={form.priority} onChange={set('priority')} className="dx-wiz-input" style={{ cursor: 'pointer' }}>
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-              </FieldWrap>
-
-              <FieldWrap label={<>Quarry / Supplier {autoFilled.quarry_id && <AutoFilledTag />}</>} full>
-                <select value={form.quarry_id} onChange={set('quarry_id')} className="dx-wiz-input" style={{ cursor: 'pointer' }}>
-                  <option value="">— Select quarry (optional) —</option>
-                  {quarries.map((q) => <option key={q.id} value={q.id}>{q.quarry_name}</option>)}
-                </select>
-              </FieldWrap>
-
-              {/* Vehicle type is intentionally absent here — it is determined by
-                  Best-Fit during dispatch. If the client has a vehicle preference
-                  in Master Data, it is already stored in preferred_vehicle_type_id
-                  via handleClientChange and is silently passed to the backend as a
-                  scoring factor. */}
-              {form.preferred_vehicle_type_id && (
-                <div className="dx-wiz-full" style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 12px', borderRadius: 10,
-                  background: '#f0fdf4', border: '1px solid #bbf7d0',
-                  fontSize: '0.8125rem', color: '#166534',
-                }}>
-                  <span style={{ fontWeight: 700 }}>✓</span>
-                  Client vehicle preference noted — Best-Fit will apply a score boost for the preferred type during dispatch.
-                </div>
-              )}
             </div>
           </>
         )}
@@ -780,56 +742,83 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
             <p className="dx-wizard-step-title">Source &amp; Destination</p>
             <p className="dx-wizard-step-subtitle">Where is the material coming from, and where does it need to go?</p>
 
-            <div className="dx-wiz-route-grid">
-              {/* Pickup */}
-              <div>
-                <div className="dx-wiz-route-col-title">
-                  Pickup Source
-                  <span>Optional if quarry selected</span>
-                </div>
-                <div className="dx-wiz-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 0 }}>
-                  <FieldWrap label="Province">
-                    <WizInput value={form.pickup_province} onChange={set('pickup_province')} placeholder="Optional" />
-                  </FieldWrap>
-                  <FieldWrap label="City / Municipality">
-                    <WizInput value={form.pickup_city} onChange={set('pickup_city')} placeholder="Optional" />
-                  </FieldWrap>
-                  <FieldWrap label="Barangay">
-                    <WizInput value={form.pickup_barangay} onChange={set('pickup_barangay')} placeholder="Optional" />
-                  </FieldWrap>
-                  <FieldWrap label="Landmark">
-                    <WizInput value={form.pickup_landmark} onChange={set('pickup_landmark')} placeholder="Optional" />
-                  </FieldWrap>
-                  <FieldWrap label="Street / Site Details" full error={fieldErrors.pickup_street}>
-                    <WizInput value={form.pickup_street} onChange={set('pickup_street')} placeholder="Optional if quarry selected" error={fieldErrors.pickup_street} />
-                  </FieldWrap>
-                </div>
-              </div>
+            <div className="dx-wiz-grid" style={{ marginBottom: 12 }}>
+              <FieldWrap label={<>Quarry / Supplier {autoFilled.quarry_id && <AutoFilledTag />}</>} full>
+                <select value={form.quarry_id} onChange={set('quarry_id')} className="dx-wiz-input" style={{ cursor: 'pointer' }}>
+                  <option value="">— Select quarry (optional) —</option>
+                  {quarries.map((q) => <option key={q.id} value={q.id}>{q.quarry_name}</option>)}
+                </select>
+              </FieldWrap>
 
-              {/* Drop-off */}
-              <div>
-                <div className="dx-wiz-route-col-title">
-                  Delivery Destination
-                  <span style={{ color: 'var(--color-error)', fontWeight: 600 }}>Required</span>
-                </div>
-                <div className="dx-wiz-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 0 }}>
-                  <FieldWrap label={<>Province {autoFilled.dropoff_province && <AutoFilledTag />}</>} required error={fieldErrors.dropoff_province}>
-                    <WizInput value={form.dropoff_province} onChange={set('dropoff_province')} error={fieldErrors.dropoff_province} />
-                  </FieldWrap>
-                  <FieldWrap label={<>City / Municipality {autoFilled.dropoff_city && <AutoFilledTag />}</>} required error={fieldErrors.dropoff_city}>
-                    <WizInput value={form.dropoff_city} onChange={set('dropoff_city')} error={fieldErrors.dropoff_city} />
-                  </FieldWrap>
-                  <FieldWrap label="Barangay">
-                    <WizInput value={form.dropoff_barangay} onChange={set('dropoff_barangay')} placeholder="Optional" />
-                  </FieldWrap>
-                  <FieldWrap label="Landmark">
-                    <WizInput value={form.dropoff_landmark} onChange={set('dropoff_landmark')} placeholder="Optional" />
-                  </FieldWrap>
-                  <FieldWrap label={<>Street / Site Details {autoFilled.dropoff_street && <AutoFilledTag />}</>} required full error={fieldErrors.dropoff_street}>
-                    <WizInput value={form.dropoff_street} onChange={set('dropoff_street')} placeholder="e.g. Construction Site, EDSA cor. Shaw" error={fieldErrors.dropoff_street} />
-                  </FieldWrap>
-                </div>
+              <FieldWrap label="Pickup Location" error={fieldErrors.pickup_location} full>
+                <CreatableCombobox
+                  items={pickupLocationItems}
+                  getItemId={(item) => item.id}
+                  getItemLabel={(item) => item.name}
+                  value={pickupLocationSelection}
+                  onChange={handlePickupLocationChange}
+                  error={fieldErrors.pickup_location || null}
+                  placeholder="Search or type pickup location…"
+                  customOptionLabel={(q) => `Use custom pickup: ${q}`}
+                  emptyMessage="No saved pickup locations."
+                />
+              </FieldWrap>
+
+              <FieldWrap label="Delivery Location" required error={fieldErrors.dropoff_location} full>
+                <WizInput
+                  value={form.dropoff_location}
+                  onChange={set('dropoff_location')}
+                  placeholder="e.g. Construction site / warehouse / temporary destination"
+                  error={fieldErrors.dropoff_location}
+                />
+              </FieldWrap>
+
+              <div className="dx-wiz-full">
+                <button
+                  type="button"
+                  className="btn-dx-secondary"
+                  onClick={() => setShowLocationDetails((v) => !v)}
+                >
+                  {showLocationDetails ? '− Hide Details' : '+ Add Details'}
+                </button>
               </div>
+            </div>
+
+            {showLocationDetails && (
+              <div className="dx-wiz-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 0 }}>
+                <FieldWrap label="Pickup Barangay">
+                  <WizInput value={form.pickup_barangay} onChange={set('pickup_barangay')} placeholder="Optional" />
+                </FieldWrap>
+                <FieldWrap label="Pickup Landmark / Notes">
+                  <WizInput value={form.pickup_landmark} onChange={set('pickup_landmark')} placeholder="Optional" />
+                </FieldWrap>
+                <FieldWrap label="Pickup Street">
+                  <WizInput value={form.pickup_street} onChange={set('pickup_street')} placeholder="Optional" />
+                </FieldWrap>
+                <FieldWrap label="Pickup City">
+                  <WizInput value={form.pickup_city} onChange={set('pickup_city')} placeholder="Optional" />
+                </FieldWrap>
+                <FieldWrap label="Delivery Barangay">
+                  <WizInput value={form.dropoff_barangay} onChange={set('dropoff_barangay')} placeholder="Optional" />
+                </FieldWrap>
+                <FieldWrap label="Delivery Landmark / Notes">
+                  <WizInput value={form.dropoff_landmark} onChange={set('dropoff_landmark')} placeholder="Optional" />
+                </FieldWrap>
+                <FieldWrap label="Delivery Street">
+                  <WizInput value={form.dropoff_street} onChange={set('dropoff_street')} placeholder="Optional" />
+                </FieldWrap>
+                <FieldWrap label="Delivery City">
+                  <WizInput value={form.dropoff_city} onChange={set('dropoff_city')} placeholder="Optional" />
+                </FieldWrap>
+              </div>
+            )}
+            <div className="dx-wiz-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 10, marginBottom: 0 }}>
+              <FieldWrap label="Pickup Province">
+                <WizInput value={form.pickup_province} onChange={set('pickup_province')} placeholder="Optional" />
+              </FieldWrap>
+              <FieldWrap label="Delivery Province">
+                <WizInput value={form.dropoff_province} onChange={set('dropoff_province')} placeholder="Optional" />
+              </FieldWrap>
             </div>
           </>
         )}
@@ -846,6 +835,14 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
               </FieldWrap>
               <FieldWrap label="Scheduled End" error={fieldErrors.scheduled_end}>
                 <WizInput type="datetime-local" min={form.scheduled_start || scheduleMin} value={form.scheduled_end} onChange={set('scheduled_end')} error={fieldErrors.scheduled_end} />
+              </FieldWrap>
+              <FieldWrap label="Priority">
+                <select value={form.priority} onChange={set('priority')} className="dx-wiz-input" style={{ cursor: 'pointer' }}>
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
               </FieldWrap>
               <FieldWrap label="Special Handling Instructions" full>
                 <textarea
@@ -886,12 +883,10 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
               <RR label="Material Type"    value={materialTypeSelection?.label} />
               <RR label="Specification"    value={specSelection?.label} />
               <RR label="Load Volume"      value={form.load_volume_m3 ? `${form.load_volume_m3} m³` : null} />
-              <RR label="Priority"         value={PRIORITY_LABELS[form.priority] ?? form.priority} />
-              <RR label="Quarry/Supplier"  value={quarryName} />
-              <RR label="Preferred Vehicle" value={vtName} />
             </ReviewBlock>
 
-            <ReviewBlock title="Route" onEdit={goToStep} stepNum={3} cols={2}>
+            <ReviewBlock title="Source & Destination" onEdit={goToStep} stepNum={3} cols={2}>
+              <RR label="Quarry/Supplier"  value={quarryName} />
               <RR label="Pickup Source"
                 value={pickupAddr || (quarryName ? `Via quarry: ${quarryName}` : null)} />
               <RR label="Drop-off Destination"
@@ -901,6 +896,7 @@ function JobOrderForm({ initial, options, clientsLoading, onSaved, onCancel, onR
             <ReviewBlock title="Schedule" onEdit={goToStep} stepNum={4} cols={2}>
               <RR label="Scheduled Start" value={form.scheduled_start ? new Date(form.scheduled_start).toLocaleString() : null} />
               <RR label="Scheduled End"   value={form.scheduled_end   ? new Date(form.scheduled_end).toLocaleString()   : null} />
+              <RR label="Priority"        value={PRIORITY_LABELS[form.priority] ?? form.priority} />
               {form.special_handling_instructions && (
                 <div className="dx-review-row" style={{ gridColumn: '1 / -1' }}>
                   <span className="dx-review-row__label">Special Instructions</span>
@@ -976,7 +972,7 @@ function CreateJobOrderPage() {
   const location  = useLocation()
   const toast     = useToast()
   const [orders, setOrders]         = useState([])
-  const [masterData, setMasterData] = useState({ clients: [], material_types: [], quarries: [], vehicle_types: [], client_preferences: [] })
+  const [masterData, setMasterData] = useState({ clients: [], material_types: [], quarries: [], vehicle_types: [], client_preferences: [], pickup_locations: [] })
   const [clientsLoading, setClientsLoading] = useState(true)
   const [selected, setSelected]     = useState(null)
   const [formMode, setFormMode]     = useState(null)
@@ -998,6 +994,11 @@ function CreateJobOrderPage() {
         quarries:           optionsRes.quarries           || [],
         vehicle_types:      optionsRes.vehicle_types      || [],
         client_preferences: optionsRes.client_preferences || [],
+        pickup_locations:   Array.from(new Set(
+          (jobsRes.data || [])
+            .map((j) => (j.pickup_location || buildDisplayAddress('pickup', j) || '').trim())
+            .filter(Boolean),
+        )).map((name, idx) => ({ id: `pickup-${idx}-${name}`, name })),
       })
     } catch (err) { setError(err.message) }
     finally { setClientsLoading(false) }
@@ -1132,6 +1133,7 @@ function CreateJobOrderPage() {
         <JobOrderForm
           initial={isEditing ? formMode.order : null}
           options={masterData}
+          pickupLocationOptions={masterData.pickup_locations || []}
           clientsLoading={clientsLoading}
           onRefreshOptions={refreshOptions}
           onSaved={handleSaved}
@@ -1321,8 +1323,21 @@ function CreateJobOrderPage() {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                  <button type="button" className="btn-dx-secondary" style={{ fontSize: '0.8rem', padding: '6px 12px' }}
-                    onClick={() => { setFormMode({ order: selected }) }}>
+                  <button
+                    type="button"
+                    className="btn-dx-secondary"
+                    style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+                    onClick={async () => {
+                      try {
+                        const full = await fetchJobOrder(selected.id)
+                        const fullOrder = full?.data && typeof full.data === 'object' ? full.data : full
+                        setFormMode({ order: fullOrder || selected })
+                      } catch {
+                        // Fallback to the selected row payload if detail fetch fails.
+                        setFormMode({ order: selected })
+                      }
+                    }}
+                  >
                     Edit
                   </button>
                   {selected.status === 'pending' && (

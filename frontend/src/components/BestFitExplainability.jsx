@@ -36,7 +36,7 @@ function BestFitExplainability({ candidate, compact = false }) {
       {factors.length > 0 && (
         <>
           <p style={{ margin: '0 0 10px', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>
-            Reason Breakdown
+            Match Score Breakdown
           </p>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: compact ? 8 : 10 }}>
             {factors.map((factor) => {

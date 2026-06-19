@@ -11,6 +11,8 @@ class Inquiry extends Model
         'email',
         'phone',
         'inquiry_type',
+        'subject',
+        'reference_no',
         'reference_job_order_id',
         'pickup_location',
         'dropoff_location',

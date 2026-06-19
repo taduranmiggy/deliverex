@@ -64,3 +64,15 @@ export function fetchDelayReports(params = {}) {
 export function acknowledgeDelayReport(id) {
   return apiRequest(`/dispatch/delays/${id}/acknowledge`, { method: 'PUT' })
 }
+
+export function fetchOcrQueue(page = 1, filter = 'all') {
+  return apiRequest(`/ocr/review?page=${page}&filter=${filter}`)
+}
+
+export function validateOcr(id, payload) {
+  return apiRequest(`/ocr/${id}/validate`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export function reprocessOcr(documentId) {
+  return apiRequest(`/ocr/process/${documentId}`, { method: 'POST' })
+}

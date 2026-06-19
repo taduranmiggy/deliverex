@@ -2,7 +2,6 @@
 
 namespace App\Services\Assignment;
 
-use App\Models\ClientQuarryVehiclePreference;
 use App\Models\DriverVehicleAssignment;
 use App\Models\DispatchAssignment;
 use App\Models\Driver;
@@ -14,39 +13,20 @@ use App\Support\VehicleCapacity;
 class BestFitAssignmentService
 {
     private const SCORE_MAX = 100;
+    private const DIVERSITY_WINDOW_DAYS = 7;
 
     /**
      * Rank driver × vehicle pairs for a job using a best-fit score (higher is better).
      */
     public function recommend(JobOrder $jobOrder): array
     {
-        $drivers = Driver::query()
-            ->with('user')
-            // Exclude inactive drivers; treat NULL status as available (auto-provisioned accounts)
-            ->where(function ($q) {
-                $q->where('status', '!=', 'inactive')
-                  ->orWhereNull('status');
-            })
-            // Exclude drivers explicitly marked offline; treat NULL availability as available
-            ->where(function ($q) {
-                $q->where('availability', '!=', 'offline')
-                  ->orWhereNull('availability');
-            })
-            ->get()
-            ->filter(fn (Driver $d) => ! AssignmentScheduleConflict::hasDriverConflict($d->id, $jobOrder));
-
-        $vehicles = Vehicle::query()
-            ->with('vehicleType')
-            ->whereNotIn('status', ['maintenance', 'unavailable', 'inactive'])
-            ->get()
-            ->filter(fn (Vehicle $v) => ! AssignmentScheduleConflict::hasVehicleConflict($v->id, $jobOrder));
+        $drivers = $this->eligibleDrivers($jobOrder);
+        $vehicles = $this->eligibleVehicles($jobOrder);
+        $driverDiversity = $this->driverDiversityStats($drivers->pluck('id')->all());
 
         $requiredVolume = $jobOrder->load_volume_m3 !== null
             ? (float) $jobOrder->load_volume_m3
             : ($jobOrder->volume_m3 !== null ? (float) $jobOrder->volume_m3 : null);
-
-        $clientPreference = $this->resolveClientPreference($jobOrder);
-        $preferredTypeName = $this->resolvePreferredTypeName($clientPreference);
 
         $recommendations = [];
 
@@ -66,8 +46,6 @@ class BestFitAssignmentService
                     $driverModel,
                     $vehicleModel,
                     $requiredVolume,
-                    $clientPreference,
-                    $preferredTypeName,
                 );
 
                 $vehicleCapacity = $vehicleModel->cbm_capacity
@@ -76,6 +54,12 @@ class BestFitAssignmentService
                     ?? null;
                 $unusedCapacity = $requiredVolume !== null && $vehicleCapacity !== null
                     ? round((float) $vehicleCapacity - $requiredVolume, 3)
+                    : null;
+                $loadEfficiencyPercent = $requiredVolume !== null
+                    && $requiredVolume > 0
+                    && $vehicleCapacity !== null
+                    && (float) $vehicleCapacity > 0
+                    ? (int) round(min(1, max(0, $requiredVolume / (float) $vehicleCapacity)) * 100)
                     : null;
 
                 $recommendations[] = [
@@ -88,19 +72,143 @@ class BestFitAssignmentService
                     'vehicle_cbm_capacity' => $vehicleCapacity !== null ? (float) $vehicleCapacity : null,
                     'load_volume' => $requiredVolume,
                     'unused_capacity' => $unusedCapacity,
-                    'client_preference_match' => $this->vehicleMatchesPreference($vehicleModel, $clientPreference, $preferredTypeName),
+                    'load_efficiency_percent' => $loadEfficiencyPercent,
                     'score'            => $score,
                     'score_max'        => self::SCORE_MAX,
                     'factors'          => $factors,
                     'reasons'          => $reasons,
                     'feasible'         => true,
+                    'driver_recent_assignments' => $driverDiversity[$driverModel->id]['recent_assignments'] ?? 0,
+                    'driver_last_assigned_at'   => $driverDiversity[$driverModel->id]['last_assigned_at'] ?? null,
                 ];
             }
         }
 
-        usort($recommendations, fn ($a, $b) => $b['score'] <=> $a['score']);
+        usort($recommendations, function ($a, $b) {
+            // Keep existing scoring as primary ranking signal.
+            $scoreCmp = $b['score'] <=> $a['score'];
+            if ($scoreCmp !== 0) {
+                return $scoreCmp;
+            }
+
+            // Diversity tie-breaker: prefer drivers with fewer recent assignments.
+            $loadCmp = ($a['driver_recent_assignments'] ?? 0) <=> ($b['driver_recent_assignments'] ?? 0);
+            if ($loadCmp !== 0) {
+                return $loadCmp;
+            }
+
+            // Then prefer the driver who has not been assigned recently.
+            $aLast = $a['driver_last_assigned_at'] ? strtotime((string) $a['driver_last_assigned_at']) : 0;
+            $bLast = $b['driver_last_assigned_at'] ? strtotime((string) $b['driver_last_assigned_at']) : 0;
+
+            return $aLast <=> $bLast;
+        });
+
+        $recommendations = $this->diversifyByDriver($recommendations);
 
         return array_slice($recommendations, 0, 10);
+    }
+
+    public function overrideOptions(JobOrder $jobOrder): array
+    {
+        $requiredVolume = $jobOrder->load_volume_m3 !== null
+            ? (float) $jobOrder->load_volume_m3
+            : ($jobOrder->volume_m3 !== null ? (float) $jobOrder->volume_m3 : null);
+
+        $drivers = $this->eligibleDrivers($jobOrder)->map(fn (Driver $driver) => [
+            'id' => $driver->id,
+            'name' => $driver->full_name ?: $driver->user?->name ?: ('Driver #'.$driver->id),
+            'availability' => $driver->availability ?? 'available',
+            'status' => $driver->status ?? 'active',
+        ])->values()->all();
+
+        $vehicles = $this->eligibleVehicles($jobOrder)
+            ->filter(fn (Vehicle $vehicle) => $this->isFeasible($vehicle, $requiredVolume))
+            ->map(fn (Vehicle $vehicle) => [
+                'id' => $vehicle->id,
+                'plate_no' => $vehicle->plate_no,
+                'status' => $vehicle->status ?? 'available',
+                'vehicle_type' => $vehicle->vehicleType?->name ?? $vehicle->type,
+                'cbm_capacity' => $vehicle->cbm_capacity ?? $vehicle->max_volume_m3 ?? $vehicle->rounded_cbm_capacity,
+            ])->values()->all();
+
+        return [
+            'drivers' => $drivers,
+            'vehicles' => $vehicles,
+        ];
+    }
+
+    private function eligibleDrivers(JobOrder $jobOrder)
+    {
+        return Driver::query()
+            ->with('user')
+            // Exclude inactive drivers; treat NULL status as available (auto-provisioned accounts)
+            ->where(function ($q) {
+                $q->where('status', '!=', 'inactive')
+                  ->orWhereNull('status');
+            })
+            // Exclude drivers explicitly marked offline; treat NULL availability as available
+            ->where(function ($q) {
+                $q->where('availability', '!=', 'offline')
+                  ->orWhereNull('availability');
+            })
+            ->get()
+            ->filter(fn (Driver $d) => ! AssignmentScheduleConflict::hasDriverConflict($d->id, $jobOrder))
+            ->values();
+    }
+
+    private function eligibleVehicles(JobOrder $jobOrder)
+    {
+        return Vehicle::query()
+            ->with('vehicleType')
+            ->whereNotIn('status', ['maintenance', 'unavailable', 'inactive'])
+            ->get()
+            ->filter(fn (Vehicle $v) => ! AssignmentScheduleConflict::hasVehicleConflict($v->id, $jobOrder))
+            ->values();
+    }
+
+    private function driverDiversityStats(array $driverIds): array
+    {
+        if (empty($driverIds)) {
+            return [];
+        }
+
+        $rows = DispatchAssignment::query()
+            ->selectRaw('driver_id, COUNT(*) as recent_assignments, MAX(assigned_at) as last_assigned_at')
+            ->whereIn('driver_id', $driverIds)
+            ->whereNotNull('assigned_at')
+            ->where('assigned_at', '>=', now()->subDays(self::DIVERSITY_WINDOW_DAYS))
+            ->groupBy('driver_id')
+            ->get();
+
+        $stats = [];
+        foreach ($rows as $row) {
+            $stats[(int) $row->driver_id] = [
+                'recent_assignments' => (int) ($row->recent_assignments ?? 0),
+                'last_assigned_at' => $row->last_assigned_at,
+            ];
+        }
+
+        return $stats;
+    }
+
+    private function diversifyByDriver(array $recommendations): array
+    {
+        $seenDrivers = [];
+        $uniqueFirstPass = [];
+        $remainder = [];
+
+        foreach ($recommendations as $rec) {
+            $driverId = (int) ($rec['driver_id'] ?? 0);
+            if ($driverId > 0 && ! isset($seenDrivers[$driverId])) {
+                $seenDrivers[$driverId] = true;
+                $uniqueFirstPass[] = $rec;
+                continue;
+            }
+            $remainder[] = $rec;
+        }
+
+        return array_merge($uniqueFirstPass, $remainder);
     }
 
     private function isFeasible(Vehicle $vehicle, ?float $requiredVolumeM3): bool
@@ -121,9 +229,7 @@ class BestFitAssignmentService
         JobOrder $jobOrder,
         Driver $driver,
         Vehicle $vehicle,
-        ?float $requiredVolumeM3,
-        ?ClientQuarryVehiclePreference $clientPreference,
-        ?string $preferredTypeName = null
+        ?float $requiredVolumeM3
     ): array {
         $factors = [];
 
@@ -215,32 +321,27 @@ class BestFitAssignmentService
             $driverDetail,
         );
 
-        // 3. Client Preference Match (max 20)
-        $preferenceMax = 20;
-        $preferenceContribution = 10;
-        $preferenceMatched = true;
-        $preferenceDetail = 'No client vehicle preference configured';
+        // 3. Load Efficiency (max 20)
+        $efficiencyMax = 20;
+        $efficiencyContribution = 10;
+        $efficiencyMatched = true;
+        $efficiencyDetail = 'Load efficiency not available (missing volume or capacity metadata)';
 
-        if ($clientPreference && $clientPreference->vehicle_type_id) {
-            $preferenceName = $preferredTypeName ?? $this->resolvePreferredTypeName($clientPreference) ?? 'preferred type';
-            if ($this->vehicleMatchesPreference($vehicle, $clientPreference, $preferredTypeName)) {
-                $preferenceContribution = 20;
-                $preferenceMatched = true;
-                $preferenceDetail = 'Matches client preference ('.$preferenceName.')';
-            } else {
-                $preferenceContribution = 0;
-                $preferenceMatched = false;
-                $preferenceDetail = 'Does not match client preference ('.$preferenceName.')';
-            }
+        if ($requiredVolumeM3 !== null && $requiredVolumeM3 > 0 && $maxVolume !== null && $maxVolume > 0) {
+            $efficiencyRatio = min(1, max(0, $requiredVolumeM3 / $maxVolume));
+            $efficiencyPercent = (int) round($efficiencyRatio * 100);
+            $efficiencyContribution = (int) round($efficiencyMax * $efficiencyRatio);
+            $efficiencyMatched = $efficiencyRatio >= 0.6;
+            $efficiencyDetail = 'Load efficiency: '.$efficiencyPercent.'%';
         }
 
         $factors[] = $this->factor(
-            'client_preference_match',
-            'Client Preference Match',
-            $preferenceMatched,
-            $preferenceContribution,
-            $preferenceMax,
-            $preferenceDetail,
+            'load_efficiency',
+            'Load Efficiency',
+            $efficiencyMatched,
+            $efficiencyContribution,
+            $efficiencyMax,
+            $efficiencyDetail,
         );
 
         // 4. Vehicle Type Match (max 15)
@@ -371,76 +472,4 @@ class BestFitAssignmentService
         ];
     }
 
-    private function resolveClientPreference(JobOrder $jobOrder): ?ClientQuarryVehiclePreference
-    {
-        // Existing client: use the stored master-data preference mapping.
-        if ($jobOrder->client_id) {
-            $preference = ClientQuarryVehiclePreference::query()
-                ->where('client_id', $jobOrder->client_id)
-                ->where('status', 'active')
-                ->where('is_default', true)
-                ->first();
-
-            if ($preference) {
-                return $preference;
-            }
-        }
-
-        // New/custom client (or existing client without a saved mapping): fall back
-        // to the per-job preferred vehicle type captured on the job order itself.
-        if ($jobOrder->preferred_vehicle_type_id) {
-            return new ClientQuarryVehiclePreference([
-                'client_id'       => $jobOrder->client_id,
-                'quarry_id'       => $jobOrder->quarry_id,
-                'vehicle_type_id' => $jobOrder->preferred_vehicle_type_id,
-                'is_default'      => true,
-                'status'          => 'active',
-            ]);
-        }
-
-        return null;
-    }
-
-    private function resolvePreferredTypeName(?ClientQuarryVehiclePreference $clientPreference): ?string
-    {
-        if (! $clientPreference || ! $clientPreference->vehicle_type_id) {
-            return null;
-        }
-
-        $type = $clientPreference->relationLoaded('vehicleType') && $clientPreference->vehicleType
-            ? $clientPreference->vehicleType
-            : \App\Models\VehicleType::query()->find($clientPreference->vehicle_type_id);
-
-        return $type?->name;
-    }
-
-    /**
-     * Determine whether a vehicle matches the preferred vehicle type. Primary match is
-     * by foreign key; a name-based fallback covers fleets where vehicles only carry the
-     * legacy `type` label and are not yet linked to the vehicle_types master record.
-     */
-    private function vehicleMatchesPreference(
-        Vehicle $vehicle,
-        ?ClientQuarryVehiclePreference $clientPreference,
-        ?string $preferredTypeName = null
-    ): bool {
-        if (! $clientPreference || ! $clientPreference->vehicle_type_id) {
-            return false;
-        }
-
-        if ($vehicle->vehicle_type_id !== null
-            && (int) $vehicle->vehicle_type_id === (int) $clientPreference->vehicle_type_id) {
-            return true;
-        }
-
-        $preferredTypeName ??= $this->resolvePreferredTypeName($clientPreference);
-        if (! $preferredTypeName) {
-            return false;
-        }
-
-        $vehicleTypeName = $vehicle->vehicleType?->name ?? $vehicle->type;
-
-        return $vehicleTypeName !== null
-            && strtolower(trim((string) $vehicleTypeName)) === strtolower(trim($preferredTypeName));
-    }
 }

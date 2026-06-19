@@ -139,7 +139,7 @@ function TrackingPage() {
           <div className="tracking-actions">
             {pollKey && (
               <span className="tracking-pill" role="status" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <RefreshCw size={12} /> Auto-refresh every 15 s
+                <RefreshCw size={12} /> Refresh Status
               </span>
             )}
           </div>
@@ -221,22 +221,23 @@ function TrackingPage() {
               {/* Metrics */}
               <div className="tracking-metrics">
                 <div>
-                  <span>Scheduled Window</span>
-                  <strong style={{ fontSize: '0.875rem' }}>{result.eta_window ?? '—'}</strong>
-                </div>
-                <div>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><MapPin size={12} /> Last Location</span>
-                  <strong style={{ fontSize: '0.875rem' }}>
+                  <strong style={{ fontSize: '0.875rem', display: 'inline-flex', flexDirection: 'column', gap: 4 }}>
                     {result.approximate_location ? (
-                      <a
-                        href={`https://maps.google.com/?q=${result.approximate_location.lat},${result.approximate_location.lng}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                      >
-                        {result.approximate_location.lat}, {result.approximate_location.lng}
-                        <ExternalLink size={11} />
-                      </a>
+                      <>
+                        <a
+                          href={`https://maps.google.com/?q=${result.approximate_location.lat},${result.approximate_location.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700 }}
+                        >
+                          View on Map
+                          <ExternalLink size={11} />
+                        </a>
+                        <span style={{ color: 'var(--muted)', fontWeight: 500, fontSize: '0.8125rem' }}>
+                          {result.approximate_location.lat}, {result.approximate_location.lng}
+                        </span>
+                      </>
                     ) : 'Unavailable'}
                   </strong>
                 </div>

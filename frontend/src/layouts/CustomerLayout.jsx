@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import PageTransition from '../components/PageTransition'
 import useAuth from '../hooks/useAuth'
-import { ChevronDown, Home, HelpCircle, LogOut, MapPin, Package, Truck, User } from 'lucide-react'
+import { BriefcaseBusiness, ChevronDown, Home, Info, LogOut, MapPin, Package, Truck } from 'lucide-react'
 
 function CustomerLayout() {
   const { user, isAuthenticated, role, logout } = useAuth()
@@ -53,6 +53,12 @@ function CustomerLayout() {
             <NavLink to="/customer/track" className={navLinkCls}>
               <MapPin size={15} /> Track Delivery
             </NavLink>
+            <NavLink to="/customer/about" className={navLinkCls}>
+              <Info size={15} /> About
+            </NavLink>
+            <NavLink to="/customer/services" className={navLinkCls}>
+              <BriefcaseBusiness size={15} /> Services
+            </NavLink>
             {isCustomer && (
               <NavLink to="/customer/deliveries" className={navLinkCls}>
                 <Package size={15} /> My Deliveries
@@ -84,6 +90,12 @@ function CustomerLayout() {
                     </Link>
                     <Link to="/customer/track" onClick={() => setDropdownOpen(false)}>
                       <MapPin size={15} /> Track Delivery
+                    </Link>
+                    <Link to="/customer/about" onClick={() => setDropdownOpen(false)}>
+                      <Info size={15} /> About
+                    </Link>
+                    <Link to="/customer/services" onClick={() => setDropdownOpen(false)}>
+                      <BriefcaseBusiness size={15} /> Services
                     </Link>
                     <div className="dropdown-divider" />
                     <button onClick={handleLogout} className="dropdown-logout">

@@ -76,12 +76,20 @@ class AssignmentController extends Controller
             return response()->json(['message' => 'This job order already has an active assignment.'], 422);
         }
 
-        if ($driver->availability === 'offline' || $driver->status === 'inactive') {
+        if ($driver->status === 'inactive' || $driver->availability === 'offline') {
             return response()->json(['message' => 'Driver is offline and cannot be assigned.'], 422);
+        }
+
+        if ($driver->availability !== null && $driver->availability !== 'available') {
+            return response()->json(['message' => 'Driver must be available before assignment.'], 422);
         }
 
         if (in_array($vehicle->status, ['maintenance', 'unavailable', 'inactive'], true)) {
             return response()->json(['message' => 'Vehicle is not dispatchable (maintenance or unavailable).'], 422);
+        }
+
+        if ($vehicle->status !== null && $vehicle->status !== 'available') {
+            return response()->json(['message' => 'Vehicle must be available before assignment.'], 422);
         }
 
         if (AssignmentScheduleConflict::hasDriverConflict($driver->id, $jobOrder)) {

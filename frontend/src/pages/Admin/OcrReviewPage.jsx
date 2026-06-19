@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, validateOcr } from '../../api/admin'
+import { exportOcrReport, fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, validateOcr } from '../../api/admin'
 import { EmptyState, PageHeader } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
+import useAuth from '../../hooks/useAuth'
 import { Check, FileSearch, Flag, Loader2, RefreshCw, X } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 
@@ -26,24 +27,54 @@ function isReadyToApprove(status) {
   return ['processed', 'completed', 'needs_review'].includes(status)
 }
 
+const REVIEW_STATUS_BADGE = {
+  pending_review: { cls: 'badge-dx badge-dx--pending', label: 'Pending Review' },
+  verified: { cls: 'badge-dx badge-dx--validated', label: 'Verified' },
+  flagged: { cls: 'badge-dx badge-dx--reviewing', label: 'Flagged' },
+  rejected: { cls: 'badge-dx badge-dx--failed', label: 'Rejected' },
+}
+
+const ISSUE_TYPES = [
+  { value: '', label: 'Select issue type (optional)' },
+  { value: 'missing_data', label: 'Missing data' },
+  { value: 'ocr_mismatch', label: 'OCR mismatch' },
+  { value: 'wrong_upload', label: 'Wrong upload' },
+  { value: 'incomplete_document', label: 'Incomplete document' },
+  { value: 'other', label: 'Other' },
+]
+
 function OcrReviewPage() {
   const toast = useToast()
+  const { user } = useAuth()
+  const isDispatcher = String(user?.role?.name || '').toLowerCase() === 'dispatcher'
   const [queue, setQueue]           = useState([])
   const [error, setError]           = useState('')
   const [selected, setSelected]     = useState(null)
   const [tab, setTab]               = useState('all')
   const [corrected, setCorrected]   = useState('')
   const [rejectReason, setRejectReason] = useState('')
+  const [reviewNotes, setReviewNotes] = useState('')
+  const [issueType, setIssueType] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading]       = useState(false)
+  const [exporting, setExporting]   = useState(false)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [previewError, setPreviewError] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [jobOrderIdFilter, setJobOrderIdFilter] = useState('')
 
   const load = useCallback(async (filter = 'all') => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetchOcrQueue(1, filter)
+      const res = await fetchOcrQueue(1, filter, {
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        status: statusFilter || undefined,
+        job_order_id: jobOrderIdFilter || undefined,
+      })
       const data = res.data || []
       setQueue(data)
       setSelected((prev) => data.find((d) => d.id === prev?.id) ?? data[0] ?? null)
@@ -52,9 +83,9 @@ function OcrReviewPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [dateFrom, dateTo, statusFilter, jobOrderIdFilter])
 
-  useEffect(() => { load(tab) }, [tab]) // eslint-disable-line
+  useEffect(() => { load(tab) }, [tab, load])
 
   useEffect(() => {
     const needsPoll = queue.some((q) => ['pending', 'processing'].includes(q.processing_status))
@@ -67,6 +98,8 @@ function OcrReviewPage() {
     if (selected) {
       setCorrected(selected.corrected_text ?? selected.extracted_text ?? '')
       setRejectReason(selected.error_message ?? '')
+      setReviewNotes(selected.review_notes ?? '')
+      setIssueType('')
     }
   }, [selected])
 
@@ -111,6 +144,8 @@ function OcrReviewPage() {
         action,
         corrected_text: action === 'approve' ? corrected : undefined,
         reject_reason:  action !== 'approve' ? rejectReason : undefined,
+        notes: reviewNotes || undefined,
+        issue_type: action !== 'approve' ? issueType || undefined : undefined,
       })
       toast(ACTION_MSGS[action] ?? 'Action completed.', 'success')
       load(tab)
@@ -136,7 +171,37 @@ function OcrReviewPage() {
     }
   }
 
+  const handleExport = async () => {
+    if (isDispatcher) return
+    setExporting(true)
+    try {
+      const blob = await exportOcrReport({
+        filter: tab,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        status: statusFilter || undefined,
+        job_order_id: jobOrderIdFilter || undefined,
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const d = new Date()
+      const datePart = `${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}_${String(d.getDate()).padStart(2, '0')}`
+      a.href = url
+      a.download = `OCR_Report_${datePart}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast('OCR report exported successfully.', 'success')
+    } catch (err) {
+      toast(err.message || 'Failed to export OCR report.', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const getBadge = (item) => STATUS_MAP[item.processing_status] ?? { cls: 'badge-dx badge-dx--muted', label: item.processing_status ?? '—' }
+  const getReviewBadge = (item) => REVIEW_STATUS_BADGE[item.review_status] ?? { cls: 'badge-dx badge-dx--muted', label: item.review_status ?? '—' }
 
   const canReprocess = selected && ['pending', 'processing', 'failed', 'processed', 'completed', 'needs_review'].includes(selected.processing_status)
   const isStub = selected?.engine === 'stub'
@@ -144,8 +209,51 @@ function OcrReviewPage() {
 
   return (
     <>
-      <PageHeader title="OCR Validation" subtitle="Review scanned delivery documents and validate extracted text" />
+      <PageHeader
+        title={isDispatcher ? 'OCR Review' : 'OCR Validation'}
+        subtitle={isDispatcher
+          ? 'Operational delivery verification using OCR data and system records'
+          : 'System-wide OCR validation, oversight, and delivery audit review'}
+      >
+        {!isDispatcher && (
+          <button type="button" className="btn-dx-primary" onClick={handleExport} disabled={exporting}>
+            {exporting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Exporting…</> : 'Export .xlsx'}
+          </button>
+        )}
+      </PageHeader>
       {error && <p className="notice error">{error}</p>}
+
+      <div className="dx-panel" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+          <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+            Date From
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          </label>
+          <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+            Date To
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </label>
+          <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+            Delivery Status
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="all">All</option>
+              <option value="pending_review">Pending Review</option>
+              <option value="verified">Verified</option>
+              <option value="flagged">Flagged</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </label>
+          <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+            Job Order ID
+            <input
+              type="search"
+              placeholder="e.g. 12345"
+              value={jobOrderIdFilter}
+              onChange={(e) => setJobOrderIdFilter(e.target.value)}
+            />
+          </label>
+        </div>
+      </div>
 
       {showTesseractWarning && (
         <p className="notice error" style={{ marginBottom: 16 }}>
@@ -178,7 +286,7 @@ function OcrReviewPage() {
                   className={`dx-doc-queue-item${item.id === selected?.id ? ' dx-doc-queue-item--active' : ''}`}
                   onClick={() => setSelected(item)}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <strong style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>DOC-{String(item.id).padStart(3, '0')}</strong>
                     <span className={b.cls}>{b.label}</span>
                   </div>
@@ -188,6 +296,9 @@ function OcrReviewPage() {
                   <div style={{ fontSize: '0.75rem', color: 'var(--subtle)', marginTop: 3, textTransform: 'capitalize' }}>
                     {item.document?.type ?? 'document'}
                     {item.engine ? ` · ${item.engine}` : ''}
+                  </div>
+                  <div style={{ marginTop: 6 }}>
+                    <span className={getReviewBadge(item).cls}>{getReviewBadge(item).label}</span>
                   </div>
                 </button>
               )
@@ -218,30 +329,77 @@ function OcrReviewPage() {
         </div>
 
         <div className="dx-panel" style={{ marginBottom: 0 }}>
-          <h3 className="dx-panel-title">Extracted Text</h3>
+          <h3 className="dx-panel-title">Validation Panel</h3>
           {!selected ? (
             <EmptyState icon={FileSearch} title="No document selected" message="Select a document from the queue to review." />
           ) : (
             <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <label>Client
-                  <input type="text" readOnly value={selected.document?.assignment?.job_order?.customer_name ?? '—'} />
+                <div style={{ border: '1px solid var(--stroke)', borderRadius: 10, padding: 12 }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>OCR Data</p>
+                  <div style={{ display: 'grid', gap: 6, fontSize: '0.85rem' }}>
+                    <div><strong>Length:</strong> {selected.extracted_length ?? '—'}</div>
+                    <div><strong>Width:</strong> {selected.extracted_width ?? '—'}</div>
+                    <div><strong>Height:</strong> {selected.extracted_height ?? '—'}</div>
+                    <div><strong>Volume:</strong> {selected.extracted_volume ?? '—'}</div>
+                    <div><strong>Delivery Receipt No:</strong> {selected.delivery_receipt_number || '—'}</div>
+                  </div>
+                </div>
+                <div style={{ border: '1px solid var(--stroke)', borderRadius: 10, padding: 12 }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>System Data</p>
+                  <div style={{ display: 'grid', gap: 6, fontSize: '0.85rem' }}>
+                    <div><strong>Job Order:</strong> {selected.job_order_id ? formatJobPublicId(selected.job_order_id) : '—'}</div>
+                    <div><strong>Assignment ID:</strong> {selected.assignment_id || '—'}</div>
+                    <div><strong>Driver:</strong> {selected.driver_name || '—'}</div>
+                    <div><strong>Driver ID:</strong> {selected.driver_id || '—'}</div>
+                    <div><strong>Vehicle:</strong> {selected.vehicle_plate_no || '—'}</div>
+                    <div><strong>Delivery Date:</strong> {selected.delivery_date ? new Date(selected.delivery_date).toLocaleString() : '—'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid var(--stroke)', borderRadius: 10, padding: 12, display: 'grid', gap: 6 }}>
+                <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>Validation Result</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className={
+                    selected.validation_result?.match_status === 'matched'
+                      ? 'badge-dx badge-dx--completed'
+                      : selected.validation_result?.match_status === 'mismatch'
+                        ? 'badge-dx badge-dx--failed'
+                        : 'badge-dx badge-dx--reviewing'
+                  }>
+                    {selected.validation_result?.match_status === 'matched'
+                      ? 'Matched'
+                      : selected.validation_result?.match_status === 'mismatch'
+                        ? 'Mismatch'
+                        : 'Partial Match'}
+                  </span>
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                    {selected.validation_result?.volume_delta_ratio != null
+                      ? `Volume delta: ${(selected.validation_result.volume_delta_ratio * 100).toFixed(1)}%`
+                      : 'Volume comparison unavailable'}
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: '0.8125rem' }}>
+                  <div><strong>Expected Volume:</strong> {selected.validation_result?.expected_volume ?? '—'}</div>
+                  <div><strong>Extracted Volume:</strong> {selected.validation_result?.actual_volume ?? '—'}</div>
+                </div>
+              </div>
+
+              {!isDispatcher && (
+                <label>Reviewed OCR text (optional)
+                  <textarea rows={5} value={corrected} onChange={(e) => setCorrected(e.target.value)} placeholder="Optional corrected OCR text…" />
                 </label>
-                <label>Job ID
-                  <input type="text" readOnly value={selected.document?.assignment?.job_order_id ? formatJobPublicId(selected.document.assignment.job_order_id) : '—'} />
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <label>Issue Type
+                  <select value={issueType} onChange={(e) => setIssueType(e.target.value)}>
+                    {ISSUE_TYPES.map((it) => <option key={it.value} value={it.value}>{it.label}</option>)}
+                  </select>
                 </label>
-                <label>Type
-                  <input type="text" readOnly value={selected.document?.type ?? '—'} />
-                </label>
-                <label>Engine / Status
-                  <input type="text" readOnly value={[selected.engine, selected.processing_status].filter(Boolean).join(' · ') || '—'} />
-                </label>
-                <label>Confidence
-                  <input type="text" readOnly
-                    value={selected.confidence_score != null
-                      ? `${Math.round(Number(selected.confidence_score) * 100)}%`
-                      : '—'}
-                  />
+                <label>Review Status
+                  <input type="text" readOnly value={getReviewBadge(selected).label} />
                 </label>
               </div>
               {selected.document?.completion_proof && (
@@ -259,14 +417,14 @@ function OcrReviewPage() {
                   )}
                 </div>
               )}
-              <label>Extracted / Corrected text
-                <textarea rows={8} value={corrected} onChange={(e) => setCorrected(e.target.value)} placeholder="Edit extracted text before approving…" />
-              </label>
               {selected.processing_status !== 'validated' && (
                 <label>Reject / flag reason <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span>
                   <textarea rows={2} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection or flag…" />
                 </label>
               )}
+              <label>Reviewer Notes
+                <textarea rows={3} value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} placeholder="Add validation notes…" />
+              </label>
               {selected.error_message && (
                 <p className={`notice${selected.processing_status === 'failed' || isStub ? ' error' : ''}`} style={{ margin: 0 }}>
                   {selected.error_message}
@@ -277,17 +435,17 @@ function OcrReviewPage() {
                   style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
                   title={!isReadyToApprove(selected.processing_status) ? 'Wait until OCR completes or reprocess failed items' : 'Save validated record'}>
                   {submitting
-                    ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Validating…</>
-                    : <><Check size={15} /> Validate</>}
+                    ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Approving…</>
+                    : <><Check size={15} /> Approve Delivery</>}
                 </button>
                 <button className="btn-dx-secondary" type="button" disabled={submitting} onClick={() => handleAction('reject')}
                   style={{ color: 'var(--color-error)', borderColor: 'var(--color-error-mid)' }}>
                   {submitting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Rejecting…</> : <><X size={15} /> Reject</>}
                 </button>
                 <button className="btn-dx-secondary" type="button" disabled={submitting} onClick={() => handleAction('flag')}>
-                  {submitting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Flagging…</> : <><Flag size={15} /> Flag</>}
+                  {submitting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Flagging…</> : <><Flag size={15} /> Flag Delivery</>}
                 </button>
-                {canReprocess && (
+                {!isDispatcher && canReprocess && (
                   <button className="btn-dx-secondary" type="button" disabled={submitting} onClick={handleReprocess}>
                     {submitting
                       ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Processing OCR…</>

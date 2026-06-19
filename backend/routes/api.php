@@ -102,11 +102,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/master-data/{resource}/{id}',           [AdminMasterDataController::class, 'archive']);
 
         Route::get('/ocr/review',                       [OcrReviewController::class, 'index']);
+        Route::get('/ocr/review/export',                [OcrReviewController::class, 'export']);
         Route::put('/ocr/{ocrResult}/validate',         [OcrReviewController::class, 'validateResult']);
     });
 
-    // ─── Admin + Dispatcher: inquiries ───────────────────────────────────────
-    Route::middleware('role:admin|dispatcher')->prefix('inquiries')->group(function () {
+    // ─── Admin: inquiries ────────────────────────────────────────────────────
+    Route::middleware('role:admin')->prefix('inquiries')->group(function () {
         Route::get('/',                        [InquiryController::class, 'index']);
         Route::get('/{inquiry}',               [InquiryController::class, 'show']);
         Route::put('/{inquiry}/read',          [InquiryController::class, 'markRead']);
@@ -183,6 +184,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // ─── Admin + Dispatcher + Manager: GPS tracking view & OCR reprocess ─────
     Route::middleware('role:admin|dispatcher|manager')->group(function () {
         Route::get('/tracking/{assignment}',             [GpsTrackingController::class, 'show']);
+    });
+
+    // ─── Admin + Dispatcher: OCR review workflow ─────────────────────────────
+    Route::middleware('role:admin|dispatcher')->prefix('ocr')->group(function () {
+        Route::get('/review', [OcrReviewController::class, 'index']);
+        Route::put('/{ocrResult}/validate', [OcrReviewController::class, 'validateResult']);
     });
 
     Route::middleware('role:admin|dispatcher')->group(function () {

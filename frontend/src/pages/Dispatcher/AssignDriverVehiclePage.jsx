@@ -7,7 +7,7 @@ import { IconRouteArrow } from '../../components/DxIcons'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus } from '../../utils/statusLabels'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
-import { AlertTriangle, CheckCircle2, Loader2, Star, Truck, User, Zap } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-react'
 
 // ─── Priority helpers ──────────────────────────────────────────────────────────
 const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 }
@@ -173,17 +173,6 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
               {item.unused_capacity} m³ unused
             </span>
           )}
-          {item.client_preference_match && (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              fontSize: '0.6875rem', fontWeight: 700,
-              color: '#15803d', background: '#f0fdf4',
-              border: '1px solid #bbf7d0', borderRadius: 99,
-              padding: '1px 8px',
-            }}>
-              <Star size={10} /> Client Preference Match
-            </span>
-          )}
         </div>
         {topFactor && (
           <span style={{ fontSize: '0.75rem', color: topFactor.matched ? 'var(--color-success)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -220,6 +209,7 @@ function AssignDriverVehiclePage() {
   const [selected, setSelected] = useState(null)
   const [recommended, setRecommended] = useState(null)
   const [recommendations, setRecommendations] = useState([])
+  const [overrideOptions, setOverrideOptions] = useState({ drivers: [], vehicles: [] })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -227,6 +217,8 @@ function AssignDriverVehiclePage() {
   const [overrideReason, setOverrideReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [modalError, setModalError] = useState('')
+  const [manualDriverId, setManualDriverId] = useState('')
+  const [manualVehicleId, setManualVehicleId] = useState('')
 
   const location = useLocation()
   const preselectJobId = location.state?.jobOrderId ?? null
@@ -265,10 +257,14 @@ function AssignDriverVehiclePage() {
     setLoading(true)
     setRecommended(null)
     setRecommendations([])
+    setOverrideOptions({ drivers: [], vehicles: [] })
+    setManualDriverId('')
+    setManualVehicleId('')
     getBestFit(selected.id)
       .then((res) => {
         setRecommended(res.recommended || null)
         setRecommendations(res.recommendations || [])
+        setOverrideOptions(res.override_options || { drivers: [], vehicles: [] })
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
@@ -303,6 +299,34 @@ function AssignDriverVehiclePage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const openManualOverride = () => {
+    if (!selected) {
+      setError('Select a job order first.')
+      return
+    }
+
+    const driver = overrideOptions.drivers.find((d) => String(d.id) === String(manualDriverId))
+    const vehicle = overrideOptions.vehicles.find((v) => String(v.id) === String(manualVehicleId))
+
+    if (!driver || !vehicle) {
+      setError('Select an available driver and vehicle for override.')
+      return
+    }
+
+    const candidate = {
+      driver_id: driver.id,
+      driver_name: driver.name,
+      vehicle_id: vehicle.id,
+      vehicle_plate: vehicle.plate_no,
+      vehicle_type: vehicle.vehicle_type,
+      vehicle_cbm_capacity: vehicle.cbm_capacity,
+      factors: [],
+      reasons: ['Manual override selection from currently available resources'],
+    }
+
+    openModal(candidate, true)
   }
 
   const top = recommended || recommendations[0]
@@ -412,17 +436,15 @@ function AssignDriverVehiclePage() {
                   )}
                 </div>
 
-                {/* Client vehicle preference notice */}
-                {top?.client_preference_match && (
+                {top?.load_efficiency_percent != null && (
                   <div style={{
                     marginTop: 10,
                     display: 'flex', alignItems: 'center', gap: 7,
                     padding: '7px 11px', borderRadius: 8,
-                    background: '#f0fdf4', border: '1px solid #bbf7d0',
-                    fontSize: '0.75rem', color: '#15803d', fontWeight: 600,
+                    background: '#eff6ff', border: '1px solid #bfdbfe',
+                    fontSize: '0.75rem', color: '#1d4ed8', fontWeight: 600,
                   }}>
-                    <Star size={12} style={{ flexShrink: 0 }} />
-                    Client vehicle preference applied — recommended vehicle received a score boost.
+                    ✓ Load Efficiency: {top.load_efficiency_percent}%
                   </div>
                 )}
               </div>
@@ -457,6 +479,51 @@ function AssignDriverVehiclePage() {
               <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>Override the recommendation by assigning any match below</p>
             )}
           </div>
+
+          {/* Safe manual override selector (uses same assignment endpoint) */}
+          {!!selected && !loading && (
+            <div style={{ background: '#fff', border: '1px solid #fde68a', borderRadius: 12, padding: '12px 14px', marginBottom: 10 }}>
+              <p style={{ margin: '0 0 8px', fontSize: '0.8125rem', fontWeight: 700, color: '#92400e' }}>
+                Safe Override Selection
+              </p>
+              <p style={{ margin: '0 0 10px', fontSize: '0.75rem', color: 'var(--muted)' }}>
+                Select from available drivers and vehicles only, then confirm override.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+                <select
+                  value={manualDriverId}
+                  onChange={(e) => setManualDriverId(e.target.value)}
+                  style={{ padding: '8px 10px', borderRadius: 9, border: '1.5px solid var(--stroke)', fontSize: '0.8125rem' }}
+                >
+                  <option value="">Select available driver…</option>
+                  {overrideOptions.drivers.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={manualVehicleId}
+                  onChange={(e) => setManualVehicleId(e.target.value)}
+                  style={{ padding: '8px 10px', borderRadius: 9, border: '1.5px solid var(--stroke)', fontSize: '0.8125rem' }}
+                >
+                  <option value="">Select available vehicle…</option>
+                  {overrideOptions.vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.plate_no}{v.vehicle_type ? ` · ${v.vehicle_type}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn-dx-secondary"
+                  onClick={openManualOverride}
+                  disabled={!manualDriverId || !manualVehicleId}
+                  style={{ justifyContent: 'center', fontSize: '0.8125rem' }}
+                >
+                  <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} /> Review Manual Override
+                </button>
+              </div>
+            </div>
+          )}
 
           {!selected || loading ? (
             <div style={{ background: '#fff', border: '1px dashed var(--stroke)', borderRadius: 12, padding: '32px 16px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.875rem' }}>

@@ -161,7 +161,7 @@ function DispatcherDashboard() {
               { label: 'Create Job Order',   to: '/dispatcher/job-orders',        cls: 'btn-dx-primary' },
               { label: 'Fleet Dispatch',      to: '/dispatcher/dispatch-best-fit', cls: 'btn-dx-secondary' },
               { label: 'Calendar',            to: '/dispatcher/calendar',          cls: 'btn-dx-secondary' },
-              { label: 'View Inquiries',      to: '/dispatcher/inquiries',          cls: 'btn-dx-secondary' },
+              { label: 'OCR Review',          to: '/dispatcher/ocr-review',         cls: 'btn-dx-secondary' },
               { label: 'Tracking',            to: '/dispatcher/live-tracking',      cls: 'btn-dx-secondary' },
             ].map(({ label, to, cls }) => (
               <Link key={to} to={to} className={`${cls} btn-sm`} style={{ width: '100%', marginBottom: 8, justifyContent: 'flex-start', gap: 8 }}>

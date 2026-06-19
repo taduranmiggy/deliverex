@@ -181,7 +181,7 @@ const ROUTING_RULES = [
   {
     id: 1,
     condition: '2 failed detections',
-    action: 'Escalate to support@deliverex.com',
+    action: 'Escalate to deliverex.support@gmail.com',
     priority: 'High',
     active: true,
   },

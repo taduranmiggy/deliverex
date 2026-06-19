@@ -14,7 +14,6 @@ const TAB_CONFIG = {
   vehicles:                     { label: 'Vehicles',        title: 'Vehicles',                    headers: ['Plate', 'Type', 'CBM', 'Status', 'Actions'] },
   drivers:                      { label: 'Drivers',         title: 'Drivers',                     headers: ['Name', 'License', 'Linked Account', 'Link Status', 'Actions'] },
   'driver-vehicle-assignments':  { label: 'Driver-Vehicle', title: 'Driver-Vehicle Assignments',  headers: ['Driver', 'Vehicle', 'Primary', 'Status', 'Actions'] },
-  'client-preferences':         { label: 'Preferences',    title: 'Client Preferences',          headers: ['Client', 'Quarry', 'Vehicle Type', 'Default', 'Status', 'Actions'] },
 }
 
 // Tabs shown in the UI strip — material-specifications is merged into material-types
@@ -74,7 +73,6 @@ function rowMatches(row, tab, search) {
   if (tab === 'vehicles') hay.push(row.plate_no, row.type, row.vehicleType?.name)
   if (tab === 'drivers') hay.push(row.full_name, row.license_no, row.user?.name)
   if (tab === 'driver-vehicle-assignments') hay.push(row.driver?.full_name, row.vehicle?.plate_no)
-  if (tab === 'client-preferences') hay.push(row.client?.client_name, row.quarry?.quarry_name, row.vehicleType?.name)
   return hay.some((v) => String(v || '').toLowerCase().includes(q))
 }
 
@@ -105,8 +103,6 @@ function MasterRecordModal({ tab, item, data, onClose, onSaved }) {
 
   const mt      = data.material_types || []
   const vt      = data.vehicle_types  || []
-  const clients = data.clients        || []
-  const quarries = data.quarries      || []
   const drivers  = data.drivers       || []
   const vehicles = data.vehicles      || []
 
@@ -215,39 +211,6 @@ function MasterRecordModal({ tab, item, data, onClose, onSaved }) {
               <label>
                 Is primary
                 <select value={form.is_primary} onChange={set('is_primary')}>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              </label>
-              <StatusSelect value={form.status} onChange={set('status')} />
-            </>
-          )}
-          {tab === 'client-preferences' && (
-            <>
-              <label>
-                Client
-                <select required value={form.client_id} onChange={set('client_id')}>
-                  <option value="">— Select —</option>
-                  {clients.map((r) => <option key={r.id} value={r.id}>{r.client_name}</option>)}
-                </select>
-              </label>
-              <label>
-                Quarry
-                <select required value={form.quarry_id} onChange={set('quarry_id')}>
-                  <option value="">— Select —</option>
-                  {quarries.map((r) => <option key={r.id} value={r.id}>{r.quarry_name}</option>)}
-                </select>
-              </label>
-              <label>
-                Vehicle type (optional)
-                <select value={form.vehicle_type_id} onChange={set('vehicle_type_id')}>
-                  <option value="">— None —</option>
-                  {vt.map((r) => <option key={r.id} value={r.id}>{r.name} {r.wheel_type ? `(${r.wheel_type})` : ''}</option>)}
-                </select>
-              </label>
-              <label>
-                Is default
-                <select value={form.is_default} onChange={set('is_default')}>
                   <option value="true">Yes</option>
                   <option value="false">No</option>
                 </select>
@@ -412,7 +375,7 @@ function AdminMasterDataPage() {
   const [data, setData]     = useState({
     material_types: [], material_specifications: [],
     clients: [], quarries: [], vehicle_types: [],
-    vehicles: [], drivers: [], driver_vehicle_assignments: [], client_preferences: [],
+    vehicles: [], drivers: [], driver_vehicle_assignments: [],
   })
   // Driver account generation
   const [generatingId, setGeneratingId]   = useState(null) // per-row spinner
@@ -434,7 +397,6 @@ function AdminMasterDataPage() {
         vehicles:                   payload?.vehicles                   || [],
         drivers:                    payload?.drivers                    || [],
         driver_vehicle_assignments: payload?.driver_vehicle_assignments || [],
-        client_preferences:         payload?.client_preferences         || [],
       })
     } catch (err) {
       setError(err?.message || 'Unable to load master data. Please try again.')
@@ -463,7 +425,6 @@ function AdminMasterDataPage() {
       clients: data.clients, quarries: data.quarries,
       'vehicle-types': data.vehicle_types, vehicles: data.vehicles,
       drivers: data.drivers, 'driver-vehicle-assignments': data.driver_vehicle_assignments,
-      'client-preferences': data.client_preferences,
     }
     return (map[tab] || []).filter((row) => rowMatches(row, tab, search))
   }, [data, tab, search])
@@ -541,7 +502,7 @@ function AdminMasterDataPage() {
 
   return (
     <>
-      <PageHeader title="Master Data" subtitle="Operational materials, clients, suppliers, fleet, drivers, and preference mappings">
+      <PageHeader title="Master Data" subtitle="Operational materials, clients, suppliers, fleet, and drivers">
         {tab === 'drivers' && (
           <button
             className="btn-dx-secondary"
@@ -665,7 +626,6 @@ function AdminMasterDataPage() {
                   </>
                 )}
                 {tab === 'driver-vehicle-assignments' && <><td>{row.driver?.full_name || '—'}</td><td>{row.vehicle?.plate_no || '—'}</td><td>{row.is_primary ? 'Yes' : 'No'}</td><td><StatusBadge status={row.status} /></td></>}
-                {tab === 'client-preferences' && <><td>{row.client?.client_name || '—'}</td><td>{row.quarry?.quarry_name || '—'}</td><td>{row.vehicleType?.name || '—'}</td><td>{row.is_default ? 'Yes' : 'No'}</td><td><StatusBadge status={row.status} /></td></>}
                 <td>
                   <div className="dx-text-actions">
                     <button type="button" onClick={() => setModal({ item: row, tab })}>Edit</button>

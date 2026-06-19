@@ -27,15 +27,31 @@ class OcrService
      */
     public function createPending(DeliveryDocument $document): OcrResult
     {
+        $system = $this->buildSystemContext($document);
+
         return OcrResult::query()->updateOrCreate(
             ['document_id' => $document->id],
             [
                 'processing_status' => self::STATUS_PENDING,
+                'review_status'     => 'pending_review',
                 'extracted_text'    => null,
                 'corrected_text'    => null,
+                'extracted_length'  => null,
+                'extracted_width'   => null,
+                'extracted_height'  => null,
+                'extracted_volume'  => null,
+                'delivery_receipt_number' => null,
+                'assignment_id'     => $system['assignment_id'],
+                'job_order_id'      => $system['job_order_id'],
+                'driver_id'         => $system['driver_id'],
+                'driver_name'       => $system['driver_name'],
+                'vehicle_plate_no'  => $system['vehicle_plate_no'],
+                'delivery_date'     => $system['delivery_date'],
                 'confidence_score'  => null,
                 'engine'            => null,
                 'error_message'     => null,
+                'review_notes'      => null,
+                'reviewed_at'       => null,
                 'is_validated'      => false,
             ]
         );
@@ -113,6 +129,8 @@ class OcrService
             $text = trim($process->getOutput());
             $confidence = $this->estimateConfidence($text);
             $displayText = $text !== '' ? $text : '(No text detected — image may be blank or low contrast.)';
+            $structured = $this->extractStructuredFields($text);
+            $system = $this->buildSystemContext($document);
 
             $status = self::STATUS_PROCESSED;
             if ($text === '' || ($confidence !== null && $confidence < 0.65)) {
@@ -121,8 +139,20 @@ class OcrService
 
             $result->forceFill([
                 'processing_status'  => $status,
+                'review_status'      => 'pending_review',
                 'extracted_text'     => $displayText,
                 'corrected_text'     => null,
+                'extracted_length'   => $structured['length'],
+                'extracted_width'    => $structured['width'],
+                'extracted_height'   => $structured['height'],
+                'extracted_volume'   => $structured['volume'],
+                'delivery_receipt_number' => $structured['delivery_receipt_number'],
+                'assignment_id'      => $system['assignment_id'],
+                'job_order_id'       => $system['job_order_id'],
+                'driver_id'          => $system['driver_id'],
+                'driver_name'        => $system['driver_name'],
+                'vehicle_plate_no'   => $system['vehicle_plate_no'],
+                'delivery_date'      => $system['delivery_date'],
                 'confidence_score'   => $confidence,
                 'engine'             => 'tesseract',
                 'error_message'      => null,
@@ -264,8 +294,14 @@ class OcrService
 
         $result->forceFill([
             'processing_status'  => self::STATUS_NEEDS_REVIEW,
+            'review_status'      => 'pending_review',
             'extracted_text'     => $stub,
             'corrected_text'     => null,
+            'extracted_length'   => null,
+            'extracted_width'    => null,
+            'extracted_height'   => null,
+            'extracted_volume'   => null,
+            'delivery_receipt_number' => null,
             'confidence_score'   => null,
             'engine'             => 'stub',
             'error_message'      => $errorHint,
@@ -295,9 +331,66 @@ class OcrService
     {
         $result->forceFill([
             'processing_status' => self::STATUS_FAILED,
+            'review_status'     => 'pending_review',
             'error_message'     => $message,
         ])->save();
 
         return $result->fresh();
+    }
+
+    private function extractStructuredFields(string $text): array
+    {
+        $normalized = strtolower($text);
+
+        return [
+            'length' => $this->extractDecimal($normalized, ['length', 'len', 'l']),
+            'width' => $this->extractDecimal($normalized, ['width', 'wid', 'w']),
+            'height' => $this->extractDecimal($normalized, ['height', 'hgt', 'h']),
+            'volume' => $this->extractDecimal($normalized, ['volume', 'vol', 'cbm', 'm3']),
+            'delivery_receipt_number' => $this->extractReceiptNumber($text),
+        ];
+    }
+
+    private function extractDecimal(string $text, array $labels): ?float
+    {
+        foreach ($labels as $label) {
+            $pattern = '/(?:\b'.preg_quote($label, '/').'\b)\s*[:=]?\s*([0-9]+(?:\.[0-9]+)?)/i';
+            if (preg_match($pattern, $text, $m)) {
+                return (float) $m[1];
+            }
+        }
+
+        return null;
+    }
+
+    private function extractReceiptNumber(string $text): ?string
+    {
+        $patterns = [
+            '/(?:delivery\s*receipt|receipt|dr\s*(?:no|number)?|delivery\s*no)\s*[:#-]?\s*([a-z0-9\-\/]+)/i',
+            '/\bdr[-\s]?([0-9]{4,})\b/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $text, $m)) {
+                return strtoupper(trim((string) ($m[1] ?? '')));
+            }
+        }
+
+        return null;
+    }
+
+    private function buildSystemContext(DeliveryDocument $document): array
+    {
+        $document->loadMissing('assignment.driver.user', 'assignment.vehicle', 'assignment.jobOrder');
+        $assignment = $document->assignment;
+
+        return [
+            'assignment_id' => $assignment?->id,
+            'job_order_id' => $assignment?->job_order_id,
+            'driver_id' => $assignment?->driver_id,
+            'driver_name' => $assignment?->driver?->full_name ?: $assignment?->driver?->user?->name,
+            'vehicle_plate_no' => $assignment?->vehicle?->plate_no,
+            'delivery_date' => $assignment?->arrived_at ?: $assignment?->completed_at ?: now(),
+        ];
     }
 }

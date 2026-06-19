@@ -19,8 +19,28 @@ export async function fetchDocumentPreviewBlob(documentId) {
 export function fetchUsers(page = 1, perPage = 15) { return apiRequest(`/admin/users?page=${page}&per_page=${perPage}`) }
 export function fetchDrivers(page = 1)     { return apiRequest(`/admin/drivers?page=${page}`) }
 export function fetchVehicles(page = 1)    { return apiRequest(`/admin/vehicles?page=${page}`) }
-export function fetchOcrQueue(page = 1, filter = 'all') {
-  return apiRequest(`/admin/ocr/review?page=${page}&filter=${filter}`)
+export function fetchOcrQueue(page = 1, filter = 'all', params = {}) {
+  const qs = new URLSearchParams({
+    page: String(page),
+    filter,
+    ...Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
+  }).toString()
+  return apiRequest(`/ocr/review?${qs}`)
+}
+
+export async function exportOcrReport(params = {}) {
+  const token = localStorage.getItem('deliverex_token')
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
+  ).toString()
+  const response = await fetch(`${API_URL}/admin/ocr/review/export${qs ? `?${qs}` : ''}`, {
+    headers: token ? { Authorization: `Bearer ${token}`, Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } : {},
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.message || 'Failed to export OCR report.')
+  }
+  return response.blob()
 }
 export function fetchRoles()               { return apiRequest('/admin/roles') }
 export function fetchAuditLogs(params = {}) {
@@ -67,7 +87,7 @@ export function generateAllDriverAccounts() {
 
 // ─── OCR ──────────────────────────────────────────────────────────────────────
 export function validateOcr(id, payload)   {
-  return apiRequest(`/admin/ocr/${id}/validate`, { method: 'PUT', body: JSON.stringify(payload) })
+  return apiRequest(`/ocr/${id}/validate`, { method: 'PUT', body: JSON.stringify(payload) })
 }
 export function reprocessOcr(documentId)  {
   return apiRequest(`/ocr/process/${documentId}`, { method: 'POST' })
