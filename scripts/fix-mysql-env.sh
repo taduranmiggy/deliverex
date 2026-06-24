@@ -9,8 +9,8 @@ REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$REPO/backend/.env"
 
 if [ ! -f "$ENV_FILE" ]; then
-  echo "ERROR: $ENV_FILE not found. Run hostinger-one-shot-setup.sh first."
-  exit 1
+  echo "==> Creating $ENV_FILE from .env.example..."
+  cp "$REPO/backend/.env.example" "$ENV_FILE"
 fi
 
 echo "============================================"
