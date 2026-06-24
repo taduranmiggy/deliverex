@@ -96,10 +96,37 @@ bash /home/u123456789/domains/yourdomain.com/deliverex/scripts/hostinger-hpanel-
 ```
 
 Ginagawa nito pagkatapos ng bawat **Deploy** o auto-pull:
+- i-restore ang `.env` mula sa backup (`.deliverex.env`)
 - `composer install`
-- `php artisan migrate`
-- cache config/routes/views
-- i-publish ang frontend (kung may build)
+- `php artisan migrate` (safe — hindi dine-delete ang existing data)
+- seed **lang kung walang users pa** (first-time install)
+- cache clear + frontend publish
+
+### Database at redeploy (IMPORTANTE)
+
+**Hindi nawawala ang MySQL data tuwing Git redeploy.** Ang database sa Hostinger ay hiwalay sa mga file sa `public_html`. Ang redeploy ay nagpapalit lang ng code files.
+
+| Ano ang nangyayari | Effect sa DB |
+|--------------------|--------------|
+| hPanel Git Redeploy | **Walang data loss** — tables nandoon pa rin |
+| `php artisan migrate` | Nagdadagdag lang ng bagong tables/columns |
+| `db:seed` sa bawat deploy (dating setup) | **Delikado** — nagde-delete ng drivers/vehicles na wala sa master list |
+
+Ang bagong deploy script ay **migrate-only** sa routine redeploy. Tumatakbo lang ang seed kung **walang users** sa database (fresh install).
+
+**One-time:** gumawa ng `.env` backup (nasa labas ng git, hindi mawawala sa redeploy):
+```bash
+bash scripts/write-production-env.sh
+```
+Naka-save sa: `/home/u123456789/domains/yourdomain.com/.deliverex.env`
+
+**Kung kailangan i-reset ang demo data** (manual lang):
+```bash
+cd ~/domains/yourdomain.com/deliverex
+FORCE_SEED=1 bash scripts/seed-if-needed.sh
+```
+
+**Huwag mag-redeploy** nang walang post-deployment script — mawawala ang `backend/.env` at mag-e-error ang login ("Request failed") hanggang ma-restore ang backup.
 
 ### Step 6 — Frontend build config (server)
 
@@ -170,9 +197,12 @@ Pwede mong gamitin **Path A + Path B** sabay: hPanel Git para sa pull, GitHub Ac
 
 | Script | Kailan |
 |--------|--------|
-| [`scripts/hostinger-first-setup.sh`](scripts/hostinger-first-setup.sh) | Isang beses: `.env`, composer, migrate |
+| [`scripts/hostinger-first-setup.sh`](scripts/hostinger-first-setup.sh) | Isang beses: `.env`, composer, migrate, seed |
 | [`scripts/hostinger-hpanel-git-deploy.sh`](scripts/hostinger-hpanel-git-deploy.sh) | I-paste sa hPanel Git post-deploy |
-| [`scripts/deploy-hostinger.sh`](scripts/deploy-hostinger.sh) | GitHub Actions / manual SSH |
+| [`scripts/deploy-hostinger.sh`](scripts/deploy-hostinger.sh) | GitHub Actions / manual SSH — migrate-only redeploy |
+| [`scripts/seed-if-needed.sh`](scripts/seed-if-needed.sh) | Seed lang kung empty DB; `FORCE_SEED=1` para manual reset |
+| [`scripts/verify-db.sh`](scripts/verify-db.sh) | Tsek DB connection bago migrate |
+| [`scripts/write-production-env.sh`](scripts/write-production-env.sh) | One-time: gumawa ng `.deliverex.env` backup |
 | [`scripts/.deploy.env.example`](scripts/.deploy.env.example) | Copy to `scripts/.deploy.env` sa server |
 
 ---
@@ -181,6 +211,8 @@ Pwede mong gamitin **Path A + Path B** sabay: hPanel Git para sa pull, GitHub Ac
 
 | Problema | Solusyon |
 |---------|----------|
+| Data nawawala pag redeploy | Dating issue: `db:seed` sa bawat deploy. Update scripts; redeploy with post-deploy script |
+| "Request failed" sa login | Nawawala ang `.env` — run `bash scripts/fix-after-redeploy.sh` o `write-production-env.sh` |
 | 500 error | `tail backend/storage/logs/laravel.log`; `php artisan config:clear` |
 | Blank / white page | Walang frontend build — gamitin GitHub Actions o set `VITE_API_URL` sa `.deploy.env` |
 | Laravel welcome page | Mali ang document root — dapat `backend/public` |

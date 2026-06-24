@@ -47,25 +47,25 @@ else
 fi
 
 ENV_BACKUP="$(dirname "$DEPLOY_PATH")/.deliverex.env"
-if [ ! -f .env ] && [ -f "$ENV_BACKUP" ]; then
-  echo "==> Restoring .env from backup (wiped by git deploy)..."
+if [ -f "$ENV_BACKUP" ]; then
+  echo "==> Restoring .env from backup (survives git redeploy)..."
   cp "$ENV_BACKUP" .env
   chmod 600 .env 2>/dev/null || true
-fi
-
-if [ ! -f .env ]; then
-  echo "ERROR: backend/.env missing. Run: bash scripts/write-production-env.sh" >&2
+elif [ ! -f .env ]; then
+  echo "ERROR: backend/.env missing and no backup at $ENV_BACKUP" >&2
+  echo "       Run: bash scripts/write-production-env.sh" >&2
   exit 1
 fi
+
+grep -q '^APP_KEY=base64:' .env || php artisan key:generate --force
+
+php artisan config:clear
+bash "$SCRIPT_DIR/verify-db.sh"
 
 echo "==> Running migrations..."
 php artisan migrate --force
 
-echo "==> Seeding (ensures admin exists after redeploy)..."
-php artisan db:seed --force 2>/dev/null || true
-
-echo "==> Seeding demo fleet + job orders..."
-php artisan db:seed --class=DispatchDemoSeeder --force 2>/dev/null || true
+bash "$SCRIPT_DIR/seed-if-needed.sh"
 
 echo "==> Clearing caches (avoid stale config on shared hosting)..."
 php artisan config:clear
