@@ -3,7 +3,7 @@ import { exportOcrReport, fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr,
 import { EmptyState, PageHeader } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import useAuth from '../../hooks/useAuth'
-import { Check, FileSearch, Flag, Loader2, RefreshCw, X } from 'lucide-react'
+import { Check, FileSearch, Flag, Info, Loader2, RefreshCw, X } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 
 const FILTER_TABS = [
@@ -46,7 +46,10 @@ const ISSUE_TYPES = [
 function OcrReviewPage() {
   const toast = useToast()
   const { user } = useAuth()
-  const isDispatcher = String(user?.role?.name || '').toLowerCase() === 'dispatcher'
+  const roleName = String(user?.role?.name || '').toLowerCase()
+  const isDispatcher = roleName === 'dispatcher'
+  const isManager = roleName === 'manager'
+  const isReadOnly = isManager
   const [queue, setQueue]           = useState([])
   const [error, setError]           = useState('')
   const [selected, setSelected]     = useState(null)
@@ -210,17 +213,25 @@ function OcrReviewPage() {
   return (
     <>
       <PageHeader
-        title={isDispatcher ? 'OCR Review' : 'OCR Validation'}
-        subtitle={isDispatcher
-          ? 'Operational delivery verification using OCR data and system records'
-          : 'System-wide OCR validation, oversight, and delivery audit review'}
+        title={isReadOnly ? 'Delivery Documentation' : isDispatcher ? 'OCR Review' : 'OCR Validation'}
+        subtitle={isReadOnly
+          ? 'View OCR results and delivery documents — read-only'
+          : isDispatcher
+            ? 'Operational delivery verification using OCR data and system records'
+            : 'System-wide OCR validation, oversight, and delivery audit review'}
       >
-        {!isDispatcher && (
+        {!isDispatcher && !isReadOnly && (
           <button type="button" className="btn-dx-primary" onClick={handleExport} disabled={exporting}>
             {exporting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Exporting…</> : 'Export .xlsx'}
           </button>
         )}
       </PageHeader>
+      {isReadOnly && (
+        <div className="dx-readonly-notice" style={{ marginBottom: 16 }}>
+          <Info size={14} aria-hidden />
+          Manager view only — validation and reprocessing are handled by Admin and Dispatcher roles.
+        </div>
+      )}
       {error && <p className="notice error">{error}</p>}
 
       <div className="dx-panel" style={{ marginBottom: 16 }}>
@@ -329,7 +340,7 @@ function OcrReviewPage() {
         </div>
 
         <div className="dx-panel" style={{ marginBottom: 0 }}>
-          <h3 className="dx-panel-title">Validation Panel</h3>
+          <h3 className="dx-panel-title">{isReadOnly ? 'Document Details' : 'Validation Panel'}</h3>
           {!selected ? (
             <EmptyState icon={FileSearch} title="No document selected" message="Select a document from the queue to review." />
           ) : (
@@ -386,12 +397,13 @@ function OcrReviewPage() {
                 </div>
               </div>
 
-              {!isDispatcher && (
+              {!isDispatcher && !isReadOnly && (
                 <label>Reviewed OCR text (optional)
                   <textarea rows={5} value={corrected} onChange={(e) => setCorrected(e.target.value)} placeholder="Optional corrected OCR text…" />
                 </label>
               )}
 
+              {!isReadOnly && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <label>Issue Type
                   <select value={issueType} onChange={(e) => setIssueType(e.target.value)}>
@@ -402,6 +414,13 @@ function OcrReviewPage() {
                   <input type="text" readOnly value={getReviewBadge(selected).label} />
                 </label>
               </div>
+              )}
+              {isReadOnly && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: '0.875rem' }}>
+                  <div><strong>Issue Type:</strong> {selected.issue_type || '—'}</div>
+                  <div><strong>Review Status:</strong> {getReviewBadge(selected).label}</div>
+                </div>
+              )}
               {selected.document?.completion_proof && (
                 <div style={{ padding: '12px 14px', borderRadius: 10, background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: '0.8125rem' }}>
                   <strong style={{ display: 'block', marginBottom: 6 }}>Delivery Completion Proof</strong>
@@ -417,20 +436,29 @@ function OcrReviewPage() {
                   )}
                 </div>
               )}
-              {selected.processing_status !== 'validated' && (
+              {!isReadOnly && selected.processing_status !== 'validated' && (
                 <label>Reject / flag reason <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span>
                   <textarea rows={2} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection or flag…" />
                 </label>
               )}
+              {!isReadOnly ? (
               <label>Reviewer Notes
                 <textarea rows={3} value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} placeholder="Add validation notes…" />
               </label>
+              ) : selected.review_notes ? (
+                <div style={{ fontSize: '0.875rem' }}>
+                  <strong>Reviewer Notes:</strong>
+                  <p style={{ margin: '6px 0 0', color: 'var(--muted)' }}>{selected.review_notes}</p>
+                </div>
+              ) : null}
               {selected.error_message && (
                 <p className={`notice${selected.processing_status === 'failed' || isStub ? ' error' : ''}`} style={{ margin: 0 }}>
                   {selected.error_message}
                 </p>
               )}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {!isReadOnly && (
+                <>
                 <button className="btn-dx-primary" type="button" disabled={submitting || !isReadyToApprove(selected.processing_status)} onClick={() => handleAction('approve')}
                   style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
                   title={!isReadyToApprove(selected.processing_status) ? 'Wait until OCR completes or reprocess failed items' : 'Save validated record'}>
@@ -451,6 +479,8 @@ function OcrReviewPage() {
                       ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Processing OCR…</>
                       : <><RefreshCw size={15} /> Reprocess OCR</>}
                   </button>
+                )}
+                </>
                 )}
                 <button className="btn-dx-secondary" type="button" disabled={loading || submitting} onClick={() => load(tab)}>
                   {loading ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Refreshing…</> : <><RefreshCw size={15} /> Refresh</>}

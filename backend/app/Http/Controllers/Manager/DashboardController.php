@@ -7,10 +7,15 @@ use App\Models\DispatchAssignment;
 use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Vehicle;
+use App\Services\Performance\ManagerDashboardMetricsService;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    public function __construct(
+        private readonly ManagerDashboardMetricsService $metricsService,
+    ) {}
+
     public function index()
     {
         $delayed = JobOrder::whereNotIn('status', ['completed', 'cancelled'])
@@ -37,20 +42,7 @@ class DashboardController extends Controller
             ];
         }
 
-        // On-time rate (completed before or on scheduled_end, this month)
-        $completedThisMonth = DispatchAssignment::where('status', 'completed')
-            ->where('completed_at', '>=', now()->startOfMonth())
-            ->count();
-
-        $onTimeThisMonth = DispatchAssignment::where('status', 'completed')
-            ->where('completed_at', '>=', now()->startOfMonth())
-            ->whereHas('jobOrder', fn ($q) => $q->whereNotNull('scheduled_end'))
-            ->whereRaw('dispatch_assignments.completed_at <= (SELECT scheduled_end FROM job_orders WHERE job_orders.id = dispatch_assignments.job_order_id)')
-            ->count();
-
-        $onTimePct = $completedThisMonth > 0
-            ? round(($onTimeThisMonth / $completedThisMonth) * 100, 1)
-            : null;
+        $kpis = $this->metricsService->compute();
 
         return response()->json([
             'job_orders'          => JobOrder::count(),
@@ -61,8 +53,8 @@ class DashboardController extends Controller
             'vehicles_available'  => Vehicle::where('status', 'available')->count(),
             'delayed_today'       => $delayed,
             'completed_this_week' => (int) collect($weekDays)->sum('count'),
-            'on_time_pct'         => $onTimePct,
             'daily_completed'     => $weekDays,
+            ...$kpis,
         ]);
     }
 }

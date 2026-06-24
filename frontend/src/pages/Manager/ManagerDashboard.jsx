@@ -5,7 +5,19 @@ import DriverPerformanceSection from '../../components/DriverPerformanceSection'
 import IssueReportsSection from '../../components/IssueReportsSection'
 import VehicleUtilizationSection from '../../components/VehicleUtilizationSection'
 import { PageHeader, SectionCard, StatCard } from '../../components/ui'
-import { AlertTriangle, Car, CheckCircle2, Clock, TrendingUp, Truck, Users } from 'lucide-react'
+import { AlertTriangle, Car, CheckCircle2, Clock, FileCheck, Target, Timer, TrendingUp, Truck, Users, Zap } from 'lucide-react'
+
+function formatPct(value) {
+  return value != null ? `${value}%` : '—'
+}
+
+function formatHours(value) {
+  return value != null ? `${value} hrs` : '—'
+}
+
+function formatScore(value) {
+  return value != null ? String(value) : '—'
+}
 
 function MiniBarChart({ data }) {
   if (!data || data.length === 0) return <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.875rem' }}>No data yet.</p>
@@ -36,6 +48,19 @@ function ManagerDashboard() {
   }, [])
 
   const s = stats ?? {}
+  const periodLabel = s.period
+    ? `Last 30 days (${s.period.from} – ${s.period.to})`
+    : 'Last 30 days'
+
+  const performanceKpis = [
+    { label: 'On-Time Delivery Rate', value: formatPct(s.on_time_pct), icon: TrendingUp, iconVariant: 'green' },
+    { label: 'Delivery Completion Rate', value: formatPct(s.delivery_completion_pct), icon: CheckCircle2, iconVariant: 'green' },
+    { label: 'Average Delivery Time', value: formatHours(s.avg_delivery_time_hours), icon: Timer, iconVariant: 'purple', hint: 'Per completed delivery' },
+    { label: 'Driver Utilization Rate', value: formatPct(s.driver_utilization_pct), icon: Users, iconVariant: 'default' },
+    { label: 'Best-Fit Assignment Efficiency', value: formatScore(s.best_fit_efficiency_score), icon: Target, iconVariant: 'orange' },
+    { label: 'PoD Completion Rate', value: formatPct(s.pod_completion_pct), icon: FileCheck, iconVariant: 'green' },
+    { label: 'Exception Rate', value: formatPct(s.exception_rate_pct), icon: Zap, iconVariant: s.exception_rate_pct > 10 ? 'red' : 'default' },
+  ]
 
   return (
     <>
@@ -47,6 +72,17 @@ function ManagerDashboard() {
         <StatCard label="Completed"          value={s.jobs_completed       ?? '—'} icon={CheckCircle2}  iconVariant="green" />
         <StatCard label="Active Deliveries"  value={s.assignments_active   ?? '—'} icon={Clock}         iconVariant="purple" />
         <StatCard label="Delayed"            value={s.delayed_today        ?? '—'} icon={AlertTriangle} iconVariant={s.delayed_today > 0 ? 'red' : 'green'} />
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+      <SectionCard title="Performance KPIs" className="dx-manager-kpi-section">
+        <p style={{ color: 'var(--muted)', fontSize: '0.8125rem', margin: '0 0 16px' }}>{periodLabel}</p>
+        <div className="dx-stat-row">
+          {performanceKpis.map(({ label, value, icon, iconVariant, hint }) => (
+            <StatCard key={label} label={label} value={value} icon={icon} iconVariant={iconVariant} hint={hint} />
+          ))}
+        </div>
+      </SectionCard>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
@@ -65,10 +101,9 @@ function ManagerDashboard() {
 
         <SectionCard title="Fleet & Workforce">
           {[
-            { label: 'On-Time Rate (this month)', value: s.on_time_pct != null ? `${s.on_time_pct}%` : '—', icon: TrendingUp, color: 'var(--color-success)' },
-            { label: 'Drivers Available',         value: s.drivers_available  ?? '—', icon: Users, color: 'var(--color-primary)' },
-            { label: 'Vehicles Available',        value: s.vehicles_available ?? '—', icon: Car,   color: 'var(--color-purple)' },
-            { label: 'Pending Jobs',              value: s.jobs_pending       ?? '—', icon: Clock, color: 'var(--color-warning)' },
+            { label: 'Drivers Available',  value: s.drivers_available  ?? '—', icon: Users, color: 'var(--color-primary)' },
+            { label: 'Vehicles Available', value: s.vehicles_available ?? '—', icon: Car,   color: 'var(--color-purple)' },
+            { label: 'Pending Jobs',       value: s.jobs_pending       ?? '—', icon: Clock, color: 'var(--color-warning)' },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--stroke)', fontSize: '0.875rem' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted)' }}>

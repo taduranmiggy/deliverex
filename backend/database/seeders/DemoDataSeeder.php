@@ -2,6 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\AssignmentAuditTrail;
+use App\Models\DeliveryCompletionProof;
+use App\Models\DeliveryDelayReport;
+use App\Models\DeliveryIssueReport;
 use App\Models\DeliveryStatusLog;
 use App\Models\DispatchAssignment;
 use App\Models\Driver;
@@ -75,7 +79,7 @@ class DemoDataSeeder extends Seeder
         ]);
 
         $jobOrders->each(function (JobOrder $jobOrder, int $index) use ($drivers, $vehicles, $dispatcher) {
-            if ($index < 4) {
+            if ($index < 2) {
                 $driver = $drivers[$index % $drivers->count()];
                 $vehicle = $vehicles[$index % $vehicles->count()];
 
@@ -105,12 +109,104 @@ class DemoDataSeeder extends Seeder
                 $driver->update(['availability' => 'busy']);
                 $vehicle->update(['status' => 'assigned']);
                 $jobOrder->update(['status' => $assignment->status]);
+            } elseif ($index < 4) {
+                $this->seedCompletedAssignment($jobOrder, $drivers[$index], $vehicles[$index], $dispatcher, $index === 2);
             }
         });
 
         Vehicle::where('plate_no', 'DX-1005')->update(['status' => 'maintenance']);
 
         $this->linkDemoCustomerJobs();
+    }
+
+    private function seedCompletedAssignment(
+        JobOrder $jobOrder,
+        Driver $driver,
+        Vehicle $vehicle,
+        User $dispatcher,
+        bool $onTime,
+    ): void {
+        $scheduledEnd = now()->subDays(3)->addHours($onTime ? 4 : -2);
+        $startedAt    = now()->subDays(3);
+        $completedAt  = $onTime ? $scheduledEnd->copy()->subHour() : $scheduledEnd->copy()->addHours(2);
+
+        $jobOrder->update([
+            'status'          => 'completed',
+            'scheduled_start' => $startedAt->copy()->subHour(),
+            'scheduled_end'   => $scheduledEnd,
+        ]);
+
+        $assignment = DispatchAssignment::create([
+            'job_order_id'    => $jobOrder->id,
+            'driver_id'       => $driver->id,
+            'vehicle_id'      => $vehicle->id,
+            'assigned_by'     => $dispatcher->id,
+            'status'          => 'completed',
+            'assigned_at'     => $startedAt->copy()->subHours(2),
+            'started_at'      => $startedAt,
+            'completed_at'    => $completedAt,
+            'pod_verified_at' => $onTime ? $completedAt->copy()->addMinutes(15) : null,
+            'pod_verified_by' => $onTime ? $dispatcher->id : null,
+        ]);
+
+        if (! $onTime) {
+            DeliveryCompletionProof::create([
+                'job_order_id'   => $jobOrder->id,
+                'assignment_id'  => $assignment->id,
+                'driver_id'      => $driver->id,
+                'reported_by'    => $driver->user_id,
+                'proof_type'     => DeliveryCompletionProof::TYPE_RECEIPT_PHOTO,
+                'receiver_name'  => 'Site Receiver',
+                'delivery_notes' => 'Demo completion proof',
+            ]);
+        }
+
+        AssignmentAuditTrail::create([
+            'assignment_id'             => $assignment->id,
+            'job_order_id'              => $jobOrder->id,
+            'dispatcher_id'             => $dispatcher->id,
+            'recommended_driver_id'     => $driver->id,
+            'recommended_vehicle_id'    => $vehicle->id,
+            'recommended_driver_name'   => $driver->user?->name ?? 'Demo Driver',
+            'recommended_vehicle_plate' => $vehicle->plate_no,
+            'assigned_driver_id'        => $driver->id,
+            'assigned_vehicle_id'       => $vehicle->id,
+            'assigned_driver_name'      => $driver->user?->name ?? 'Demo Driver',
+            'assigned_vehicle_plate'    => $vehicle->plate_no,
+            'is_override'               => ! $onTime,
+            'override_reason'           => $onTime ? null : 'Client requested specific driver',
+            'best_fit_score'            => $onTime ? 92.5 : 78.0,
+            'best_fit_reasons'          => ['capacity_match', 'proximity'],
+        ]);
+
+        DeliveryStatusLog::create([
+            'assignment_id' => $assignment->id,
+            'status'        => 'completed',
+            'notes'         => 'Demo completed delivery',
+            'created_at'    => $completedAt,
+        ]);
+
+        if (! $onTime) {
+            DeliveryDelayReport::create([
+                'job_order_id'   => $jobOrder->id,
+                'assignment_id'  => $assignment->id,
+                'driver_id'      => $driver->id,
+                'reported_by'    => $driver->user_id,
+                'delay_reason'   => 'traffic_congestion',
+                'delay_notes'    => 'Demo delay for KPI seeding',
+            ]);
+
+            DeliveryIssueReport::create([
+                'assignment_id' => $assignment->id,
+                'driver_id'     => $driver->id,
+                'reported_by'   => $driver->user_id,
+                'issue_type'    => 'other',
+                'notes'         => 'Demo issue for exception rate KPI',
+            ]);
+        }
+
+        $driver->update(['availability' => 'available']);
+        $vehicle->update(['status' => 'available']);
     }
 
     /** Attach sample jobs to the demo customer account (runs on fresh demo or after migrations). */

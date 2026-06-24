@@ -14,6 +14,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
+use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Hash;
@@ -318,7 +319,7 @@ class MasterDataController extends Controller
         }
 
         $email    = $this->makeDriverEmail($driver->full_name);
-        $password = 'Password123!';
+        $password = DriverAccount::DEFAULT_PASSWORD;
 
         $user = User::updateOrCreate(
             ['email' => $email],
@@ -379,6 +380,8 @@ class MasterDataController extends Controller
             'accounts'   => [],
         ];
 
+        $defaultPassword = DriverAccount::DEFAULT_PASSWORD;
+
         foreach ($unlinked as $driver) {
             $email = $this->makeDriverEmail($driver->full_name);
 
@@ -386,7 +389,7 @@ class MasterDataController extends Controller
                 ['email' => $email],
                 [
                     'name'     => $driver->full_name,
-                    'password' => Hash::make('Password123!'),
+                    'password' => Hash::make($defaultPassword),
                     'role_id'  => $driverRole->id,
                     'status'   => 'active',
                 ]
@@ -398,23 +401,29 @@ class MasterDataController extends Controller
                 'availability' => $driver->availability ?? 'available',
             ]);
 
+            $wasCreated = $user->wasRecentlyCreated;
             $results['processed']++;
-            if ($user->wasRecentlyCreated) {
+            if ($wasCreated) {
                 $results['created']++;
             } else {
                 $results['reused']++;
             }
 
-            $results['accounts'][] = [
+            $accountEntry = [
                 'driver_id'   => $driver->id,
                 'driver_name' => $driver->full_name,
                 'email'       => $email,
-                'created'     => $user->wasRecentlyCreated,
+                'created'     => $wasCreated,
             ];
+            if ($wasCreated) {
+                $accountEntry['default_password'] = $defaultPassword;
+            }
+            $results['accounts'][] = $accountEntry;
         }
 
         return response()->json([
-            'message' => "Processed {$results['processed']} drivers: {$results['created']} accounts created, {$results['reused']} existing accounts reused.",
+            'message'          => "Processed {$results['processed']} drivers: {$results['created']} accounts created, {$results['reused']} existing accounts reused.",
+            'default_password' => $defaultPassword,
             ...$results,
         ]);
     }

@@ -3,7 +3,7 @@ import LogoutButton from '../components/LogoutButton'
 import PageTransition from '../components/PageTransition'
 import useAuth from '../hooks/useAuth'
 import {
-  BarChart3, Bell, History, LayoutDashboard, MapPin, TrendingUp,
+  BarChart3, Bell, FileSearch, History, LayoutDashboard, MapPin, TrendingUp,
 } from 'lucide-react'
 
 const navCls = ({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`
@@ -13,6 +13,7 @@ const NAV = [
   { to: '/manager/analytics',          label: 'Analytics',   Icon: BarChart3 },
   { to: '/manager/delivery-history',   label: 'History',     Icon: History },
   { to: '/manager/reports',            label: 'Reports',     Icon: TrendingUp },
+  { to: '/manager/delivery-documentation', label: 'OCR / Delivery Documentation', Icon: FileSearch },
   { to: '/manager/fleet-tracking',     label: 'Fleet Tracking', Icon: MapPin },
   { to: '/manager/notifications',      label: 'Notifications', Icon: Bell },
 ]

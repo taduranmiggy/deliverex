@@ -186,9 +186,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/tracking/{assignment}',             [GpsTrackingController::class, 'show']);
     });
 
-    // ─── Admin + Dispatcher: OCR review workflow ─────────────────────────────
-    Route::middleware('role:admin|dispatcher')->prefix('ocr')->group(function () {
+    // ─── OCR review: read queue (manager view-only) + validate (admin/dispatcher) ─
+    Route::middleware('role:admin|dispatcher|manager')->prefix('ocr')->group(function () {
         Route::get('/review', [OcrReviewController::class, 'index']);
+    });
+
+    Route::middleware('role:admin|dispatcher')->prefix('ocr')->group(function () {
         Route::put('/{ocrResult}/validate', [OcrReviewController::class, 'validateResult']);
     });
 

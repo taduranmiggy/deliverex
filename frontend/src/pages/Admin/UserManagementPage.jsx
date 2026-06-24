@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createUser, deleteUser, fetchRoles, fetchUsers, updateUser } from '../../api/admin'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
+import { DRIVER_DEFAULT_PASSWORD } from '../../constants/driverAccount'
 import { Plus, Users } from 'lucide-react'
 
 const BLANK = { name: '', email: '', password: '', phone: '', role_id: '', status: 'active' }
@@ -37,7 +38,28 @@ function UserModal({ user, roles, onClose, onSaved }) {
     : BLANK)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const passwordTouchedRef = useRef(false)
+  const selectedRoleName = roles.find((r) => String(r.id) === String(form.role_id))?.name?.toLowerCase()
+  const isDriverRole = selectedRoleName === 'driver'
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  const handlePasswordChange = (e) => {
+    passwordTouchedRef.current = true
+    set('password')(e)
+  }
+
+  const handleRoleChange = (e) => {
+    const roleId = e.target.value
+    const roleName = roles.find((r) => String(r.id) === String(roleId))?.name?.toLowerCase()
+    setForm((f) => {
+      const next = { ...f, role_id: roleId }
+      if (!isEdit && roleName === 'driver' && !passwordTouchedRef.current && !f.password) {
+        next.password = DRIVER_DEFAULT_PASSWORD
+      }
+      return next
+    })
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -62,11 +84,18 @@ function UserModal({ user, roles, onClose, onSaved }) {
           <label style={{ gridColumn: '1/-1' }}>Full name <input required value={form.name} onChange={set('name')} placeholder="Maria Santos" /></label>
           <label style={{ gridColumn: '1/-1' }}>Email <input required type="email" value={form.email} onChange={set('email')} /></label>
           <label style={{ gridColumn: '1/-1' }}>{isEdit ? 'New password (blank = keep)' : 'Password'}
-            <input type="password" minLength={isEdit ? 0 : 8} required={!isEdit} value={form.password} onChange={set('password')} placeholder="Min 8 characters" />
+            <input type="password" minLength={isEdit ? 0 : 8} required={!isEdit} value={form.password} onChange={handlePasswordChange} placeholder="Min 8 characters" />
           </label>
+          {isDriverRole && (
+            <p style={{ gridColumn: '1/-1', margin: '-8px 0 0', fontSize: '0.8125rem', color: 'var(--muted)' }}>
+              {isEdit
+                ? <>Default password for auto-generated driver accounts: <strong>{DRIVER_DEFAULT_PASSWORD}</strong> (leave blank to keep current password)</>
+                : <>Driver accounts use default password <strong>{DRIVER_DEFAULT_PASSWORD}</strong> unless you enter a different one.</>}
+            </p>
+          )}
           <label>Phone <input value={form.phone ?? ''} onChange={set('phone')} placeholder="+63 9XX" /></label>
           <label>Role
-            <select required value={form.role_id} onChange={set('role_id')}>
+            <select required value={form.role_id} onChange={handleRoleChange}>
               <option value="">— Select —</option>
               {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>

@@ -153,6 +153,13 @@ $dash = Invoke-RestMethod -Uri "$base/manager/dashboard" -Headers (Hdr $tMgr)
 $an = Invoke-RestMethod -Uri "$base/manager/analytics" -Headers (Hdr $tMgr)
 if ($dash.job_orders -gt 0) { Ok "dashboard total job_orders=$($dash.job_orders)" } else { Bad 'dashboard job_orders=0' }
 if ($dash.jobs_completed -gt 0) { Ok "dashboard jobs_completed=$($dash.jobs_completed)" } else { Bad 'dashboard jobs_completed=0' }
+if ($null -ne $dash.on_time_pct) { Ok "dashboard on_time_pct=$($dash.on_time_pct)%" } else { Bad 'dashboard on_time_pct is null' }
+if ($null -ne $dash.delivery_completion_pct) { Ok "dashboard delivery_completion_pct=$($dash.delivery_completion_pct)%" } else { Bad 'dashboard delivery_completion_pct is null' }
+if ($null -ne $dash.avg_delivery_time_hours) { Ok "dashboard avg_delivery_time_hours=$($dash.avg_delivery_time_hours)" } else { Bad 'dashboard avg_delivery_time_hours is null' }
+try {
+  $ocrMgr = Invoke-RestMethod -Uri "$base/ocr/review" -Headers (Hdr $tMgr)
+  Ok 'manager can read OCR review queue'
+} catch { Bad 'manager blocked from OCR review queue' }
 if ($an.summary.completed -ge 1) { Ok "analytics summary.completed=$($an.summary.completed)" } else { Bad 'analytics completed not counted' }
 if ($an.fleet.total -gt 0) { Ok "analytics fleet.total=$($an.fleet.total) utilization=$($an.fleet.utilization_pct)%" } else { Bad 'analytics fleet empty' }
 

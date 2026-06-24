@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { archiveMasterDataRecord, createMasterDataRecord, fetchMasterData, generateAllDriverAccounts, generateDriverAccount, updateMasterDataRecord } from '../../api/admin'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
+import { DRIVER_DEFAULT_PASSWORD } from '../../constants/driverAccount'
 import { ChevronRight, Database, Link2, Plus, RefreshCw, UserPlus } from 'lucide-react'
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
@@ -448,14 +449,21 @@ function AdminMasterDataPage() {
 
   const paginationTotal = tab === 'material-types' ? filteredMatsTotal : tabRows.length
 
-  const flash = (text) => { setMsg(text); setTimeout(() => setMsg(''), 5000) }
+  const flash = (text, ms = 5000) => { setMsg(text); setTimeout(() => setMsg(''), ms) }
 
   const onGenerateAccount = async (driverId) => {
     setGeneratingId(driverId)
     setError('')
     try {
       const res = await generateDriverAccount(driverId)
-      flash(res.message || 'Account linked.')
+      if (res.created && res.email) {
+        flash(
+          `Account created — Email: ${res.email} · Password: ${res.default_password || DRIVER_DEFAULT_PASSWORD}`,
+          10000,
+        )
+      } else {
+        flash(res.message || 'Account linked.')
+      }
       load()
     } catch (err) {
       setError(err.message)
@@ -465,7 +473,7 @@ function AdminMasterDataPage() {
   }
 
   const onGenerateAll = async () => {
-    if (!window.confirm('Generate login accounts for all unlinked drivers? Default password: Password123!')) return
+    if (!window.confirm(`Generate login accounts for all unlinked drivers? Default password: ${DRIVER_DEFAULT_PASSWORD}`)) return
     setGeneratingAll(true)
     setError('')
     setGenResult(null)
@@ -528,11 +536,24 @@ function AdminMasterDataPage() {
       {error && <p className="notice error">{error}</p>}
       {msg   && <p className="notice">{msg}</p>}
       {genResult && (
-        <div className="notice" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="notice" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <strong>Bulk account generation complete:</strong>
           <span>{genResult.processed} drivers processed</span>
           <span style={{ color: '#16a34a' }}>{genResult.created} accounts created</span>
           <span style={{ color: '#2563eb' }}>{genResult.reused} existing accounts reused</span>
+          <span>
+            Default password: <strong>{genResult.default_password || DRIVER_DEFAULT_PASSWORD}</strong>
+          </span>
+          {(genResult.accounts || []).filter((a) => a.created).length > 0 && (
+            <div style={{ width: '100%', marginTop: 4 }}>
+              <strong style={{ fontSize: '0.8125rem' }}>New accounts:</strong>
+              <ul style={{ margin: '6px 0 0', paddingLeft: 20, fontSize: '0.8125rem' }}>
+                {(genResult.accounts || []).filter((a) => a.created).map((a) => (
+                  <li key={a.driver_id}>{a.driver_name} — {a.email}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <button type="button" style={{ marginLeft: 'auto', fontSize: '0.75rem', opacity: 0.6 }} onClick={() => setGenResult(null)}>Dismiss</button>
         </div>
       )}

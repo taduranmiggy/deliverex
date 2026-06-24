@@ -71,6 +71,7 @@ export const roleRoutes = {
     <Route key="manager-analytics" path="analytics" element={<AnalyticsPage />} />,
     <Route key="manager-history" path="delivery-history" element={<ManagerDeliveryHistoryPage />} />,
     <Route key="manager-reports" path="reports" element={<ReportsPage />} />,
+    <Route key="manager-ocr" path="delivery-documentation" element={<OcrReviewPage />} />,
     <Route key="manager-fleet" path="fleet-tracking" element={<ManagerFleetTrackingPage />} />,
     <Route key="manager-notifs" path="notifications" element={<ManagerNotificationsPage />} />,
   ],

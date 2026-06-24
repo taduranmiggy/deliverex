@@ -74,7 +74,7 @@ function VehicleUtilizationSection({ limit = 5 }) {
       <div className="dx-stat-row" style={{ marginBottom: 20 }}>
         <StatCard label="Fleet Utilization" value={summary.avg_utilization_pct != null ? `${summary.avg_utilization_pct}%` : '—'} icon={Car} iconVariant="orange" />
         <StatCard label="Total Trips" value={summary.total_trips ?? '—'} icon={TrendingUp} iconVariant="default" />
-        <StatCard label="Delivery Hours" value={summary.total_delivery_hours != null ? `${summary.total_delivery_hours}h` : '—'} icon={Car} iconVariant="purple" />
+        <StatCard label="Total Delivery Hours" value={summary.total_delivery_hours != null ? `${summary.total_delivery_hours}h` : '—'} icon={Car} iconVariant="purple" hint="Fleet-wide sum, last 30 days" />
         <StatCard label="Fleet Vehicles" value={summary.total_vehicles ?? '—'} icon={Car} iconVariant="default" />
       </div>
 

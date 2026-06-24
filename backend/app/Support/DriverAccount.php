@@ -7,6 +7,8 @@ use App\Models\User;
 
 class DriverAccount
 {
+    public const DEFAULT_PASSWORD = 'Password123!';
+
     /**
      * Ensure a drivers-table row exists for a user with the driver role,
      * and keep the profile fields in sync with the users table.
