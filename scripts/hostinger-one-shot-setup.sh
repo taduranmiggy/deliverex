@@ -22,6 +22,11 @@ find_repo() {
     echo "$DEFAULT_REPO"
     return 0
   fi
+  local public_html="$HOME_DIR/domains/$DOMAIN/public_html"
+  if [ -d "$public_html/backend" ]; then
+    echo "$public_html"
+    return 0
+  fi
   local found
   found="$(find "$HOME_DIR/domains" -maxdepth 4 -type f -path '*/deliverex/backend/artisan' 2>/dev/null | head -1 || true)"
   if [ -n "$found" ]; then
@@ -44,6 +49,11 @@ else
   echo "       hPanel → Git → Deploy muna, install path:"
   echo "       $DEFAULT_REPO"
   exit 1
+fi
+
+# Hostinger shared hosting: Git root is often public_html (no document-root change).
+if [ -f "$REPO_PATH/backend/public/index.php" ]; then
+  bash "$REPO_PATH/scripts/fix-public-html.sh"
 fi
 
 SCRIPT_DIR="$REPO_PATH/scripts"

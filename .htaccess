@@ -1,0 +1,11 @@
+# Hostinger shared hosting: document root is always public_html.
+# Git deploys the full repo into public_html — route all requests to Laravel public/.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Already under backend/public (e.g. direct asset URL)
+    RewriteRule ^backend/public/ - [L]
+
+    RewriteRule ^(.*)$ backend/public/$1 [L]
+</IfModule>
