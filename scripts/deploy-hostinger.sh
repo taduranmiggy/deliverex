@@ -54,10 +54,15 @@ fi
 echo "==> Running migrations..."
 php artisan migrate --force
 
-echo "==> Caching config, routes, and views..."
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+echo "==> Clearing caches (avoid stale config on shared hosting)..."
+php artisan config:clear
+php artisan route:clear
+php artisan cache:clear
+php artisan view:clear
+rm -f bootstrap/cache/config.php bootstrap/cache/routes-v7.php bootstrap/cache/routes.php 2>/dev/null || true
+
+echo "==> Fixing storage permissions..."
+chmod -R u+rwX storage bootstrap/cache 2>/dev/null || true
 
 echo "==> Ensuring storage link..."
 php artisan storage:link 2>/dev/null || true

@@ -95,6 +95,8 @@ cd "$REPO"
 export SKIP_GIT_PULL=1
 bash "$SCRIPT_DIR/deploy-hostinger.sh"
 
+# Do NOT config:cache after deploy — shared hosting reads .env directly
+
 echo ""
 echo "============================================"
 echo " DONE! Test: https://deliverexapp.com/up"
