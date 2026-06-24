@@ -31,3 +31,10 @@ export async function logout() {
     method: 'POST',
   })
 }
+
+export async function changePassword(payload) {
+  return apiRequest('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}

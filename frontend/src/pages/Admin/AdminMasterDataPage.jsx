@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { archiveMasterDataRecord, createMasterDataRecord, fetchMasterData, generateAllDriverAccounts, generateDriverAccount, updateMasterDataRecord } from '../../api/admin'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
-import { DRIVER_DEFAULT_PASSWORD } from '../../constants/driverAccount'
 import { ChevronRight, Database, Link2, Plus, RefreshCw, UserPlus } from 'lucide-react'
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
@@ -382,6 +381,7 @@ function AdminMasterDataPage() {
   const [generatingId, setGeneratingId]   = useState(null) // per-row spinner
   const [generatingAll, setGeneratingAll] = useState(false)
   const [genResult, setGenResult]         = useState(null)  // bulk result summary
+  const [credentialModal, setCredentialModal] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -456,11 +456,12 @@ function AdminMasterDataPage() {
     setError('')
     try {
       const res = await generateDriverAccount(driverId)
-      if (res.created && res.email) {
-        flash(
-          `Account created — Email: ${res.email} · Password: ${res.default_password || DRIVER_DEFAULT_PASSWORD}`,
-          10000,
-        )
+      if (res.created && res.email && (res.temporary_password || res.default_password)) {
+        setCredentialModal({
+          email: res.email,
+          password: res.temporary_password || res.default_password,
+          driverName: res.driver?.full_name || res.driver?.user?.name || 'Driver',
+        })
       } else {
         flash(res.message || 'Account linked.')
       }
@@ -473,7 +474,7 @@ function AdminMasterDataPage() {
   }
 
   const onGenerateAll = async () => {
-    if (!window.confirm(`Generate login accounts for all unlinked drivers? Default password: ${DRIVER_DEFAULT_PASSWORD}`)) return
+    if (!window.confirm('Generate login accounts for all unlinked drivers? Each new account gets a unique temporary password (DRV-XXXXXX).')) return
     setGeneratingAll(true)
     setError('')
     setGenResult(null)
@@ -541,15 +542,15 @@ function AdminMasterDataPage() {
           <span>{genResult.processed} drivers processed</span>
           <span style={{ color: '#16a34a' }}>{genResult.created} accounts created</span>
           <span style={{ color: '#2563eb' }}>{genResult.reused} existing accounts reused</span>
-          <span>
-            Default password: <strong>{genResult.default_password || DRIVER_DEFAULT_PASSWORD}</strong>
-          </span>
           {(genResult.accounts || []).filter((a) => a.created).length > 0 && (
             <div style={{ width: '100%', marginTop: 4 }}>
-              <strong style={{ fontSize: '0.8125rem' }}>New accounts:</strong>
+              <strong style={{ fontSize: '0.8125rem' }}>New accounts (share temporary passwords securely):</strong>
               <ul style={{ margin: '6px 0 0', paddingLeft: 20, fontSize: '0.8125rem' }}>
                 {(genResult.accounts || []).filter((a) => a.created).map((a) => (
-                  <li key={a.driver_id}>{a.driver_name} — {a.email}</li>
+                  <li key={a.driver_id}>
+                    {a.driver_name} — {a.email}
+                    {(a.temporary_password || a.default_password) ? ` · ${a.temporary_password || a.default_password}` : ''}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -699,6 +700,25 @@ function AdminMasterDataPage() {
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); flash('Saved successfully.'); load() }}
         />
+      )}
+
+      {credentialModal && (
+        <div className="dx-modal-backdrop" onClick={() => setCredentialModal(null)}>
+          <div className="dx-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal style={{ maxWidth: 480 }}>
+            <div className="dx-modal-header">
+              <h2>Driver account created</h2>
+              <button type="button" className="dx-modal-close" onClick={() => setCredentialModal(null)}>×</button>
+            </div>
+            <div style={{ padding: '20px 28px 28px' }}>
+              <p style={{ margin: '0 0 12px', color: 'var(--muted)' }}>
+                Share these credentials with <strong>{credentialModal.driverName}</strong>. They must change password on first login.
+              </p>
+              <p style={{ margin: '0 0 6px' }}><strong>Email:</strong> {credentialModal.email}</p>
+              <p style={{ margin: '0 0 16px' }}><strong>Temporary password:</strong> <code>{credentialModal.password}</code></p>
+              <button type="button" className="btn-dx-primary" onClick={() => setCredentialModal(null)}>Done</button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )

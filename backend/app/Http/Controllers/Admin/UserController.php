@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Role;
 use App\Models\User;
 use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -29,13 +31,11 @@ class UserController extends Controller
 
         $data['password'] = Hash::make($data['password']);
 
+        $role = Role::query()->findOrFail($data['role_id']);
+        $this->assertInternalStaffRole($role->name, $isCreate: true);
+
         $user = User::create($data);
         $user->load('role');
-
-        // Always call resolve (it checks role internally); builds a complete
-        // driver profile including full_name + status so the driver appears
-        // immediately on dispatcher and Best-Fit screens.
-        DriverAccount::resolve($user);
 
         return response()->json($user->fresh()->load('role', 'driver'), 201);
     }
@@ -57,11 +57,13 @@ class UserController extends Controller
             unset($data['password']);
         }
 
+        if (isset($data['role_id'])) {
+            $role = Role::query()->findOrFail($data['role_id']);
+            $this->assertInternalStaffRole($role->name, $isCreate: false);
+        }
+
         $user->update($data);
 
-        // Ensure a driver profile exists (and stays in sync) whenever:
-        //  - the user's role is (or becomes) driver, OR
-        //  - the user's display name changed (keeps full_name consistent)
         DriverAccount::sync($user->fresh());
 
         return response()->json($user->fresh()->load('role', 'driver'));
@@ -72,5 +74,27 @@ class UserController extends Controller
         $user->delete();
 
         return response()->json(['message' => 'User deleted']);
+    }
+
+    private function assertInternalStaffRole(string $roleName, bool $isCreate): void
+    {
+        if ($roleName === 'customer') {
+            throw ValidationException::withMessages([
+                'role_id' => ['Customer accounts must register at /customer/signup.'],
+            ]);
+        }
+
+        if ($roleName === 'driver') {
+            throw ValidationException::withMessages([
+                'role_id' => ['Driver accounts must be created via Master Data → Generate Account.'],
+            ]);
+        }
+
+        $allowed = ['admin', 'dispatcher', 'manager'];
+        if (! in_array($roleName, $allowed, true)) {
+            throw ValidationException::withMessages([
+                'role_id' => ['Invalid role for admin user management.'],
+            ]);
+        }
     }
 }

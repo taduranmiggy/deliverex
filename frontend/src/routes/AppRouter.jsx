@@ -3,6 +3,7 @@ import ProtectedRoutes from './ProtectedRoutes'
 import { roleRoutes } from './roleRoutes'
 import LoginPage from '../pages/Auth/LoginPage'
 import DriverLoginPage from '../pages/Auth/DriverLoginPage'
+import DriverChangePasswordPage from '../pages/Driver/DriverChangePasswordPage'
 import DriverSignupPage from '../pages/Auth/DriverSignupPage'
 import BusinessSignupPage from '../pages/Auth/BusinessSignupPage'
 import AdminLayout from '../layouts/AdminLayout'
@@ -22,6 +23,14 @@ function AppRouter() {
 
         <Route path="/login" element={<LoginPage />} />
         <Route path="/driver/login" element={<DriverLoginPage />} />
+        <Route
+          path="/driver/change-password"
+          element={
+            <ProtectedRoutes roles={['driver']}>
+              <DriverChangePasswordPage />
+            </ProtectedRoutes>
+          }
+        />
         <Route path="/driver/signup" element={<DriverSignupPage />} />
         <Route path="/signup/business" element={<BusinessSignupPage />} />
 

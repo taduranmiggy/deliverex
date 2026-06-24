@@ -14,3 +14,10 @@ export function sendInquiry(payload) {
 export function fetchCustomerOrders() {
   return apiRequest('/customer/portal/orders')
 }
+
+export function linkCustomerDelivery(trackingCode) {
+  return apiRequest('/customer/portal/link-delivery', {
+    method: 'POST',
+    body: JSON.stringify({ tracking_code: trackingCode }),
+  })
+}

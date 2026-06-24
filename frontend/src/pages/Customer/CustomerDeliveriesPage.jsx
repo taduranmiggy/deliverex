@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { fetchCustomerOrders } from '../../api/customer'
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from '../../components/ui'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
-import { CheckCircle2, ExternalLink, FileText, MapPin, Package, Truck, X } from 'lucide-react'
+import { CheckCircle2, ExternalLink, FileText, Link2, MapPin, Package, Truck, X } from 'lucide-react'
 
 function formatDate(v) {
   if (!v) return '—'
@@ -292,7 +292,12 @@ function CustomerDeliveriesPage() {
   return (
     <div className="customer-content" style={{ paddingTop: 32 }}>
       <PageHeader title="My Deliveries" subtitle="Review all shipments and delivery records associated with your account.">
-        <Link to="/customer/track" className="btn-dx-secondary btn-sm">Track by code</Link>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link to="/customer/link-delivery" className="btn-dx-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Link2 size={15} /> Link a delivery
+          </Link>
+          <Link to="/customer/track" className="btn-dx-secondary btn-sm">Track by code</Link>
+        </div>
       </PageHeader>
 
       {error && <p className="notice error">{error}</p>}
@@ -306,8 +311,13 @@ function CustomerDeliveriesPage() {
           <EmptyState
             icon={Package}
             title="No deliveries yet"
-            message="Deliveries linked to your account will appear here. You can also look up any shipment using a tracking code."
-            action={<Link to="/customer/track" className="btn-dx-primary">Track a delivery</Link>}
+            message="Deliveries linked to your account will appear here. Link a shipment with your tracking ID, or look up any delivery by code."
+            action={(
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <Link to="/customer/link-delivery" className="btn-dx-primary">Link a delivery</Link>
+                <Link to="/customer/track" className="btn-dx-secondary">Track by code</Link>
+              </div>
+            )}
           />
         </SectionCard>
       ) : (

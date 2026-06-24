@@ -64,6 +64,8 @@ class BestFitAssignmentService
 
                 $recommendations[] = [
                     'driver_id'        => $driverModel->id,
+                    'driver_user_id'   => $driverModel->user_id,
+                    'driver_has_account' => (bool) $driverModel->user_id,
                     'driver_name'      => $driverModel->full_name ?: $driverModel->user?->name,
                     'vehicle_id'       => $vehicleModel->id,
                     'vehicle_plate'    => $vehicleModel->plate_no,
@@ -117,6 +119,8 @@ class BestFitAssignmentService
 
         $drivers = $this->eligibleDrivers($jobOrder)->map(fn (Driver $driver) => [
             'id' => $driver->id,
+            'user_id' => $driver->user_id,
+            'has_login_account' => (bool) $driver->user_id,
             'name' => $driver->full_name ?: $driver->user?->name ?: ('Driver #'.$driver->id),
             'availability' => $driver->availability ?? 'available',
             'status' => $driver->status ?? 'active',

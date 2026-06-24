@@ -32,6 +32,8 @@ import CustomerHomePage from '../pages/Customer/CustomerHomePage'
 import TrackingPage from '../pages/Customer/TrackingPage'
 import CustomerSignupPage from '../pages/Customer/CustomerSignupPage'
 import CustomerDeliveriesPage from '../pages/Customer/CustomerDeliveriesPage'
+import CustomerLinkDeliveryPage from '../pages/Customer/CustomerLinkDeliveryPage'
+import CustomerAccountPage from '../pages/Customer/CustomerAccountPage'
 import AboutUsPage from '../pages/Customer/AboutUsPage'
 import ServicesPage from '../pages/Customer/ServicesPage'
 import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
@@ -84,6 +86,8 @@ export const roleRoutes = {
     <Route key="customer-track" path="track" element={<TrackingPage />} />,
     <Route key="customer-auth-gate" element={<ProtectedCustomerOutlet />}>
       <Route key="customer-deliveries" path="deliveries" element={<CustomerDeliveriesPage />} />
+      <Route key="customer-link" path="link-delivery" element={<CustomerLinkDeliveryPage />} />
+      <Route key="customer-account" path="account" element={<CustomerAccountPage />} />
     </Route>,
   ],
 }

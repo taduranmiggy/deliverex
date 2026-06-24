@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Models\Driver;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -96,5 +97,36 @@ class DatabaseSeeder extends Seeder
             DriverVehicleAssignmentSeeder::class,
             DispatchDemoSeeder::class,
         ]);
+
+        $this->linkDemoDriverAccount();
+    }
+
+    private function linkDemoDriverAccount(): void
+    {
+        $demoUser = User::query()->where('email', 'driver@deliverex.ph')->first();
+        if (! $demoUser) {
+            return;
+        }
+
+        $fleetDriver = Driver::query()
+            ->where('full_name', 'Rubio, Bernie')
+            ->whereNull('user_id')
+            ->first();
+
+        if ($fleetDriver) {
+            $fleetDriver->update(['user_id' => $demoUser->id]);
+
+            return;
+        }
+
+        Driver::firstOrCreate(
+            ['user_id' => $demoUser->id],
+            [
+                'full_name'    => 'Demo Driver',
+                'license_no'   => 'LIC-DEMO-0001',
+                'availability' => 'available',
+                'status'       => 'available',
+            ]
+        );
     }
 }

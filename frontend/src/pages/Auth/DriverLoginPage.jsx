@@ -36,7 +36,9 @@ function DriverLoginPage() {
         return
       }
       login(result.user, result.token)
-      const target = location.state?.from?.pathname || roleHome(result.user?.role?.name)
+      const target = result.user?.must_change_password
+        ? '/driver/change-password'
+        : location.state?.from?.pathname || roleHome(result.user?.role?.name)
       navigate(target, { replace: true })
     } catch (err) {
       setError(err.message)

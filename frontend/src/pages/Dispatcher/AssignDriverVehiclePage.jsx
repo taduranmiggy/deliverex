@@ -122,6 +122,7 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
   const topFactor = Array.isArray(item.factors) && item.factors.length > 0
     ? [...item.factors].sort((a, b) => b.contribution - a.contribution)[0]
     : null
+  const noAccount = item.driver_has_account === false
 
   return (
     <div style={{
@@ -147,6 +148,11 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
             <User size={10} /> Driver
           </p>
           <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9375rem' }}>{item.driver_name}</p>
+          {noAccount && (
+            <span style={{ display: 'inline-block', marginTop: 4, fontSize: '0.6875rem', fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 99 }}>
+              No login account
+            </span>
+          )}
         </div>
         <div>
           <p style={{ margin: '0 0 2px', fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -187,8 +193,8 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8 }}>
         {isTop ? (
-          <button type="button" className="btn-dx-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={onAssign}>
-            <CheckCircle2 size={15} /> Assign Recommended
+          <button type="button" className="btn-dx-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={onAssign} disabled={noAccount}>
+            <CheckCircle2 size={15} /> {noAccount ? 'Generate account first' : 'Assign Recommended'}
           </button>
         ) : (
           <>
@@ -497,7 +503,9 @@ function AssignDriverVehiclePage() {
                 >
                   <option value="">Select available driver…</option>
                   {overrideOptions.drivers.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
+                    <option key={d.id} value={d.id} disabled={!d.has_login_account}>
+                      {d.name}{!d.has_login_account ? ' (no account)' : ''}
+                    </option>
                   ))}
                 </select>
                 <select

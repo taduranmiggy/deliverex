@@ -84,6 +84,12 @@ class AssignmentController extends Controller
             return response()->json(['message' => 'Driver must be available before assignment.'], 422);
         }
 
+        if (! $driver->user_id) {
+            return response()->json([
+                'message' => 'Driver has no login account. Admin must Generate Account in Master Data.',
+            ], 422);
+        }
+
         if (in_array($vehicle->status, ['maintenance', 'unavailable', 'inactive'], true)) {
             return response()->json(['message' => 'Vehicle is not dispatchable (maintenance or unavailable).'], 422);
         }

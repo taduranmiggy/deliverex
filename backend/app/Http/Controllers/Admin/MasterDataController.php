@@ -318,22 +318,31 @@ class MasterDataController extends Controller
             return response()->json(['message' => 'Driver role not found in roles table.'], 500);
         }
 
-        $email    = $this->makeDriverEmail($driver->full_name);
-        $password = DriverAccount::DEFAULT_PASSWORD;
+        $email = $this->makeDriverEmail($driver->full_name);
+        $password = DriverAccount::generateTemporaryPassword();
 
-        $user = User::updateOrCreate(
+        $user = User::firstOrCreate(
             ['email' => $email],
             [
-                'name'     => $driver->full_name,
-                'password' => Hash::make($password),
-                'role_id'  => $driverRole->id,
-                'status'   => 'active',
+                'name'                 => $driver->full_name,
+                'password'             => Hash::make($password),
+                'role_id'              => $driverRole->id,
+                'status'               => 'active',
+                'must_change_password' => true,
             ]
         );
 
         $wasCreated = $user->wasRecentlyCreated;
+        $temporaryPassword = $wasCreated ? $password : null;
 
-        // Link the driver record to this account
+        if (! $wasCreated && ! $driver->user_id) {
+            $user->forceFill([
+                'name'     => $driver->full_name,
+                'role_id'  => $driverRole->id,
+                'status'   => 'active',
+            ])->save();
+        }
+
         $driver->update(['user_id' => $user->id]);
 
         // Also patch missing status/availability fields on the driver row
@@ -343,14 +352,16 @@ class MasterDataController extends Controller
         if (!empty($patch))               $driver->update($patch);
 
         return response()->json([
-            'message'          => $wasCreated
+            'message'            => $wasCreated
                 ? "Account created and linked: {$email}"
                 : "Existing account found and linked: {$email}",
-            'driver'           => $driver->fresh()->load('user:id,name,email,status'),
-            'email'            => $email,
-            'default_password' => $wasCreated ? $password : null,
-            'created'          => $wasCreated,
-            'reused'           => !$wasCreated,
+            'driver'             => $driver->fresh()->load('user:id,name,email,status,must_change_password'),
+            'email'              => $email,
+            'temporary_password' => $temporaryPassword,
+            'default_password'   => $temporaryPassword,
+            'must_change_password' => (bool) $user->must_change_password,
+            'created'            => $wasCreated,
+            'reused'             => ! $wasCreated,
         ]);
     }
 
@@ -380,20 +391,27 @@ class MasterDataController extends Controller
             'accounts'   => [],
         ];
 
-        $defaultPassword = DriverAccount::DEFAULT_PASSWORD;
+        $defaultPassword = null;
 
         foreach ($unlinked as $driver) {
             $email = $this->makeDriverEmail($driver->full_name);
+            $password = DriverAccount::generateTemporaryPassword();
 
-            $user = User::updateOrCreate(
+            $user = User::firstOrCreate(
                 ['email' => $email],
                 [
-                    'name'     => $driver->full_name,
-                    'password' => Hash::make($defaultPassword),
-                    'role_id'  => $driverRole->id,
-                    'status'   => 'active',
+                    'name'                 => $driver->full_name,
+                    'password'             => Hash::make($password),
+                    'role_id'              => $driverRole->id,
+                    'status'               => 'active',
+                    'must_change_password' => true,
                 ]
             );
+
+            $wasCreated = $user->wasRecentlyCreated;
+            if ($wasCreated) {
+                $defaultPassword = $password;
+            }
 
             $driver->update([
                 'user_id'      => $user->id,
@@ -401,7 +419,6 @@ class MasterDataController extends Controller
                 'availability' => $driver->availability ?? 'available',
             ]);
 
-            $wasCreated = $user->wasRecentlyCreated;
             $results['processed']++;
             if ($wasCreated) {
                 $results['created']++;
@@ -416,7 +433,8 @@ class MasterDataController extends Controller
                 'created'     => $wasCreated,
             ];
             if ($wasCreated) {
-                $accountEntry['default_password'] = $defaultPassword;
+                $accountEntry['temporary_password'] = $password;
+                $accountEntry['default_password'] = $password;
             }
             $results['accounts'][] = $accountEntry;
         }

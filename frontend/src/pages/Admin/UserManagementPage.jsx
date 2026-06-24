@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createUser, deleteUser, fetchRoles, fetchUsers, updateUser } from '../../api/admin'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
-import { DRIVER_DEFAULT_PASSWORD } from '../../constants/driverAccount'
 import { Plus, Users } from 'lucide-react'
 
 const BLANK = { name: '', email: '', password: '', phone: '', role_id: '', status: 'active' }
+
+const INTERNAL_ROLE_NAMES = ['admin', 'dispatcher', 'manager']
 
 // Role tabs config — values match role.name (lowercase) from the backend
 const ROLE_TABS = [
@@ -33,14 +34,13 @@ const ROLE_COLORS = {
 
 function UserModal({ user, roles, onClose, onSaved }) {
   const isEdit = Boolean(user?.id)
+  const assignableRoles = roles.filter((r) => INTERNAL_ROLE_NAMES.includes(r.name?.toLowerCase()))
   const [form, setForm] = useState(isEdit
     ? { ...user, password: '', role_id: user.role_id ?? user.role?.id ?? '' }
     : BLANK)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const passwordTouchedRef = useRef(false)
-  const selectedRoleName = roles.find((r) => String(r.id) === String(form.role_id))?.name?.toLowerCase()
-  const isDriverRole = selectedRoleName === 'driver'
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
@@ -50,15 +50,7 @@ function UserModal({ user, roles, onClose, onSaved }) {
   }
 
   const handleRoleChange = (e) => {
-    const roleId = e.target.value
-    const roleName = roles.find((r) => String(r.id) === String(roleId))?.name?.toLowerCase()
-    setForm((f) => {
-      const next = { ...f, role_id: roleId }
-      if (!isEdit && roleName === 'driver' && !passwordTouchedRef.current && !f.password) {
-        next.password = DRIVER_DEFAULT_PASSWORD
-      }
-      return next
-    })
+    setForm((f) => ({ ...f, role_id: e.target.value }))
   }
 
   const handleSubmit = async (e) => {
@@ -86,18 +78,14 @@ function UserModal({ user, roles, onClose, onSaved }) {
           <label style={{ gridColumn: '1/-1' }}>{isEdit ? 'New password (blank = keep)' : 'Password'}
             <input type="password" minLength={isEdit ? 0 : 8} required={!isEdit} value={form.password} onChange={handlePasswordChange} placeholder="Min 8 characters" />
           </label>
-          {isDriverRole && (
-            <p style={{ gridColumn: '1/-1', margin: '-8px 0 0', fontSize: '0.8125rem', color: 'var(--muted)' }}>
-              {isEdit
-                ? <>Default password for auto-generated driver accounts: <strong>{DRIVER_DEFAULT_PASSWORD}</strong> (leave blank to keep current password)</>
-                : <>Driver accounts use default password <strong>{DRIVER_DEFAULT_PASSWORD}</strong> unless you enter a different one.</>}
-            </p>
-          )}
+          <p style={{ gridColumn: '1/-1', margin: '-8px 0 0', fontSize: '0.8125rem', color: 'var(--muted)' }}>
+            Fleet driver logins are created in <strong>Master Data → Generate Account</strong>. Customers register at <strong>/customer/signup</strong>.
+          </p>
           <label>Phone <input value={form.phone ?? ''} onChange={set('phone')} placeholder="+63 9XX" /></label>
           <label>Role
             <select required value={form.role_id} onChange={handleRoleChange}>
               <option value="">— Select —</option>
-              {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              {assignableRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           </label>
           <label>Status

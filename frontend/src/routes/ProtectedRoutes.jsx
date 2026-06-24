@@ -4,7 +4,7 @@ import useAuth from '../hooks/useAuth'
 import { roleHome } from '../utils/roleUtils'
 
 function ProtectedRoutes({ children, roles }) {
-  const { isAuthenticated, role, bootstrapped } = useAuth()
+  const { isAuthenticated, role, bootstrapped, user } = useAuth()
   const location = useLocation()
 
   if (!bootstrapped) {
@@ -28,7 +28,9 @@ function ProtectedRoutes({ children, roles }) {
         pathname === '/customer' ||
         pathname === '/customer/' ||
         pathname.startsWith('/customer/track') ||
-        pathname.startsWith('/customer/signup')
+        pathname.startsWith('/customer/signup') ||
+        pathname.startsWith('/customer/about') ||
+        pathname.startsWith('/customer/services')
       if (!customerPublic) {
         loginPath = '/login'
       }
@@ -40,6 +42,17 @@ function ProtectedRoutes({ children, roles }) {
   if (roles && !roles.includes(role)) {
     const fallback = role ? roleHome(role) : '/login'
     return <Navigate to={fallback} replace />
+  }
+
+  const { pathname } = location
+  const mustChangePassword = Boolean(user?.must_change_password)
+
+  if (role === 'driver' && mustChangePassword && pathname !== '/driver/change-password') {
+    return <Navigate to="/driver/change-password" replace />
+  }
+
+  if (role === 'driver' && !mustChangePassword && pathname === '/driver/change-password') {
+    return <Navigate to="/driver" replace />
   }
 
   return children

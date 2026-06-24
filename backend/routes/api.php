@@ -63,6 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me',      [AuthController::class, 'me']);
+    Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
 
     // Shared notifications (any authenticated user)
     Route::get('/notifications',                               [NotificationController::class, 'index']);
@@ -71,6 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ─── Customer Portal ──────────────────────────────────────────────────────
     Route::middleware('role:customer')->prefix('customer/portal')->group(function () {
         Route::get('/orders', [CustomerPortalController::class, 'orders']);
+        Route::post('/link-delivery', [CustomerPortalController::class, 'linkDelivery']);
     });
 
     // ─── Admin ────────────────────────────────────────────────────────────────

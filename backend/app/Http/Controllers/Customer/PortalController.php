@@ -71,4 +71,50 @@ class PortalController extends Controller
             'data' => $data,
         ]);
     }
+
+    /**
+     * Link a job order to the signed-in customer using tracking code + email match.
+     */
+    public function linkDelivery(Request $request)
+    {
+        $data = $request->validate([
+            'tracking_code' => 'required|string|max:20',
+        ]);
+
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+        $code = strtoupper(trim($data['tracking_code']));
+
+        $job = JobOrder::query()->where('tracking_code', $code)->first();
+
+        if (! $job) {
+            return response()->json(['message' => 'Tracking ID not found.'], 404);
+        }
+
+        $jobEmail = strtolower(trim((string) $job->customer_email));
+        $userEmail = strtolower(trim((string) $user->email));
+
+        if ($jobEmail === '' || $jobEmail !== $userEmail) {
+            return response()->json([
+                'message' => 'This tracking ID is not linked to your email address.',
+            ], 403);
+        }
+
+        $linkedByCode = 0;
+        if ($job->customer_user_id !== $user->id) {
+            $job->update(['customer_user_id' => $user->id]);
+            $linkedByCode = 1;
+        }
+
+        $linkedByEmail = JobOrder::query()
+            ->whereNull('customer_user_id')
+            ->where('customer_email', $user->email)
+            ->update(['customer_user_id' => $user->id]);
+
+        return response()->json([
+            'message' => 'Delivery linked successfully.',
+            'linked_count' => $linkedByCode + $linkedByEmail,
+            'tracking_code' => $job->tracking_code,
+        ]);
+    }
 }

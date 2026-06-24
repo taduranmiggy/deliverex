@@ -11,6 +11,7 @@ use App\Support\DriverAccount;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -65,6 +66,7 @@ class AuthController extends Controller
         }
 
         $user = $request->user();
+        $user->load('role');
         $user->forceFill([
             'failed_login_attempts' => 0,
             'locked_until' => null,
@@ -72,6 +74,10 @@ class AuthController extends Controller
 
         if (($user->status ?? 'active') !== 'active') {
             return response()->json(['message' => 'Account is not active'], 403);
+        }
+
+        if ($user->role?->name === 'customer') {
+            $this->linkCustomerJobOrdersByEmail($user);
         }
 
         $token = $user->createToken('api')->plainTextToken;
@@ -177,6 +183,45 @@ class AuthController extends Controller
         }
 
         return response()->json($user);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $data = $request->validate([
+            'current_password' => 'required|string',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($data['current_password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['Current password is incorrect.'],
+            ]);
+        }
+
+        $user->forceFill([
+            'password' => $data['password'],
+            'must_change_password' => false,
+            'password_changed_at' => now(),
+        ])->save();
+
+        AuditLogger::record($user, 'auth.password_changed', User::class, $user->id, [], $request);
+
+        $this->prepareUserPayload($user);
+
+        return response()->json([
+            'message' => 'Password updated successfully.',
+            'user' => $user,
+        ]);
+    }
+
+    private function linkCustomerJobOrdersByEmail(User $user): void
+    {
+        JobOrder::query()
+            ->whereNull('customer_user_id')
+            ->where('customer_email', $user->email)
+            ->update(['customer_user_id' => $user->id]);
     }
 
     private function prepareUserPayload(User $user): void
