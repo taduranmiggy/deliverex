@@ -24,7 +24,7 @@ php artisan cache:clear
 rm -f bootstrap/cache/*.php 2>/dev/null || true
 chmod -R 775 storage bootstrap/cache 2>/dev/null || true
 
-if ! grep -q '^APP_KEY=base64:' ../backend/.env 2>/dev/null; then
+if ! grep -q '^APP_KEY=base64:' .env 2>/dev/null; then
   php artisan key:generate --force
 fi
 
