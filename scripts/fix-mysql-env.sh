@@ -35,8 +35,9 @@ if [ -z "$DB_PASS" ]; then
   exit 1
 fi
 
-# Replace entire DB block (sed fails when lines are still commented in .env.example)
-grep -v -E '^(#\s*)?DB_(CONNECTION|HOST|PORT|DATABASE|USERNAME|PASSWORD)=' "$ENV_FILE" > "$ENV_FILE.tmp"
+# Remove duplicate/stale DB and sqlite-related lines before appending
+grep -v -E '^(#\s*)?DB_(CONNECTION|HOST|PORT|DATABASE|USERNAME|PASSWORD)=' "$ENV_FILE" | \
+  grep -v -E '^DB_CONNECTION=sqlite' > "$ENV_FILE.tmp"
 mv "$ENV_FILE.tmp" "$ENV_FILE"
 {
   echo "DB_CONNECTION=mysql"
@@ -46,6 +47,14 @@ mv "$ENV_FILE.tmp" "$ENV_FILE"
   echo "DB_USERNAME=$DB_USER"
   echo "DB_PASSWORD=$DB_PASS"
 } >> "$ENV_FILE"
+
+# Use file cache/sessions on shared hosting (avoids sqlite default from .env.example)
+sed -i.bak 's|^CACHE_STORE=.*|CACHE_STORE=file|' "$ENV_FILE"
+sed -i.bak 's|^SESSION_DRIVER=.*|SESSION_DRIVER=file|' "$ENV_FILE"
+sed -i.bak 's|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=database|' "$ENV_FILE"
+rm -f "$ENV_FILE.bak"
+grep -q '^CACHE_STORE=' "$ENV_FILE" || echo 'CACHE_STORE=file' >> "$ENV_FILE"
+grep -q '^SESSION_DRIVER=' "$ENV_FILE" || echo 'SESSION_DRIVER=file' >> "$ENV_FILE"
 
 # Production app settings (no manual nano needed)
 sed -i.bak "s|^APP_NAME=.*|APP_NAME=Deliverex|" "$ENV_FILE"
