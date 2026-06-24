@@ -37,7 +37,14 @@ else
 fi
 
 cd "$REPO/backend"
-php artisan config:clear
+
+if [ ! -f vendor/autoload.php ]; then
+  echo "==> Installing composer dependencies (vendor/ missing)..."
+  composer install --no-dev --optimize-autoloader --no-interaction
+fi
+
+echo "==> Clearing config cache..."
+php artisan config:clear || { echo "ERROR: php artisan failed — run: composer install"; exit 1; }
 
 if ! grep -q '^APP_KEY=base64:' "$ENV_FILE" 2>/dev/null; then
   echo "==> Generating APP_KEY..."
@@ -45,14 +52,11 @@ if ! grep -q '^APP_KEY=base64:' "$ENV_FILE" 2>/dev/null; then
 fi
 
 echo "==> Running migrations..."
-if ! php artisan migrate --force; then
-  echo ""
-  echo "ERROR: migrate failed. Check hPanel database user permissions."
-  exit 1
-fi
+php artisan migrate --force -v
 
 echo "==> Seeding demo users (admin@deliverex.com / admin123)..."
-php artisan db:seed --force
+php artisan db:seed --force -v
+php artisan tinker --execute="echo 'users=' . App\Models\User::count();"
 
 echo "==> Deploy..."
 cd "$REPO"
