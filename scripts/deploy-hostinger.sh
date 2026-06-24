@@ -82,33 +82,13 @@ if [ ! -e public/storage ]; then
   ln -sfn ../storage/app/public public/storage 2>/dev/null || true
 fi
 
-DIST_DIR="/tmp/deliverex-dist"
-PUBLISHED=0
+export VITE_API_URL
+bash "$SCRIPT_DIR/build-frontend.sh"
 
-if [ -d "$DIST_DIR" ] && [ -n "$(ls -A "$DIST_DIR" 2>/dev/null)" ]; then
-  echo "==> Publishing frontend from $DIST_DIR ..."
-  rsync -a --delete "$DIST_DIR/" public/ \
-    --exclude index.php \
-    --exclude .htaccess
-  PUBLISHED=1
-fi
-
-if [ "$PUBLISHED" -eq 0 ] && command -v npm >/dev/null 2>&1 && [ -n "${VITE_API_URL:-}" ]; then
-  echo "==> Building frontend on server (npm)..."
-  cd "$DEPLOY_PATH/frontend"
-  npm ci
-  VITE_API_URL="$VITE_API_URL" npm run build
-  rsync -a --delete dist/ "$DEPLOY_PATH/backend/public/" \
-    --exclude index.php \
-    --exclude .htaccess
-  PUBLISHED=1
-  cd "$DEPLOY_PATH/backend"
-fi
-
-if [ "$PUBLISHED" -eq 0 ]; then
-  echo "WARN: No frontend build published."
-  echo "      Use GitHub Actions deploy, or set VITE_API_URL in scripts/.deploy.env and install Node on server,"
-  echo "      or upload frontend/dist to /tmp/deliverex-dist before deploy."
+if [ ! -f public/index.html ]; then
+  echo "ERROR: backend/public/index.html missing after frontend publish." >&2
+  echo "       Push latest main (includes built assets) or enable Node on Hostinger." >&2
+  exit 1
 fi
 
 echo "==> Deploy complete."

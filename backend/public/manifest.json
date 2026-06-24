@@ -1,0 +1,26 @@
+{
+  "name": "Deliverex Driver",
+  "short_name": "Deliverex",
+  "description": "Mobile logistics app for delivery drivers — jobs, navigation, documents, and status updates.",
+  "start_url": "/driver",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f1f5f9",
+  "theme_color": "#1d4ed8",
+  "categories": ["business", "productivity", "navigation"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
