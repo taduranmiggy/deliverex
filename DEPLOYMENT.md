@@ -50,6 +50,8 @@ ssh-keygen -t ed25519 -C "deliverex-deploy" -f "$env:USERPROFILE\.ssh\deliverex_
 1. Copy **public** key (`deliverex_hostinger.pub`) → hPanel → **Advanced** → **SSH Access** → Add SSH key
 2. Copy **private** key contents → GitHub secret `SSH_PRIVATE_KEY`
 
+**Important:** Paste the **private** file (`deliverex_hostinger`, not `.pub`). Include the `BEGIN` and `END` lines. If deploy fails with `error in libcrypto`, delete the secret and re-paste the full key (GitHub preserves newlines when pasted directly into the secret field).
+
 ### Manual workflow run
 
 GitHub → **Actions** → **Deploy to Hostinger** → **Run workflow**

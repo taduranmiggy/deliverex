@@ -29,11 +29,13 @@ jobs:
           npm ci
           VITE_API_URL="$VITE_API_URL" npm run build
 
-      - name: Configure SSH
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
         run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Sync code to server
@@ -44,23 +46,23 @@ jobs:
             --exclude 'backend/.env' \
             --exclude 'frontend/node_modules' \
             --exclude 'frontend/dist' \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
+            -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
             ./ \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
 
       - name: Upload frontend build
         run: |
-          ssh -i ~/.ssh/deploy_key -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
+          ssh -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "mkdir -p /tmp/deliverex-dist"
           rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
+            -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
             frontend/dist/ \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/deliverex-dist/"
 
       - name: Run deployment script on server
         run: |
-          ssh -i ~/.ssh/deploy_key -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
+          ssh -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "export DEPLOY_PATH='${{ secrets.DEPLOY_PATH }}' SKIP_GIT_PULL=1 SKIP_SERVER_FRONTEND_BUILD=1 && bash '${{ secrets.DEPLOY_PATH }}/scripts/deployment.sh'"
 
@@ -68,6 +70,6 @@ jobs:
         if: failure()
         continue-on-error: true
         run: |
-          ssh -i ~/.ssh/deploy_key -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
+          ssh -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "tail -80 '${{ secrets.DEPLOY_PATH }}/backend/storage/logs/deploy.log' 2>/dev/null || echo '(no deploy log)'"
