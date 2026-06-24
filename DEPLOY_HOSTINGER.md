@@ -144,6 +144,8 @@ VITE_API_URL=https://yourdomain.com/api
 Pag may `VITE_API_URL` at `npm` sa server, auto-build ang React sa deploy.  
 Kung **walang npm** sa Hostinger (common sa shared hosting), gamitin ang **Path B (GitHub Actions)** para sa frontend build — mas reliable.
 
+**Huwag mag-`npm run build` sa Hostinger SSH** — madalas mag-fail ang Vite/Rolldown dahil sa thread limits (`Resource temporarily unavailable`). Ang frontend ay naka-commit na sa `backend/public/` sa Git; sapat na iyon para sa redeploy.
+
 ### Step 7 — Manual deploy pagkatapos mag-push sa GitHub
 
 1. Push code sa `main`
