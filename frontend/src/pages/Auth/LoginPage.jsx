@@ -249,35 +249,6 @@ function LoginPage() {
               </button>
             </form>
 
-            <div className="auth-create-account-wrap">
-              <div className="auth-create-intro-row">
-                <span className="auth-create-intro">Don&apos;t have an account?</span>
-                <details className="auth-signup-details auth-signup-details--narrow">
-                  <summary className="auth-signup-summary-link">Create an account</summary>
-                  <div className="auth-signup-panel auth-signup-panel--split">
-                    <p className="auth-signup-panel-callout">Choose your sign up path</p>
-                    <div className="auth-signup-grid auth-signup-grid--split auth-signup-grid--triple">
-                      <Link className="auth-signup-card" to="/customer/signup">
-                        <strong>Customer</strong>
-                        <span>Book and track shipments with your personal account.</span>
-                      </Link>
-                      <Link className="auth-signup-card" to="/driver/signup">
-                        <strong>Driver</strong>
-                        <span>Field delivery access and driver workflow.</span>
-                      </Link>
-                      <Link className="auth-signup-card" to="/signup/business">
-                        <strong>Business</strong>
-                        <span>Booking and shipment tracking for your ops team.</span>
-                      </Link>
-                    </div>
-                    <p className="auth-signup-note">
-                      <strong>Dispatcher, admin, or manager?</strong> Staff accounts are created by your organization.
-                    </p>
-                  </div>
-              </details>
-              </div>
-            </div>
-
             <div className="auth-demo-dx auth-demo-split">
               <strong>Demo credentials:</strong>
               <div>Admin: admin@deliverex.com / admin123</div>
