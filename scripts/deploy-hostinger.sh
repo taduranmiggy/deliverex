@@ -46,8 +46,15 @@ else
   exit 1
 fi
 
+ENV_BACKUP="$(dirname "$DEPLOY_PATH")/.deliverex.env"
+if [ ! -f .env ] && [ -f "$ENV_BACKUP" ]; then
+  echo "==> Restoring .env from backup (wiped by git deploy)..."
+  cp "$ENV_BACKUP" .env
+  chmod 600 .env 2>/dev/null || true
+fi
+
 if [ ! -f .env ]; then
-  echo "ERROR: backend/.env missing. Run: bash scripts/hostinger-first-setup.sh" >&2
+  echo "ERROR: backend/.env missing. Run: bash scripts/write-production-env.sh" >&2
   exit 1
 fi
 

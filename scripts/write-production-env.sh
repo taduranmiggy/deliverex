@@ -58,3 +58,9 @@ EOF
 
 echo "==> Wrote $ENV_FILE (complete production config)"
 grep "^DB_\|^APP_\|^CORS\|^SANCTUM\|^CACHE\|^SESSION_DRIVER" "$ENV_FILE" | grep -v PASSWORD
+
+# Backup outside git root — survives hPanel Git redeploy (which wipes untracked .env)
+BACKUP="$(dirname "$REPO")/.deliverex.env"
+cp "$ENV_FILE" "$BACKUP"
+chmod 600 "$BACKUP" 2>/dev/null || true
+echo "==> Backed up to $BACKUP"
