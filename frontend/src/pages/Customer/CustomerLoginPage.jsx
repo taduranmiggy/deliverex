@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { login as loginRequest } from '../../api/auth'
 import useAuth from '../../hooks/useAuth'
+import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import { roleHome } from '../../utils/roleUtils'
 import '../Auth/LoginPage.css'
 
@@ -81,6 +82,7 @@ function CustomerLoginPage() {
           Drivers and staff: open <strong>deliverexapp.com/driver</strong> or <strong>/login</strong> in your mobile browser — not this app.
         </p>
       </div>
+      <LoadingOverlay open={submitting} message="Signing in" submessage="Please wait." />
     </section>
   )
 }

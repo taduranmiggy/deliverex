@@ -35,6 +35,8 @@ import CustomerSignupPage from '../pages/Customer/CustomerSignupPage'
 import CustomerDeliveriesPage from '../pages/Customer/CustomerDeliveriesPage'
 import CustomerLinkDeliveryPage from '../pages/Customer/CustomerLinkDeliveryPage'
 import CustomerAccountPage from '../pages/Customer/CustomerAccountPage'
+import CustomerSupportPage from '../pages/Customer/CustomerSupportPage'
+import CustomerHistoryPage from '../pages/Customer/CustomerHistoryPage'
 import AboutUsPage from '../pages/Customer/AboutUsPage'
 import ServicesPage from '../pages/Customer/ServicesPage'
 import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
@@ -85,10 +87,12 @@ export const roleRoutes = {
     <Route key="customer-login" path="login" element={<CustomerLoginPage />} />,
     <Route key="customer-signup" path="signup" element={<CustomerSignupPage />} />,
     <Route key="customer-track" path="track" element={<TrackingPage />} />,
+    <Route key="customer-support" path="support" element={<CustomerSupportPage />} />,
+    <Route key="customer-history" path="history" element={<CustomerHistoryPage />} />,
+    <Route key="customer-account" path="account" element={<CustomerAccountPage />} />,
     <Route key="customer-auth-gate" element={<ProtectedCustomerOutlet />}>
       <Route key="customer-deliveries" path="deliveries" element={<CustomerDeliveriesPage />} />
       <Route key="customer-link" path="link-delivery" element={<CustomerLinkDeliveryPage />} />
-      <Route key="customer-account" path="account" element={<CustomerAccountPage />} />
     </Route>,
   ],
 }

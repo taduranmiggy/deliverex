@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { linkCustomerDelivery } from '../../api/customer'
+import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import { PageHeader, SectionCard } from '../../components/ui'
 import { Link2, Package } from 'lucide-react'
 
@@ -61,6 +62,7 @@ function CustomerLinkDeliveryPage() {
           </div>
         </form>
       </SectionCard>
+      <LoadingOverlay open={submitting} message="Linking delivery" submessage="Please wait." />
     </div>
   )
 }

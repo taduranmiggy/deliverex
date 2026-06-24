@@ -1,35 +1,28 @@
-import { useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { useLocation } from 'react-router-dom'
 
-/**
- * Wraps page content to replay a CSS entrance animation on every route change.
- *
- * Technique: on location.key change, remove the animation class, force a
- * reflow (one frame), then re-add it. The CSS animation replays without
- * unmounting / remounting child components (no data-fetch side effects).
- *
- * The animation itself is defined in deliverex-ui.css → .dx-page-enter
- * and is ~200 ms — imperceptible as a "restart".
- *
- * prefers-reduced-motion is handled entirely by CSS:
- * @media (prefers-reduced-motion: reduce) { .dx-page-enter { animation: none } }
- */
-function PageTransition({ children, style }) {
-  const ref = useRef(null)
-  const { key } = useLocation()
+const variants = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+}
 
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    el.classList.remove('dx-page-enter')
-    void el.offsetHeight          // force reflow — triggers animation restart
-    el.classList.add('dx-page-enter')
-  }, [key])
+function PageTransition({ children, style }) {
+  const { pathname } = useLocation()
 
   return (
-    <div ref={ref} className="dx-page-enter" style={style}>
+    <motion.div
+      key={pathname}
+      className="dx-page-enter"
+      style={style}
+      variants={variants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+    >
       {children}
-    </div>
+    </motion.div>
   )
 }
 

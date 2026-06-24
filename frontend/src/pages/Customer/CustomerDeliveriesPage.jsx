@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchCustomerOrders } from '../../api/customer'
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton'
+import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from '../../components/ui'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 import { CheckCircle2, ExternalLink, FileText, Link2, MapPin, Package, Truck, X } from 'lucide-react'
@@ -303,9 +305,7 @@ function CustomerDeliveriesPage() {
       {error && <p className="notice error">{error}</p>}
 
       {loading ? (
-        <div className="dx-panel" style={{ textAlign: 'center', color: 'var(--muted)', padding: '48px' }}>
-          Loading your deliveries…
-        </div>
+        <CustomerSkeleton variant="delivery" count={4} />
       ) : rows.length === 0 ? (
         <SectionCard>
           <EmptyState
@@ -340,7 +340,26 @@ function CustomerDeliveriesPage() {
             ))}
           </div>
 
-          <div className="dx-data-table-wrap">
+          <div className="pwa-deliveries-mobile">
+            {filteredRows.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className="pwa-delivery-card"
+                onClick={() => setSelected(r)}
+              >
+                <div className="pwa-delivery-card__top">
+                  <span className="pwa-delivery-card__code">{r.tracking_code}</span>
+                  <StatusBadge status={r.status} />
+                </div>
+                <p className="pwa-delivery-card__route">
+                  {buildDisplayAddress('pickup', r)} → {buildDisplayAddress('dropoff', r)}
+                </p>
+              </button>
+            ))}
+          </div>
+
+          <div className="pwa-deliveries-table-wrap dx-data-table-wrap">
             <table className="dx-data-table">
               <thead>
                 <tr>

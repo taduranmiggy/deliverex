@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { trackDelivery } from '../../api/customer'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton'
+import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import { StatusBadge } from '../../components/ui'
 import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, MessageSquare, Package, RefreshCw, Search, Truck } from 'lucide-react'
 
@@ -39,7 +42,9 @@ function DeliveryProgressBar({ status }) {
               {idx < DELIVERY_STEPS.length - 1 && (
                 <div style={{ position: 'absolute', top: 18, left: '50%', right: '-50%', height: 3, background: done ? 'var(--color-primary)' : 'var(--slate-200)', borderRadius: 2, zIndex: 0, transition: 'background 0.4s' }} />
               )}
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: done || active ? 'var(--color-primary)' : 'var(--slate-200)', display: 'grid', placeItems: 'center', zIndex: 1, position: 'relative', flexShrink: 0, boxShadow: active ? '0 0 0 4px rgba(37,99,235,0.18)' : 'none', transition: 'all 0.3s' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: done || active ? 'var(--color-primary)' : 'var(--slate-200)', display: 'grid', placeItems: 'center', zIndex: 1, position: 'relative', flexShrink: 0, boxShadow: active ? '0 0 0 4px rgba(37,99,235,0.18)' : 'none', transition: 'all 0.3s' }}
+                className={active ? 'pwa-timeline-step--active' : undefined}
+              >
                 <Icon size={16} color={done || active ? '#fff' : 'var(--muted)'} />
               </div>
               <span style={{ fontSize: '0.7rem', fontWeight: active ? 700 : 500, color: active ? 'var(--color-primary)' : future ? 'var(--muted)' : 'var(--text)', marginTop: 8, textAlign: 'center', lineHeight: 1.3 }}>
@@ -170,13 +175,22 @@ function TrackingPage() {
             </span>
           </div>
 
-          {!result ? (
+          {!result && loading ? (
+            <CustomerSkeleton variant="tracking" />
+          ) : !result ? (
             <div className="tracking-empty">
               <Search size={40} style={{ opacity: 0.15, margin: '0 auto 12px' }} />
               <p>Enter a tracking ID to view status.</p>
             </div>
           ) : (
-            <div className="tracking-stack">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={result.tracking_code}
+                className="tracking-stack pwa-tracking-reveal"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              >
               {/* Progress bar */}
               <DeliveryProgressBar status={result.status} />
 
@@ -319,12 +333,14 @@ function TrackingPage() {
                   </ul>
                 </div>
               )}
-            </div>
+              </motion.div>
+            </AnimatePresence>
           )}
         </div>
       </div>
 
       <DeliverexAssistantChat open={chatOpen} onOpenChange={setChatOpen} />
+      <LoadingOverlay open={loading} message="Loading delivery details" submessage="Please wait." />
     </div>
   )
 }

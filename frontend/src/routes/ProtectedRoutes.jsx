@@ -31,7 +31,10 @@ function ProtectedRoutes({ children, roles }) {
         pathname.startsWith('/customer/signup') ||
         pathname.startsWith('/customer/login') ||
         pathname.startsWith('/customer/about') ||
-        pathname.startsWith('/customer/services')
+        pathname.startsWith('/customer/services') ||
+        pathname.startsWith('/customer/support') ||
+        pathname.startsWith('/customer/history') ||
+        pathname.startsWith('/customer/account')
       if (!customerPublic) {
         loginPath = '/customer/login'
       } else {
