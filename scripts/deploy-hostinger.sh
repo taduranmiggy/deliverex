@@ -61,6 +61,9 @@ fi
 echo "==> Running migrations..."
 php artisan migrate --force
 
+echo "==> Seeding (ensures admin exists after redeploy)..."
+php artisan db:seed --force 2>/dev/null || true
+
 echo "==> Clearing caches (avoid stale config on shared hosting)..."
 php artisan config:clear
 php artisan route:clear
