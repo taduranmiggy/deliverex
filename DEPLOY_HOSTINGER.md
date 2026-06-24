@@ -197,6 +197,16 @@ Pwede mong gamitin **Path A + Path B** sabay: hPanel Git para sa pull, GitHub Ac
 
 ## Scripts reference
 
+| Script | Purpose |
+|--------|---------|
+| [`deployment.sh`](deployment.sh) | **Main deploy** — migrate, seed, cache (zero SSH after setup) |
+| [`scripts/deployment.sh`](scripts/deployment.sh) | Implementation |
+| [`scripts/hostinger-hpanel-git-deploy.sh`](scripts/hostinger-hpanel-git-deploy.sh) | hPanel post-deploy hook |
+| [`scripts/write-production-env.sh`](scripts/write-production-env.sh) | One-time `.env` + backup |
+| [`scripts/diagnose-production.sh`](scripts/diagnose-production.sh) | Health check |
+
+Full guide: [`DEPLOYMENT.md`](DEPLOYMENT.md)
+
 | Script | Kailan |
 |--------|--------|
 | [`scripts/hostinger-first-setup.sh`](scripts/hostinger-first-setup.sh) | Isang beses: `.env`, composer, migrate, seed |

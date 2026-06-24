@@ -69,19 +69,5 @@ class DriverVehicleAssignmentSeeder extends Seeder
                 ]
             );
         }
-
-        $validDriverIds = Driver::query()
-            ->whereIn('full_name', array_map('trim', $driverNames))
-            ->pluck('id')
-            ->all();
-        $validVehicleIds = Vehicle::query()
-            ->whereIn('plate_no', array_map(fn (string $plate) => strtoupper(trim($plate)), $tenWheelerPlates))
-            ->pluck('id')
-            ->all();
-
-        DriverVehicleAssignment::query()
-            ->whereNotIn('driver_id', $validDriverIds)
-            ->orWhereNotIn('vehicle_id', $validVehicleIds)
-            ->delete();
     }
 }

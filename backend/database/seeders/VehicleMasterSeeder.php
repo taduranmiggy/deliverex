@@ -2,8 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\DispatchAssignment;
-use App\Models\DriverVehicleAssignment;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
 use Illuminate\Database\Seeder;
@@ -79,8 +77,6 @@ class VehicleMasterSeeder extends Seeder
                 cbmCapacity: $cbmCapacity
             );
         }
-
-        $this->cleanupNonClientVehicles(array_merge(array_keys($tenWheelers), array_keys($adts)));
     }
 
     private function upsertVehicle(
@@ -92,7 +88,7 @@ class VehicleMasterSeeder extends Seeder
         $plateNo = strtoupper(trim($plateNo));
         $cbm = round($cbmCapacity, 3);
 
-        Vehicle::updateOrCreate(
+        Vehicle::firstOrCreate(
             ['plate_no' => $plateNo],
             [
                 'vehicle_type_id' => $vehicleTypeId,
@@ -110,38 +106,5 @@ class VehicleMasterSeeder extends Seeder
     private function formatCbmLabel(float $cbm): string
     {
         return rtrim(rtrim(number_format($cbm, 2, '.', ''), '0'), '.').' m3';
-    }
-
-    /**
-     * Remove stale demo/faker vehicles. If already linked to assignments, archive instead.
-     */
-    private function cleanupNonClientVehicles(array $validPlates): void
-    {
-        $validPlates = array_map(fn (string $plate) => strtoupper(trim($plate)), $validPlates);
-
-        $nonClientVehicles = Vehicle::query()
-            ->whereNotIn('plate_no', $validPlates)
-            ->get();
-
-        foreach ($nonClientVehicles as $vehicle) {
-            if (! $vehicle instanceof Vehicle) {
-                continue;
-            }
-
-            $hasAssignments = DispatchAssignment::query()
-                ->where('vehicle_id', $vehicle->id)
-                ->exists();
-
-            if ($hasAssignments) {
-                $vehicle->update(['status' => 'inactive']);
-                continue;
-            }
-
-            DriverVehicleAssignment::query()
-                ->where('vehicle_id', $vehicle->id)
-                ->delete();
-
-            $vehicle->delete();
-        }
     }
 }

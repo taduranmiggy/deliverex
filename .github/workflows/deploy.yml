@@ -23,11 +23,11 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: |
+          VITE_API_URL="${{ secrets.VITE_API_URL }}"
+          if [ -z "$VITE_API_URL" ]; then VITE_API_URL="https://deliverexapp.com/api"; fi
           npm ci
-          npm run build
+          VITE_API_URL="$VITE_API_URL" npm run build
 
       - name: Configure SSH
         run: |
@@ -36,17 +36,38 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Upload frontend build to server
+      - name: Sync code to server
+        run: |
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude 'backend/vendor' \
+            --exclude 'backend/.env' \
+            --exclude 'frontend/node_modules' \
+            --exclude 'frontend/dist' \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
+            ./ \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
+
+      - name: Upload frontend build
         run: |
           ssh -i ~/.ssh/deploy_key -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "mkdir -p /tmp/deliverex-dist"
-          rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
             frontend/dist/ \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/deliverex-dist/"
 
-      - name: Run deploy script on server
+      - name: Run deployment script on server
         run: |
           ssh -i ~/.ssh/deploy_key -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "export DEPLOY_PATH='${{ secrets.DEPLOY_PATH }}' && bash '${{ secrets.DEPLOY_PATH }}/scripts/deploy-hostinger.sh'"
+            "export DEPLOY_PATH='${{ secrets.DEPLOY_PATH }}' SKIP_GIT_PULL=1 SKIP_SERVER_FRONTEND_BUILD=1 && bash '${{ secrets.DEPLOY_PATH }}/scripts/deployment.sh'"
+
+      - name: Fetch deployment log on failure
+        if: failure()
+        continue-on-error: true
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "tail -80 '${{ secrets.DEPLOY_PATH }}/backend/storage/logs/deploy.log' 2>/dev/null || echo '(no deploy log)'"

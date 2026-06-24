@@ -43,7 +43,7 @@ class DispatchDemoSeeder extends Seeder
         ];
 
         foreach ($driverDefs as $def) {
-            $user = User::updateOrCreate(
+            $user = User::firstOrCreate(
                 ['email' => $def['email']],
                 [
                     'role_id'  => $driverRole?->id,
@@ -60,12 +60,6 @@ class DispatchDemoSeeder extends Seeder
                     'availability' => 'available',
                 ]
             );
-
-            // If the driver profile already exists, ensure it is available for demo.
-            Driver::where('user_id', $user->id)
-                ->where('availability', '!=', 'available')
-                ->whereNull('current_assignment_id')
-                ->update(['availability' => 'available']);
         }
 
         // ── Demo vehicles (never consumed by DemoDataSeeder) ─────────────────
@@ -98,7 +92,7 @@ class DispatchDemoSeeder extends Seeder
         ];
 
         foreach ($vehicleDefs as $v) {
-            Vehicle::updateOrCreate(
+            Vehicle::firstOrCreate(
                 ['plate_no' => $v['plate_no']],
                 $v
             );
