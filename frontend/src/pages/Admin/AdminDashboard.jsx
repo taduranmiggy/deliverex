@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchAuditLogs, fetchDrivers, fetchOcrQueue, fetchUsers, fetchVehicles } from '../../api/admin'
 import AssignmentAuditSection from '../../components/AssignmentAuditSection'
-import DriverPerformanceSection from '../../components/DriverPerformanceSection'
 import { EmptyState, PageHeader, SectionCard, StatCard } from '../../components/ui'
 import { Car, ChevronRight, Code, FileSearch, Users } from 'lucide-react'
 
@@ -51,7 +50,7 @@ function AdminDashboard() {
         <StatCard label="Fleet Vehicles"       value={summary.vehicles} icon={Car}        iconVariant="purple" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20, alignItems: 'flex-start' }}>
+      <div className="admin-dashboard-grid">
         <SectionCard title="Recent System Activity">
           {activity.length === 0 ? (
             <EmptyState icon={Code} title="No activity recorded" message="Audit entries will appear here as actions are taken." />
@@ -115,9 +114,7 @@ function AdminDashboard() {
         </div>
       </div>
 
-      <AssignmentAuditSection title="Assignment Audit Trail" />
-
-      <DriverPerformanceSection />
+      <AssignmentAuditSection title="Assignment Audit Trail" hideWhenEmpty />
     </>
   )
 }

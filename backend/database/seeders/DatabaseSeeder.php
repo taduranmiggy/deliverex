@@ -94,6 +94,7 @@ class DatabaseSeeder extends Seeder
             VehicleMasterSeeder::class,
             DriverMasterSeeder::class,
             DriverVehicleAssignmentSeeder::class,
+            DispatchDemoSeeder::class,
         ]);
     }
 }

@@ -4510,6 +4510,24 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
+   ADMIN DASHBOARD LAYOUT
+═══════════════════════════════════════════════════════════ */
+
+.admin-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1024px) {
+  .admin-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
    QUICK NAVIGATION CARD — Admin Dashboard
    Polished, clickable items with hover/focus/active states.
 ═══════════════════════════════════════════════════════════ */
