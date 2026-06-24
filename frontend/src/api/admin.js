@@ -1,6 +1,6 @@
 import { apiRequest } from './client'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+import { API_URL } from '../config/api.js'
 
 /** Fetch document image with auth — use with URL.createObjectURL for <img src>. */
 export async function fetchDocumentPreviewBlob(documentId) {

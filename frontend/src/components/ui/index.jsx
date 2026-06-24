@@ -3,6 +3,7 @@
  * Use these across all roles for visual consistency.
  */
 import { useEffect, useState } from 'react'
+import { API_URL } from '../../config/api.js'
 import {
   Loader2, Package, Search, TrendingUp, TrendingDown,
 } from 'lucide-react'
@@ -318,7 +319,7 @@ export function ProofImageModal({ documentId, title = 'En Route Proof', onClose 
     if (!documentId) return
     let active = true
     let objectUrl = null
-    const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:8000/api'
+    const apiBase = API_URL
     const token = localStorage.getItem('deliverex_token')
 
     setLoading(true)

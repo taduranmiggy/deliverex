@@ -1,4 +1,4 @@
-const CACHE = 'deliverex-driver-v4'
+const CACHE = 'deliverex-driver-v5'
 const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg']
 
 // ─── Install: pre-cache app shell ────────────────────────────────
@@ -30,7 +30,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          caches.open(CACHE).then((cache) => cache.put('/index.html', response.clone()))
+          if (response.ok) {
+            const copy = response.clone()
+            caches.open(CACHE).then((cache) => cache.put('/index.html', copy))
+          }
           return response
         })
         .catch(() => caches.match('/index.html')),

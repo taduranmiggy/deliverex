@@ -137,6 +137,23 @@ export SKIP_GIT_PULL=1
 bash "$SCRIPT_DIR/deploy-hostinger.sh"
 
 echo ""
+echo "==> Verifying Laravel..."
+if [ ! -f "$REPO_PATH/backend/vendor/autoload.php" ]; then
+  echo "ERROR: backend/vendor wala pa. hPanel → Composer → install sa backend/"
+  exit 1
+fi
+if [ ! -f "$PUBLIC_DIR/index.php" ]; then
+  echo "ERROR: Walang $PUBLIC_DIR/index.php — mali ang document root o incomplete ang deploy."
+  exit 1
+fi
+cd "$REPO_PATH/backend"
+php artisan route:list --path=auth/login 2>/dev/null | head -3 || true
+echo ""
+echo "TEST sa browser pagkatapos i-set ang document root:"
+echo "  https://$DOMAIN/up          (dapat: laravel health, hindi Hostinger 404)"
+echo "  https://$DOMAIN/api/auth/login (POST lang; GET ay 405 ok)"
+
+echo ""
 echo "============================================"
 echo " DONE!"
 echo " 1. Siguraduhing document root = $PUBLIC_DIR"
