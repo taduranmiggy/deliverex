@@ -47,8 +47,7 @@ function CustomerLinkDeliveryPage() {
             />
           </label>
           <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--muted)' }}>
-            The tracking ID must match a job order created with your account email ({' '}
-            <strong>customer_email</strong> on the shipment).
+            The Tracking ID must match a delivery created with your account email.
           </p>
           {error && <p className="notice error" style={{ margin: 0 }}>{error}</p>}
           {message && <p className="notice" style={{ margin: 0 }}>{message}</p>}

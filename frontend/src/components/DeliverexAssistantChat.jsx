@@ -6,8 +6,51 @@ import { IconMail, IconPhone } from './DxIcons'
 
 const SUPPORT_EMAIL = 'deliverex.support@gmail.com'
 const SUPPORT_PHONE = '(+63) 995-582-0222'
-const QUICK_ACTIONS = ['Track Another Delivery', 'Contact Support', 'Return to Menu']
-const MAIN_OPTIONS = ['Track My Delivery', 'What is a Job Order ID?', 'Account Help', 'Contact Support', 'General Questions']
+
+const MAIN_OPTIONS = [
+  'Track My Delivery',
+  'What is a Tracking ID?',
+  'Account Help',
+  'Contact Support',
+  'General Questions',
+]
+
+const QUICK_AFTER_TRACK = ['Track Another Delivery', 'Contact Support', 'Return to Menu']
+const QUICK_AFTER_FAQ = ['Track My Delivery', 'Account Help', 'Contact Support', 'Return to Menu']
+const ACCOUNT_OPTIONS = ['Create Account', 'Login', 'Link Delivery', 'Forgot Password']
+
+const WELCOME_MESSAGE = `Hello! I can help you with:
+
+• Tracking your delivery
+• Understanding Tracking IDs
+• Delivery status updates
+• Account assistance
+• Contacting support
+
+Choose an option below to begin.`
+
+const TRACKING_ID_PROMPT = `Please enter your Tracking ID.
+
+Example:
+TRK-ABC123
+or
+DLX-2026-001`
+
+const TRACKING_ID_FAQ = `A Tracking ID is a unique reference number assigned to your delivery.
+
+You can find it in:
+• SMS notifications
+• Email notifications
+• Delivery confirmation messages
+• Information provided by the dispatcher
+
+Example: TRK-ABC123
+
+Use this Tracking ID to view:
+• Delivery status
+• Estimated arrival time
+• Delivery timeline
+• Proof of Delivery (POD)`
 
 let msgIdSeq = 0
 function nid() {
@@ -43,15 +86,15 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How do I track my delivery?',
-    a: 'Enter your Job Order ID on the tracking page or use Track My Delivery here.',
+    a: 'Enter your Tracking ID on the tracking page or use Track My Delivery here.',
+  },
+  {
+    q: 'How do I link a delivery to my account?',
+    a: 'Sign in, open Link Delivery, and enter your Tracking ID. The email on the shipment must match your account email.',
   },
   {
     q: 'How do I create an account?',
     a: 'Select Create Account from Account Help to open customer registration.',
-  },
-  {
-    q: 'Where do I request services?',
-    a: 'You can request assistance through the support contact form and service channels.',
   },
   {
     q: 'What do delivery statuses mean?',
@@ -67,15 +110,17 @@ const STATUS_GUIDE = [
 ]
 
 function optionButtonClass(option) {
-  if (QUICK_ACTIONS.includes(option)) return 'dx-msg-quick dx-msg-quick--secondary'
-  if (['Create Account', 'Login', 'Forgot Password'].includes(option)) return 'dx-msg-quick dx-msg-quick--account'
-  return 'dx-msg-quick'
+  if (QUICK_AFTER_TRACK.includes(option)) return 'dx-msg-quick dx-msg-quick--secondary'
+  if (ACCOUNT_OPTIONS.includes(option)) return 'dx-msg-quick dx-msg-quick--account'
+  if (MAIN_OPTIONS.includes(option)) return 'dx-msg-quick'
+  return 'dx-msg-quick dx-msg-quick--secondary'
 }
 
 function optionsGroupLabel(options) {
-  if (options.every((o) => QUICK_ACTIONS.includes(o))) return 'Quick actions'
-  if (options.some((o) => ['Create Account', 'Login', 'Forgot Password'].includes(o))) return 'Account options'
-  return 'Choose an option'
+  if (options.every((o) => QUICK_AFTER_TRACK.includes(o))) return 'Quick actions'
+  if (options.some((o) => ACCOUNT_OPTIONS.includes(o))) return 'Account options'
+  if (options.every((o) => MAIN_OPTIONS.includes(o))) return 'Choose an option'
+  return 'Quick replies'
 }
 
 export default function DeliverexAssistantChat({ open: openProp, onOpenChange }) {
@@ -112,13 +157,9 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     setActiveOptions(MAIN_OPTIONS)
   }, [])
 
-  const showQuickActions = useCallback(() => {
-    setActiveOptions(QUICK_ACTIONS)
-  }, [])
-
   const seedWelcome = useCallback(() => {
     setMessages([
-      { id: nid(), role: 'assistant', content: ['text', 'Hello! How can I help you?'] },
+      { id: nid(), role: 'assistant', content: ['text', WELCOME_MESSAGE] },
     ])
     setAwaitTrackInput(false)
     setTyping(false)
@@ -158,8 +199,8 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
   const handleTrackingLookup = useCallback(async (raw) => {
     const code = raw.trim()
     if (!code) {
-      pushAssistant(['text', 'Please enter your Job Order ID.'])
-      showQuickActions()
+      pushAssistant(['text', TRACKING_ID_PROMPT])
+      setActiveOptions(QUICK_AFTER_TRACK)
       return
     }
 
@@ -185,72 +226,78 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
         },
       ])
     } catch (err) {
-      pushAssistant(['text', err?.message || 'Unable to check this Job Order ID right now. Please try again.'])
+      pushAssistant(['text', err?.message || 'Unable to check this Tracking ID right now. Please try again.'])
     } finally {
       setTyping(false)
       setLoadingTrack(false)
       setAwaitTrackInput(false)
-      showQuickActions()
+      setActiveOptions(QUICK_AFTER_TRACK)
     }
-  }, [pushAssistant, showQuickActions])
+  }, [pushAssistant])
 
   const handleMainOption = useCallback(async (option) => {
     pushUser(option)
 
     if (option === 'Track My Delivery') {
       setAwaitTrackInput(true)
-      pushAssistant(['text', 'Please enter your Job Order ID.'])
-      showQuickActions()
+      pushAssistant(['text', TRACKING_ID_PROMPT])
+      setActiveOptions(QUICK_AFTER_TRACK)
       return
     }
 
-    if (option === 'What is a Job Order ID?') {
-      pushAssistant(['text', 'A Job Order ID uniquely identifies a delivery request and is used for tracking delivery progress.'])
-      showQuickActions()
+    if (option === 'What is a Tracking ID?') {
+      pushAssistant(['text', TRACKING_ID_FAQ])
+      setActiveOptions(QUICK_AFTER_FAQ)
       return
     }
 
     if (option === 'Account Help') {
-      pushAssistant(['text', 'Choose an account topic: Create Account, Login, or Forgot Password.'])
-      setActiveOptions(['Create Account', 'Login', 'Forgot Password', ...QUICK_ACTIONS])
+      pushAssistant(['text', 'Choose an account topic: Create Account, Login, Link Delivery, or Forgot Password.'])
+      setActiveOptions([...ACCOUNT_OPTIONS, ...QUICK_AFTER_FAQ])
       return
     }
 
     if (option === 'Contact Support') {
       pushAssistant(['text', 'You can contact support through these channels:'])
       pushAssistant(['contact'])
-      showQuickActions()
+      setActiveOptions(QUICK_AFTER_FAQ)
       return
     }
 
     if (option === 'General Questions') {
       pushAssistant(['faq'])
       pushAssistant(['status_guide'])
-      showQuickActions()
+      setActiveOptions(QUICK_AFTER_FAQ)
     }
-  }, [pushAssistant, pushUser, showQuickActions])
+  }, [pushAssistant, pushUser])
 
   const handleQuickAction = useCallback((option) => {
     pushUser(option)
 
-    if (option === 'Track Another Delivery') {
+    if (option === 'Track Another Delivery' || option === 'Track My Delivery' || option === 'Track Delivery') {
       setAwaitTrackInput(true)
-      pushAssistant(['text', 'Please enter your Job Order ID.'])
-      showQuickActions()
+      pushAssistant(['text', TRACKING_ID_PROMPT])
+      setActiveOptions(QUICK_AFTER_TRACK)
+      return
+    }
+
+    if (option === 'Account Help') {
+      pushAssistant(['text', 'Choose an account topic: Create Account, Login, Link Delivery, or Forgot Password.'])
+      setActiveOptions([...ACCOUNT_OPTIONS, ...QUICK_AFTER_FAQ])
       return
     }
 
     if (option === 'Contact Support') {
       pushAssistant(['contact'])
-      showQuickActions()
+      setActiveOptions(QUICK_AFTER_FAQ)
       return
     }
 
     if (option === 'Return to Menu') {
-      pushAssistant(['text', 'Hello! How can I help you?'])
+      pushAssistant(['text', WELCOME_MESSAGE])
       openMainMenu()
     }
-  }, [openMainMenu, pushAssistant, pushUser, showQuickActions])
+  }, [openMainMenu, pushAssistant, pushUser])
 
   const handleAccountOption = useCallback((option) => {
     pushUser(option)
@@ -258,40 +305,50 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     if (option === 'Create Account') {
       pushAssistant(['text', 'To create an account, open the registration page and complete your customer information.'])
       pushAssistant(['link', { text: 'Create Account', href: '/customer/signup' }])
-      showQuickActions()
+      setActiveOptions(QUICK_AFTER_FAQ)
       return
     }
 
     if (option === 'Login') {
       pushAssistant(['text', 'Use your registered email and password to sign in.'])
       pushAssistant(['link', { text: 'Go to Login', href: '/customer/login' }])
-      showQuickActions()
+      setActiveOptions(QUICK_AFTER_FAQ)
+      return
+    }
+
+    if (option === 'Link Delivery') {
+      pushAssistant([
+        'text',
+        'To link a delivery to your account, sign in and enter your Tracking ID. The email on the shipment must match your account email. Linked deliveries then appear in your dashboard.',
+      ])
+      pushAssistant(['link', { text: 'Link Delivery', href: '/customer/link-delivery' }])
+      setActiveOptions(QUICK_AFTER_FAQ)
       return
     }
 
     if (option === 'Forgot Password') {
       pushAssistant(['text', 'If you forgot your password, contact support so the team can help you recover account access.'])
       pushAssistant(['contact'])
-      showQuickActions()
+      setActiveOptions(QUICK_AFTER_FAQ)
     }
-  }, [pushAssistant, pushUser, showQuickActions])
+  }, [pushAssistant, pushUser])
 
   const handleOptionClick = useCallback((option) => {
     if (MAIN_OPTIONS.includes(option)) {
       handleMainOption(option)
       return
     }
-    if (QUICK_ACTIONS.includes(option)) {
+    if (QUICK_AFTER_TRACK.includes(option) || QUICK_AFTER_FAQ.includes(option)) {
       handleQuickAction(option)
       return
     }
-    if (['Create Account', 'Login', 'Forgot Password'].includes(option)) {
+    if (ACCOUNT_OPTIONS.includes(option)) {
       handleAccountOption(option)
       return
     }
     pushAssistant([
       'text',
-      'I can assist with delivery tracking, account guidance, and general delivery questions. Please select one of the available options.',
+      'I can assist with delivery tracking, Tracking IDs, account guidance, and general delivery questions. Please select one of the available options.',
     ])
     openMainMenu()
   }, [handleAccountOption, handleMainOption, handleQuickAction, openMainMenu, pushAssistant])
@@ -311,40 +368,51 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     const lower = text.toLowerCase()
     if (lower.includes('track')) {
       setAwaitTrackInput(true)
-      pushAssistant(['text', 'Please enter your Job Order ID.'])
-      showQuickActions()
+      pushAssistant(['text', TRACKING_ID_PROMPT])
+      setActiveOptions(QUICK_AFTER_TRACK)
       return
     }
-    if (lower.includes('job order')) {
-      pushAssistant(['text', 'A Job Order ID uniquely identifies a delivery request and is used for tracking delivery progress.'])
-      showQuickActions()
+    if (lower.includes('tracking id') || lower.includes('tracking code') || lower.includes('what is a tracking')) {
+      pushAssistant(['text', TRACKING_ID_FAQ])
+      setActiveOptions(QUICK_AFTER_FAQ)
+      return
+    }
+    if (lower.includes('link') && (lower.includes('delivery') || lower.includes('account'))) {
+      pushAssistant([
+        'text',
+        'Sign in, open Link Delivery, and enter your Tracking ID. The shipment email must match your account email.',
+      ])
+      pushAssistant(['link', { text: 'Link Delivery', href: '/customer/link-delivery' }])
+      setActiveOptions(QUICK_AFTER_FAQ)
       return
     }
     if (lower.includes('support') || lower.includes('contact')) {
       pushAssistant(['contact'])
-      showQuickActions()
+      setActiveOptions(QUICK_AFTER_FAQ)
       return
     }
     if (lower.includes('account') || lower.includes('login') || lower.includes('password')) {
-      pushAssistant(['text', 'For account help, choose Create Account, Login, or Forgot Password from the options below.'])
-      setActiveOptions(['Create Account', 'Login', 'Forgot Password', ...QUICK_ACTIONS])
+      pushAssistant(['text', 'For account help, choose Create Account, Login, Link Delivery, or Forgot Password from the options below.'])
+      setActiveOptions([...ACCOUNT_OPTIONS, ...QUICK_AFTER_FAQ])
       return
     }
 
     pushAssistant([
       'text',
-      'I can assist with delivery tracking, account guidance, and general delivery questions. Please select one of the available options.',
+      'I can assist with delivery tracking, Tracking IDs, account guidance, and general delivery questions. Please select one of the available options.',
     ])
     openMainMenu()
-  }, [awaitTrackInput, handleTrackingLookup, loadingTrack, openMainMenu, pushAssistant, pushUser, showQuickActions])
+  }, [awaitTrackInput, handleTrackingLookup, loadingTrack, openMainMenu, pushAssistant, pushUser])
 
   const renderAssistantBody = (kind, body) => {
-    if (kind === 'text') return <div className="dx-msg-bubble">{body}</div>
+    if (kind === 'text') {
+      return <div className="dx-msg-bubble dx-msg-bubble--pre">{body}</div>
+    }
 
     if (kind === 'link') {
       return (
         <div className="dx-msg-bubble">
-          <a href={body.href}>{body.text}</a>
+          <Link to={body.href}>{body.text}</Link>
         </div>
       )
     }
@@ -362,7 +430,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
               <span className="dx-contact-rows__glyph" aria-hidden="true"><IconPhone /></span>
               <a href="tel:+639955820222">{SUPPORT_PHONE}</a>
             </span>
-            <a href="/customer" className="dx-chat-inline-link">Open Contact Form</a>
+            <Link to="/customer/support" className="dx-chat-inline-link">Open Contact Form</Link>
           </div>
         </div>
       )
@@ -378,7 +446,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
             </div>
             <div className="dx-chat-kv-grid">
               <div className="dx-chat-kv">
-                <span>Job Order ID</span>
+                <span>Tracking ID</span>
                 <strong>{body.code}</strong>
               </div>
               <div className="dx-chat-kv">
@@ -435,7 +503,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
 
     return (
       <div className="dx-msg-bubble">
-        I can assist with delivery tracking, account guidance, and general delivery questions. Please select one of the available options.
+        I can assist with delivery tracking, Tracking IDs, account guidance, and general delivery questions. Please select one of the available options.
       </div>
     )
   }
@@ -579,7 +647,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
                 <input
                   id="dx-ass-input"
                   autoComplete="off"
-                  placeholder={awaitTrackInput ? 'Enter Job Order ID...' : 'Type your message...'}
+                  placeholder={awaitTrackInput ? 'Enter Tracking ID...' : 'Type your message...'}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                 />
@@ -596,6 +664,9 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
           height: 1px; width: 1px;
           overflow: hidden; clip: rect(1px,1px,1px,1px);
           white-space: nowrap;
+        }
+        .dx-msg-bubble--pre {
+          white-space: pre-line;
         }
       `}</style>
     </>

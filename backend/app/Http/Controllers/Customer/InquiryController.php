@@ -35,7 +35,7 @@ class InquiryController extends Controller
         $customer = $request->user();
         if (! $customer && ! empty($data['reference_job_order_id'])) {
             return response()->json([
-                'message' => 'Please sign in to attach a reference job order.',
+                'message' => 'Please sign in to attach a reference delivery.',
             ], 422);
         }
 
@@ -52,7 +52,7 @@ class InquiryController extends Controller
 
                 if (! $jobExistsForCustomer) {
                     return response()->json([
-                        'message' => 'Reference job order is invalid for this account.',
+                        'message' => 'Reference delivery is invalid for this account.',
                     ], 422);
                 }
             }

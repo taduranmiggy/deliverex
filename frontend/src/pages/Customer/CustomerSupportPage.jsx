@@ -158,7 +158,7 @@ function CustomerSupportPage() {
         {!isCustomer && (
           <p className="pwa-section__hint">
             <Link to="/customer/login" className="auth-inline-link">Sign in</Link>
-            {' '}to link job orders when submitting inquiries.
+            {' '}to link deliveries when submitting inquiries.
           </p>
         )}
       </div>

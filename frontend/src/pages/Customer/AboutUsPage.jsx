@@ -4,7 +4,7 @@ import {
 } from 'lucide-react'
 
 const SYSTEM_FEATURES = [
-  { label: 'Job Order Management', icon: ClipboardList, color: '#2563eb', bg: '#dbeafe' },
+  { label: 'Delivery Management', icon: ClipboardList, color: '#2563eb', bg: '#dbeafe' },
   { label: 'Fleet Dispatch', icon: Truck, color: '#0891b2', bg: '#cffafe' },
   { label: 'Delivery Tracking', icon: Radar, color: '#7c3aed', bg: '#ede9fe' },
   { label: 'OCR Processing', icon: FileCheck2, color: '#059669', bg: '#d1fae5' },
@@ -25,7 +25,7 @@ function AboutUsPage() {
             system developed for Providential 628 Site Preparation Services.
           </p>
           <p className="customer-info-hero__sub">
-            The system helps manage job orders, dispatch drivers and vehicles, track delivery
+            The system helps manage deliveries, dispatch drivers and vehicles, track delivery
             progress, process proof-of-delivery documents, and maintain delivery records.
           </p>
           <div className="customer-info-hero__actions">
