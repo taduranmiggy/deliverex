@@ -81,7 +81,7 @@ function DriverPerformanceSection({ limit = 5 }) {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+    <div className="admin-driver-performance-grid">
       <SectionCard title="Top Performing Drivers" action={<Award size={16} color="var(--color-success)" />}>
         {!data ? (
           <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>Loading scores…</p>

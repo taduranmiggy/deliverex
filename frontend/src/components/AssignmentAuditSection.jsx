@@ -4,7 +4,7 @@ import { DataTable, EmptyState, SectionCard } from './ui'
 import { ClipboardList } from 'lucide-react'
 import { formatJobPublicId } from '../utils/formatPhp'
 
-function AssignmentAuditSection({ title = 'Assignment Audit Trail', limit = 8, overridesOnly = false, hideWhenEmpty = false }) {
+function AssignmentAuditSection({ title = 'Assignment Audit Trail', limit = 8, overridesOnly = false }) {
   const [trails, setTrails] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -21,10 +21,6 @@ function AssignmentAuditSection({ title = 'Assignment Audit Trail', limit = 8, o
 
   if (error) {
     return <p className="notice error">{error}</p>
-  }
-
-  if (hideWhenEmpty && !loading && trails.length === 0) {
-    return null
   }
 
   return (

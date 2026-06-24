@@ -4513,17 +4513,67 @@
    ADMIN DASHBOARD LAYOUT
 ═══════════════════════════════════════════════════════════ */
 
+.admin-dashboard-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.admin-dashboard-page .dx-panel {
+  margin-bottom: 0;
+}
+
+.admin-dashboard-page .dx-activity-item {
+  padding: 14px 0;
+}
+
+.admin-dashboard-page .dx-activity-item + .dx-activity-item {
+  margin-top: 4px;
+}
+
+.admin-dashboard-page .page-header {
+  margin-bottom: 0;
+}
+
+.admin-dashboard-stats {
+  margin-bottom: 0;
+}
+
 .admin-dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 28px;
+  align-items: start;
+}
+
+.admin-dashboard-quicknav {
+  display: flex;
+  flex-direction: column;
   gap: 20px;
-  align-items: flex-start;
-  margin-bottom: 20px;
+}
+
+.admin-dashboard-section {
+  margin-top: 0;
+}
+
+.admin-dashboard-section + .admin-dashboard-section {
+  margin-top: 0;
+}
+
+.admin-driver-performance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
 }
 
 @media (max-width: 1024px) {
-  .admin-dashboard-grid {
+  .admin-dashboard-grid,
+  .admin-driver-performance-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-dashboard-page {
+    gap: 24px;
   }
 }
 

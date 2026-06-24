@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchAuditLogs, fetchDrivers, fetchOcrQueue, fetchUsers, fetchVehicles } from '../../api/admin'
 import AssignmentAuditSection from '../../components/AssignmentAuditSection'
+import DriverPerformanceSection from '../../components/DriverPerformanceSection'
 import { EmptyState, PageHeader, SectionCard, StatCard } from '../../components/ui'
 import { Car, ChevronRight, Code, FileSearch, Users } from 'lucide-react'
 
@@ -39,11 +40,11 @@ function AdminDashboard() {
   }
 
   return (
-    <>
+    <div className="admin-dashboard-page">
       <PageHeader title="Admin Dashboard" subtitle="System Overview and Activity Monitoring" />
       {error && <p className="notice error">{error}</p>}
 
-      <div className="dx-stat-row">
+      <div className="dx-stat-row admin-dashboard-stats">
         <StatCard label="Docs Awaiting Review" value={summary.ocr}   icon={FileSearch} iconVariant={summary.ocr > 0 ? 'yellow' : 'green'} />
         <StatCard label="Total Users"          value={summary.users}    icon={Users}      iconVariant="default" />
         <StatCard label="Active Drivers"       value={summary.drivers}  icon={Users}      iconVariant="green" />
@@ -77,7 +78,7 @@ function AdminDashboard() {
           )}
         </SectionCard>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="admin-dashboard-quicknav">
           <SectionCard title="Quick Navigation">
             <nav aria-label="Admin quick navigation">
               {[
@@ -114,8 +115,14 @@ function AdminDashboard() {
         </div>
       </div>
 
-      <AssignmentAuditSection title="Assignment Audit Trail" hideWhenEmpty />
-    </>
+      <div className="admin-dashboard-section">
+        <AssignmentAuditSection title="Assignment Audit Trail" />
+      </div>
+
+      <div className="admin-dashboard-section">
+        <DriverPerformanceSection />
+      </div>
+    </div>
   )
 }
 
