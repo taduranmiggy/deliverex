@@ -35,19 +35,17 @@ if [ -z "$DB_PASS" ]; then
   exit 1
 fi
 
-# Update .env (escape & and / for sed)
-escape_sed() { printf '%s' "$1" | sed 's/[&/\]/\\&/g'; }
-DB_PASS_ESC="$(escape_sed "$DB_PASS")"
-DB_NAME_ESC="$(escape_sed "$DB_NAME")"
-DB_USER_ESC="$(escape_sed "$DB_USER")"
-
-sed -i.bak "s|^DB_CONNECTION=.*|DB_CONNECTION=mysql|" "$ENV_FILE"
-sed -i.bak "s|^DB_HOST=.*|DB_HOST=localhost|" "$ENV_FILE"
-sed -i.bak "s|^DB_PORT=.*|DB_PORT=3306|" "$ENV_FILE"
-sed -i.bak "s|^DB_DATABASE=.*|DB_DATABASE=$DB_NAME_ESC|" "$ENV_FILE"
-sed -i.bak "s|^DB_USERNAME=.*|DB_USERNAME=$DB_USER_ESC|" "$ENV_FILE"
-sed -i.bak "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASS_ESC|" "$ENV_FILE"
-rm -f "$ENV_FILE.bak"
+# Replace entire DB block (sed fails when lines are still commented in .env.example)
+grep -v -E '^(#\s*)?DB_(CONNECTION|HOST|PORT|DATABASE|USERNAME|PASSWORD)=' "$ENV_FILE" > "$ENV_FILE.tmp"
+mv "$ENV_FILE.tmp" "$ENV_FILE"
+{
+  echo "DB_CONNECTION=mysql"
+  echo "DB_HOST=localhost"
+  echo "DB_PORT=3306"
+  echo "DB_DATABASE=$DB_NAME"
+  echo "DB_USERNAME=$DB_USER"
+  echo "DB_PASSWORD=$DB_PASS"
+} >> "$ENV_FILE"
 
 # Production app settings (no manual nano needed)
 sed -i.bak "s|^APP_NAME=.*|APP_NAME=Deliverex|" "$ENV_FILE"
@@ -88,6 +86,9 @@ if ! php artisan migrate --force; then
   echo "ERROR: migrate failed. Check hPanel database user permissions."
   exit 1
 fi
+
+echo "==> Seeding demo users (admin@deliverex.com / admin123)..."
+php artisan db:seed --force
 
 echo "==> Deploy..."
 cd "$REPO"
