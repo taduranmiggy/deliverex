@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { login as loginRequest } from '../../api/auth'
 import useAuth from '../../hooks/useAuth'
 import { roleHome } from '../../utils/roleUtils'
+import { isStandalonePwa } from '../../utils/pwaUtils'
 import { Truck } from 'lucide-react'
 import '../../styles/driver-app.css'
 import './DriverLoginPage.css'
@@ -15,6 +16,10 @@ function DriverLoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+
+  if (isStandalonePwa()) {
+    return <Navigate to="/customer/login" replace />
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()

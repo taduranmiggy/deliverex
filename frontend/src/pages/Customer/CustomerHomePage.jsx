@@ -194,8 +194,8 @@ function CustomerHomePage() {
             <p style={{ fontWeight: 700, fontSize: '0.9375rem', marginBottom: 12 }}>Quick Actions</p>
             {[
               { icon: MapPin, label: 'Track a Delivery', to: '/customer/track' },
-              { icon: Package, label: 'View My Deliveries', to: isCustomer ? '/customer/deliveries' : '/login' },
-              { icon: History, label: 'Delivery History', to: isCustomer ? '/customer/deliveries' : '/login' },
+              { icon: Package, label: 'View My Deliveries', to: isCustomer ? '/customer/deliveries' : '/customer/login' },
+              { icon: History, label: 'Delivery History', to: isCustomer ? '/customer/deliveries' : '/customer/login' },
               { icon: Info, label: 'About Deliverex', to: '/customer/about' },
               { icon: BriefcaseBusiness, label: 'Our Services', to: '/customer/services' },
               { icon: MessageSquare, label: 'Contact Support', action: () => setContactOpen(true) },
@@ -358,7 +358,7 @@ function CustomerHomePage() {
             <p style={{ color: 'var(--muted)', marginBottom: 24 }}>Create an account to view all deliveries linked to your email and access your full delivery history and status records.</p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Link to="/customer/signup" className="btn-dx-primary btn-lg">Create free account</Link>
-              <Link to="/login" className="btn-dx-secondary btn-lg">Sign in</Link>
+              <Link to="/customer/login" className="btn-dx-secondary btn-lg">Sign in</Link>
             </div>
           </div>
         )}

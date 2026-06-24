@@ -264,7 +264,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
 
     if (option === 'Login') {
       pushAssistant(['text', 'Use your registered email and password to sign in.'])
-      pushAssistant(['link', { text: 'Go to Login', href: '/login' }])
+      pushAssistant(['link', { text: 'Go to Login', href: '/customer/login' }])
       showQuickActions()
       return
     }

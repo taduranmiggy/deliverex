@@ -35,7 +35,7 @@ export default function CustomerSignupPage() {
         password_confirmation: confirmation,
       })
       setSuccess(result.message || 'Verification email sent. Please check your inbox.')
-      navigate('/login', { replace: true, state: { notice: 'Verify your email to activate your account.' } })
+      navigate('/customer/login', { replace: true, state: { notice: 'Verify your email to activate your account.' } })
     } catch (err) {
       setError(err.message)
     }
@@ -98,7 +98,7 @@ export default function CustomerSignupPage() {
         </form>
         <p className="auth-alt-link">
           Already registered?{' '}
-          <Link className="auth-inline-link" to="/login">
+          <Link className="auth-inline-link" to="/customer/login">
             Sign in
           </Link>
         </p>

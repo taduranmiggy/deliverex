@@ -30,6 +30,7 @@ import ManagerNotificationsPage from '../pages/Manager/ManagerNotificationsPage'
 import ManagerFleetTrackingPage from '../pages/Manager/ManagerFleetTrackingPage'
 import CustomerHomePage from '../pages/Customer/CustomerHomePage'
 import TrackingPage from '../pages/Customer/TrackingPage'
+import CustomerLoginPage from '../pages/Customer/CustomerLoginPage'
 import CustomerSignupPage from '../pages/Customer/CustomerSignupPage'
 import CustomerDeliveriesPage from '../pages/Customer/CustomerDeliveriesPage'
 import CustomerLinkDeliveryPage from '../pages/Customer/CustomerLinkDeliveryPage'
@@ -81,7 +82,7 @@ export const roleRoutes = {
     <Route key="customer-home" index element={<CustomerHomePage />} />,
     <Route key="customer-about" path="about" element={<AboutUsPage />} />,
     <Route key="customer-services" path="services" element={<ServicesPage />} />,
-    <Route key="customer-login" path="login" element={<Navigate to="/login" replace />} />,
+    <Route key="customer-login" path="login" element={<CustomerLoginPage />} />,
     <Route key="customer-signup" path="signup" element={<CustomerSignupPage />} />,
     <Route key="customer-track" path="track" element={<TrackingPage />} />,
     <Route key="customer-auth-gate" element={<ProtectedCustomerOutlet />}>

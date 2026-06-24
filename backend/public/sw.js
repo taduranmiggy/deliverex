@@ -1,5 +1,5 @@
-const CACHE = 'deliverex-customer-v6'
-const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg', '/customer', '/customer/track', '/customer/about', '/customer/services']
+const CACHE = 'deliverex-customer-v7'
+const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg', '/customer', '/customer/login', '/customer/track', '/customer/about', '/customer/services']
 
 // ─── Install: pre-cache app shell ────────────────────────────────
 self.addEventListener('install', (event) => {

@@ -110,7 +110,7 @@ function CustomerLayout() {
               </div>
             ) : (
               <div style={{ display: 'flex', gap: 8 }}>
-                <Link to="/login" className="btn-dx-secondary btn-sm">Sign in</Link>
+                <Link to="/customer/login" className="btn-dx-secondary btn-sm">Sign in</Link>
                 <Link to="/customer/signup" className="btn-dx-primary btn-sm">Create account</Link>
               </div>
             )}

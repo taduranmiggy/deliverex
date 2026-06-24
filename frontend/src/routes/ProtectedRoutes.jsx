@@ -29,10 +29,13 @@ function ProtectedRoutes({ children, roles }) {
         pathname === '/customer/' ||
         pathname.startsWith('/customer/track') ||
         pathname.startsWith('/customer/signup') ||
+        pathname.startsWith('/customer/login') ||
         pathname.startsWith('/customer/about') ||
         pathname.startsWith('/customer/services')
       if (!customerPublic) {
-        loginPath = '/login'
+        loginPath = '/customer/login'
+      } else {
+        return children
       }
     }
 

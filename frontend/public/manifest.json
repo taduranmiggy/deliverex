@@ -3,7 +3,7 @@
   "short_name": "Deliverex",
   "description": "Track deliveries, view services, and manage your shipments.",
   "start_url": "/customer",
-  "scope": "/",
+  "scope": "/customer",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#f1f5f9",
