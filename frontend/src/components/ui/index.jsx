@@ -213,22 +213,24 @@ export function FilterSelect({ value, onChange, options, label, style = {} }) {
 }
 
 /* ─── DataTable ─────────────────────────────────────────────── */
-export function DataTable({ headers, children, loading, empty }) {
+export function DataTable({ headers, children, loading, empty, mobileCards = false }) {
   return (
-    <div className="dx-data-table-wrap">
-      <table className="dx-data-table">
-        <thead>
-          <tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr>
-        </thead>
-        <tbody>
-          {loading ? (
-            <LoadingRows cols={headers.length} />
-          ) : children || (
-            <tr><td colSpan={headers.length} style={{ textAlign: 'center', color: 'var(--muted)', padding: '40px 0' }}>{empty ?? 'No records.'}</td></tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className={`dx-data-table-wrap${mobileCards ? ' dx-data-table-wrap--cards-mobile' : ' dx-data-table-wrap--scroll'}`}>
+        <table className="dx-data-table">
+          <thead>
+            <tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <LoadingRows cols={headers.length} />
+            ) : children || (
+              <tr><td colSpan={headers.length} style={{ textAlign: 'center', color: 'var(--muted)', padding: '40px 0' }}>{empty ?? 'No records.'}</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
   )
 }
 

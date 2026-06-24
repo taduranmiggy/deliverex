@@ -2791,7 +2791,6 @@
 
 @media (max-width: 768px) {
   .app-shell { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
   .dx-ocr-grid { grid-template-columns: 1fr; }
   .dx-split-bestfit { grid-template-columns: 1fr; }
   .dx-stat-row { grid-template-columns: repeat(2, 1fr); }

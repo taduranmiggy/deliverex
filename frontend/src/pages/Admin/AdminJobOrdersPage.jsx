@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchJobOrders } from '../../api/dispatcher'
-import { EmptyState, FilterSelect, PageHeader, PaginationBar, ProofImageModal, SearchInput } from '../../components/ui'
+import { EmptyState, FilterSelect, LoadingSpinner, PageHeader, PaginationBar, ProofImageModal, SearchInput } from '../../components/ui'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
@@ -218,9 +218,46 @@ function AdminJobOrdersPage() {
       </div>
 
       <div className="dx-split-bestfit" style={{ gridTemplateColumns: '1fr 340px', gap: 20 }}>
-        {/* Table */}
         <div className="dx-panel" style={{ marginBottom: 0 }}>
-          <div className="dx-data-table-wrap">
+          <div className="dx-mobile-card-list dx-mobile-card-list--show">
+            {loading ? (
+              <LoadingSpinner label="Loading job orders…" />
+            ) : filtered.length === 0 ? (
+              <EmptyState
+                icon={ClipboardList}
+                title="No job orders found"
+                message={search || status !== 'all' ? 'No orders match your filter.' : 'Job orders will appear here once created.'}
+              />
+            ) : (
+              pagedOrders.map((order) => (
+                <button
+                  key={order.id}
+                  type="button"
+                  className={`dx-mobile-card${selected?.id === order.id ? ' dx-mobile-card--selected' : ''}`}
+                  onClick={() => setSelected(order)}
+                >
+                  <div className="dx-mobile-card__row">
+                    <span className="dx-mobile-card__title">{formatJobPublicId(order.id)}</span>
+                    <span className={jobStatusBadgeClass(order.status)}>{formatJobStatus(order.status)}</span>
+                  </div>
+                  <p className="dx-mobile-card__meta">
+                    {order.client?.client_name || order.custom_client_name || buildDisplayName(order)}
+                  </p>
+                  <p className="dx-mobile-card__meta">
+                    {buildDisplayAddress('pickup', order)} → {buildDisplayAddress('dropoff', order)}
+                  </p>
+                  <p className="dx-mobile-card__meta">
+                    Priority: {order.priority} · {order.scheduled_start ? new Date(order.scheduled_start).toLocaleDateString() : 'No schedule'}
+                  </p>
+                  {order.tracking_code && (
+                    <p className="dx-mobile-card__meta">Tracking: {order.tracking_code}</p>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+
+          <div className="dx-data-table-wrap dx-data-table-wrap--stack dx-data-table-wrap--cards-mobile">
             <table className="dx-data-table">
               <thead>
                 <tr>
@@ -264,20 +301,20 @@ function AdminJobOrdersPage() {
                       className={selected?.id === order.id ? 'is-selected' : undefined}
                       style={{ cursor: 'pointer' }}
                     >
-                      <td>
+                      <td data-label="Job ID">
                         <span className="job-link">{formatJobPublicId(order.id)}</span>
                       </td>
-                      <td style={{ fontWeight: 500 }}>
+                      <td data-label="Client" style={{ fontWeight: 500 }}>
                         {order.client?.client_name || order.custom_client_name || buildDisplayName(order)}
                       </td>
-                      <td style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                      <td data-label="Route" style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>
                         {buildDisplayAddress('pickup', order)} → {buildDisplayAddress('dropoff', order)}
                       </td>
-                      <td style={{ textTransform: 'capitalize', fontSize: '0.875rem' }}>{order.priority}</td>
-                      <td style={{ fontSize: '0.8125rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                      <td data-label="Priority" style={{ textTransform: 'capitalize', fontSize: '0.875rem' }}>{order.priority}</td>
+                      <td data-label="Schedule" style={{ fontSize: '0.8125rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
                         {order.scheduled_start ? new Date(order.scheduled_start).toLocaleDateString() : '—'}
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <span className={jobStatusBadgeClass(order.status)}>
                           {formatJobStatus(order.status)}
                         </span>

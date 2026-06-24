@@ -261,24 +261,24 @@ function CustomerDeliveriesPage() {
     const hasPod = Array.isArray(r.documents) && r.documents.length > 0
     return (
       <tr>
-        <td>
+        <td data-label="Tracking ID">
           <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.875rem', background: 'var(--slate-100)', padding: '3px 8px', borderRadius: 6 }}>
             {r.tracking_code || `#${r.id}`}
           </span>
         </td>
-        <td><StatusBadge status={r.status} /></td>
-        <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+        <td data-label="Status"><StatusBadge status={r.status} /></td>
+        <td data-label="Last Update" style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
           {formatDate(r.status_at || r.updated_at)}
         </td>
-        <td style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
+        <td data-label="Route" style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
           {buildDisplayAddress('pickup', r)} → {buildDisplayAddress('dropoff', r)}
         </td>
-        <td>
+        <td data-label="POD">
           {hasPod
             ? <span style={{ fontSize: '0.8125rem', color: '#166534', fontWeight: 600 }}>Available</span>
             : <span style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>—</span>}
         </td>
-        <td>
+        <td data-label="Actions">
           <button
             type="button"
             className="btn-dx-primary btn-sm"
@@ -359,7 +359,7 @@ function CustomerDeliveriesPage() {
             ))}
           </div>
 
-          <div className="pwa-deliveries-table-wrap dx-data-table-wrap">
+          <div className="pwa-deliveries-table-wrap dx-data-table-wrap dx-data-table-wrap--stack">
             <table className="dx-data-table">
               <thead>
                 <tr>
