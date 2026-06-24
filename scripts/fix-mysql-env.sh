@@ -49,6 +49,18 @@ sed -i.bak "s|^DB_USERNAME=.*|DB_USERNAME=$DB_USER_ESC|" "$ENV_FILE"
 sed -i.bak "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASS_ESC|" "$ENV_FILE"
 rm -f "$ENV_FILE.bak"
 
+# Production app settings (no manual nano needed)
+sed -i.bak "s|^APP_NAME=.*|APP_NAME=Deliverex|" "$ENV_FILE"
+sed -i.bak "s|^APP_ENV=.*|APP_ENV=production|" "$ENV_FILE"
+sed -i.bak "s|^APP_DEBUG=.*|APP_DEBUG=false|" "$ENV_FILE"
+sed -i.bak "s|^APP_URL=.*|APP_URL=https://deliverexapp.com|" "$ENV_FILE"
+rm -f "$ENV_FILE.bak"
+
+grep -q '^CORS_ALLOWED_ORIGINS=' "$ENV_FILE" || echo 'CORS_ALLOWED_ORIGINS=https://deliverexapp.com' >> "$ENV_FILE"
+grep -q '^SESSION_DOMAIN=' "$ENV_FILE" || echo 'SESSION_DOMAIN=deliverexapp.com' >> "$ENV_FILE"
+grep -q '^SANCTUM_STATEFUL_DOMAINS=' "$ENV_FILE" || echo 'SANCTUM_STATEFUL_DOMAINS=deliverexapp.com' >> "$ENV_FILE"
+grep -q '^OCR_SYNC_MODE=' "$ENV_FILE" || echo 'OCR_SYNC_MODE=true' >> "$ENV_FILE"
+
 echo ""
 echo "==> Testing MySQL connection..."
 if command -v mysql >/dev/null 2>&1; then
@@ -64,6 +76,11 @@ fi
 
 cd "$REPO/backend"
 php artisan config:clear
+
+if ! grep -q '^APP_KEY=base64:' "$ENV_FILE" 2>/dev/null; then
+  echo "==> Generating APP_KEY..."
+  php artisan key:generate --force
+fi
 
 echo "==> Running migrations..."
 if ! php artisan migrate --force; then
