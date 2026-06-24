@@ -45,7 +45,9 @@ echo "==> Running migrations..."
 php artisan migrate --force
 
 echo "==> Storage link..."
-php artisan storage:link 2>/dev/null || true
+if [ ! -e public/storage ]; then
+  ln -sfn ../storage/app/public public/storage 2>/dev/null || true
+fi
 
 chmod +x "$DEPLOY_PATH/scripts/"*.sh 2>/dev/null || true
 

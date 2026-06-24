@@ -74,8 +74,10 @@ rm -f bootstrap/cache/config.php bootstrap/cache/routes-v7.php bootstrap/cache/r
 echo "==> Fixing storage permissions..."
 chmod -R u+rwX storage bootstrap/cache 2>/dev/null || true
 
-echo "==> Ensuring storage link..."
-php artisan storage:link 2>/dev/null || true
+echo "==> Ensuring storage link (shell symlink — exec() disabled on shared hosting)..."
+if [ ! -e public/storage ]; then
+  ln -sfn ../storage/app/public public/storage 2>/dev/null || true
+fi
 
 DIST_DIR="/tmp/deliverex-dist"
 PUBLISHED=0
