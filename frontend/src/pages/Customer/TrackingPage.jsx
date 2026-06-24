@@ -24,30 +24,33 @@ function DeliveryProgressBar({ status }) {
   const currentIdx = STATUS_STEP_INDEX[status] ?? 0
   if (status === 'cancelled') {
     return (
-      <div style={{ padding: '16px 20px', borderRadius: 12, background: 'var(--color-error-light, #fef2f2)', border: '1px solid var(--color-error-mid, #fca5a5)', color: 'var(--color-error)', fontWeight: 600, fontSize: '0.875rem', textAlign: 'center' }}>
+      <div className="tracking-alert" role="status">
         This delivery has been cancelled.
       </div>
     )
   }
   return (
-    <div style={{ padding: '20px 4px 8px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, position: 'relative' }}>
+    <div className="pwa-delivery-progress" aria-label="Delivery progress">
+      <div className="pwa-delivery-progress__track">
         {DELIVERY_STEPS.map((step, idx) => {
-          const done    = idx < currentIdx
-          const active  = idx === currentIdx
-          const future  = idx > currentIdx
-          const Icon    = step.icon
+          const done = idx < currentIdx
+          const active = idx === currentIdx
+          const Icon = step.icon
           return (
-            <div key={step.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+            <div key={step.key} className="pwa-delivery-progress__step">
               {idx < DELIVERY_STEPS.length - 1 && (
-                <div style={{ position: 'absolute', top: 18, left: '50%', right: '-50%', height: 3, background: done ? 'var(--color-primary)' : 'var(--slate-200)', borderRadius: 2, zIndex: 0, transition: 'background 0.4s' }} />
+                <div className={`pwa-delivery-progress__connector${done ? ' pwa-delivery-progress__connector--done' : ''}`} aria-hidden />
               )}
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: done || active ? 'var(--color-primary)' : 'var(--slate-200)', display: 'grid', placeItems: 'center', zIndex: 1, position: 'relative', flexShrink: 0, boxShadow: active ? '0 0 0 4px rgba(37,99,235,0.18)' : 'none', transition: 'all 0.3s' }}
-                className={active ? 'pwa-timeline-step--active' : undefined}
+              <div
+                className={[
+                  'pwa-delivery-progress__dot',
+                  done || active ? 'pwa-delivery-progress__dot--done' : '',
+                  active ? 'pwa-delivery-progress__dot--active pwa-timeline-step--active' : '',
+                ].filter(Boolean).join(' ')}
               >
                 <Icon size={16} color={done || active ? '#fff' : 'var(--muted)'} />
               </div>
-              <span style={{ fontSize: '0.7rem', fontWeight: active ? 700 : 500, color: active ? 'var(--color-primary)' : future ? 'var(--muted)' : 'var(--text)', marginTop: 8, textAlign: 'center', lineHeight: 1.3 }}>
+              <span className={`pwa-delivery-progress__label${active ? ' pwa-delivery-progress__label--active' : ''}`}>
                 {step.label}
               </span>
             </div>
@@ -205,10 +208,10 @@ function TrackingPage() {
               {/* Tracking ID + ETA highlight */}
               <div style={{ padding: '16px 18px', borderRadius: 12, background: 'linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%)', border: '1px solid #bfdbfe', marginBottom: 4 }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: 4 }}>Tracking ID</div>
-                <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '1.125rem', letterSpacing: '0.04em', marginBottom: 14 }}>
+                <div className="pwa-tracking-code">
                   {result.tracking_code}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="tracking-eta-grid">
                   <div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: 4 }}>Current Status</div>
                     <StatusBadge status={result.status} />

@@ -32,7 +32,7 @@ function CustomerLinkDeliveryPage() {
   }
 
   return (
-    <div className="customer-page" style={{ maxWidth: 640, margin: '0 auto', padding: '24px 16px 48px' }}>
+    <div className="customer-page customer-page--narrow">
       <PageHeader title="Link a delivery" subtitle="Enter the tracking ID from your shipment confirmation email." />
       <SectionCard>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

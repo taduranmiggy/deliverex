@@ -33,36 +33,36 @@ function DeliveryTimeline({ status }) {
   const currentIdx = STATUS_IDX[status] ?? 0
   if (status === 'cancelled') {
     return (
-      <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', fontWeight: 600, fontSize: '0.875rem', textAlign: 'center' }}>
+      <div className="tracking-alert" role="status">
         This delivery was cancelled.
       </div>
     )
   }
   return (
-    <div style={{ padding: '4px 0 12px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+    <div className="pwa-delivery-progress" aria-label="Delivery progress">
+      <div className="pwa-delivery-progress__track">
         {STATUS_STEPS.map((step, idx) => {
-          const done   = idx < currentIdx
+          const done = idx < currentIdx
           const active = idx === currentIdx
-          const future = idx > currentIdx
           return (
-            <div key={step.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+            <div key={step.key} className="pwa-delivery-progress__step">
               {idx < STATUS_STEPS.length - 1 && (
-                <div style={{ position: 'absolute', top: 15, left: '50%', right: '-50%', height: 3, background: done ? 'var(--color-primary)' : '#e2e8f0', borderRadius: 2, zIndex: 0 }} />
+                <div className={`pwa-delivery-progress__connector${done ? ' pwa-delivery-progress__connector--done' : ''}`} aria-hidden />
               )}
-              <div style={{
-                width: 30, height: 30, borderRadius: '50%', zIndex: 1, position: 'relative', flexShrink: 0,
-                background: done || active ? 'var(--color-primary)' : '#e2e8f0',
-                display: 'grid', placeItems: 'center',
-                boxShadow: active ? '0 0 0 4px rgba(37,99,235,0.15)' : 'none',
-              }}>
+              <div
+                className={[
+                  'pwa-delivery-progress__dot',
+                  done || active ? 'pwa-delivery-progress__dot--done' : '',
+                  active ? 'pwa-delivery-progress__dot--active' : '',
+                ].filter(Boolean).join(' ')}
+              >
                 {done ? (
                   <CheckCircle2 size={14} color="#fff" />
                 ) : (
                   <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: active ? '#fff' : '#94a3b8' }}>{idx + 1}</span>
                 )}
               </div>
-              <span style={{ fontSize: '0.65rem', fontWeight: active ? 700 : 500, color: active ? 'var(--color-primary)' : future ? '#94a3b8' : '#64748b', marginTop: 6, textAlign: 'center', lineHeight: 1.3 }}>
+              <span className={`pwa-delivery-progress__label${active ? ' pwa-delivery-progress__label--active' : ''}`}>
                 {step.label}
               </span>
             </div>
@@ -82,9 +82,9 @@ function DeliveryDetailModal({ order, onClose }) {
   const hasPod  = Array.isArray(order.documents) && order.documents.length > 0
 
   const KV = ({ label, value, mono }) => value ? (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 0', borderBottom: '1px solid #f1f5f9', gap: 16 }}>
-      <span style={{ fontSize: '0.8125rem', color: '#64748b', flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a', textAlign: 'right', fontFamily: mono ? 'monospace' : undefined }}>{value}</span>
+    <div className="pwa-kv-row">
+      <span className="pwa-kv-row__label">{label}</span>
+      <span className={`pwa-kv-row__value${mono ? ' pwa-kv-row__value--mono' : ''}`}>{value}</span>
     </div>
   ) : null
 
@@ -100,11 +100,11 @@ function DeliveryDetailModal({ order, onClose }) {
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      className="pwa-modal-backdrop"
       onClick={onClose}
     >
       <div
-        style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 580, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(15,23,42,0.22)' }}
+        className="pwa-modal-sheet"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal

@@ -1,4 +1,4 @@
-const CACHE = 'deliverex-customer-v8'
+const CACHE = 'deliverex-customer-v9'
 const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg', '/customer', '/customer/login', '/customer/track', '/customer/support', '/customer/history', '/customer/about', '/customer/services']
 
 // ─── Install: pre-cache app shell ────────────────────────────────
