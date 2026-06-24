@@ -23,6 +23,9 @@ grep -q '^APP_KEY=base64:' .env || php artisan key:generate --force
 php artisan migrate --force
 php artisan db:seed --force
 chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+mkdir -p storage/logs storage/framework/{cache,sessions,views} 2>/dev/null || true
+touch storage/logs/laravel.log 2>/dev/null || true
+chmod -R 775 storage bootstrap/cache 2>/dev/null || true
 
 cd "$REPO"
 export SKIP_GIT_PULL=1
