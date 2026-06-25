@@ -19,6 +19,20 @@ if [ -z "$DB_PASS" ]; then echo "ERROR: password required"; exit 1; fi
 # Escape double quotes in password for .env
 DB_PASS_ENV="${DB_PASS//\"/\\\"}"
 
+existing_env_value() {
+  local key="$1"
+  if [ -f "$ENV_FILE" ]; then
+    grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^"//;s/"$//'
+  fi
+}
+
+OCR_ENGINE="$(existing_env_value OCR_ENGINE)"
+OCR_ENGINE="${OCR_ENGINE:-local}"
+OCR_REMOTE_URL="$(existing_env_value OCR_REMOTE_URL)"
+OCR_REMOTE_TOKEN="$(existing_env_value OCR_REMOTE_TOKEN)"
+OCR_REMOTE_TIMEOUT="$(existing_env_value OCR_REMOTE_TIMEOUT)"
+OCR_REMOTE_TIMEOUT="${OCR_REMOTE_TIMEOUT:-180}"
+
 cat > "$ENV_FILE" <<EOF
 APP_NAME=Deliverex
 APP_ENV=production
@@ -53,11 +67,15 @@ MAIL_MAILER=log
 
 CORS_ALLOWED_ORIGINS=https://deliverexapp.com
 SANCTUM_STATEFUL_DOMAINS=deliverexapp.com
+OCR_ENGINE=${OCR_ENGINE}
+OCR_REMOTE_URL=${OCR_REMOTE_URL}
+OCR_REMOTE_TOKEN=${OCR_REMOTE_TOKEN}
+OCR_REMOTE_TIMEOUT=${OCR_REMOTE_TIMEOUT}
 OCR_SYNC_MODE=true
 EOF
 
 echo "==> Wrote $ENV_FILE (complete production config)"
-grep "^DB_\|^APP_\|^CORS\|^SANCTUM\|^CACHE\|^SESSION_DRIVER" "$ENV_FILE" | grep -v PASSWORD
+grep "^DB_\|^APP_\|^CORS\|^SANCTUM\|^CACHE\|^SESSION_DRIVER\|^OCR_" "$ENV_FILE" | grep -v PASSWORD | grep -v TOKEN
 
 # Backup outside git root — survives hPanel Git redeploy (which wipes untracked .env)
 BACKUP="$(dirname "$REPO")/.deliverex.env"

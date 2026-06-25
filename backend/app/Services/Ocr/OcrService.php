@@ -4,6 +4,7 @@ namespace App\Services\Ocr;
 
 use App\Models\DeliveryDocument;
 use App\Models\OcrResult;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\ExecutableFinder;
@@ -101,6 +102,10 @@ class OcrService
             return $this->fail($result, 'Unsupported image type for OCR: '.$ext);
         }
 
+        if ($this->usesRemoteEngine()) {
+            return $this->processWithRemoteService($result, $document, $diskPath);
+        }
+
         $tesseract = $this->resolveTesseractBinary();
         if (! $tesseract) {
             $message = 'Tesseract OCR is not installed or not configured. '
@@ -126,39 +131,13 @@ class OcrService
                 return $this->fail($result, $err);
             }
 
-            $text = trim($process->getOutput());
-            $confidence = $this->estimateConfidence($text);
-            $displayText = $text !== '' ? $text : '(No text detected — image may be blank or low contrast.)';
-            $structured = $this->extractStructuredFields($text);
-            $system = $this->buildSystemContext($document);
-
-            $status = self::STATUS_PROCESSED;
-            if ($text === '' || ($confidence !== null && $confidence < 0.65)) {
-                $status = self::STATUS_NEEDS_REVIEW;
-            }
-
-            $result->forceFill([
-                'processing_status'  => $status,
-                'review_status'      => 'pending_review',
-                'extracted_text'     => $displayText,
-                'corrected_text'     => null,
-                'extracted_length'   => $structured['length'],
-                'extracted_width'    => $structured['width'],
-                'extracted_height'   => $structured['height'],
-                'extracted_volume'   => $structured['volume'],
-                'delivery_receipt_number' => $structured['delivery_receipt_number'],
-                'assignment_id'      => $system['assignment_id'],
-                'job_order_id'       => $system['job_order_id'],
-                'driver_id'          => $system['driver_id'],
-                'driver_name'        => $system['driver_name'],
-                'vehicle_plate_no'   => $system['vehicle_plate_no'],
-                'delivery_date'      => $system['delivery_date'],
-                'confidence_score'   => $confidence,
-                'engine'             => 'tesseract',
-                'error_message'      => null,
-            ])->save();
-
-            return $result->fresh();
+            return $this->persistExtraction(
+                $result,
+                $document,
+                trim($process->getOutput()),
+                null,
+                'tesseract'
+            );
         } catch (Throwable $e) {
             Log::error('OCR processing exception', ['document_id' => $document->id, 'error' => $e->getMessage()]);
 
@@ -169,6 +148,109 @@ class OcrService
     public function isTesseractAvailable(): bool
     {
         return $this->resolveTesseractBinary() !== null;
+    }
+
+    private function usesRemoteEngine(): bool
+    {
+        return strtolower((string) config('ocr.engine', 'local')) === 'remote';
+    }
+
+    private function processWithRemoteService(OcrResult $result, DeliveryDocument $document, string $diskPath): OcrResult
+    {
+        $url = trim((string) config('ocr.remote_url'));
+        $token = trim((string) config('ocr.remote_token'));
+        $timeout = max(10, (int) config('ocr.remote_timeout', 180));
+
+        if ($url === '') {
+            return $this->fail($result, 'Remote OCR is enabled but OCR_REMOTE_URL is not configured.');
+        }
+
+        if ($token === '') {
+            return $this->fail($result, 'Remote OCR is enabled but OCR_REMOTE_TOKEN is not configured.');
+        }
+
+        $handle = @fopen($diskPath, 'r');
+        if (! $handle) {
+            return $this->fail($result, 'Could not open stored file for remote OCR.');
+        }
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->withToken($token)
+                ->attach('file', $handle, basename($diskPath))
+                ->post($url);
+        } catch (Throwable $e) {
+            fclose($handle);
+            Log::error('Remote OCR request failed', ['document_id' => $document->id, 'error' => $e->getMessage()]);
+
+            return $this->fail($result, 'Remote OCR request failed: '.$e->getMessage());
+        }
+
+        fclose($handle);
+
+        if (! $response->successful()) {
+            $message = $response->json('detail')
+                ?: $response->json('message')
+                ?: trim($response->body())
+                ?: 'Remote OCR service returned HTTP '.$response->status();
+
+            return $this->fail($result, 'Remote OCR failed: '.$message);
+        }
+
+        $payload = $response->json();
+        if (! is_array($payload)) {
+            return $this->fail($result, 'Remote OCR returned an invalid JSON response.');
+        }
+
+        $text = trim((string) ($payload['text'] ?? ''));
+        $confidence = is_numeric($payload['confidence'] ?? null)
+            ? (float) $payload['confidence']
+            : null;
+        $engine = trim((string) ($payload['engine'] ?? 'render-tesseract')) ?: 'render-tesseract';
+
+        return $this->persistExtraction($result, $document, $text, $confidence, $engine);
+    }
+
+    private function persistExtraction(
+        OcrResult $result,
+        DeliveryDocument $document,
+        string $text,
+        ?float $confidence,
+        string $engine,
+    ): OcrResult {
+        $confidence ??= $this->estimateConfidence($text);
+        $displayText = $text !== '' ? $text : '(No text detected — image may be blank or low contrast.)';
+        $structured = $this->extractStructuredFields($text);
+        $system = $this->buildSystemContext($document);
+
+        $status = self::STATUS_PROCESSED;
+        if ($text === '' || ($confidence !== null && $confidence < 0.65)) {
+            $status = self::STATUS_NEEDS_REVIEW;
+        }
+
+        $result->forceFill([
+            'processing_status'  => $status,
+            'review_status'      => 'pending_review',
+            'extracted_text'     => $displayText,
+            'corrected_text'     => null,
+            'extracted_length'   => $structured['length'],
+            'extracted_width'    => $structured['width'],
+            'extracted_height'   => $structured['height'],
+            'extracted_volume'   => $structured['volume'],
+            'delivery_receipt_number' => $structured['delivery_receipt_number'],
+            'assignment_id'      => $system['assignment_id'],
+            'job_order_id'       => $system['job_order_id'],
+            'driver_id'          => $system['driver_id'],
+            'driver_name'        => $system['driver_name'],
+            'vehicle_plate_no'   => $system['vehicle_plate_no'],
+            'delivery_date'      => $system['delivery_date'],
+            'confidence_score'   => $confidence,
+            'engine'             => $engine,
+            'error_message'      => null,
+        ])->save();
+
+        return $result->fresh();
     }
 
     /**

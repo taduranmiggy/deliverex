@@ -4,6 +4,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | OCR engine
+    |--------------------------------------------------------------------------
+    |
+    | local  - use a Tesseract binary available to this Laravel server.
+    | remote - send images to an external OCR HTTP service, such as Render.
+    |
+    */
+    'engine' => env('OCR_ENGINE', 'local'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Tesseract binary path
     |--------------------------------------------------------------------------
     |
@@ -13,6 +24,19 @@ return [
     |
     */
     'tesseract_path' => env('TESSERACT_PATH'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Remote OCR service
+    |--------------------------------------------------------------------------
+    |
+    | OCR_REMOTE_URL should point directly to the remote /ocr endpoint.
+    | OCR_REMOTE_TOKEN is sent as a Bearer token.
+    |
+    */
+    'remote_url' => env('OCR_REMOTE_URL'),
+    'remote_token' => env('OCR_REMOTE_TOKEN'),
+    'remote_timeout' => (int) env('OCR_REMOTE_TIMEOUT', 180),
 
     /*
     |--------------------------------------------------------------------------

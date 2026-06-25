@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\Ocr\OcrService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
 use ReflectionClass;
 use Symfony\Component\Process\Process;
 
@@ -11,10 +12,17 @@ class OcrCheckCommand extends Command
 {
     protected $signature = 'ocr:check';
 
-    protected $description = 'Verify Tesseract OCR is visible to PHP (PATH or TESSERACT_PATH)';
+    protected $description = 'Verify OCR configuration for local Tesseract or remote Render OCR';
 
     public function handle(): int
     {
+        $engine = strtolower((string) config('ocr.engine', 'local'));
+        $this->line('OCR_ENGINE: '.$engine);
+
+        if ($engine === 'remote') {
+            return $this->checkRemote();
+        }
+
         $configured = config('ocr.tesseract_path');
         $this->line('TESSERACT_PATH (.env): '.($configured ?: '(not set)'));
 
@@ -49,6 +57,46 @@ class OcrCheckCommand extends Command
 
         $this->newLine();
         $this->info('OCR is ready. Upload a document or reprocess an existing one.');
+
+        return self::SUCCESS;
+    }
+
+    private function checkRemote(): int
+    {
+        $url = trim((string) config('ocr.remote_url'));
+        $token = trim((string) config('ocr.remote_token'));
+        $timeout = max(10, (int) config('ocr.remote_timeout', 180));
+
+        $this->line('OCR_REMOTE_URL: '.($url ?: '(not set)'));
+        $this->line('OCR_REMOTE_TOKEN: '.($token !== '' ? '(set)' : '(not set)'));
+
+        if ($url === '' || $token === '') {
+            $this->error('Remote OCR is not configured. Set OCR_REMOTE_URL and OCR_REMOTE_TOKEN.');
+
+            return self::FAILURE;
+        }
+
+        $healthUrl = preg_replace('#/ocr/?$#', '/health', $url) ?: $url;
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->withToken($token)
+                ->get($healthUrl);
+        } catch (\Throwable $e) {
+            $this->error('Remote OCR health check failed: '.$e->getMessage());
+
+            return self::FAILURE;
+        }
+
+        if (! $response->successful()) {
+            $this->error('Remote OCR health check returned HTTP '.$response->status().': '.trim($response->body()));
+
+            return self::FAILURE;
+        }
+
+        $this->info('Remote OCR is reachable.');
+        $this->line(trim($response->body()));
 
         return self::SUCCESS;
     }
