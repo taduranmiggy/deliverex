@@ -106,8 +106,8 @@ bash "$SCRIPT_DIR/verify-db.sh"
 log "Running migrations (php artisan migrate --force)..."
 php artisan migrate --force
 
-log "Seeding database (php artisan db:seed --force)..."
-php artisan db:seed --force
+log "Checking whether database seed is needed..."
+bash "$SCRIPT_DIR/seed-if-needed.sh"
 
 log "Clearing caches (php artisan optimize:clear)..."
 php artisan optimize:clear

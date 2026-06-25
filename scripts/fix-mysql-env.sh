@@ -54,8 +54,8 @@ fi
 echo "==> Running migrations..."
 php artisan migrate --force -v
 
-echo "==> Seeding demo users (admin@deliverex.com / admin123)..."
-php artisan db:seed --force -v
+echo "==> Seeding demo users if needed (use FORCE_SEED=1 to reset demo records intentionally)..."
+bash "$SCRIPT_DIR/seed-if-needed.sh"
 php artisan tinker --execute="echo 'users=' . App\Models\User::count();"
 
 echo "==> Deploy..."

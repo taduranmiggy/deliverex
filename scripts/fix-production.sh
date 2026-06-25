@@ -28,9 +28,9 @@ if ! grep -q '^APP_KEY=base64:' .env 2>/dev/null; then
   php artisan key:generate --force
 fi
 
-echo "==> Migrate + seed..."
+echo "==> Migrate + seed if needed..."
 php artisan migrate --force
-php artisan db:seed --force
+bash "$SCRIPT_DIR/seed-if-needed.sh"
 
 echo "==> Deploy..."
 cd "$REPO"

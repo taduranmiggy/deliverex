@@ -31,8 +31,8 @@ fi
 echo "==> migrate..."
 php artisan migrate --force
 
-echo "==> seed..."
-php artisan db:seed --force
+echo "==> seed if needed..."
+bash "$SCRIPT_DIR/seed-if-needed.sh"
 
 echo "==> verify users table..."
 php artisan tinker --execute="echo 'users=' . App\Models\User::count();"

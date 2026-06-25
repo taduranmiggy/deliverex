@@ -32,7 +32,7 @@ class UserController extends Controller
         $data['password'] = Hash::make($data['password']);
 
         $role = Role::query()->findOrFail($data['role_id']);
-        $this->assertInternalStaffRole($role->name, $isCreate: true);
+        $this->assertInternalStaffRole($role->name, isCreate: true);
 
         $user = User::create($data);
         $user->load('role');
@@ -59,7 +59,7 @@ class UserController extends Controller
 
         if (isset($data['role_id'])) {
             $role = Role::query()->findOrFail($data['role_id']);
-            $this->assertInternalStaffRole($role->name, $isCreate: false);
+            $this->assertInternalStaffRole($role->name, isCreate: false);
         }
 
         $user->update($data);
