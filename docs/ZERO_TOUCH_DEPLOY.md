@@ -93,7 +93,7 @@ Kung `env=no` o `vendor=no` → hindi pa tumatakbo ang deploy script. Ulitin ang
 |---------|-----|
 | Push pero luma pa ang site | Check hPanel Auto Deploy ON; o i-run Option B/C |
 | `env=no` sa ping | Walang post-deploy script — i-paste Option A |
-| Login "Request failed" | `bash scripts/fix-after-redeploy.sh` sa SSH (isang beses) |
+| `composer install failed` / `Could not determine the current working directory` | Sa SSH: `cd ~/domains/deliverexapp.com/public_html && bash scripts/hostinger-hpanel-git-deploy.sh` — na-fix na sa latest script (auto-retry) |
 | GitHub Actions hindi tumatakbo | Check **Actions** tab sa GitHub — dapat may green check |
 
 ---
