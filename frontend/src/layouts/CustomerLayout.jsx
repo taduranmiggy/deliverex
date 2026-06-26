@@ -11,6 +11,7 @@ function CustomerLayout() {
   const isCustomer = isAuthenticated && role === 'customer'
   const signInPath = isStandalonePwa() ? '/customer/login' : '/login'
   const signUpPath = '/customer/signup'
+  const homePath = isStandalonePwa() ? '/customer' : '/'
   const initials = user?.name
     ? user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : 'DC'
@@ -22,7 +23,7 @@ function CustomerLayout() {
     <div className="customer-layout" id="main-content">
       <nav className="customer-nav" role="navigation" aria-label="Customer navigation">
         <div className="customer-nav-inner">
-          <Link to="/customer" className="customer-nav-brand">
+          <Link to={homePath} className="customer-nav-brand">
             <div className="customer-nav-brand-icon" aria-hidden>
               <Truck size={18} color="#fff" />
             </div>
@@ -30,7 +31,7 @@ function CustomerLayout() {
           </Link>
 
           <div className="customer-nav-links customer-nav-links--desktop">
-            <NavLink to="/customer" end className={navLinkCls}>
+            <NavLink to={homePath} end className={navLinkCls}>
               <Home size={15} /> Home
             </NavLink>
             <NavLink to="/customer/track" className={navLinkCls}>

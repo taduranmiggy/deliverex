@@ -46,7 +46,10 @@ function LandingPage() {
             </div>
             <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text)', letterSpacing: '-0.03em' }}>Deliverex</span>
           </Link>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+            <Link to="/customer/about" className="btn-dx-secondary btn-sm" style={{ background: 'transparent', border: 'none', boxShadow: 'none', color: 'var(--muted)', fontWeight: 600 }}>About</Link>
+            <Link to="/customer/services" className="btn-dx-secondary btn-sm" style={{ background: 'transparent', border: 'none', boxShadow: 'none', color: 'var(--muted)', fontWeight: 600 }}>Services</Link>
+            <Link to="/customer/support" className="btn-dx-secondary btn-sm">Support</Link>
             <Link to="/customer/track" className="btn-dx-secondary btn-sm">Track Delivery</Link>
             <Link to="/login" className="btn-dx-primary btn-sm">Sign in <ArrowRight size={13} /></Link>
           </div>
@@ -122,8 +125,28 @@ function LandingPage() {
         </div>
       </section>
 
-      <footer style={{ background: 'var(--slate-800)', color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '24px', fontSize: '0.8125rem' }}>
-        Deliverex Logistics · Providential 628 Site Preparation Services
+      <footer style={{ background: 'var(--slate-800)', color: 'rgba(255,255,255,0.5)', padding: '40px 24px 24px', fontSize: '0.8125rem' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 24, marginBottom: 28 }}>
+          <div>
+            <p style={{ color: '#fff', fontWeight: 700, marginBottom: 10 }}>Deliverex</p>
+            <p style={{ lineHeight: 1.6, margin: 0 }}>Logistics dispatch, delivery tracking, and proof-of-delivery for site preparation teams.</p>
+          </div>
+          <div>
+            <p style={{ color: 'rgba(255,255,255,0.75)', fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.75rem' }}>Explore</p>
+            <p style={{ margin: '6px 0' }}><Link to="/customer/about" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>About Us</Link></p>
+            <p style={{ margin: '6px 0' }}><Link to="/customer/services" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Services</Link></p>
+            <p style={{ margin: '6px 0' }}><Link to="/customer/support" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Support</Link></p>
+            <p style={{ margin: '6px 0' }}><Link to="/customer/track" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Track Delivery</Link></p>
+          </div>
+          <div>
+            <p style={{ color: 'rgba(255,255,255,0.75)', fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.75rem' }}>Account</p>
+            <p style={{ margin: '6px 0' }}><Link to="/login" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Sign in</Link></p>
+            <p style={{ margin: '6px 0' }}><Link to="/customer/signup" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Create account</Link></p>
+          </div>
+        </div>
+        <p style={{ textAlign: 'center', margin: 0, borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 20 }}>
+          Deliverex Logistics · Providential 628 Site Preparation Services
+        </p>
       </footer>
 
       {contactOpen && (

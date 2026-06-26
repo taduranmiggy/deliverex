@@ -26,11 +26,6 @@ function BrowserCustomerPortalGuard({ children }) {
     return <Navigate to="/" replace />
   }
 
-  const pwaOnlyMarketing = ['/customer/about', '/customer/services', '/customer/support']
-  if (pwaOnlyMarketing.includes(pathname) && !isCustomer) {
-    return <Navigate to="/" replace />
-  }
-
   return children
 }
 
