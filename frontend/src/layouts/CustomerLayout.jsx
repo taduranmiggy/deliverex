@@ -2,12 +2,15 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import PageTransition from '../components/PageTransition'
 import CustomerBottomNav from '../components/customer/CustomerBottomNav'
 import useAuth from '../hooks/useAuth'
+import { isStandalonePwa } from '../utils/pwaUtils'
 import { BriefcaseBusiness, Home, Info, MapPin, Package, Truck } from 'lucide-react'
 
 function CustomerLayout() {
   const { user, isAuthenticated, role } = useAuth()
 
   const isCustomer = isAuthenticated && role === 'customer'
+  const signInPath = isStandalonePwa() ? '/customer/login' : '/login'
+  const signUpPath = '/customer/signup'
   const initials = user?.name
     ? user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : 'DC'
@@ -54,8 +57,8 @@ function CustomerLayout() {
               </NavLink>
             ) : (
               <div className="customer-nav-auth-btns">
-                <Link to="/customer/login" className="btn-dx-secondary btn-sm">Sign in</Link>
-                <Link to="/customer/signup" className="btn-dx-primary btn-sm">Create account</Link>
+                <Link to={signInPath} className="btn-dx-secondary btn-sm">Sign in</Link>
+                <Link to={signUpPath} className="btn-dx-primary btn-sm">Create account</Link>
               </div>
             )}
           </div>

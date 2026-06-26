@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { HeadphonesIcon, History, Home, MapPin, User } from 'lucide-react'
 import useAuth from '../../hooks/useAuth'
+import { isStandalonePwa } from '../../utils/pwaUtils'
 
 const NAV_ITEMS = [
   { to: '/customer', end: true, icon: Home, label: 'Home' },
@@ -13,6 +14,10 @@ const NAV_ITEMS = [
 function CustomerBottomNav() {
   const { isAuthenticated, role } = useAuth()
   const isCustomer = isAuthenticated && role === 'customer'
+
+  if (!isStandalonePwa()) {
+    return null
+  }
 
   return (
     <nav className="customer-bottom-nav" aria-label="Mobile navigation">

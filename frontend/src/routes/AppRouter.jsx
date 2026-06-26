@@ -12,6 +12,7 @@ import DriverLayout from '../layouts/DriverLayout'
 import ManagerLayout from '../layouts/ManagerLayout'
 import CustomerLayout from '../layouts/CustomerLayout'
 import PwaCustomerOnlyGuard from '../components/PwaCustomerOnlyGuard'
+import BrowserCustomerPortalGuard from '../components/BrowserCustomerPortalGuard'
 import RootRoute from './RootRoute'
 
 function AppRouter() {
@@ -79,7 +80,14 @@ function AppRouter() {
             {roleRoutes.manager}
           </Route>
 
-          <Route path="/customer/*" element={<CustomerLayout />}>
+          <Route
+            path="/customer/*"
+            element={
+              <BrowserCustomerPortalGuard>
+                <CustomerLayout />
+              </BrowserCustomerPortalGuard>
+            }
+          >
             {roleRoutes.customer}
           </Route>
         </Routes>

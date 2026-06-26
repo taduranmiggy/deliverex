@@ -128,8 +128,13 @@ function LoginPage() {
 
     try {
       const result = await loginRequest(payload)
+      const roleName = result.user?.role?.name
+      if (roleName === 'driver') {
+        setError('Driver accounts use the driver portal. Open /driver/login in your browser.')
+        return
+      }
       login(result.user, result.token)
-      const target = location.state?.from?.pathname || roleHome(result.user?.role?.name)
+      const target = location.state?.from?.pathname || roleHome(roleName)
       navigate(target, { replace: true })
     } catch (err) {
       setError(err.message)
@@ -155,8 +160,8 @@ function LoginPage() {
               <span className="auth-brand-text">Deliverex</span>
             </div>
 
-            <h1 className="auth-split-title">Log in to your Account</h1>
-            <p className="auth-split-lead">Welcome back! Select method to log in:</p>
+            <h1 className="auth-split-title">Sign in</h1>
+            <p className="auth-split-lead">Admin, manager, dispatcher, and customer accounts use this page.</p>
 
             <div className="auth-social-row">
               <button type="button" className="auth-social-btn" onClick={socialUnavailable}>
@@ -257,11 +262,17 @@ function LoginPage() {
               <div>Customer: customer@deliverex.com / customer123</div>
               <div className="auth-demo-driver">
                 <Link to="/driver/login" className="auth-driver-login-link">
-                  Driver login (driver@deliverex.ph / driver123)
+                  Driver portal (separate sign-in)
                   <IconChevronRight />
                 </Link>
               </div>
             </div>
+            <p className="auth-alt-link" style={{ marginTop: 16 }}>
+              New customer?{' '}
+              <Link className="auth-inline-link" to="/customer/signup">
+                Create account
+              </Link>
+            </p>
           </div>
         </div>
 

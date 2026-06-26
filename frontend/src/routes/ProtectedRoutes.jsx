@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react'
 import { Navigate, useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { roleHome } from '../utils/roleUtils'
+import { isStandalonePwa } from '../utils/pwaUtils'
 
 function ProtectedRoutes({ children, roles }) {
   const { isAuthenticated, role, bootstrapped, user } = useAuth()
@@ -36,7 +37,7 @@ function ProtectedRoutes({ children, roles }) {
         pathname.startsWith('/customer/history') ||
         pathname.startsWith('/customer/account')
       if (!customerPublic) {
-        loginPath = '/customer/login'
+        loginPath = isStandalonePwa() ? '/customer/login' : '/login'
       } else {
         return children
       }

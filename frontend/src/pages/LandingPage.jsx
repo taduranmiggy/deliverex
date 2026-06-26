@@ -48,8 +48,7 @@ function LandingPage() {
           </Link>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <Link to="/customer/track" className="btn-dx-secondary btn-sm">Track Delivery</Link>
-            <Link to="/customer" className="btn-dx-secondary btn-sm">Customer Portal</Link>
-            <Link to="/login" className="btn-dx-primary btn-sm">Staff Sign in <ArrowRight size={13} /></Link>
+            <Link to="/login" className="btn-dx-primary btn-sm">Sign in <ArrowRight size={13} /></Link>
           </div>
         </div>
       </nav>
@@ -117,13 +116,9 @@ function LandingPage() {
         <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', borderRadius: 24, padding: '60px 24px', border: '1px solid var(--blue-200)' }}>
           <h2 style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)', fontWeight: 900, letterSpacing: '-0.03em', marginBottom: 12 }}>Ready to manage your logistics?</h2>
           <p style={{ color: 'var(--muted)', fontSize: '1.0625rem', maxWidth: 480, margin: '0 auto 32px', lineHeight: 1.6 }}>
-            Sign in to your role dashboard or create a customer account to start tracking deliveries.
+            Sign in once with your Deliverex account — admin, dispatcher, manager, or customer.
           </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to="/login" className="btn-dx-primary btn-lg">Staff Login <ArrowRight size={16} /></Link>
-            <Link to="/customer/signup" className="btn-dx-secondary btn-lg">Create Customer Account</Link>
-            <Link to="/driver/login" className="btn-dx-secondary btn-lg">Driver Login</Link>
-          </div>
+          <Link to="/login" className="btn-dx-primary btn-lg">Sign in <ArrowRight size={16} /></Link>
         </div>
       </section>
 
