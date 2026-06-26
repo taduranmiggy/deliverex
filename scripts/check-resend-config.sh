@@ -21,9 +21,12 @@ validate_key() {
     echo "  $label: INVALID format (must start with re_ — get key from https://resend.com/api-keys)"
     return 1
   fi
-  if [ "${#key}" -lt 20 ]; then
-    echo "  $label: INVALID (too short — copy the full key from Resend)"
+  if [[ "$key" == re_your_* ]] || [[ "$key" == *your*key* ]] || [[ "$key" == *placeholder* ]]; then
+    echo "  $label: INVALID (still using placeholder — paste real key from Resend dashboard)"
     return 1
+  fi
+  if [ "${#key}" -lt 30 ]; then
+    echo "  $label: WARN (only ${#key} chars — Resend keys are usually longer; key may be truncated)"
   fi
   echo "  $label: OK (starts with re_, length ${#key})"
   return 0
@@ -67,6 +70,35 @@ if [ -z "$SECRETS_KEY" ]; then
   echo "FIX: Add to $SECRETS_FILE (no quotes):"
   echo "  RESEND_API_KEY=re_your_full_key_from_resend_dashboard"
   echo "Then run: bash scripts/hostinger-hpanel-git-deploy.sh"
+fi
+
+if [ -n "$ENV_KEY" ]; then
+  echo ""
+  echo "--- Live Resend API test (uses backend/.env key) ---"
+  HTTP_CODE="$(curl -sS -o /tmp/resend-api-test.json -w "%{http_code}" \
+    -H "Authorization: Bearer ${ENV_KEY}" \
+    -H "Accept: application/json" \
+    --connect-timeout 15 \
+    "https://api.resend.com/domains" || echo "000")"
+  case "$HTTP_CODE" in
+    200)
+      DOMAIN_COUNT="$(grep -o '"name"' /tmp/resend-api-test.json 2>/dev/null | wc -l | tr -d ' ')"
+      echo "  Resend API: OK — key is valid (domains visible: ${DOMAIN_COUNT:-?})"
+      ;;
+    401|403)
+      echo "  Resend API: FAILED — key rejected (invalid or revoked)"
+      echo "  FIX: Resend → API Keys → Create API Key → copy FULL key → update .deploy.secrets → deploy"
+      ;;
+    000)
+      echo "  Resend API: network error — could not reach api.resend.com"
+      ;;
+    *)
+      echo "  Resend API: unexpected HTTP ${HTTP_CODE}"
+      head -c 200 /tmp/resend-api-test.json 2>/dev/null || true
+      echo ""
+      ;;
+  esac
+  rm -f /tmp/resend-api-test.json 2>/dev/null || true
 fi
 
 echo ""
