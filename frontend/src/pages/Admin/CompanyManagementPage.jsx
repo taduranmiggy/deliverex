@@ -88,7 +88,7 @@ function CompanyModal({ company, onClose, onSaved }) {
 
 function CompanyManagementPage() {
   const [companies, setCompanies] = useState([])
-  const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 })
+  const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0, per_page: 20 })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [msg, setMsg] = useState('')
@@ -111,6 +111,7 @@ function CompanyManagementPage() {
         current_page: res.current_page || 1,
         last_page: res.last_page || 1,
         total: res.total || 0,
+        per_page: res.per_page || 20,
       })
     } catch (err) {
       setError(err.message)
@@ -152,65 +153,70 @@ function CompanyManagementPage() {
       {msg && <p className="notice" style={{ marginTop: 12 }}>{msg}</p>}
       {error && <p className="notice error" style={{ marginTop: 12 }}>{error}</p>}
 
-      <div className="dx-filter-bar" style={{ marginTop: 16 }}>
-        <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1) }} placeholder="Search company name or email…" />
-        <div className="dx-tab-row">
-          {STATUS_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              className={`dx-tab${statusTab === tab.value ? ' dx-tab--active' : ''}`}
-              onClick={() => { setStatusTab(tab.value); setPage(1) }}
-            >
-              {tab.label}
-            </button>
-          ))}
+      <div className="dx-panel" style={{ marginTop: 16 }}>
+        <div className="dx-filter-bar" style={{ marginBottom: 16 }}>
+          <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1) }} placeholder="Search company name or email…" />
+          <div className="dx-tab-row">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                className={`dx-tab${statusTab === tab.value ? ' dx-tab--active' : ''}`}
+                onClick={() => { setStatusTab(tab.value); setPage(1) }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {loading && companies.length === 0 ? (
-        <EmptyState icon={Building2} title="Loading companies…" />
-      ) : companies.length === 0 ? (
-        <EmptyState icon={Building2} title="No companies yet" message="Create a company to send an activation email to the owner." />
-      ) : (
-        <>
-          <DataTable>
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>Email</th>
-                <th>Contact</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map((row) => (
-                <tr key={row.id}>
-                  <td><strong>{row.company_name}</strong></td>
-                  <td>{row.company_email}</td>
-                  <td>{row.contact_person || '—'}{row.contact_number ? ` · ${row.contact_number}` : ''}</td>
-                  <td><StatusBadge status={row.status} /></td>
-                  <td style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button type="button" className="btn-dx-secondary btn-sm" onClick={() => setModal(row)}>Edit</button>
-                    {row.status === 'pending_activation' && (
-                      <button
-                        type="button"
-                        className="btn-dx-secondary btn-sm"
-                        disabled={resendingId === row.id}
-                        onClick={() => handleResend(row)}
-                      >
-                        <Mail size={14} /> {resendingId === row.id ? 'Sending…' : 'Resend activation'}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </DataTable>
-          <PaginationBar page={meta.current_page} lastPage={meta.last_page} total={meta.total} onPageChange={setPage} />
-        </>
-      )}
+        <DataTable
+          headers={['Company', 'Email', 'Contact', 'Status', 'Actions']}
+          loading={loading}
+          empty={
+            <EmptyState
+              icon={Building2}
+              title={search || statusTab !== 'all' ? 'No companies match your filters' : 'No companies yet'}
+              message={search || statusTab !== 'all' ? 'Try adjusting your search or status filter.' : 'Create a company to send an activation email to the owner.'}
+            />
+          }
+        >
+          {companies.map((row) => (
+            <tr key={row.id}>
+              <td><strong>{row.company_name}</strong></td>
+              <td>{row.company_email}</td>
+              <td>{row.contact_person || '—'}{row.contact_number ? ` · ${row.contact_number}` : ''}</td>
+              <td><StatusBadge status={row.status} /></td>
+              <td>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button" className="btn-dx-secondary btn-sm" onClick={() => setModal(row)}>Edit</button>
+                  {row.status === 'pending_activation' && (
+                    <button
+                      type="button"
+                      className="btn-dx-secondary btn-sm"
+                      disabled={resendingId === row.id}
+                      onClick={() => handleResend(row)}
+                    >
+                      <Mail size={14} /> {resendingId === row.id ? 'Sending…' : 'Resend activation'}
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+
+        {meta.total > 0 && (
+          <PaginationBar
+            page={meta.current_page}
+            perPage={meta.per_page}
+            total={meta.total}
+            onPage={setPage}
+            onPerPage={() => {}}
+            perPageOptions={[meta.per_page]}
+          />
+        )}
+      </div>
 
       {modal !== null && (
         <CompanyModal company={modal.id ? modal : null} onClose={() => setModal(null)} onSaved={handleSaved} />
