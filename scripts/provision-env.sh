@@ -21,6 +21,7 @@ write_env_from_secrets() {
   : "${DB_PASSWORD:?DB_PASSWORD missing in $SECRETS_FILE}"
 
   RESEND_API_KEY="${RESEND_API_KEY:-}"
+  RESEND_API_KEY="$(printf '%s' "$RESEND_API_KEY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
 
   local app_url="${APP_URL:-https://deliverexapp.com}"
   local domain="${APP_DOMAIN:-deliverexapp.com}"
@@ -147,6 +148,7 @@ if [ -f "$SECRETS_FILE" ]; then
   merge_env_var() {
     local key="$1"
     local val="$2"
+    val="$(printf '%s' "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
     [ -n "$val" ] || return 0
     if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
       sed -i.bak "s|^${key}=.*|${key}=${val}|" "$ENV_FILE" 2>/dev/null || true
