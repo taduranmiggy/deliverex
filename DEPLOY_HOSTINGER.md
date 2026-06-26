@@ -1,5 +1,7 @@
 # Deliverex — Hostinger Deploy Guide
 
+**Gusto mo push lang, walang commands?** Basahin muna: [`docs/ZERO_TOUCH_DEPLOY.md`](docs/ZERO_TOUCH_DEPLOY.md) — isang beses na setup, tapos auto na.
+
 Dalawang paraan para auto-deploy. **Kung naka-connect na ang GitHub sa hPanel Git**, sundin ang **Path A** muna.
 
 | URL | Serves |
@@ -172,11 +174,13 @@ Build ng React sa GitHub cloud, i-commit sa `backend/public/`, tapos **hPanel Gi
 
 Hindi na kailangan ang SSH secrets (`SSH_HOST`, `SSH_PORT`, etc.) para sa deploy workflow.
 
-### Auto-deploy flow
+### Auto-deploy flow (zero-touch after one-time setup)
 
-1. Push sa `main` → [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds frontend + pushes assets
-2. hPanel → **Git** → **Deploy** (o i-enable auto-deploy on repository update)
-3. Post-deploy script tumatakbo sa server: `bash .../public_html/scripts/hostinger-hpanel-git-deploy.sh`
+1. Push sa `main` → GitHub Actions builds frontend + **laging** tumatawag sa deploy hook (kung may `DEPLOY_HOOK_TOKEN`)
+2. hPanel **Auto Deploy** nag-pull ng latest code
+3. Post-deploy script (Option A) o cron (Option C) tumatakbo: composer, migrate, cache
+
+**Note:** Dati, hindi tumatakbo ang GitHub Actions kapag may `backend/public/` sa push — na-fix na (walang `paths-ignore`).
 
 Manual: GitHub → **Actions** → **Deploy to Hostinger** → **Run workflow**
 

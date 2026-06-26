@@ -1,14 +1,11 @@
 name: Deploy to Hostinger
 
-# Hostinger shared hosting often blocks SSH from GitHub Actions IPs.
-# This workflow builds the frontend, commits assets to backend/public/, and pushes.
-# The server deploys via hPanel Git (auto-pull or manual Deploy) + post-deploy script.
+# Push to main → build frontend (if needed) → trigger server deploy hook.
+# Server-side: hPanel post-deploy script OR cron OR deploy-hook (see DEPLOY_HOSTINGER.md).
 on:
   push:
     branches:
       - main
-    paths-ignore:
-      - "backend/public/**"
   workflow_dispatch:
 
 permissions:
@@ -16,15 +13,16 @@ permissions:
 
 concurrency:
   group: deploy-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  build-and-publish:
+  build-frontend:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,7 +36,7 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: |
-          if [ -z "$VITE_API_URL" ]; then export VITE_API_URL="https://deliverexapp.com/api"; fi
+          if [ -z "${VITE_API_URL:-}" ]; then export VITE_API_URL="https://deliverexapp.com/api"; fi
           npm ci
           VITE_API_URL="$VITE_API_URL" npm run build
 
@@ -49,40 +47,47 @@ jobs:
             --exclude index.php \
             --exclude .htaccess \
             --exclude ping.php \
+            --exclude deploy-hook.php \
             --exclude storage
 
-      - name: Commit and push published assets
+      - name: Commit and push published assets (if changed)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add backend/public/
           if git diff --staged --quiet; then
-            echo "No frontend asset changes to publish."
+            echo "Frontend assets already up to date in repo."
           else
             git commit -m "chore: publish frontend build for Hostinger deploy"
             git push
           fi
 
-      - name: Trigger Hostinger deploy
+  trigger-hostinger:
+    runs-on: ubuntu-latest
+    needs: build-frontend
+    steps:
+      - name: Trigger Hostinger deploy hook
         continue-on-error: true
         env:
           DEPLOY_HOOK_TOKEN: ${{ secrets.DEPLOY_HOOK_TOKEN }}
         run: |
-          if [ -n "${DEPLOY_HOOK_TOKEN:-}" ]; then
-            curl -fsS --connect-timeout 20 --max-time 600 -X POST \
-              -H "X-Deploy-Token: $DEPLOY_HOOK_TOKEN" \
-              "https://deliverexapp.com/deploy-hook.php" 2>/dev/null && exit 0
+          if [ -z "${DEPLOY_HOOK_TOKEN:-}" ]; then
+            echo "DEPLOY_HOOK_TOKEN not set — server will deploy via hPanel auto-pull or cron (within ~5 min)."
+            exit 0
           fi
-          echo "Deploy will run via hPanel auto-deploy or cron (no action needed)."
+          echo "Calling deploy hook..."
+          curl -fsS --connect-timeout 20 --max-time 600 -X POST \
+            -H "X-Deploy-Token: $DEPLOY_HOOK_TOKEN" \
+            "https://deliverexapp.com/deploy-hook.php"
+          echo "Deploy hook finished."
 
       - name: Production health check (informational)
         continue-on-error: true
         run: |
-          sleep 30
+          sleep 45
           body="$(curl -fsS --connect-timeout 20 https://deliverexapp.com/ping.php 2>/dev/null || echo 'pending')"
           echo "$body"
           if echo "$body" | grep -q 'vendor=yes'; then
             echo "Production: ready"
           else
-            echo "Production: deploy in progress (hPanel auto-deploy / cron, no action needed)"
-          fi
+            echo "Production: deploy may still be running — check hPanel post-deploy script or cron."
