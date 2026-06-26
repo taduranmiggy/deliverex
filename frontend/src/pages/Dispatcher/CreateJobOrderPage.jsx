@@ -5,7 +5,7 @@ import {
   deleteJobOrder, fetchJobOrder, fetchJobOrders,
   fetchMasterDataOptions, updateJobOrder,
 } from '../../api/dispatcher'
-import ClientCombobox from '../../components/ClientCombobox'
+import CompanyCombobox from '../../components/CompanyCombobox'
 import CreatableCombobox from '../../components/CreatableCombobox'
 import { useToast } from '../../context/ToastContext'
 import { formatJobPublicId } from '../../utils/formatPhp'
@@ -22,9 +22,8 @@ import { FilterSelect } from '../../components/ui'
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BLANK = {
-  client_id: '', custom_client_name: '',
+  company_id: '', client_id: '',
   contact_person: '', customer_email: '', customer_contact: '',
-  save_as_client: true,
   quarry_id: '', preferred_vehicle_type_id: '',
   pickup_location: '', dropoff_location: '',
   pickup_province: '', pickup_city: '', pickup_barangay: '', pickup_street: '', pickup_landmark: '',
@@ -35,7 +34,7 @@ const BLANK = {
 }
 
 const STEPS = [
-  { id: 1, label: 'Client',    hint: 'Client & contacts' },
+  { id: 1, label: 'Company',   hint: 'Company & contacts' },
   { id: 2, label: 'Material',  hint: 'Type, spec & load' },
   { id: 3, label: 'Source & Destination', hint: 'Pickup & delivery' },
   { id: 4, label: 'Schedule',  hint: 'Start, end & priority' },
@@ -93,9 +92,11 @@ function buildSpecSelection(initial, specOptions) {
 
 function buildClientSelection(initial, clients) {
   if (!initial) return null
-  if (initial.client_id) {
-    const client = clients.find((c) => String(c.id) === String(initial.client_id))
-    return { type: 'existing', clientId: initial.client_id, label: client?.client_name || initial.client?.client_name || `Client #${initial.client_id}` }
+  const companyId = initial.company_id ?? initial.client_id
+  if (companyId) {
+    const client = clients.find((c) => String(c.id) === String(companyId))
+    const label = client?.company_name || client?.client_name || initial.company?.company_name || initial.client?.client_name || `Company #${companyId}`
+    return { type: 'existing', clientId: companyId, companyId, label }
   }
   const custom = initial.custom_client_name || initial.customer_name || buildDisplayName(initial)
   if (custom) return { type: 'custom', label: custom }
@@ -206,7 +207,7 @@ function RR({ label, value }) {
 
 function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading, onSaved, onCancel, onRefreshOptions }) {
   const isEdit       = Boolean(initial?.id)
-  const clients      = options.clients         || []
+  const clients      = options.companies || options.clients || []
   const materialTypes = useMemo(() => options.material_types || [], [options.material_types])
   const quarries     = options.quarries        || []
   const toast        = useToast()
@@ -254,12 +255,11 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
 
     return {
       ...BLANK,
-      client_id: initial.client_id ? String(initial.client_id) : '',
-      custom_client_name: initial.custom_client_name ?? (initial.client_id ? '' : (initial.customer_name || buildDisplayName(initial) || '')),
-      contact_person: initial.contact_person ?? initial.client?.contact_person ?? '',
-      customer_email: initial.customer_email ?? initial.client?.email ?? '',
-      customer_contact: initial.customer_contact ?? initial.client?.phone ?? '',
-      save_as_client: !initial.client_id,
+      company_id: initial.company_id ?? initial.client_id ? String(initial.company_id ?? initial.client_id) : '',
+      client_id: initial.company_id ?? initial.client_id ? String(initial.company_id ?? initial.client_id) : '',
+      contact_person: initial.contact_person ?? initial.client?.contact_person ?? initial.company?.contact_person ?? '',
+      customer_email: initial.customer_email ?? initial.client?.email ?? initial.company?.company_email ?? '',
+      customer_contact: initial.customer_contact ?? initial.client?.phone ?? initial.company?.contact_number ?? '',
       quarry_id: quarryIdStr,
       preferred_vehicle_type_id: initial.preferred_vehicle_type_id ?? '',
       pickup_location: pickupFromInitial || quarryPickupFallback,
@@ -309,7 +309,6 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
   )
 
   const scheduleMin = minDatetimeLocalValue()
-  const isCustomClient = !form.client_id && Boolean(form.custom_client_name?.trim())
 
   const stepPanelRef  = useRef(null)
   // Tracks every field the dispatcher has manually typed into.
@@ -411,8 +410,9 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     setClientSelection(selection)
     const filled = {}
     if (selection?.type === 'existing') {
-      const client = findClientById(selection.clientId)
-      const pref   = findDefaultPreference(selection.clientId)
+      const id = selection.companyId ?? selection.clientId
+      const client = findClientById(id)
+      const pref   = findDefaultPreference(id)
       // Client changed — allow contact fields to be re-filled even if user
       // had previously edited them for a different client.
       userEditedRef.current.delete('contact_person')
@@ -424,10 +424,10 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       setForm((f) => {
         const next = {
           ...f,
-          client_id: String(selection.clientId), custom_client_name: '', save_as_client: false,
+          company_id: String(id), client_id: String(id),
           contact_person:   client?.contact_person || '',
-          customer_email:   client?.email          || '',
-          customer_contact: client?.phone          || '',
+          customer_email:   client?.company_email || client?.email || '',
+          customer_contact: client?.contact_number || client?.phone || '',
           preferred_vehicle_type_id: pref?.vehicle_type_id ? String(pref.vehicle_type_id) : f.preferred_vehicle_type_id,
         }
         if (canAutoFillPickup) {
@@ -448,13 +448,9 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       if (canAutoFillPickup) filled.pickup_location = true
       if (pref?.vehicle_type_id) filled.preferred_vehicle_type_id = true
       setAutoFilled(filled)
-    } else if (selection?.type === 'custom') {
-      userEditedRef.current.clear()
-      setForm((f) => ({ ...f, client_id: '', custom_client_name: selection.label, save_as_client: true }))
-      setAutoFilled({})
     } else {
       userEditedRef.current.clear()
-      setForm((f) => ({ ...f, client_id: '', custom_client_name: '', save_as_client: true, contact_person: '', customer_email: '', customer_contact: '' }))
+      setForm((f) => ({ ...f, company_id: '', client_id: '', contact_person: '', customer_email: '', customer_contact: '' }))
       setAutoFilled({})
     }
     setFE((prev) => { if (!prev.client) return prev; const n = { ...prev }; delete n.client; return n })
@@ -497,8 +493,8 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
   const validateStep = (step) => {
     const errs = {}
     if (step === 1) {
-      if (!form.client_id && !form.custom_client_name?.trim())
-        errs.client = 'Select an existing client or enter a custom client name.'
+      if (!form.company_id && !form.client_id)
+        errs.client = 'Select an active company.'
     }
     if (step === 2) {
       if (!form.material_type_id && materialTypeSelection?.type !== 'custom')
@@ -541,12 +537,11 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
 
   // ── Final payload + submit ─────────────────────────────────────────────────
   const buildPayload = () => ({
-    client_id:                form.client_id ? Number(form.client_id) : null,
-    custom_client_name:       !form.client_id && form.custom_client_name?.trim() ? form.custom_client_name.trim() : null,
+    company_id:               form.company_id || form.client_id ? Number(form.company_id || form.client_id) : null,
+    client_id:                form.company_id || form.client_id ? Number(form.company_id || form.client_id) : null,
     contact_person:           form.contact_person || null,
     customer_email:           form.customer_email || null,
     customer_contact:         form.customer_contact || null,
-    save_as_client:           isCustomClient ? Boolean(form.save_as_client) : false,
     quarry_id:                form.quarry_id ? Number(form.quarry_id) : null,
     preferred_vehicle_type_id: form.preferred_vehicle_type_id ? Number(form.preferred_vehicle_type_id) : null,
     pickup_location:          form.pickup_location || null,
@@ -647,13 +642,13 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
         {/* ── STEP 1: Client Information ── */}
         {currentStep === 1 && (
           <>
-            <p className="dx-wizard-step-title">Client Information</p>
-            <p className="dx-wizard-step-subtitle">Who is this delivery for? Select an existing client or enter a new one.</p>
+            <p className="dx-wizard-step-title">Company Information</p>
+            <p className="dx-wizard-step-subtitle">Select the B2B company for this delivery. Contact details are filled from the company record.</p>
 
             <div className="dx-wiz-grid" style={{ marginBottom: 14 }}>
-              <FieldWrap label={<>Client {autoFilled.client_id && <AutoFilledTag />}</>} required full error={fieldErrors.client}>
-                <ClientCombobox
-                  clients={clients}
+              <FieldWrap label={<>Company {autoFilled.client_id && <AutoFilledTag />}</>} required full error={fieldErrors.client}>
+                <CompanyCombobox
+                  companies={clients}
                   value={clientSelection}
                   onChange={handleClientChange}
                   loading={clientsLoading}
@@ -662,7 +657,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
               </FieldWrap>
 
               <FieldWrap label={<>Contact Person {autoFilled.contact_person && <AutoFilledTag />}</>}>
-                <WizInput value={form.contact_person} onChange={set('contact_person')} placeholder="Optional" />
+                <WizInput value={form.contact_person} onChange={set('contact_person')} placeholder="From company record" readOnly />
               </FieldWrap>
 
               <FieldWrap label={<>Contact Number {autoFilled.customer_contact && <AutoFilledTag />}</>} error={fieldErrors.customer_contact}>
@@ -672,29 +667,24 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
                   autoComplete="tel"
                   value={form.customer_contact}
                   onChange={set('customer_contact')}
-                  placeholder="Optional"
+                  placeholder="From company record"
+                  readOnly
                   error={fieldErrors.customer_contact}
                 />
               </FieldWrap>
 
-              <FieldWrap label={<>Email {autoFilled.customer_email && <AutoFilledTag />}</>} error={fieldErrors.customer_email}>
+              <FieldWrap label={<>Email {autoFilled.customer_email && <AutoFilledTag />}</>} required error={fieldErrors.customer_email}>
                 <WizInput
                   type="text"
                   inputMode="email"
                   autoComplete="email"
                   value={form.customer_email}
                   onChange={set('customer_email')}
-                  placeholder="Optional"
+                  placeholder="From company record"
+                  readOnly
                   error={fieldErrors.customer_email}
                 />
               </FieldWrap>
-
-              {isCustomClient && (
-                <label className="dx-wiz-label dx-wiz-full" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer', paddingTop: 4 }}>
-                  <input type="checkbox" checked={form.save_as_client} onChange={set('save_as_client')} style={{ width: 'auto', accentColor: 'var(--color-primary)' }} />
-                  <span style={{ fontSize: '0.875rem', color: 'var(--text)' }}>Save this client to Master Data for future orders</span>
-                </label>
-              )}
             </div>
           </>
         )}

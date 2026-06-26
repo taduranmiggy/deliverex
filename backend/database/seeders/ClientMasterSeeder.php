@@ -2,8 +2,9 @@
 
 namespace Database\Seeders;
 
-use App\Models\Client;
+use App\Models\Company;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class ClientMasterSeeder extends Seeder
 {
@@ -22,9 +23,13 @@ class ClientMasterSeeder extends Seeder
         ];
 
         foreach ($clients as $name) {
-            Client::updateOrCreate(
-                ['client_name' => trim($name)],
-                ['status' => 'active']
+            $slug = Str::slug($name, '.');
+            Company::updateOrCreate(
+                ['company_name' => trim($name)],
+                [
+                    'company_email' => "{$slug}@demo.deliverex",
+                    'status' => Company::STATUS_ACTIVE,
+                ]
             );
         }
     }

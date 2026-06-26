@@ -10,15 +10,20 @@ use Illuminate\Support\Facades\Storage;
 class PortalController extends Controller
 {
     /**
-     * List job orders linked to the signed-in customer.
+     * List job orders for the signed-in customer's company.
      */
     public function orders(Request $request)
     {
         /** @var \App\Models\User $user */
         $user = $request->user();
+        $companyId = $user->companyUser?->company_id;
+
+        if (! $companyId) {
+            return response()->json(['data' => []]);
+        }
 
         $orders = JobOrder::query()
-            ->where('customer_user_id', $user->id)
+            ->where('company_id', $companyId)
             ->with([
                 'assignments' => function ($q) {
                     $q->latest('assigned_at');
@@ -73,7 +78,7 @@ class PortalController extends Controller
     }
 
     /**
-     * Link a job order to the signed-in customer using tracking code + email match.
+     * @deprecated B2B deliveries auto-link by company. Kept for backward compatibility.
      */
     public function linkDelivery(Request $request)
     {
@@ -83,6 +88,7 @@ class PortalController extends Controller
 
         /** @var \App\Models\User $user */
         $user = $request->user();
+        $companyId = $user->companyUser?->company_id;
         $code = strtoupper(trim($data['tracking_code']));
 
         $job = JobOrder::query()->where('tracking_code', $code)->first();
@@ -91,30 +97,20 @@ class PortalController extends Controller
             return response()->json(['message' => 'Tracking ID not found.'], 404);
         }
 
-        $jobEmail = strtolower(trim((string) $job->customer_email));
-        $userEmail = strtolower(trim((string) $user->email));
+        if ($companyId && (int) $job->company_id === (int) $companyId) {
+            if ($job->customer_user_id !== $user->id) {
+                $job->update(['customer_user_id' => $user->id]);
+            }
 
-        if ($jobEmail === '' || $jobEmail !== $userEmail) {
             return response()->json([
-                'message' => 'This tracking ID is not linked to your email address.',
-            ], 403);
+                'message' => 'Delivery is already linked to your company.',
+                'linked_count' => 1,
+                'tracking_code' => $job->tracking_code,
+            ]);
         }
-
-        $linkedByCode = 0;
-        if ($job->customer_user_id !== $user->id) {
-            $job->update(['customer_user_id' => $user->id]);
-            $linkedByCode = 1;
-        }
-
-        $linkedByEmail = JobOrder::query()
-            ->whereNull('customer_user_id')
-            ->where('customer_email', $user->email)
-            ->update(['customer_user_id' => $user->id]);
 
         return response()->json([
-            'message' => 'Delivery linked successfully.',
-            'linked_count' => $linkedByCode + $linkedByEmail,
-            'tracking_code' => $job->tracking_code,
-        ]);
+            'message' => 'This delivery is not linked to your company account.',
+        ], 403);
     }
 }

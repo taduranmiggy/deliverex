@@ -2,34 +2,23 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-
-class ClientQuarryVehiclePreference extends Model
+/**
+ * @deprecated Use CompanyQuarryVehiclePreference.
+ */
+class ClientQuarryVehiclePreference extends CompanyQuarryVehiclePreference
 {
-    protected $fillable = [
-        'client_id',
-        'quarry_id',
-        'vehicle_type_id',
-        'is_default',
-        'status',
-    ];
-
-    protected $casts = [
-        'is_default' => 'boolean',
-    ];
-
     public function client()
     {
-        return $this->belongsTo(Client::class);
+        return $this->company();
     }
 
-    public function quarry()
+    public function setClientIdAttribute($value): void
     {
-        return $this->belongsTo(Quarry::class);
+        $this->attributes['company_id'] = $value;
     }
 
-    public function vehicleType()
+    public function getClientIdAttribute()
     {
-        return $this->belongsTo(VehicleType::class);
+        return $this->company_id;
     }
 }

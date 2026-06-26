@@ -84,7 +84,7 @@ class UserController extends Controller
     {
         if ($roleName === 'customer') {
             throw ValidationException::withMessages([
-                'role_id' => ['Customer accounts must register at /customer/signup.'],
+                'role_id' => ['Customer accounts are created via Admin → Company Management, not here.'],
             ]);
         }
 

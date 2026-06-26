@@ -81,11 +81,8 @@ function CustomerLoginPage() {
           <div>customer@deliverex.com / customer123</div>
         </div>
 
-        <p className="auth-alt-link">
-          No account yet?{' '}
-          <Link className="auth-inline-link" to="/customer/signup">
-            Create account
-          </Link>
+        <p className="auth-alt-link" style={{ marginTop: 16, color: 'var(--muted)' }}>
+          Company accounts are created by your administrator. Contact them if you need access.
         </p>
       </div>
       <LoadingOverlay open={submitting} message="Signing in" submessage="Please wait." />

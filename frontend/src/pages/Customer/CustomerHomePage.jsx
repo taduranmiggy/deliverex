@@ -115,8 +115,7 @@ function CustomerHomePage() {
 
           {!isCustomer && (
             <div className="pwa-hero__cta-row">
-              <Link to="/customer/login" className="btn-dx-secondary pwa-hero__cta">Sign In</Link>
-              <Link to="/customer/signup" className="btn-dx-primary pwa-hero__cta">Create Account</Link>
+              <Link to="/customer/login" className="btn-dx-primary pwa-hero__cta">Sign In</Link>
             </div>
           )}
         </div>

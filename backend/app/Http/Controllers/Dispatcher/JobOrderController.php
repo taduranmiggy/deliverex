@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Dispatcher;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Models\Client;
+use App\Models\CompanyQuarryVehiclePreference;
 use App\Models\ClientQuarryVehiclePreference;
+use App\Services\Company\CompanyService;
 use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\MaterialSpecification;
@@ -21,8 +24,10 @@ use Illuminate\Support\Str;
 
 class JobOrderController extends Controller
 {
-    public function __construct(private MaterialMasterDataService $materialMasterData)
-    {
+    public function __construct(
+        private MaterialMasterDataService $materialMasterData,
+        private CompanyService $companyService,
+    ) {
     }
 
     public function index()
@@ -30,6 +35,7 @@ class JobOrderController extends Controller
         return response()->json(
             JobOrder::with([
                 'creator',
+                'company',
                 'client',
                 'quarry',
                 'preferredVehicleType',
@@ -60,7 +66,8 @@ class JobOrderController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'client_id'                  => 'nullable|exists:clients,id',
+            'company_id'                 => 'required_without:client_id|nullable|exists:companies,id',
+            'client_id'                  => 'required_without:company_id|nullable|exists:companies,id',
             'custom_client_name'         => 'nullable|string|max:200',
             // legacy fields kept for backward compatibility
             'client_mode'                => 'nullable|in:existing,new',
@@ -104,53 +111,45 @@ class JobOrderController extends Controller
         ]);
 
         $data = $this->normalizeClientInput($data);
+        $data['company_id'] = $data['company_id'] ?? $data['client_id'] ?? null;
 
-        if (empty($data['client_id']) && empty($data['custom_client_name'])) {
-            return response()->json(['message' => 'Select an existing client or enter a custom client name.'], 422);
+        if (empty($data['company_id'])) {
+            return response()->json(['message' => 'Company is required.'], 422);
         }
 
-        if (! empty($data['client_id']) && ! empty($data['custom_client_name'])) {
-            return response()->json(['message' => 'Provide either client_id or custom_client_name, not both.'], 422);
+        if (! empty($data['custom_client_name'])) {
+            return response()->json(['message' => 'Custom client names are no longer supported. Select an active company.'], 422);
         }
 
         JobOrderScheduleValidator::validatePayload($data);
 
         $data = $this->materialMasterData->resolveJobOrderMaterials($data);
 
-        // Resolve / create the client.
-        $client = null;
-        if (! empty($data['client_id'])) {
-            $client = Client::query()->findOrFail($data['client_id']);
-            $data['custom_client_name'] = null;
+        $company = Company::query()
+            ->where('id', $data['company_id'])
+            ->where('status', Company::STATUS_ACTIVE)
+            ->firstOrFail();
 
-            if (empty($data['quarry_id'])) {
-                $pref = ClientQuarryVehiclePreference::query()
-                    ->where('client_id', $client->id)
-                    ->where('is_default', true)
-                    ->where('status', 'active')
-                    ->first();
-                $data['quarry_id'] = $pref?->quarry_id;
-                if (empty($data['preferred_vehicle_type_id'])) {
-                    $data['preferred_vehicle_type_id'] = $pref?->vehicle_type_id;
-                }
-            }
-        } else {
-            $customName = trim((string) $data['custom_client_name']);
-            $data['custom_client_name'] = $customName;
+        $data['company_id'] = $company->id;
 
-            if (! empty($data['save_as_client'])) {
-                $client = $this->saveNewClientToMasterData([
-                    'customer_name'    => $customName,
-                    'custom_client_name' => $customName,
-                    'contact_person'   => $data['contact_person'] ?? null,
-                    'customer_email'   => $data['customer_email'] ?? null,
-                    'customer_contact' => $data['customer_contact'] ?? null,
-                    'pickup_location'  => $data['pickup_location'] ?? null,
-                ]);
-                $data['client_id'] = $client->id;
-                $data['custom_client_name'] = null;
-                $this->maybeCreatePreference($client, $data);
+        if (empty($data['quarry_id'])) {
+            $pref = CompanyQuarryVehiclePreference::query()
+                ->where('company_id', $company->id)
+                ->where('is_default', true)
+                ->where('status', 'active')
+                ->first();
+            $data['quarry_id'] = $pref?->quarry_id;
+            if (empty($data['preferred_vehicle_type_id'])) {
+                $data['preferred_vehicle_type_id'] = $pref?->vehicle_type_id;
             }
+        }
+
+        $data['customer_email'] = Str::lower(trim($company->company_email));
+        $data['customer_contact'] = $company->contact_number;
+        $data['contact_person'] = $company->contact_person;
+
+        if (empty($data['customer_email'])) {
+            return response()->json(['message' => 'Selected company has no email on file.'], 422);
         }
 
         // A job needs a source: either a quarry/supplier (possibly auto-filled from the
@@ -160,7 +159,7 @@ class JobOrderController extends Controller
         }
 
         // Resolve full name from client, custom name, or legacy parts
-        $data = $this->resolveCustomerName($data, $client?->client_name ?? $data['custom_client_name'] ?? '');
+        $data = $this->resolveCustomerName($data, $company->company_name ?? '');
 
         // Resolve combined address strings from structured parts
         $data = $this->resolveAddresses($data);
@@ -172,19 +171,8 @@ class JobOrderController extends Controller
             $data['pickup_location'] = $quarry?->quarry_name;
         }
 
-        $resolvedEmail = $data['customer_email'] ?? $client?->email;
-        $normalizedEmail = $resolvedEmail ? Str::lower($resolvedEmail) : null;
-        $customerAccount = $normalizedEmail
-            ? User::query()
-                ->where('email', $normalizedEmail)
-                ->whereHas('role', fn ($q) => $q->where('name', 'customer'))
-                ->first()
-            : null;
-
         $data['created_by']         = $request->user()?->id;
-        $data['customer_email']     = $normalizedEmail;
-        $data['customer_user_id']   = $customerAccount?->id;
-        $data['customer_contact']   = $data['customer_contact'] ?? $client?->phone;
+        $data['customer_user_id']   = $this->companyService->resolveCustomerUserIdForCompany($company);
         $data['job_requirements']   = $data['job_requirements'] ?? $data['special_handling_instructions'] ?? null;
         $data['volume_m3']          = $data['volume_m3'] ?? $data['load_volume_m3'];
         $data['tracking_code']      = strtoupper(Str::random(10));
@@ -192,18 +180,19 @@ class JobOrderController extends Controller
         $data['priority']           = $data['priority'] ?? 'normal';
 
         // Strip non-column helper fields before persisting.
-        unset($data['client_mode'], $data['save_as_client'], $data['contact_person']);
+        unset($data['client_mode'], $data['save_as_client'], $data['contact_person'], $data['client_id']);
 
         $jobOrder = JobOrder::create($data);
         $this->geocodeDropoff($jobOrder);
 
         AuditLogger::record($request->user(), 'job_order.created', JobOrder::class, $jobOrder->id, [
             'tracking_code' => $jobOrder->tracking_code,
-            'client_id'     => $jobOrder->client_id,
+            'company_id'     => $jobOrder->company_id,
+            'client_id'     => $jobOrder->company_id,
             'custom_client' => (bool) $request->input('custom_client_name'),
         ], $request);
 
-        return response()->json($jobOrder->fresh()->load('client', 'quarry', 'preferredVehicleType', 'materialTypeRef', 'materialSpecification'), 201);
+        return response()->json($jobOrder->fresh()->load('company', 'client', 'quarry', 'preferredVehicleType', 'materialTypeRef', 'materialSpecification'), 201);
     }
 
     /**
@@ -257,7 +246,8 @@ class JobOrderController extends Controller
     public function update(Request $request, JobOrder $jobOrder)
     {
         $data = $request->validate([
-            'client_id'                  => 'sometimes|nullable|exists:clients,id',
+            'client_id'                  => 'sometimes|nullable|exists:companies,id',
+            'company_id'                 => 'sometimes|nullable|exists:companies,id',
             'custom_client_name'         => 'sometimes|nullable|string|max:200',
             // structured name parts (legacy)
             'customer_first_name'        => 'sometimes|nullable|string|max:80',
@@ -311,12 +301,17 @@ class JobOrderController extends Controller
             $data = array_merge($data, $this->materialMasterData->resolveJobOrderMaterials($merged));
         }
 
-        if (array_key_exists('client_id', $data) || array_key_exists('custom_client_name', $data)) {
+        if (array_key_exists('client_id', $data) || array_key_exists('company_id', $data) || array_key_exists('custom_client_name', $data)) {
+            if (array_key_exists('client_id', $data) && ! array_key_exists('company_id', $data)) {
+                $data['company_id'] = $data['client_id'];
+            }
             $data = $this->normalizeClientInput($data);
-            if (! empty($data['client_id'])) {
+            if (! empty($data['company_id']) || ! empty($data['client_id'])) {
+                $data['company_id'] = $data['company_id'] ?? $data['client_id'];
                 $data['custom_client_name'] = null;
             }
         }
+        unset($data['client_id']);
 
         // Keep structured name fields in sync with legacy customer_name
         $nameFields = ['customer_first_name', 'customer_middle_name', 'customer_last_name', 'customer_suffix', 'customer_name', 'custom_client_name'];

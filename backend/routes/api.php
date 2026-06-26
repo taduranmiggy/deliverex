@@ -1,7 +1,8 @@
 <?php
 
-use App\Http\Controllers\Admin\DocumentFileController;
+use App\Http\Controllers\Admin\CompanyController as AdminCompanyController;
 use App\Http\Controllers\Admin\AuditLogsController;
+use App\Http\Controllers\Admin\DocumentFileController;
 use App\Http\Controllers\Admin\DriverController as AdminDriverController;
 use App\Http\Controllers\Admin\MasterDataController as AdminMasterDataController;
 use App\Http\Controllers\Admin\OcrReviewController;
@@ -9,7 +10,9 @@ use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VehicleController as AdminVehicleController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\CompanyActivationController;
 use App\Http\Controllers\Customer\InquiryController;
+use App\Http\Controllers\Customer\CompanyUserController;
 use App\Http\Controllers\Customer\PortalController as CustomerPortalController;
 use App\Http\Controllers\Customer\TrackingController as CustomerTrackingController;
 use App\Http\Controllers\DriverPerformanceController;
@@ -47,7 +50,8 @@ Route::post('/auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:10,1');
 Route::post('/auth/refresh', [AuthController::class, 'refresh'])
     ->middleware('throttle:30,1');
-Route::post('/auth/register/customer', [AuthController::class, 'registerCustomer'])
+Route::get('/auth/company/activate/{token}', [CompanyActivationController::class, 'show']);
+Route::post('/auth/company/activate/{token}', [CompanyActivationController::class, 'activate'])
     ->middleware('throttle:10,1');
 Route::get('/auth/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
     ->middleware('signed')
@@ -80,6 +84,13 @@ Route::middleware('auth.api')->group(function () {
         Route::post('/link-delivery', [CustomerPortalController::class, 'linkDelivery']);
     });
 
+    Route::middleware(['role:customer', 'company.role:owner'])->prefix('company/users')->group(function () {
+        Route::get('/', [CompanyUserController::class, 'index']);
+        Route::post('/', [CompanyUserController::class, 'store']);
+        Route::put('/{companyUser}', [CompanyUserController::class, 'update']);
+        Route::delete('/{companyUser}', [CompanyUserController::class, 'destroy']);
+    });
+
     // ─── Admin ────────────────────────────────────────────────────────────────
     Route::middleware('role:admin')->prefix('admin')->group(function () {
         Route::get('/roles',                [RolesController::class, 'index']);
@@ -89,6 +100,12 @@ Route::middleware('auth.api')->group(function () {
         Route::post('/users',               [AdminUserController::class, 'store']);
         Route::put('/users/{user}',         [AdminUserController::class, 'update']);
         Route::delete('/users/{user}',      [AdminUserController::class, 'destroy']);
+
+        Route::get('/companies',                        [AdminCompanyController::class, 'index']);
+        Route::post('/companies',                       [AdminCompanyController::class, 'store']);
+        Route::get('/companies/{company}',              [AdminCompanyController::class, 'show']);
+        Route::put('/companies/{company}',              [AdminCompanyController::class, 'update']);
+        Route::post('/companies/{company}/resend-activation', [AdminCompanyController::class, 'resendActivation']);
 
         Route::get('/drivers',              [AdminDriverController::class, 'index']);
         Route::post('/drivers',             [AdminDriverController::class, 'store']);
@@ -143,6 +160,7 @@ Route::middleware('auth.api')->group(function () {
         Route::post('/assignments',                   [DispatcherAssignmentController::class, 'store']);
 
         Route::get('/clients/{client}/history',       [ClientHistoryController::class, 'show']);
+        Route::get('/companies/{company}/history',  [ClientHistoryController::class, 'showCompany']);
         Route::get('/best-fit/{jobOrder}',            [BestFitController::class, 'show']);
         Route::get('/calendar',                       [CalendarController::class, 'index']);
         Route::post('/master-data/material-types',    [MaterialMasterDataController::class, 'storeMaterialType']);

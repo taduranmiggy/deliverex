@@ -83,6 +83,21 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(JobOrder::class, 'customer_user_id');
     }
 
+    public function companyUser()
+    {
+        return $this->hasOne(CompanyUser::class);
+    }
+
+    public function company()
+    {
+        return $this->hasOneThrough(Company::class, CompanyUser::class, 'user_id', 'id', 'id', 'company_id');
+    }
+
+    public function isCompanyOwner(): bool
+    {
+        return $this->companyUser?->isOwner() ?? false;
+    }
+
     public function assignmentsCreated()
     {
         return $this->hasMany(DispatchAssignment::class, 'assigned_by');

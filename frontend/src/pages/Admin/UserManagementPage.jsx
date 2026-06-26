@@ -79,7 +79,7 @@ function UserModal({ user, roles, onClose, onSaved }) {
             <input type="password" minLength={isEdit ? 0 : 8} required={!isEdit} value={form.password} onChange={handlePasswordChange} placeholder="Min 8 characters" />
           </label>
           <p style={{ gridColumn: '1/-1', margin: '-8px 0 0', fontSize: '0.8125rem', color: 'var(--muted)' }}>
-            Fleet driver logins are created in <strong>Master Data → Generate Account</strong>. Customers register at <strong>/customer/signup</strong>.
+            Fleet driver logins are created in <strong>Master Data → Generate Account</strong>. B2B customer accounts are created in <strong>Company Management</strong>.
           </p>
           <label>Phone <input value={form.phone ?? ''} onChange={set('phone')} placeholder="+63 9XX" /></label>
           <label>Role

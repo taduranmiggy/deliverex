@@ -5,7 +5,7 @@ import useAuth from '../../hooks/useAuth'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
 import { isStandalonePwa } from '../../utils/pwaUtils'
-import { Link2, Lock, LogOut, Package, Settings, User } from 'lucide-react'
+import { Link2, Lock, LogOut, Package, Settings, User, Users } from 'lucide-react'
 
 function CustomerAccountPage() {
   const { user, isAuthenticated, role, logout, updateUser } = useAuth()
@@ -70,7 +70,6 @@ function CustomerAccountPage() {
           </p>
           <div className="pwa-empty-state__actions">
             <Link to={signInPath} className="btn-dx-primary btn-lg">Sign In</Link>
-            <Link to="/customer/signup" className="btn-dx-secondary btn-lg">Create Account</Link>
           </div>
           <p className="pwa-section__hint" style={{ marginTop: 24 }}>
             Drivers and staff should use the web browser at <strong>/driver</strong> or <strong>/login</strong>.
@@ -85,13 +84,18 @@ function CustomerAccountPage() {
       <CustomerPageHeader
         eyebrow="Account"
         title={user?.name}
-        description={user?.email}
+        description={user?.company_name ? `${user.company_name} · ${user?.email}` : user?.email}
       />
 
       <div className="pwa-account-links">
         <Link to="/customer/deliveries" className="pwa-account-link">
           <Package size={18} /> My Deliveries
         </Link>
+        {user?.company_role === 'owner' && (
+          <Link to="/customer/team" className="pwa-account-link">
+            <Users size={18} /> Team
+          </Link>
+        )}
         <Link to="/customer/link-delivery" className="pwa-account-link">
           <Link2 size={18} /> Link Delivery
         </Link>

@@ -141,7 +141,7 @@ function LandingPage() {
           <div>
             <p style={{ color: 'rgba(255,255,255,0.75)', fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.75rem' }}>Account</p>
             <p style={{ margin: '6px 0' }}><Link to="/login" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Sign in</Link></p>
-            <p style={{ margin: '6px 0' }}><Link to="/customer/signup" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Create account</Link></p>
+            <p style={{ margin: '6px 0', color: 'rgba(255,255,255,0.65)', fontSize: '0.875rem' }}>Company accounts are created by your administrator.</p>
           </div>
         </div>
         <p style={{ textAlign: 'center', margin: 0, borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 20 }}>

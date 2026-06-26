@@ -14,7 +14,7 @@ class CustomerHistoryService
     public function analyze(Client $client, ?int $excludeJobOrderId = null): array
     {
         $orders = JobOrder::query()
-            ->where('client_id', $client->id)
+            ->where('company_id', $client->id)
             ->when($excludeJobOrderId, fn ($q) => $q->where('id', '!=', $excludeJobOrderId))
             ->where('status', '!=', 'cancelled')
             ->with(['quarry', 'preferredVehicleType', 'materialTypeRef', 'materialSpecification'])
@@ -22,7 +22,7 @@ class CustomerHistoryService
             ->get();
 
         $preference = ClientQuarryVehiclePreference::query()
-            ->where('client_id', $client->id)
+            ->where('company_id', $client->id)
             ->where('status', 'active')
             ->where('is_default', true)
             ->with(['quarry', 'vehicleType'])
@@ -42,7 +42,7 @@ class CustomerHistoryService
 
         $recent = $orders->first();
         $lastDelivery = DispatchAssignment::query()
-            ->whereHas('jobOrder', fn ($q) => $q->where('client_id', $client->id))
+            ->whereHas('jobOrder', fn ($q) => $q->where('company_id', $client->id))
             ->where('status', 'completed')
             ->whereNotNull('completed_at')
             ->orderByDesc('completed_at')
@@ -59,6 +59,7 @@ class CustomerHistoryService
 
         return [
             'client_id'        => $client->id,
+            'company_id'       => $client->id,
             'total_orders'     => $orders->count(),
             'preferred_quarry' => $topQuarry ? [
                 'id'   => $topQuarry->id,

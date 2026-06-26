@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Company;
 use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Role;
@@ -165,10 +166,18 @@ class DispatchDemoSeeder extends Seeder
         ];
 
         foreach ($jobDefs as $job) {
+            $companyId = null;
+            if (! empty($job['customer_email'])) {
+                $companyId = Company::query()
+                    ->whereRaw('LOWER(company_email) = ?', [strtolower(trim($job['customer_email']))])
+                    ->value('id');
+            }
+
             JobOrder::firstOrCreate(
                 ['tracking_code' => $job['tracking_code']],
                 array_merge($job, [
                     'created_by'       => $dispatcher->id,
+                    'company_id'       => $companyId,
                     'customer_user_id' => $customer?->id,
                 ])
             );

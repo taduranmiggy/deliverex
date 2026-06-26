@@ -194,11 +194,8 @@ function LoginPage() {
               <div>Manager: manager@deliverex.com / manager123</div>
               <div>Customer: customer@deliverex.com / customer123</div>
             </div>
-            <p className="auth-alt-link" style={{ marginTop: 16 }}>
-              New customer?{' '}
-              <Link className="auth-inline-link" to="/customer/signup">
-                Create account
-              </Link>
+            <p className="auth-alt-link" style={{ marginTop: 16, color: 'var(--muted)' }}>
+              B2B company accounts are provisioned by an administrator.
             </p>
           </div>
         </div>

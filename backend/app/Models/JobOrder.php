@@ -43,7 +43,7 @@ class JobOrder extends Model
         'customer_middle_name',
         'customer_last_name',
         'customer_suffix',
-        'client_id',
+        'company_id',
         'custom_client_name',
         'customer_email',
         'customer_contact',
@@ -91,11 +91,14 @@ class JobOrder extends Model
      */
     public function getDisplayNameAttribute(): string
     {
-        if ($this->relationLoaded('client') && $this->client?->client_name) {
-            return $this->client->client_name;
+        if ($this->relationLoaded('company') && $this->company?->company_name) {
+            return $this->company->company_name;
         }
-        if ($this->client_id && $this->client?->client_name) {
-            return $this->client->client_name;
+        if ($this->company_id && $this->company?->company_name) {
+            return $this->company->company_name;
+        }
+        if ($this->relationLoaded('client') && $this->client?->company_name) {
+            return $this->client->company_name;
         }
         if ($this->custom_client_name) {
             return $this->custom_client_name;
@@ -156,6 +159,18 @@ class JobOrder extends Model
         'scheduled_end' => 'datetime',
     ];
 
+    /** @deprecated Use company_id */
+    public function getClientIdAttribute(): ?int
+    {
+        return isset($this->attributes['company_id']) ? (int) $this->attributes['company_id'] : null;
+    }
+
+    /** @deprecated Use company_id */
+    public function setClientIdAttribute($value): void
+    {
+        $this->attributes['company_id'] = $value;
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -166,9 +181,15 @@ class JobOrder extends Model
         return $this->belongsTo(User::class, 'customer_user_id');
     }
 
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /** @deprecated Use company() */
     public function client()
     {
-        return $this->belongsTo(Client::class);
+        return $this->company();
     }
 
     public function quarry()

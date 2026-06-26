@@ -15,6 +15,20 @@ export async function fetchDocumentPreviewBlob(documentId) {
   return response.blob()
 }
 
+// ─── Companies (B2B) ─────────────────────────────────────────────────────────
+export function fetchCompanies(query = '') {
+  return apiRequest(`/admin/companies${query ? `?${query}` : ''}`)
+}
+export function createCompany(payload) {
+  return apiRequest('/admin/companies', { method: 'POST', body: JSON.stringify(payload) })
+}
+export function updateCompany(id, payload) {
+  return apiRequest(`/admin/companies/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+export function resendCompanyActivation(id) {
+  return apiRequest(`/admin/companies/${id}/resend-activation`, { method: 'POST' })
+}
+
 // ─── Fetch (list) ─────────────────────────────────────────────────────────────
 export function fetchUsers(page = 1, perPage = 15) { return apiRequest(`/admin/users?page=${page}&per_page=${perPage}`) }
 export function fetchDrivers(page = 1)     { return apiRequest(`/admin/drivers?page=${page}`) }

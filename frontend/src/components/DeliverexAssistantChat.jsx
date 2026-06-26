@@ -90,11 +90,11 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How do I link a delivery to my account?',
-    a: 'Sign in, open Link Delivery, and enter your Tracking ID. The email on the shipment must match your account email.',
+    a: 'Deliveries for your company are linked automatically when a dispatcher creates them. You can also sign in and use Link Delivery if needed.',
   },
   {
     q: 'How do I create an account?',
-    a: 'Select Create Account from Account Help to open customer registration.',
+    a: 'Company accounts are created by a Deliverex administrator. You will receive an activation email to set your password.',
   },
   {
     q: 'What do delivery statuses mean?',
@@ -303,8 +303,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     pushUser(option)
 
     if (option === 'Create Account') {
-      pushAssistant(['text', 'To create an account, open the registration page and complete your customer information.'])
-      pushAssistant(['link', { text: 'Create Account', href: '/customer/signup' }])
+      pushAssistant(['text', 'Company accounts are created by a Deliverex administrator. Contact your account manager to get an activation email.'])
       setActiveOptions(QUICK_AFTER_FAQ)
       return
     }
@@ -319,7 +318,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     if (option === 'Link Delivery') {
       pushAssistant([
         'text',
-        'To link a delivery to your account, sign in and enter your Tracking ID. The email on the shipment must match your account email. Linked deliveries then appear in your dashboard.',
+        'Deliveries assigned to your company appear automatically after sign-in. You can also open Link Delivery and enter a Tracking ID if a shipment is not yet visible.',
       ])
       pushAssistant(['link', { text: 'Link Delivery', href: '/customer/link-delivery' }])
       setActiveOptions(QUICK_AFTER_FAQ)

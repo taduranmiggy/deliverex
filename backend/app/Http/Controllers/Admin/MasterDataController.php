@@ -255,7 +255,7 @@ class MasterDataController extends Controller
     private function saveClientPreference(Request $request, ?int $id)
     {
         $data = $this->validateEntity($request->all(), [
-            'client_id' => ['required', 'exists:clients,id'],
+            'client_id' => ['required', 'exists:companies,id'],
             'quarry_id' => ['required', 'exists:quarries,id'],
             'vehicle_type_id' => ['nullable', 'exists:vehicle_types,id'],
             'is_default' => ['nullable', 'boolean'],
@@ -267,7 +267,7 @@ class MasterDataController extends Controller
 
         if ($data['is_default']) {
             ClientQuarryVehiclePreference::query()
-                ->where('client_id', $data['client_id'])
+                ->where('company_id', $data['client_id'])
                 ->where('id', '!=', $id ?? 0)
                 ->update(['is_default' => false]);
         }

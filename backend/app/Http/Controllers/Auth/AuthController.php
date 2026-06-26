@@ -87,7 +87,15 @@ class AuthController extends Controller
         }
 
         if ($user->role?->name === 'customer') {
-            $this->linkCustomerJobOrdersByEmail($user);
+            $membership = $user->companyUser()->with('company')->first();
+            if (! $membership || ! $membership->is_active) {
+                return response()->json(['message' => 'Company account is not active. Contact your administrator.'], 403);
+            }
+            if (! $membership->company?->isActive()) {
+                return response()->json(['message' => 'Company is not active.'], 403);
+            }
+            $membership->forceFill(['last_login' => now()])->save();
+            $this->linkCustomerJobOrdersByCompany($user, $membership->company_id);
         }
 
         // Issue JWT session (replaces Sanctum token for new logins).
@@ -162,6 +170,8 @@ class AuthController extends Controller
             $payload['refresh_token'] = $result['refresh_token'];
         }
 
+        $response = response()->json($payload);
+
         return $response->withCookie($this->sessions->makeRefreshCookie($result['refresh_token'], $role));
     }
 
@@ -214,37 +224,9 @@ class AuthController extends Controller
 
     public function registerCustomer(Request $request)
     {
-        $data = $request->validate([
-            'name' => 'required|string|max:120',
-            'email' => 'required|email|max:255|unique:users,email',
-            'phone' => 'nullable|string|max:50',
-            'password' => 'required|string|min:8|confirmed',
-        ]);
-
-        $role = Role::query()->where('name', 'customer')->firstOrFail();
-
-        $user = User::query()->create([
-            'role_id' => $role->id,
-            'name' => $data['name'],
-            'email' => Str::lower($data['email']),
-            'phone' => $data['phone'] ?? null,
-            'password' => $data['password'],
-            'status' => 'pending',
-        ]);
-
-        JobOrder::query()
-            ->whereNull('customer_user_id')
-            ->where('customer_email', $user->email)
-            ->update(['customer_user_id' => $user->id]);
-
-        $user->sendEmailVerificationNotification();
-
-        AuditLogger::record($user, 'auth.register_customer', User::class, $user->id, [], $request);
-
         return response()->json([
-            'message' => 'Verification email sent. Please verify your email to activate your account.',
-            'user' => $user->load('role'),
-        ], 201);
+            'message' => 'Customer self-registration is disabled. Contact your administrator to create a company account.',
+        ], 403);
     }
 
     public function verifyEmail(Request $request, int $id, string $hash)
@@ -326,6 +308,16 @@ class AuthController extends Controller
         ]);
     }
 
+    private function linkCustomerJobOrdersByCompany(User $user, int $companyId): void
+    {
+        JobOrder::query()
+            ->where('company_id', $companyId)
+            ->where(function ($q) use ($user) {
+                $q->whereNull('customer_user_id')->orWhere('customer_user_id', '!=', $user->id);
+            })
+            ->update(['customer_user_id' => $user->id]);
+    }
+
     private function linkCustomerJobOrdersByEmail(User $user): void
     {
         JobOrder::query()
@@ -345,6 +337,13 @@ class AuthController extends Controller
         $user->load([
             'driver.currentAssignment.jobOrder',
             'driver.currentAssignment.vehicle',
+            'companyUser.company',
         ]);
+
+        if ($user->companyUser) {
+            $user->setAttribute('company_id', $user->companyUser->company_id);
+            $user->setAttribute('company_role', $user->companyUser->role);
+            $user->setAttribute('company_name', $user->companyUser->company?->company_name);
+        }
     }
 }

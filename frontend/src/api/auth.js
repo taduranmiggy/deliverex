@@ -13,11 +13,15 @@ export async function refreshSession(payload = {}) {
   return postRefreshRequest(body)
 }
 
-export async function registerCustomer(payload) {
-  return apiRequest('/auth/register/customer', {
+export async function activateCompany(token, payload) {
+  return apiRequest(`/auth/company/activate/${token}`, {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+}
+
+export async function fetchCompanyActivation(token) {
+  return apiRequest(`/auth/company/activate/${token}`)
 }
 
 export async function getProfile() {

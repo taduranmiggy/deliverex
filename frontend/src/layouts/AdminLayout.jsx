@@ -1,5 +1,5 @@
 import {
-  Bell, Bot, ClipboardList, FileSearch, LayoutDashboard, Settings, Shield, Users,
+  Bell, Bot, Building2, ClipboardList, FileSearch, LayoutDashboard, Settings, Shield, Users,
 } from 'lucide-react'
 import StaffAppShell from './StaffAppShell'
 
@@ -8,6 +8,7 @@ const NAV = [
   { to: '/admin/job-orders', label: 'Job Orders', Icon: ClipboardList },
   { to: '/admin/ocr-validation', label: 'OCR Review', Icon: FileSearch },
   { to: '/admin/master-data', label: 'Master Data', Icon: Settings },
+  { to: '/admin/companies', label: 'Companies', Icon: Building2 },
   { to: '/admin/users', label: 'User Management', Icon: Users },
   { to: '/admin/chatbot', label: 'Chatbot Management', Icon: Bot },
   { to: '/admin/audit-logs', label: 'Audit Logs', Icon: ClipboardList },

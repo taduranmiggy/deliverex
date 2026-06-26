@@ -17,7 +17,7 @@ const TAB_CONFIG = {
 }
 
 // Tabs shown in the UI strip — material-specifications is merged into material-types
-const UI_TABS = Object.keys(TAB_CONFIG).filter((k) => k !== 'material-specifications')
+const UI_TABS = Object.keys(TAB_CONFIG).filter((k) => k !== 'material-specifications' && k !== 'clients')
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 function StatusSelect({ value, onChange }) {
@@ -511,7 +511,7 @@ function AdminMasterDataPage() {
 
   return (
     <>
-      <PageHeader title="Master Data" subtitle="Operational materials, clients, suppliers, fleet, and drivers">
+      <PageHeader title="Master Data" subtitle="Operational materials, suppliers, fleet, and drivers. B2B companies are managed under Company Management.">
         {tab === 'drivers' && (
           <button
             className="btn-dx-secondary"

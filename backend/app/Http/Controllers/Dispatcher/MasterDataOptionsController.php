@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Dispatcher;
 
 use App\Http\Controllers\Controller;
-use App\Models\Client;
-use App\Models\ClientQuarryVehiclePreference;
+use App\Models\Company;
+use App\Models\CompanyQuarryVehiclePreference;
 use App\Models\MaterialSpecification;
 use App\Models\MaterialType;
 use App\Models\Quarry;
@@ -14,11 +14,37 @@ class MasterDataOptionsController extends Controller
 {
     public function index()
     {
+        $companies = Company::query()
+            ->where('status', Company::STATUS_ACTIVE)
+            ->orderBy('company_name')
+            ->get()
+            ->map(fn (Company $c) => [
+                'id' => $c->id,
+                'company_name' => $c->company_name,
+                'client_name' => $c->company_name,
+                'company_email' => $c->company_email,
+                'email' => $c->company_email,
+                'contact_person' => $c->contact_person,
+                'contact_number' => $c->contact_number,
+                'phone' => $c->contact_number,
+            ]);
+
+        $preferences = CompanyQuarryVehiclePreference::query()
+            ->where('status', 'active')
+            ->where('is_default', true)
+            ->with(['company:id,company_name', 'quarry:id,quarry_name', 'vehicleType:id,name,wheel_type,min_cbm,max_cbm'])
+            ->get()
+            ->map(fn ($p) => array_merge($p->toArray(), [
+                'client_id' => $p->company_id,
+                'client' => $p->company ? [
+                    'id' => $p->company->id,
+                    'client_name' => $p->company->company_name,
+                ] : null,
+            ]));
+
         return response()->json([
-            'clients' => Client::query()
-                ->where('status', 'active')
-                ->orderBy('client_name')
-                ->get(),
+            'companies' => $companies,
+            'clients' => $companies,
             'material_types' => MaterialType::query()
                 ->where('status', 'active')
                 ->with(['specifications' => fn ($q) => $q->where('status', 'active')->orderBy('name')])
@@ -36,11 +62,8 @@ class MasterDataOptionsController extends Controller
                 ->where('status', 'active')
                 ->orderBy('name')
                 ->get(),
-            'client_preferences' => ClientQuarryVehiclePreference::query()
-                ->where('status', 'active')
-                ->where('is_default', true)
-                ->with(['client:id,client_name', 'quarry:id,quarry_name', 'vehicleType:id,name,wheel_type,min_cbm,max_cbm'])
-                ->get(),
+            'company_preferences' => $preferences,
+            'client_preferences' => $preferences,
         ]);
     }
 }

@@ -7,7 +7,6 @@ function CustomerNavBar() {
   const { user, isAuthenticated, role } = useAuth()
   const isCustomer = isAuthenticated && role === 'customer'
   const signInPath = isStandalonePwa() ? '/customer/login' : '/login'
-  const signUpPath = '/customer/signup'
   const homePath = isStandalonePwa() ? '/customer' : '/'
 
   const initials = user?.name
@@ -58,8 +57,7 @@ function CustomerNavBar() {
             </NavLink>
           ) : (
             <div className="customer-nav-auth-btns">
-              <Link to={signInPath} className="btn-dx-secondary btn-sm">Sign in</Link>
-              <Link to={signUpPath} className="btn-dx-primary btn-sm">Create account</Link>
+              <Link to={signInPath} className="btn-dx-primary btn-sm">Sign in</Link>
             </div>
           )}
         </div>

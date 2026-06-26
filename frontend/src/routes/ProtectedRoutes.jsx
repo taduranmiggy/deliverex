@@ -29,7 +29,6 @@ function ProtectedRoutes({ children, roles }) {
         pathname === '/customer' ||
         pathname === '/customer/' ||
         pathname.startsWith('/customer/track') ||
-        pathname.startsWith('/customer/signup') ||
         pathname.startsWith('/customer/login') ||
         pathname.startsWith('/customer/about') ||
         pathname.startsWith('/customer/services') ||

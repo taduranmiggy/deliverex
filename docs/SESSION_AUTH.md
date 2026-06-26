@@ -46,6 +46,18 @@ Deliverex uses **JWT access tokens** (2 hours) plus **opaque refresh tokens** (r
 }
 ```
 
+For **customer** role users, `user` also includes B2B company context (from `company_users`):
+
+```json
+{
+  "company_id": 12,
+  "company_role": "owner",
+  "company_name": "Acme Construction"
+}
+```
+
+These fields are additive; existing JWTs without company claims continue to work until re-login. See [B2B_COMPANY_ACCOUNTS.md](./B2B_COMPANY_ACCOUNTS.md).
+
 Web/PWA also receive `Set-Cookie: deliverex_refresh=...` (HttpOnly).
 
 ## Database tables

@@ -90,6 +90,7 @@ class DatabaseSeeder extends Seeder
             VehicleTypeSeeder::class,
             MaterialMasterSeeder::class,
             ClientMasterSeeder::class,
+            CompanyDemoSeeder::class,
             QuarryMasterSeeder::class,
             ClientPreferenceSeeder::class,
             VehicleMasterSeeder::class,
