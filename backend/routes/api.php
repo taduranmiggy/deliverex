@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\EmailLogController;
 use App\Http\Controllers\Admin\CompanyController as AdminCompanyController;
 use App\Http\Controllers\Admin\AuditLogsController;
 use App\Http\Controllers\Admin\DocumentFileController;
@@ -58,6 +59,10 @@ Route::get('/auth/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
     ->name('verification.verify');
 Route::post('/auth/verify/resend', [AuthController::class, 'resendVerification'])
     ->middleware('throttle:6,1');
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
+    ->middleware('throttle:6,1');
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
+    ->middleware('throttle:6,1');
 
 // Public: customer tracking (no auth required)
 Route::get('/customer/track/{trackingCode}', [CustomerTrackingController::class, 'show']);
@@ -95,6 +100,10 @@ Route::middleware('auth.api')->group(function () {
     Route::middleware('role:admin')->prefix('admin')->group(function () {
         Route::get('/roles',                [RolesController::class, 'index']);
         Route::get('/audit-logs',           [AuditLogsController::class, 'index']);
+        Route::get('/email-logs',           [EmailLogController::class, 'index']);
+        Route::get('/email-logs/types',     [EmailLogController::class, 'types']);
+        Route::get('/email-logs/stats',    [EmailLogController::class, 'stats']);
+        Route::post('/email-logs/{emailLog}/retry', [EmailLogController::class, 'retry']);
 
         Route::get('/users',                [AdminUserController::class, 'index']);
         Route::post('/users',               [AdminUserController::class, 'store']);

@@ -14,7 +14,7 @@ return [
     |
     */
 
-    'default' => env('MAIL_MAILER', 'log'),
+    'default' => env('MAIL_MAILER', 'resend'),
 
     /*
     |--------------------------------------------------------------------------
@@ -111,8 +111,16 @@ return [
     */
 
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-        'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
+        'address' => env('MAIL_FROM_ADDRESS', 'noreply@deliverexapp.com'),
+        'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Deliverex')),
+    ],
+
+    'queue' => env('MAIL_QUEUE', false),
+
+    'addresses' => [
+        'noreply' => env('MAIL_FROM_ADDRESS', 'noreply@deliverexapp.com'),
+        'accounts' => env('MAIL_ACCOUNTS_ADDRESS', 'accounts@deliverexapp.com'),
+        'support' => env('MAIL_SUPPORT_ADDRESS', 'support@deliverexapp.com'),
     ],
 
 ];

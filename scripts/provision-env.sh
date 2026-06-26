@@ -20,6 +20,8 @@ write_env_from_secrets() {
   : "${DB_USERNAME:?DB_USERNAME missing in $SECRETS_FILE}"
   : "${DB_PASSWORD:?DB_PASSWORD missing in $SECRETS_FILE}"
 
+  RESEND_API_KEY="${RESEND_API_KEY:-}"
+
   local app_url="${APP_URL:-https://deliverexapp.com}"
   local domain="${APP_DOMAIN:-deliverexapp.com}"
   local db_pass_env="${DB_PASSWORD//\"/\\\"}"
@@ -55,7 +57,14 @@ FILESYSTEM_DISK=local
 QUEUE_CONNECTION=database
 CACHE_STORE=file
 
-MAIL_MAILER=log
+MAIL_MAILER=resend
+MAIL_FROM_ADDRESS=noreply@deliverexapp.com
+MAIL_FROM_NAME=Deliverex
+MAIL_ACCOUNTS_ADDRESS=accounts@deliverexapp.com
+MAIL_SUPPORT_ADDRESS=support@deliverexapp.com
+MAIL_QUEUE=false
+RESEND_API_KEY=${RESEND_API_KEY:-}
+FRONTEND_URL=${app_url}
 
 CORS_ALLOWED_ORIGINS=${app_url}
 SANCTUM_STATEFUL_DOMAINS=${domain}
@@ -129,4 +138,35 @@ fi
 if ! grep -q '^DB_CONNECTION=mysql' "$ENV_FILE"; then
   log "ERROR: .env must use DB_CONNECTION=mysql for production"
   exit 1
+fi
+
+# Merge Resend/mail settings from .deploy.secrets into restored .env (backup may predate email setup).
+if [ -f "$SECRETS_FILE" ]; then
+  # shellcheck disable=SC1090
+  source "$SECRETS_FILE"
+  merge_env_var() {
+    local key="$1"
+    local val="$2"
+    [ -n "$val" ] || return 0
+    if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+      sed -i.bak "s|^${key}=.*|${key}=${val}|" "$ENV_FILE" 2>/dev/null || true
+      rm -f "$ENV_FILE.bak" 2>/dev/null || true
+    else
+      echo "${key}=${val}" >>"$ENV_FILE"
+    fi
+  }
+  merge_env_var "MAIL_MAILER" "resend"
+  merge_env_var "MAIL_FROM_ADDRESS" "noreply@deliverexapp.com"
+  merge_env_var "MAIL_FROM_NAME" "Deliverex"
+  merge_env_var "MAIL_ACCOUNTS_ADDRESS" "accounts@deliverexapp.com"
+  merge_env_var "MAIL_SUPPORT_ADDRESS" "support@deliverexapp.com"
+  merge_env_var "MAIL_QUEUE" "false"
+  merge_env_var "FRONTEND_URL" "${APP_URL:-https://deliverexapp.com}"
+  if [ -n "${RESEND_API_KEY:-}" ]; then
+    merge_env_var "RESEND_API_KEY" "$RESEND_API_KEY"
+    log "Merged RESEND_API_KEY from .deploy.secrets into backend/.env"
+  else
+    log "WARN: RESEND_API_KEY not set in .deploy.secrets — emails will fail until added"
+  fi
+  save_backup
 fi

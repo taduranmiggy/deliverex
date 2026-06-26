@@ -8,6 +8,8 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\URL;
+use App\Services\Email\EmailService;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements MustVerifyEmail
@@ -101,5 +103,25 @@ class User extends Authenticatable implements MustVerifyEmail
     public function assignmentsCreated()
     {
         return $this->hasMany(DispatchAssignment::class, 'assigned_by');
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $url = rtrim(config('app.frontend_url', config('app.url')), '/')
+            .'/reset-password?token='.urlencode($token)
+            .'&email='.urlencode($this->email);
+
+        app(EmailService::class)->sendPasswordReset($this, $url);
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $verificationUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(60),
+            ['id' => $this->id, 'hash' => sha1($this->getEmailForVerification())]
+        );
+
+        app(EmailService::class)->sendEmailVerification($this, $verificationUrl);
     }
 }

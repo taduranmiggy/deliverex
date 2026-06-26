@@ -64,6 +64,22 @@ export function fetchAuditLogs(params = {}) {
   return apiRequest(`/admin/audit-logs${qs ? '?' + qs : ''}`)
 }
 
+export function fetchEmailLogs(params = {}) {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+  ).toString()
+  return apiRequest(`/admin/email-logs${qs ? '?' + qs : ''}`)
+}
+export function fetchEmailLogStats() {
+  return apiRequest('/admin/email-logs/stats')
+}
+export function fetchEmailLogTypes() {
+  return apiRequest('/admin/email-logs/types')
+}
+export function retryEmailLog(id) {
+  return apiRequest(`/admin/email-logs/${id}/retry`, { method: 'POST' })
+}
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 export function createUser(payload)        { return apiRequest('/admin/users', { method: 'POST', body: JSON.stringify(payload) }) }
 export function updateUser(id, payload)    { return apiRequest(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }) }

@@ -10,9 +10,13 @@ use App\Models\NotificationLog;
 use App\Models\OcrResult;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\JobOrder;
+use App\Services\Email\EmailService;
+use App\Services\Email\EmailType;
 
 class NotificationDispatcher
 {
+    public function __construct(private readonly EmailService $email) {}
     public function notifyUser(?User $user, string $title, string $message): void
     {
         if (! $user) {
@@ -56,6 +60,8 @@ class NotificationDispatcher
             'Assignment confirmed',
             'Job '.$code.' assigned to '.($assignment->driver?->user?->name ?? 'driver').'.'
         );
+
+        $this->emailCustomerForJob($job, EmailType::DELIVERY_ASSIGNED, 'Delivery assigned — '.$code);
     }
 
     public function statusUpdated(DispatchAssignment $assignment, string $status): void
@@ -84,6 +90,16 @@ class NotificationDispatcher
             'Delivery status update',
             'Job '.$code.' ('.($assignment->driver?->user?->name ?? 'driver').') is now '.$label.'.'
         );
+
+        $emailType = match (true) {
+            in_array($status, ['in_progress', 'en_route'], true) => EmailType::DELIVERY_EN_ROUTE,
+            $status === 'arrived' => EmailType::DELIVERY_ARRIVED,
+            default => null,
+        };
+
+        if ($emailType) {
+            $this->emailCustomerForJob($job, $emailType, 'Delivery update — '.$code);
+        }
     }
 
     public function deliveryCompleted(DispatchAssignment $assignment): void
@@ -108,6 +124,8 @@ class NotificationDispatcher
 
         $this->notifyRole('manager', 'Delivery completed', 'Job '.$code.' has been completed.');
         $this->notifyRole('admin', 'Delivery completed', 'Job '.$code.' has been completed.');
+
+        $this->emailCustomerForJob($job, EmailType::DELIVERY_COMPLETED, 'Delivery completed — '.$code);
     }
 
     public function documentUploaded(DeliveryDocument $document): void
@@ -128,6 +146,10 @@ class NotificationDispatcher
             'Document awaiting OCR review',
             'A '.($document->type ?? 'document').' was uploaded for job '.$code.' and is queued for review.'
         );
+
+        if ($document->type === 'pod' || str_contains(strtolower((string) $document->type), 'proof')) {
+            $this->emailCustomerForJob($job, EmailType::POD_AVAILABLE, 'Proof of delivery available — '.$code);
+        }
     }
 
     public function issueReported(DeliveryIssueReport $report): void
@@ -199,6 +221,33 @@ class NotificationDispatcher
                 'Document rejected',
                 'Uploaded document for job '.$code.' was rejected. Please re-upload if required.'
             );
+        }
+    }
+
+    private function emailCustomerForJob(?JobOrder $job, string $type, string $subject): void
+    {
+        if (! $job || ! $job->customer_email) {
+            return;
+        }
+
+        $base = rtrim(config('app.frontend_url', config('app.url')), '/');
+        $code = $job->tracking_code ?? (string) $job->id;
+
+        try {
+            $this->email->sendDeliveryNotification(
+                $type,
+                $job->customer_email,
+                $subject,
+                [
+                    'trackingCode' => $code,
+                    'customerName' => $job->customer_name,
+                    'trackingUrl' => $base.'/track/'.$code,
+                ],
+                userId: $job->customer_user_id,
+                companyId: $job->company_id,
+            );
+        } catch (\Throwable) {
+            // Logged in email_logs; do not break dispatch flow.
         }
     }
 }

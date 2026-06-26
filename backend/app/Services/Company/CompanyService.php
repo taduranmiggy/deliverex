@@ -2,7 +2,7 @@
 
 namespace App\Services\Company;
 
-use App\Mail\CompanyActivationMail;
+use App\Services\Email\EmailService;
 use App\Models\Company;
 use App\Models\CompanyUser;
 use App\Models\JobOrder;
@@ -12,12 +12,14 @@ use App\Services\Auth\SessionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class CompanyService
 {
-    public function __construct(private readonly SessionService $sessions) {}
+    public function __construct(
+        private readonly SessionService $sessions,
+        private readonly EmailService $email,
+    ) {}
 
     public function createPendingCompany(array $data, User $admin): Company
     {
@@ -179,12 +181,12 @@ class CompanyService
 
     private function sendActivationEmail(Company $company, string $token): void
     {
-        $url = rtrim(config('app.url'), '/').'/activate-company/'.$token;
+        $url = rtrim(config('app.frontend_url', config('app.url')), '/').'/activate-company/'.$token;
 
         try {
-            Mail::to($company->company_email)->send(new CompanyActivationMail($company, $url));
+            $this->email->sendCompanyActivation($company, $url);
         } catch (\Throwable) {
-            // Log-only on shared hosting when mail is not configured.
+            // Logged by EmailService / ResendService; do not block company creation.
         }
     }
 }

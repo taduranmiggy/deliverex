@@ -6,15 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Inquiry;
 use App\Models\JobOrder;
 use App\Support\AuditLogger;
+use App\Services\Email\EmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Throwable;
 
 class InquiryController extends Controller
 {
-    private const SUPPORT_EMAIL = 'deliverex.support@gmail.com';
+    public function __construct(private readonly EmailService $email) {}
 
     /** Public: customer submits a contact / delivery inquiry. */
     public function store(Request $request)
@@ -71,7 +71,7 @@ class InquiryController extends Controller
 
         return response()->json([
             'message'    => $mailSent
-                ? 'Your concern has been submitted successfully. For follow-up, you may contact deliverex.support@gmail.com.'
+                ? 'Your concern has been submitted successfully. Our team will respond via email.'
                 : 'Your concern has been saved. Email notification could not be sent.',
             'inquiry_id' => $inquiry->id,
             'reference_no' => $inquiry->reference_no,
@@ -166,10 +166,18 @@ class InquiryController extends Controller
     private function sendSupportEmail(Inquiry $inquiry): bool
     {
         try {
-            Mail::raw($this->buildSupportEmailBody($inquiry), function ($message) use ($inquiry) {
-                $message->to(self::SUPPORT_EMAIL)
-                    ->subject('Customer Support Inquiry '.$inquiry->reference_no);
-            });
+            $payload = [
+                'reference_no' => $inquiry->reference_no,
+                'name' => $inquiry->name,
+                'email' => $inquiry->email,
+                'phone' => $inquiry->phone,
+                'inquiry_type' => $inquiry->inquiry_type,
+                'subject_line' => $inquiry->subject,
+                'message_body' => $inquiry->message,
+            ];
+
+            $this->email->sendSupportInquiry($payload);
+            $this->email->sendContactConfirmation($inquiry->email, $payload);
 
             return true;
         } catch (Throwable $e) {
@@ -183,19 +191,4 @@ class InquiryController extends Controller
         }
     }
 
-    private function buildSupportEmailBody(Inquiry $inquiry): string
-    {
-        return implode("\n", [
-            'New customer concern submitted',
-            '',
-            'Reference No: '.($inquiry->reference_no ?? '—'),
-            'Inquiry Type: '.($inquiry->inquiry_type ?? '—'),
-            'Customer Name: '.($inquiry->name ?? '—'),
-            'Customer Email: '.($inquiry->email ?? '—'),
-            'Customer Phone: '.($inquiry->phone ?? '—'),
-            'Subject: '.($inquiry->subject ?? '—'),
-            'Message: '.($inquiry->message ?? '—'),
-            'Timestamp: '.($inquiry->created_at?->toDateTimeString() ?? now()->toDateTimeString()),
-        ]);
-    }
 }

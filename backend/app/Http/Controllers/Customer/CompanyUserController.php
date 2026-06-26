@@ -5,13 +5,18 @@ namespace App\Http\Controllers\Customer;
 use App\Http\Controllers\Controller;
 use App\Models\CompanyUser;
 use App\Services\Company\CompanyService;
+use App\Services\Email\EmailService;
+use App\Services\Email\EmailType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class CompanyUserController extends Controller
 {
-    public function __construct(private readonly CompanyService $companies) {}
+    public function __construct(
+        private readonly CompanyService $companies,
+        private readonly EmailService $email,
+    ) {}
 
     public function index(Request $request)
     {
@@ -39,7 +44,14 @@ class CompanyUserController extends Controller
         ]);
 
         $company = $membership->company;
+        $plainPassword = $data['password'];
         $created = $this->companies->createCompanyUser($company, $data);
+
+        try {
+            $this->email->sendCompanyInvitation($created->user, $company, $plainPassword);
+        } catch (\Throwable) {
+            // Logged in email_logs.
+        }
 
         return response()->json($created->load('user'), 201);
     }
@@ -83,6 +95,19 @@ class CompanyUserController extends Controller
         }
 
         $user = $companyUser->user;
+        if ($user && ($user->status ?? '') === 'active') {
+            try {
+                app(EmailService::class)->sendSystemAlert(
+                    $user,
+                    EmailType::ACCOUNT_DISABLED,
+                    'Your Deliverex account has been deactivated',
+                    ['message' => 'Your company team access has been removed by an administrator. Contact your company owner if you believe this is an error.'],
+                );
+            } catch (\Throwable) {
+                // Non-blocking.
+            }
+        }
+
         $companyUser->delete();
         $user?->forceFill(['status' => 'inactive'])->save();
 

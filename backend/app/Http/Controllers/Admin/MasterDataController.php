@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
 use App\Support\DriverAccount;
+use App\Services\Email\EmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Hash;
@@ -351,6 +352,14 @@ class MasterDataController extends Controller
         if (empty($driver->availability)) $patch['availability'] = 'available';
         if (!empty($patch))               $driver->update($patch);
 
+        if ($wasCreated && $temporaryPassword) {
+            try {
+                app(EmailService::class)->sendDriverCredentials($user, $temporaryPassword);
+            } catch (\Throwable) {
+                // Logged in email_logs.
+            }
+        }
+
         return response()->json([
             'message'            => $wasCreated
                 ? "Account created and linked: {$email}"
@@ -435,6 +444,11 @@ class MasterDataController extends Controller
             if ($wasCreated) {
                 $accountEntry['temporary_password'] = $password;
                 $accountEntry['default_password'] = $password;
+                try {
+                    app(EmailService::class)->sendDriverCredentials($user, $password);
+                } catch (\Throwable) {
+                    // Logged in email_logs.
+                }
             }
             $results['accounts'][] = $accountEntry;
         }

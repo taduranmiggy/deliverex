@@ -7,6 +7,7 @@ import UserManagementPage from '../pages/Admin/UserManagementPage'
 import OcrReviewPage from '../pages/Admin/OcrReviewPage'
 import AdminMasterDataPage from '../pages/Admin/AdminMasterDataPage'
 import AdminAuditLogsPage from '../pages/Admin/AdminAuditLogsPage'
+import AdminEmailLogsPage from '../pages/Admin/AdminEmailLogsPage'
 import AdminChatbotPage from '../pages/Admin/AdminChatbotPage'
 import NotificationsPage from '../pages/Admin/NotificationsPage'
 import DispatcherDashboard from '../pages/Dispatcher/DispatcherDashboard'
@@ -53,6 +54,7 @@ export const roleRoutes = {
     <Route key="admin-users"      path="users"           element={<UserManagementPage />} />,
     <Route key="admin-chatbot"    path="chatbot"         element={<AdminChatbotPage />} />,
     <Route key="admin-audit"      path="audit-logs"      element={<AdminAuditLogsPage />} />,
+    <Route key="admin-email"      path="email-logs"      element={<AdminEmailLogsPage />} />,
     <Route key="admin-notifs"     path="notifications"   element={<NotificationsPage />} />,
   ],
   dispatcher: [

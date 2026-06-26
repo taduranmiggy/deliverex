@@ -124,6 +124,12 @@ if [ ! -f "$BACKEND/vendor/autoload.php" ]; then
   exit 1
 fi
 
+if [ ! -d "$BACKEND/vendor/resend/resend-php" ]; then
+  log "Installing resend/resend-php for email transport..."
+  bash "$SCRIPT_DIR/run-composer.sh" "$BACKEND" require resend/resend-php --no-dev --no-interaction --update-with-all-dependencies \
+    || log "WARN: resend/resend-php install failed — check RESEND_API_KEY and composer network"
+fi
+
 if ! grep -q '^APP_KEY=base64:' "$BACKEND/.env"; then
   log "Generating APP_KEY..."
   "${ARTISAN[@]}" key:generate --force
