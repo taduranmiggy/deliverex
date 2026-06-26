@@ -18,6 +18,8 @@ class TemplateMail extends Mailable
         public string $htmlContent,
         public ?string $fromAddress = null,
         public ?string $fromName = null,
+        public ?string $replyToAddress = null,
+        public ?string $replyToName = null,
     ) {}
 
     public function envelope(): Envelope
@@ -26,9 +28,14 @@ class TemplateMail extends Mailable
             ? new Address($this->fromAddress, $this->fromName ?? config('mail.from.name'))
             : null;
 
+        $replyTo = $this->replyToAddress
+            ? [new Address($this->replyToAddress, $this->replyToName ?? config('mail.from.name'))]
+            : [];
+
         return new Envelope(
             subject: $this->mailSubject,
             from: $from,
+            replyTo: $replyTo,
         );
     }
 

@@ -25,7 +25,7 @@
 <tr>
 <td style="padding:20px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:0.75rem;color:#64748b;line-height:1.6;">
 <p style="margin:0 0 8px;">&copy; {{ date('Y') }} Deliverex. All rights reserved.</p>
-<p style="margin:0;">Need help? Contact <a href="mailto:support@deliverexapp.com" style="color:#2563eb;">support@deliverexapp.com</a></p>
+<p style="margin:0;">Need help? Contact <a href="mailto:{{ config('mail.addresses.support') }}" style="color:#2563eb;">{{ config('mail.addresses.support') }}</a></p>
 @if(!empty($footerNote))
 <p style="margin:8px 0 0;">{{ $footerNote }}</p>
 @endif

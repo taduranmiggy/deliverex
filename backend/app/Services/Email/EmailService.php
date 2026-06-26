@@ -78,18 +78,21 @@ class EmailService
 
     public function sendCompanyActivation(Company $company, string $activationUrl): EmailLog
     {
+        $support = config('mail.addresses.support');
+
         return $this->send(
             EmailType::COMPANY_ACTIVATION,
             $company->company_email,
-            'Activate Your Deliverex Company Account',
+            'Activate your Deliverex company account — '.$company->company_name,
             'mail.company-activation',
             [
                 'company' => $company,
                 'activationUrl' => $activationUrl,
-                'subject' => 'Activate Your Deliverex Company Account',
+                'subject' => 'Activate your Deliverex company account',
             ],
             config('mail.addresses.accounts'),
             companyId: $company->id,
+            metadata: ['reply_to' => $support],
         );
     }
 

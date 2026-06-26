@@ -61,7 +61,7 @@ MAIL_MAILER=resend
 MAIL_FROM_ADDRESS=noreply@deliverexapp.com
 MAIL_FROM_NAME=Deliverex
 MAIL_ACCOUNTS_ADDRESS=accounts@deliverexapp.com
-MAIL_SUPPORT_ADDRESS=support@deliverexapp.com
+MAIL_SUPPORT_ADDRESS=deliverexapp@gmail.com
 MAIL_QUEUE=false
 RESEND_API_KEY=${RESEND_API_KEY:-}
 FRONTEND_URL=${app_url}
@@ -158,8 +158,8 @@ if [ -f "$SECRETS_FILE" ]; then
   merge_env_var "MAIL_MAILER" "resend"
   merge_env_var "MAIL_FROM_ADDRESS" "noreply@deliverexapp.com"
   merge_env_var "MAIL_FROM_NAME" "Deliverex"
-  merge_env_var "MAIL_ACCOUNTS_ADDRESS" "accounts@deliverexapp.com"
-  merge_env_var "MAIL_SUPPORT_ADDRESS" "support@deliverexapp.com"
+  merge_env_var "MAIL_ACCOUNTS_ADDRESS" "${MAIL_ACCOUNTS_ADDRESS:-accounts@deliverexapp.com}"
+  merge_env_var "MAIL_SUPPORT_ADDRESS" "${MAIL_SUPPORT_ADDRESS:-deliverexapp@gmail.com}"
   merge_env_var "MAIL_QUEUE" "false"
   merge_env_var "FRONTEND_URL" "${APP_URL:-https://deliverexapp.com}"
   if [ -n "${RESEND_API_KEY:-}" ]; then

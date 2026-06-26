@@ -48,7 +48,7 @@ class CompanyService
         }
 
         $token = $company->issueActivationToken(72);
-        $this->sendActivationEmail($company, $token);
+        $this->sendActivationEmail($company, $token, throwOnFailure: true);
     }
 
     public function validateActivationToken(string $token): Company
@@ -179,13 +179,25 @@ class CompanyService
             ->value('user_id');
     }
 
-    private function sendActivationEmail(Company $company, string $token): void
+    private function sendActivationEmail(Company $company, string $token, bool $throwOnFailure = false): void
     {
         $url = rtrim(config('app.frontend_url', config('app.url')), '/').'/activate-company/'.$token;
 
         try {
-            $this->email->sendCompanyActivation($company, $url);
-        } catch (\Throwable) {
+            $log = $this->email->sendCompanyActivation($company, $url);
+            if ($throwOnFailure && $log->status === \App\Models\EmailLog::STATUS_FAILED) {
+                throw ValidationException::withMessages([
+                    'email' => [$log->failure_reason ?? 'Activation email could not be sent. Check Admin → Email Logs.'],
+                ]);
+            }
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            if ($throwOnFailure) {
+                throw ValidationException::withMessages([
+                    'email' => ['Activation email could not be sent: '.$e->getMessage()],
+                ]);
+            }
             // Logged by EmailService / ResendService; do not block company creation.
         }
     }

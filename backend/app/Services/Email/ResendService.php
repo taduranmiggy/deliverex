@@ -20,6 +20,8 @@ class ResendService
                 htmlContent: $html,
                 fromAddress: $log->from_address,
                 fromName: config('mail.from.name'),
+                replyToAddress: $log->metadata['reply_to'] ?? null,
+                replyToName: config('mail.from.name'),
             ));
 
             $log->forceFill([
