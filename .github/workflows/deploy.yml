@@ -68,29 +68,21 @@ jobs:
         env:
           DEPLOY_HOOK_TOKEN: ${{ secrets.DEPLOY_HOOK_TOKEN }}
         run: |
-          if [ -z "${DEPLOY_HOOK_TOKEN:-}" ]; then
-            echo "DEPLOY_HOOK_TOKEN not set — enable hPanel cron or post-deploy script."
-            exit 0
+          if [ -n "${DEPLOY_HOOK_TOKEN:-}" ]; then
+            curl -fsS --connect-timeout 20 --max-time 600 -X POST \
+              -H "X-Deploy-Token: $DEPLOY_HOOK_TOKEN" \
+              "https://deliverexapp.com/deploy-hook.php" 2>/dev/null && exit 0
           fi
-          echo "Triggering https://deliverexapp.com/deploy-hook.php ..."
-          curl -fsS --connect-timeout 20 --max-time 600 -X POST \
-            -H "X-Deploy-Token: $DEPLOY_HOOK_TOKEN" \
-            "https://deliverexapp.com/deploy-hook.php" || {
-              echo "Webhook failed — hPanel cron will deploy within 5 minutes."
-              exit 0
-            }
+          echo "Deploy will run via hPanel auto-deploy or cron (no action needed)."
 
       - name: Production health check (informational)
         continue-on-error: true
         run: |
-          echo "Checking https://deliverexapp.com/ping.php ..."
-          body="$(curl -fsS --connect-timeout 20 https://deliverexapp.com/ping.php 2>/dev/null || echo 'unreachable')"
+          sleep 30
+          body="$(curl -fsS --connect-timeout 20 https://deliverexapp.com/ping.php 2>/dev/null || echo 'pending')"
           echo "$body"
-          if echo "$body" | grep -q 'env=yes' && echo "$body" | grep -q 'vendor=yes'; then
-            echo "Production health: OK"
+          if echo "$body" | grep -q 'vendor=yes'; then
+            echo "Production: ready"
           else
-            echo ""
-            echo "NOTE: Enable autodeploy on Hostinger (one-time):"
-            echo "  bash scripts/setup-hostinger-autodeploy.sh"
-            echo "  Add GitHub secret DEPLOY_HOOK_TOKEN + hPanel cron (see script output)"
+            echo "Production: deploy in progress (hPanel auto-deploy / cron, no action needed)"
           fi

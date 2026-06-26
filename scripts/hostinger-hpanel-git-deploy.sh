@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# hPanel Git → Post-deployment script (paste in hPanel):
-#   bash /home/u826622735/domains/deliverexapp.com/public_html/scripts/hostinger-hpanel-git-deploy.sh
+# hPanel Git → Post-deployment script (paste sa hPanel, isang beses lang).
+# Lahat ng susunod na git push → auto dito (composer, .env, migrate, storage).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -8,5 +8,7 @@ export DEPLOY_PATH="$(cd "$SCRIPT_DIR/.." && pwd)"
 export SKIP_GIT_PULL=1
 export SKIP_FRONTEND=1
 export SKIP_SERVER_FRONTEND_BUILD=1
+
+chmod +x "$SCRIPT_DIR/"*.sh 2>/dev/null || true
 
 exec bash "$SCRIPT_DIR/deployment.sh"

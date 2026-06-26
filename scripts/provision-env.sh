@@ -74,7 +74,34 @@ is_production_env() {
   [ -f "$ENV_FILE" ] && grep -q '^DB_CONNECTION=mysql' "$ENV_FILE"
 }
 
+read_env_var() {
+  local key="$1"
+  grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^"//;s/"$//'
+}
+
+bootstrap_secrets_from_env() {
+  [ -f "$SECRETS_FILE" ] && return 0
+  is_production_env || return 1
+  local db_pass db_name db_user
+  db_pass="$(read_env_var DB_PASSWORD)"
+  db_name="$(read_env_var DB_DATABASE)"
+  db_user="$(read_env_var DB_USERNAME)"
+  [ -n "$db_pass" ] && [ -n "$db_name" ] && [ -n "$db_user" ] || return 1
+  cat > "$SECRETS_FILE" <<EOF
+DB_DATABASE=${db_name}
+DB_USERNAME=${db_user}
+DB_PASSWORD=${db_pass}
+DB_HOST=$(read_env_var DB_HOST)
+APP_URL=$(read_env_var APP_URL)
+APP_DOMAIN=deliverexapp.com
+EOF
+  chmod 600 "$SECRETS_FILE" 2>/dev/null || true
+  log "Created $SECRETS_FILE from existing .env"
+}
+
 mkdir -p "$BACKEND"
+
+bootstrap_secrets_from_env || true
 
 if [ -f "$ENV_BACKUP" ]; then
   log "Restoring from $ENV_BACKUP"
@@ -87,6 +114,7 @@ elif [ -f "$SECRETS_FILE" ]; then
 elif is_production_env; then
   log "Keeping existing mysql .env and creating backup"
   save_backup
+  bootstrap_secrets_from_env || true
 elif [ -f "$ENV_FILE" ] && grep -q '^DB_CONNECTION=sqlite' "$ENV_FILE"; then
   log "ERROR: .env uses sqlite (dev template). Create $SECRETS_FILE first."
   log "  Run once: bash scripts/setup-hostinger-autodeploy.sh"
