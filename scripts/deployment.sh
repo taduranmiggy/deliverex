@@ -131,11 +131,17 @@ log "Fixing storage permissions..."
 chmod -R u+rwX storage bootstrap/cache 2>/dev/null || true
 chmod -R 775 storage bootstrap/cache 2>/dev/null || true
 mkdir -p storage/framework/{cache,sessions,views} storage/logs 2>/dev/null || true
+mkdir -p storage/app/public/delivery_documents 2>/dev/null || true
 touch storage/logs/laravel.log 2>/dev/null || true
 
-if [ ! -e public/storage ]; then
-  log "Creating storage symlink (shell — exec() disabled on shared hosting)..."
-  ln -sfn ../storage/app/public public/storage 2>/dev/null || true
+log "Linking public/storage -> storage/app/public (Hostinger-safe)..."
+# Always recreate — broken symlinks break uploads and OCR previews.
+rm -f public/storage 2>/dev/null || true
+ln -sfn ../storage/app/public public/storage 2>/dev/null || true
+if [ -L public/storage ] && [ -d storage/app/public ]; then
+  log "storage link OK: public/storage"
+else
+  log_error "Could not create public/storage symlink — check permissions on backend/public"
 fi
 
 if [ "${SKIP_FRONTEND:-0}" != "1" ]; then

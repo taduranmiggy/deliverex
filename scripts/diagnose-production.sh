@@ -26,7 +26,10 @@ fi
 echo ""
 echo "--- storage/logs (last 15 lines) ---"
 tail -15 storage/logs/laravel.log 2>/dev/null || echo "(no log file — run: mkdir -p storage/logs && chmod -R 775 storage)"
+echo "--- storage ---"
+ls -la public/storage 2>/dev/null || echo "public/storage MISSING — run: bash scripts/fix-storage.sh"
+DOC_COUNT=$(find storage/app/public/delivery_documents -type f 2>/dev/null | wc -l | tr -d ' ')
+echo "delivery_documents files on disk: ${DOC_COUNT:-0}"
 echo ""
-echo "--- permissions ---"
 ls -ld storage storage/logs bootstrap/cache 2>/dev/null || true
 echo "======================================="

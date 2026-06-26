@@ -43,6 +43,7 @@ jobs:
           ssh -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "mkdir -p '${{ secrets.DEPLOY_PATH }}/backend/public/assets' \
+              '${{ secrets.DEPLOY_PATH }}/backend/storage/app/public/delivery_documents' \
               '${{ secrets.DEPLOY_PATH }}/backend/storage/logs' \
               '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/cache' \
               '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/sessions' \
