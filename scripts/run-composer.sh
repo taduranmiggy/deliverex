@@ -11,7 +11,7 @@ if [ ! -d "$BACKEND" ]; then
   exit 1
 fi
 
-BACKEND="$(cd "$BACKEND" && pwd -P 2>/dev/null || cd "$BACKEND" && pwd)"
+BACKEND="$(cd "$BACKEND" && pwd 2>/dev/null || echo "$BACKEND")"
 
 export COMPOSER_HOME="${COMPOSER_HOME:-$HOME/.composer}"
 export COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$HOME/.cache/composer}"

@@ -22,11 +22,14 @@ DEPLOY_PATH="${DEPLOY_PATH:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BACKEND="$DEPLOY_PATH/backend"
 ENV_BACKUP="$(dirname "$DEPLOY_PATH")/.deliverex.env"
 ENV_BACKUP_ALT="$DEPLOY_PATH/.deliverex.env"
-LOG_DIR="$BACKEND/storage/logs"
-LOG_FILE="$LOG_DIR/deploy.log"
+LOG_DIR="$DEPLOY_PATH/backend/storage/logs"
+LOG_FILE="${LOG_FILE:-$DEPLOY_PATH/deploy.log}"
 DEPLOY_STATUS=0
 
-mkdir -p "$LOG_DIR" 2>/dev/null || true
+mkdir -p "$LOG_DIR" "$DEPLOY_PATH" 2>/dev/null || true
+if [ -d "$LOG_DIR" ]; then
+  LOG_FILE="$LOG_DIR/deploy.log"
+fi
 touch "$LOG_FILE" 2>/dev/null || true
 
 log() {
@@ -37,6 +40,25 @@ log() {
 
 log_error() {
   log "ERROR: $*"
+}
+
+wait_for_backend_ready() {
+  local max_wait="${DEPLOY_WAIT_SECS:-90}"
+  local elapsed=0
+  log "Waiting for backend files (composer.json) — hPanel Git may still be syncing..."
+  while [ "$elapsed" -lt "$max_wait" ]; do
+    if [ -f "$BACKEND/composer.json" ] && [ -f "$BACKEND/artisan" ]; then
+      log "Backend ready after ${elapsed}s."
+      return 0
+    fi
+    sleep 3
+    elapsed=$((elapsed + 3))
+    log "  still waiting... (${elapsed}s / ${max_wait}s)"
+  done
+  log_error "Backend not ready after ${max_wait}s — expected $BACKEND/composer.json"
+  log "DEPLOY_PATH listing:"
+  ls -la "$DEPLOY_PATH" >>"$LOG_FILE" 2>&1 || true
+  return 1
 }
 
 on_exit() {
@@ -73,25 +95,18 @@ else
   log "Skipping git pull (already updated by hPanel Git / CI)."
 fi
 
+wait_for_backend_ready
+
 log "Provisioning backend/.env..."
 export DEPLOY_PATH
 bash "$SCRIPT_DIR/provision-env.sh"
 
-if [ ! -d "$BACKEND" ]; then
-  log_error "Backend directory missing: $BACKEND"
+if [ ! -f "$BACKEND/composer.json" ]; then
+  log_error "Backend directory missing or incomplete: $BACKEND"
   exit 1
 fi
-BACKEND="$(cd "$BACKEND" && pwd -P 2>/dev/null || cd "$BACKEND" && pwd)"
-ARTISAN=(php "$BACKEND/artisan")
 
-if [ "${SKIP_GIT_PULL:-0}" = "1" ]; then
-  # hPanel Git may still be writing files when the post-deploy hook starts.
-  sleep 2
-  if [ ! -d "$BACKEND" ]; then
-    log_error "Backend directory disappeared after git deploy: $BACKEND"
-    exit 1
-  fi
-fi
+ARTISAN=(php "$BACKEND/artisan")
 
 chmod +x "$SCRIPT_DIR/run-composer.sh" 2>/dev/null || true
 
