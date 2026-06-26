@@ -105,4 +105,41 @@ class EmailServiceTest extends TestCase
             'recipient' => 'customer@example.com',
         ]);
     }
+
+    public function test_company_activation_retry_renders_from_stored_metadata(): void
+    {
+        $company = Company::query()->create([
+            'company_name' => 'Retry Co',
+            'company_email' => 'retry@example.com',
+            'contact_person' => 'Retry Person',
+            'status' => Company::STATUS_PENDING,
+        ]);
+
+        $log = EmailLog::query()->create([
+            'email_type' => EmailType::COMPANY_ACTIVATION,
+            'recipient' => 'retry@example.com',
+            'subject' => 'Activate',
+            'from_address' => 'accounts@deliverexapp.com',
+            'status' => EmailLog::STATUS_FAILED,
+            'provider' => 'resend',
+            'company_id' => $company->id,
+            'metadata' => [
+                'view' => 'mail.company-activation',
+                'view_data' => [
+                    'company' => $company->toArray(),
+                    'activationUrl' => 'https://deliverexapp.com/activate-company/token',
+                    'subject' => 'Activate',
+                ],
+            ],
+        ]);
+
+        app(EmailService::class)->retry($log);
+
+        $this->assertDatabaseHas('email_logs', [
+            'id' => $log->id,
+            'status' => EmailLog::STATUS_SENT,
+        ]);
+
+        Mail::assertSent(\App\Mail\TemplateMail::class);
+    }
 }

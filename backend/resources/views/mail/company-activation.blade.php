@@ -3,18 +3,18 @@
 @section('content')
 <h1 style="margin:0 0 12px;font-size:1.375rem;font-weight:800;color:#0f172a;">Activate your company account</h1>
 <p style="margin:0 0 14px;font-size:0.9375rem;line-height:1.6;color:#334155;">
-    Hello {{ $company->contact_person ?? $company->company_name }},
+    Hello {{ data_get($company, 'contact_person') ?: data_get($company, 'company_name') }},
 </p>
 <p style="margin:0 0 14px;font-size:0.9375rem;line-height:1.6;color:#334155;">
-    Your Deliverex company portal has been set up by our team. Use the button below to create your password and start managing deliveries for <strong>{{ $company->company_name }}</strong>.
+    Your Deliverex company portal has been set up by our team. Use the button below to create your password and start managing deliveries for <strong>{{ data_get($company, 'company_name') }}</strong>.
 </p>
 
 <div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:0.875rem;color:#334155;line-height:1.7;">
     <strong style="color:#0f172a;">Account details</strong><br>
-    Company: {{ $company->company_name }}<br>
-    Login email: {{ $company->company_email }}
-    @if($company->contact_number)
-        <br>Contact: {{ $company->contact_number }}
+    Company: {{ data_get($company, 'company_name') }}<br>
+    Login email: {{ data_get($company, 'company_email') }}
+    @if(data_get($company, 'contact_number'))
+        <br>Contact: {{ data_get($company, 'contact_number') }}
     @endif
 </div>
 

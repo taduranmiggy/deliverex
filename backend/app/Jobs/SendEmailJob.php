@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\EmailLog;
+use App\Services\Email\MailViewData;
 use App\Services\Email\ResendService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -28,7 +29,7 @@ class SendEmailJob implements ShouldQueue
         }
 
         $view = $log->metadata['view'] ?? null;
-        $data = $log->metadata['view_data'] ?? [];
+        $data = MailViewData::prepareForRender($log->metadata['view_data'] ?? []);
         if (! $view) {
             $log->forceFill([
                 'status' => EmailLog::STATUS_FAILED,

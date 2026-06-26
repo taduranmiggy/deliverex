@@ -26,6 +26,8 @@ class EmailService
         $recipient = strtolower(trim($recipient));
         $fromAddress = $from ?? $this->fromForType($type);
 
+        $viewData = MailViewData::normalize($viewData);
+
         $log = EmailLog::query()->create([
             'email_type' => $type,
             'recipient' => $recipient,
@@ -47,7 +49,7 @@ class EmailService
             return $log;
         }
 
-        $html = View::make($view, $viewData)->render();
+        $html = View::make($view, MailViewData::prepareForRender($viewData))->render();
 
         return $this->resend->sendLogged($log, $html);
     }
@@ -59,7 +61,7 @@ class EmailService
         }
 
         $view = $log->metadata['view'] ?? null;
-        $data = $log->metadata['view_data'] ?? [];
+        $data = MailViewData::prepareForRender($log->metadata['view_data'] ?? []);
         if (! $view) {
             throw new \RuntimeException('Cannot retry email without template metadata.');
         }
