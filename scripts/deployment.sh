@@ -110,12 +110,29 @@ ARTISAN=(php "$BACKEND/artisan")
 
 chmod +x "$SCRIPT_DIR/run-composer.sh" 2>/dev/null || true
 
+sync_composer_lock_if_needed() {
+  if grep -q '"resend/resend-php"' "$BACKEND/composer.json" \
+    && ! grep -q '"name": "resend/resend-php"' "$BACKEND/composer.lock"; then
+    log "composer.lock missing resend/resend-php — updating lock file on server..."
+    bash "$SCRIPT_DIR/run-composer.sh" "$BACKEND" update resend/resend-php \
+      --no-dev --no-interaction --with-all-dependencies \
+      || bash "$SCRIPT_DIR/run-composer.sh" "$BACKEND" require resend/resend-php \
+        --no-dev --no-interaction --update-with-all-dependencies
+  fi
+}
+
+sync_composer_lock_if_needed
+
 log "Installing PHP dependencies (composer install --no-dev)..."
 if ! bash "$SCRIPT_DIR/run-composer.sh" "$BACKEND" install --no-dev --optimize-autoloader --no-interaction; then
   log "composer install failed (optimize) — retrying without optimize-autoloader..."
   if ! bash "$SCRIPT_DIR/run-composer.sh" "$BACKEND" install --no-dev --no-interaction; then
-    log_error "composer install failed"
-    exit 1
+    log "composer install failed — attempting lock sync for resend/resend-php..."
+    sync_composer_lock_if_needed
+    if ! bash "$SCRIPT_DIR/run-composer.sh" "$BACKEND" install --no-dev --no-interaction; then
+      log_error "composer install failed"
+      exit 1
+    fi
   fi
   bash "$SCRIPT_DIR/run-composer.sh" "$BACKEND" dump-autoload --no-interaction || log "dump-autoload skipped (non-fatal)"
 fi
