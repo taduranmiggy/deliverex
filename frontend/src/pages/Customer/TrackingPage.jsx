@@ -344,6 +344,7 @@ function TrackingPage() {
             </AnimatePresence>
           )}
         </div>
+        </div>
       </div>
 
       <DeliverexAssistantChat open={chatOpen} onOpenChange={setChatOpen} />
