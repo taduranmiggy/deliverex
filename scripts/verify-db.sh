@@ -18,7 +18,7 @@ if [ ! -f vendor/autoload.php ]; then
 fi
 
 echo "==> Verifying database connection..."
-RESULT="$(php artisan tinker --execute="try { DB::connection()->getPdo(); echo 'ok'; } catch (Throwable \$e) { echo 'fail:'.\$e->getMessage(); }" 2>&1 | tail -1)"
+RESULT="$(php artisan tinker --execute='try { DB::connection()->getPdo(); echo "ok"; } catch (Throwable $e) { echo "fail:".$e->getMessage(); }' 2>&1 | tail -1)"
 
 if [[ "$RESULT" == "ok" ]]; then
   echo "    Database connection OK"

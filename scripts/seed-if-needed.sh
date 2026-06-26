@@ -23,7 +23,7 @@ if [ ! -f vendor/autoload.php ]; then
   exit 0
 fi
 
-RESULT="$(php artisan tinker --execute="try { if (! Schema::hasTable('users')) { echo 'missing'; } else { echo App\Models\User::count(); } } catch (Throwable \$e) { echo 'error:'.$e->getMessage(); }" 2>&1 | tail -1)"
+RESULT="$(php artisan tinker --execute='try { if (! Schema::hasTable("users")) { echo "missing"; } else { echo App\Models\User::count(); } } catch (Throwable $e) { echo "error:".$e->getMessage(); }' 2>&1 | tail -1)"
 
 case "$RESULT" in
   0)

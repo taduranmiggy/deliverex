@@ -21,7 +21,7 @@ if [ -f vendor/autoload.php ]; then
   echo ""
   php artisan migrate:status 2>&1 | head -8 || true
   echo ""
-  php artisan tinker --execute="try { echo 'users='.App\Models\User::count(); } catch (Throwable \$e) { echo 'DB error: '.\$e->getMessage(); }" 2>&1 || true
+  php artisan tinker --execute='try { echo "users=".App\Models\User::count(); } catch (Throwable $e) { echo "DB error: ".$e->getMessage(); }' 2>&1 || true
 fi
 echo ""
 echo "--- storage/logs (last 15 lines) ---"
