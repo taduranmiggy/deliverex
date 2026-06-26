@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { login as loginRequest } from '../../api/auth'
 import useAuth from '../../hooks/useAuth'
 import { roleHome } from '../../utils/roleUtils'
-import { IconChevronLeft, IconChevronRight, IconLockOutlined, IconMail } from '../../components/DxIcons'
+import { IconChevronLeft, IconLockOutlined, IconMail } from '../../components/DxIcons'
 import './LoginPage.css'
 
 const ASIDE_SLIDES = [
@@ -130,7 +130,7 @@ function LoginPage() {
       const result = await loginRequest(payload)
       const roleName = result.user?.role?.name
       if (roleName === 'driver') {
-        setError('Driver accounts use the driver portal. Open /driver/login in your browser.')
+        setError('Driver accounts use the Deliverex driver mobile app — not this sign-in page.')
         return
       }
       login(result.user, result.token)
@@ -260,12 +260,6 @@ function LoginPage() {
               <div>Dispatcher: dispatcher@deliverex.com / dispatcher123</div>
               <div>Manager: manager@deliverex.com / manager123</div>
               <div>Customer: customer@deliverex.com / customer123</div>
-              <div className="auth-demo-driver">
-                <Link to="/driver/login" className="auth-driver-login-link">
-                  Driver portal (separate sign-in)
-                  <IconChevronRight />
-                </Link>
-              </div>
             </div>
             <p className="auth-alt-link" style={{ marginTop: 16 }}>
               New customer?{' '}

@@ -29,7 +29,7 @@ function CustomerLoginPage() {
       if (roleName !== 'customer') {
         setError(
           isStandalonePwa()
-            ? 'This app is for customers only. Staff and drivers should sign in through a web browser.'
+            ? 'This app is for customer accounts only.'
             : 'This sign-in is for customer accounts only. Admin, manager, and dispatcher accounts should use Staff Login.',
         )
         return
