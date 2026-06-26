@@ -64,6 +64,8 @@ fi
 
 cd "$DEPLOY_PATH"
 
+chmod +x "$SCRIPT_DIR/"*.sh 2>/dev/null || true
+
 if [ "${SKIP_GIT_PULL:-0}" != "1" ]; then
   log "Pulling latest code from origin/main..."
   git pull origin main
@@ -78,7 +80,7 @@ bash "$SCRIPT_DIR/provision-env.sh"
 cd "$BACKEND"
 
 log "Installing PHP dependencies (composer install --no-dev)..."
-COMPOSER_CMD="$("$SCRIPT_DIR/ensure-composer.sh" "$BACKEND" "$DEPLOY_PATH")"
+COMPOSER_CMD="$(bash "$SCRIPT_DIR/ensure-composer.sh" "$BACKEND" "$DEPLOY_PATH")"
 log "Using: $COMPOSER_CMD"
 if ! $COMPOSER_CMD install --no-dev --optimize-autoloader --no-interaction; then
   log_error "composer install failed"

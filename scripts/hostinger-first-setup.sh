@@ -33,7 +33,7 @@ if ! grep -q '^APP_KEY=base64:' .env 2>/dev/null; then
 fi
 
 echo "==> Installing Composer dependencies..."
-COMPOSER_CMD="$("$SCRIPT_DIR/ensure-composer.sh" "$DEPLOY_PATH/backend" "$DEPLOY_PATH")"
+COMPOSER_CMD="$(bash "$SCRIPT_DIR/ensure-composer.sh" "$DEPLOY_PATH/backend" "$DEPLOY_PATH")"
 echo "    Using: $COMPOSER_CMD"
 $COMPOSER_CMD install --no-dev --optimize-autoloader --no-interaction
 

@@ -14,6 +14,8 @@ echo " Deliverex — one-time Hostinger autodeploy"
 echo " DEPLOY_PATH=$DEPLOY_PATH"
 echo "============================================"
 
+chmod +x "$SCRIPT_DIR/"*.sh 2>/dev/null || true
+
 if [ -f "$SECRETS_FILE" ]; then
   echo "==> $SECRETS_FILE already exists — skipping prompts"
 else
@@ -48,7 +50,7 @@ bash "$SCRIPT_DIR/provision-env.sh"
 
 cd "$DEPLOY_PATH/backend"
 if [ ! -f vendor/autoload.php ]; then
-  COMPOSER_CMD="$("$SCRIPT_DIR/ensure-composer.sh" "$DEPLOY_PATH/backend" "$DEPLOY_PATH")"
+  COMPOSER_CMD="$(bash "$SCRIPT_DIR/ensure-composer.sh" "$DEPLOY_PATH/backend" "$DEPLOY_PATH")"
   $COMPOSER_CMD install --no-dev --optimize-autoloader --no-interaction
 fi
 

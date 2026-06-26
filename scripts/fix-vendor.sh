@@ -11,7 +11,7 @@ echo "    DEPLOY_PATH=$DEPLOY_PATH"
 
 cd "$BACKEND"
 
-COMPOSER_CMD="$("$SCRIPT_DIR/ensure-composer.sh" "$BACKEND" "$DEPLOY_PATH")"
+COMPOSER_CMD="$(bash "$SCRIPT_DIR/ensure-composer.sh" "$BACKEND" "$DEPLOY_PATH")"
 echo "==> Using: $COMPOSER_CMD"
 $COMPOSER_CMD install --no-dev --optimize-autoloader --no-interaction
 
