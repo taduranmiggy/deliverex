@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Create or restore backend/.env for production (survives hPanel Git redeploy).
+# Sources (in order): .deliverex.env backup → .deploy.secrets → existing mysql .env
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_PATH="${DEPLOY_PATH:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+BACKEND="$DEPLOY_PATH/backend"
+ENV_FILE="$BACKEND/.env"
+ENV_BACKUP="$(dirname "$DEPLOY_PATH")/.deliverex.env"
+SECRETS_FILE="$(dirname "$DEPLOY_PATH")/.deploy.secrets"
+
+log() { echo "[provision-env] $*"; }
+
+write_env_from_secrets() {
+  # shellcheck disable=SC1090
+  source "$SECRETS_FILE"
+
+  : "${DB_DATABASE:?DB_DATABASE missing in $SECRETS_FILE}"
+  : "${DB_USERNAME:?DB_USERNAME missing in $SECRETS_FILE}"
+  : "${DB_PASSWORD:?DB_PASSWORD missing in $SECRETS_FILE}"
+
+  local app_url="${APP_URL:-https://deliverexapp.com}"
+  local domain="${APP_DOMAIN:-deliverexapp.com}"
+  local db_pass_env="${DB_PASSWORD//\"/\\\"}"
+
+  cat > "$ENV_FILE" <<EOF
+APP_NAME=Deliverex
+APP_ENV=production
+APP_KEY=
+APP_DEBUG=false
+APP_URL=${app_url}
+
+APP_LOCALE=en
+APP_FALLBACK_LOCALE=en
+APP_FAKER_LOCALE=en_US
+
+LOG_CHANNEL=stack
+LOG_LEVEL=error
+
+DB_CONNECTION=mysql
+DB_HOST=${DB_HOST:-localhost}
+DB_PORT=${DB_PORT:-3306}
+DB_DATABASE=${DB_DATABASE}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD="${db_pass_env}"
+
+SESSION_DRIVER=file
+SESSION_LIFETIME=120
+SESSION_DOMAIN=${domain}
+SESSION_SECURE_COOKIE=true
+
+BROADCAST_CONNECTION=log
+FILESYSTEM_DISK=local
+QUEUE_CONNECTION=database
+CACHE_STORE=file
+
+MAIL_MAILER=log
+
+CORS_ALLOWED_ORIGINS=${app_url}
+SANCTUM_STATEFUL_DOMAINS=${domain}
+OCR_ENGINE=${OCR_ENGINE:-local}
+OCR_SYNC_MODE=true
+EOF
+}
+
+save_backup() {
+  cp "$ENV_FILE" "$ENV_BACKUP"
+  chmod 600 "$ENV_BACKUP" 2>/dev/null || true
+  log "Backed up to $ENV_BACKUP"
+}
+
+is_production_env() {
+  [ -f "$ENV_FILE" ] && grep -q '^DB_CONNECTION=mysql' "$ENV_FILE"
+}
+
+mkdir -p "$BACKEND"
+
+if [ -f "$ENV_BACKUP" ]; then
+  log "Restoring from $ENV_BACKUP"
+  cp "$ENV_BACKUP" "$ENV_FILE"
+  chmod 600 "$ENV_FILE" 2>/dev/null || true
+elif [ -f "$SECRETS_FILE" ]; then
+  log "Building .env from $SECRETS_FILE"
+  write_env_from_secrets
+  save_backup
+elif is_production_env; then
+  log "Keeping existing mysql .env and creating backup"
+  save_backup
+elif [ -f "$ENV_FILE" ] && grep -q '^DB_CONNECTION=sqlite' "$ENV_FILE"; then
+  log "ERROR: .env uses sqlite (dev template). Create $SECRETS_FILE first."
+  log "  Run once: bash scripts/setup-hostinger-autodeploy.sh"
+  exit 1
+else
+  log "ERROR: No .env backup or secrets file."
+  log "  Run once: bash scripts/setup-hostinger-autodeploy.sh"
+  log "  Expected: $ENV_BACKUP or $SECRETS_FILE"
+  exit 1
+fi
+
+if ! grep -q '^DB_CONNECTION=mysql' "$ENV_FILE"; then
+  log "ERROR: .env must use DB_CONNECTION=mysql for production"
+  exit 1
+fi

@@ -1,61 +1,74 @@
 # Deliverex — Production Deployment
 
-Zero-maintenance deploy for Laravel on Hostinger. After one-time setup, every `git push` to `main` runs migrate + seed + cache automatically via GitHub Actions or hPanel post-deploy hook.
+Zero-maintenance deploy for Hostinger. **One-time setup** (5 min), then every `git push` → build → auto-deploy with no manual SSH.
+
+---
+
+## Automated flow (after one-time setup)
+
+```
+git push main
+  → GitHub Actions: build React, commit backend/public/, push
+  → POST deploy-hook.php (or hPanel cron within 5 min)
+  → deployment.sh: .env + composer + migrate + cache + storage link
+```
+
+---
+
+## One-time setup (isang beses lang)
+
+SSH once, then never again for routine deploys:
+
+```bash
+cd ~/domains/deliverexapp.com/public_html
+bash scripts/setup-hostinger-autodeploy.sh
+```
+
+This creates:
+- `../.deploy.secrets` — MySQL + deploy hook token (outside git, survives redeploy)
+- `../.deliverex.env` — `.env` backup
+- Prints hPanel checklist (post-deploy script + cron)
+
+Add to **GitHub → Secrets → Actions**:
+- `DEPLOY_HOOK_TOKEN` — shown by setup script
+
+Configure **hPanel** (copy from script output):
+- Git install path: `domains/deliverexapp.com/public_html`
+- Document root: `.../public_html/backend/public`
+- Post-deploy: `bash .../scripts/hostinger-hpanel-git-deploy.sh`
+- Cron (every 5 min): `bash .../scripts/hostinger-cron-deploy.sh`
+
+Then run once: `bash scripts/hostinger-hpanel-git-deploy.sh`
 
 ---
 
 ## What runs on every deploy
 
-[`scripts/deployment.sh`](scripts/deployment.sh) (or [`deployment.sh`](deployment.sh) at repo root):
+[`scripts/deployment.sh`](scripts/deployment.sh):
 
-| Step | Command |
-|------|---------|
-| Restore `.env` | Copy from `../.deliverex.env` (survives git redeploy) |
-| Dependencies | `composer install --no-dev --optimize-autoloader` |
+| Step | Action |
+|------|--------|
+| `.env` | `provision-env.sh` — restore backup or build from `.deploy.secrets` |
+| `vendor/` | `ensure-composer.sh` — auto-download composer.phar if needed |
 | Migrations | `php artisan migrate --force` |
-| Seed | `php artisan db:seed --force` (idempotent) |
-| Clear caches | `php artisan optimize:clear` |
-| Cache config/routes | `php artisan config:cache` + `php artisan route:cache` |
-| Frontend | Publish git-committed `backend/public/` or `/tmp/deliverex-dist` |
+| Seed | Only if users table empty |
+| Storage | symlink, permissions, `delivery_documents/` |
+| Frontend | Uses git-committed `backend/public/` (built in CI) |
 
-**Logs:** `backend/storage/logs/deploy.log`
+**Logs:** `backend/storage/logs/deploy.log`, `backend/storage/logs/cron-deploy.log`
 
 ---
 
-## GitHub Actions (recommended)
+## GitHub Actions
 
 Workflow: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
 
-Builds the React app in CI, commits assets to `backend/public/`, and pushes to `main`.  
-**Hostinger pulls via hPanel Git** — SSH from GitHub Actions is not used (shared hosting often blocks GitHub IPs).
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `DEPLOY_HOOK_TOKEN` | Yes (for instant deploy) | From `setup-hostinger-autodeploy.sh` |
+| `VITE_API_URL` | No | Default `https://deliverexapp.com/api` |
 
-Triggers on every push to `main` (except commits that only change `backend/public/`).
-
-### Optional GitHub Secret
-
-| Secret | Example | Description |
-|--------|---------|-------------|
-| `VITE_API_URL` | `https://deliverexapp.com/api` | Frontend API URL at build time |
-
-### After CI push
-
-1. hPanel → **Git** → **Deploy** (install path: `domains/deliverexapp.com/public_html`)
-2. Post-deploy script runs on the server automatically
-
-### Manual workflow run
-
-GitHub → **Actions** → **Deploy to Hostinger** → **Run workflow**
-
-### SSH (manual server tasks only)
-
-Use SSH from your PC for first-time setup, storage fix, and diagnostics — not for GitHub Actions deploy.
-
-```powershell
-ssh -p 65002 u826622735@147.93.101.66
-cd ~/domains/deliverexapp.com/public_html
-bash scripts/hostinger-first-setup.sh
-bash scripts/fix-storage.sh
-```
+If webhook fails, **hPanel cron** deploys within 5 minutes automatically.
 
 ---
 

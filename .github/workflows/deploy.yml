@@ -63,6 +63,23 @@ jobs:
             git push
           fi
 
+      - name: Trigger Hostinger deploy
+        continue-on-error: true
+        env:
+          DEPLOY_HOOK_TOKEN: ${{ secrets.DEPLOY_HOOK_TOKEN }}
+        run: |
+          if [ -z "${DEPLOY_HOOK_TOKEN:-}" ]; then
+            echo "DEPLOY_HOOK_TOKEN not set — enable hPanel cron or post-deploy script."
+            exit 0
+          fi
+          echo "Triggering https://deliverexapp.com/deploy-hook.php ..."
+          curl -fsS --connect-timeout 20 --max-time 600 -X POST \
+            -H "X-Deploy-Token: $DEPLOY_HOOK_TOKEN" \
+            "https://deliverexapp.com/deploy-hook.php" || {
+              echo "Webhook failed — hPanel cron will deploy within 5 minutes."
+              exit 0
+            }
+
       - name: Production health check (informational)
         continue-on-error: true
         run: |
@@ -73,8 +90,7 @@ jobs:
             echo "Production health: OK"
           else
             echo ""
-            echo "NOTE: Site may need hPanel Git Deploy."
-            echo "  hPanel → Git → Deploy (install path: domains/deliverexapp.com/public_html)"
-            echo "  Post-deploy: bash .../public_html/scripts/hostinger-hpanel-git-deploy.sh"
-            echo "  First-time SSH: bash scripts/hostinger-first-setup.sh && bash scripts/fix-storage.sh"
+            echo "NOTE: Enable autodeploy on Hostinger (one-time):"
+            echo "  bash scripts/setup-hostinger-autodeploy.sh"
+            echo "  Add GitHub secret DEPLOY_HOOK_TOKEN + hPanel cron (see script output)"
           fi

@@ -71,6 +71,10 @@ else
   log "Skipping git pull (already updated by hPanel Git / CI)."
 fi
 
+log "Provisioning backend/.env..."
+export DEPLOY_PATH
+bash "$SCRIPT_DIR/provision-env.sh"
+
 cd "$BACKEND"
 
 log "Installing PHP dependencies (composer install --no-dev)..."
@@ -85,30 +89,11 @@ if [ ! -f vendor/autoload.php ]; then
   exit 1
 fi
 
-if [ -f "$ENV_BACKUP" ]; then
-  log "Restoring .env from backup: $ENV_BACKUP"
-  cp "$ENV_BACKUP" .env
-  chmod 600 .env 2>/dev/null || true
-elif [ -f "$ENV_BACKUP_ALT" ]; then
-  log "Restoring .env from backup: $ENV_BACKUP_ALT"
-  cp "$ENV_BACKUP_ALT" .env
-  chmod 600 .env 2>/dev/null || true
-elif [ -f .env ]; then
-  log "Keeping existing backend/.env"
-elif [ -f .env.example ]; then
-  log_error "backend/.env missing and no backup at $ENV_BACKUP or $ENV_BACKUP_ALT"
-  log_error "Run once via SSH: bash scripts/write-production-env.sh"
-  exit 1
-else
-  log_error "backend/.env missing and no backup at $ENV_BACKUP"
-  log_error "Run once via SSH: bash scripts/write-production-env.sh"
-  exit 1
-fi
-
 if ! grep -q '^APP_KEY=base64:' .env; then
   log "Generating APP_KEY..."
   php artisan key:generate --force
   cp .env "$ENV_BACKUP" 2>/dev/null || true
+  chmod 600 "$ENV_BACKUP" 2>/dev/null || true
 fi
 
 php artisan config:clear
