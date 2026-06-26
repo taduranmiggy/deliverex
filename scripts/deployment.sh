@@ -21,6 +21,7 @@ fi
 DEPLOY_PATH="${DEPLOY_PATH:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BACKEND="$DEPLOY_PATH/backend"
 ENV_BACKUP="$(dirname "$DEPLOY_PATH")/.deliverex.env"
+ENV_BACKUP_ALT="$DEPLOY_PATH/.deliverex.env"
 LOG_DIR="$BACKEND/storage/logs"
 LOG_FILE="$LOG_DIR/deploy.log"
 DEPLOY_STATUS=0
@@ -88,7 +89,17 @@ if [ -f "$ENV_BACKUP" ]; then
   log "Restoring .env from backup: $ENV_BACKUP"
   cp "$ENV_BACKUP" .env
   chmod 600 .env 2>/dev/null || true
-elif [ ! -f .env ]; then
+elif [ -f "$ENV_BACKUP_ALT" ]; then
+  log "Restoring .env from backup: $ENV_BACKUP_ALT"
+  cp "$ENV_BACKUP_ALT" .env
+  chmod 600 .env 2>/dev/null || true
+elif [ -f .env ]; then
+  log "Keeping existing backend/.env"
+elif [ -f .env.example ]; then
+  log_error "backend/.env missing and no backup at $ENV_BACKUP or $ENV_BACKUP_ALT"
+  log_error "Run once via SSH: bash scripts/write-production-env.sh"
+  exit 1
+else
   log_error "backend/.env missing and no backup at $ENV_BACKUP"
   log_error "Run once via SSH: bash scripts/write-production-env.sh"
   exit 1

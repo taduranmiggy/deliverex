@@ -41,6 +41,9 @@ jobs:
       - name: Sync code to server
         run: |
           rsync -avz --delete \
+            --filter 'P backend/vendor/' \
+            --filter 'P backend/.env' \
+            --filter 'P backend/storage/' \
             --exclude '.git' \
             --exclude 'backend/vendor' \
             --exclude 'backend/.env' \
@@ -65,6 +68,17 @@ jobs:
           ssh -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "export DEPLOY_PATH='${{ secrets.DEPLOY_PATH }}' SKIP_GIT_PULL=1 SKIP_SERVER_FRONTEND_BUILD=1 && bash '${{ secrets.DEPLOY_PATH }}/scripts/deployment.sh'"
+
+      - name: Verify production health
+        run: |
+          for i in 1 2 3 4 5; do
+            body="$(curl -fsS "https://deliverexapp.com/ping.php" 2>/dev/null || true)"
+            echo "$body"
+            echo "$body" | grep -q 'env=yes' && echo "$body" | grep -q 'vendor=yes' && exit 0
+            sleep 8
+          done
+          echo "ERROR: ping.php still missing env or vendor after deploy" >&2
+          exit 1
 
       - name: Fetch deployment log on failure
         if: failure()
