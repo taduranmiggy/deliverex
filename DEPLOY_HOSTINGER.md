@@ -162,36 +162,23 @@ Kung **walang npm** sa Hostinger (common sa shared hosting), gamitin ang **Path 
 
 ## Path B — GitHub Actions (recommended para sa frontend build)
 
-Mas kumpleto: build ng React sa cloud, upload sa server, run deploy script.
+Build ng React sa GitHub cloud, i-commit sa `backend/public/`, tapos **hPanel Git** ang mag-pull sa server (walang SSH mula GitHub — blocked ng Hostinger).
 
-### GitHub Secrets
-
-Repo → **Settings** → **Secrets and variables** → **Actions**
+### GitHub Secret (optional)
 
 | Secret | Halimbawa |
 |--------|-----------|
-| `SSH_HOST` | IP mula sa hPanel |
-| `SSH_PORT` | `65002` |
-| `SSH_USER` | `u123456789` |
-| `SSH_PRIVATE_KEY` | buong private key |
-| `DEPLOY_PATH` | `/home/u123456789/domains/yourdomain.com/deliverex` |
-| `VITE_API_URL` | `https://yourdomain.com/api` |
+| `VITE_API_URL` | `https://deliverexapp.com/api` |
 
-### SSH key (PowerShell sa PC)
-```powershell
-ssh-keygen -t ed25519 -C "deliverex-deploy" -f "$env:USERPROFILE\.ssh\deliverex_hostinger"
-```
+Hindi na kailangan ang SSH secrets (`SSH_HOST`, `SSH_PORT`, etc.) para sa deploy workflow.
 
-- **Public key** → idagdag sa hPanel SSH Access
-- **Private key** → ilagay sa GitHub secret `SSH_PRIVATE_KEY`
+### Auto-deploy flow
 
-### Auto-deploy
-
-Tuwing **push sa `main`**, tumatakbo ang [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+1. Push sa `main` → [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds frontend + pushes assets
+2. hPanel → **Git** → **Deploy** (o i-enable auto-deploy on repository update)
+3. Post-deploy script tumatakbo sa server: `bash .../public_html/scripts/hostinger-hpanel-git-deploy.sh`
 
 Manual: GitHub → **Actions** → **Deploy to Hostinger** → **Run workflow**
-
-Pwede mong gamitin **Path A + Path B** sabay: hPanel Git para sa pull, GitHub Actions para sa full build — o **Path B lang** at i-disable ang hPanel auto-pull para iwas double deploy.
 
 ---
 

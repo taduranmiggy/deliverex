@@ -26,35 +26,36 @@ Zero-maintenance deploy for Laravel on Hostinger. After one-time setup, every `g
 
 Workflow: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
 
-Triggers on every push to `main`.
+Builds the React app in CI, commits assets to `backend/public/`, and pushes to `main`.  
+**Hostinger pulls via hPanel Git** — SSH from GitHub Actions is not used (shared hosting often blocks GitHub IPs).
 
-### Required GitHub Secrets
+Triggers on every push to `main` (except commits that only change `backend/public/`).
 
-Repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+### Optional GitHub Secret
 
 | Secret | Example | Description |
 |--------|---------|-------------|
-| `SSH_HOST` | `147.93.101.66` | Server IP from hPanel → SSH Access |
-| `SSH_PORT` | `65002` | Hostinger SSH port (usually 65002) |
-| `SSH_USER` | `u826622735` | SSH username |
-| `SSH_PRIVATE_KEY` | `-----BEGIN OPENSSH PRIVATE KEY-----...` | Full private key (no passphrase) |
-| `DEPLOY_PATH` | `/home/u826622735/domains/deliverexapp.com/public_html` | Repo root on server |
 | `VITE_API_URL` | `https://deliverexapp.com/api` | Frontend API URL at build time |
 
-### SSH key setup (one-time, on your PC)
+### After CI push
 
-```powershell
-ssh-keygen -t ed25519 -C "deliverex-deploy" -f "$env:USERPROFILE\.ssh\deliverex_hostinger" -N '""'
-```
-
-1. Copy **public** key (`deliverex_hostinger.pub`) → hPanel → **Advanced** → **SSH Access** → Add SSH key
-2. Copy **private** key contents → GitHub secret `SSH_PRIVATE_KEY`
-
-**Important:** Paste the **private** file (`deliverex_hostinger`, not `.pub`). Include the `BEGIN` and `END` lines. If deploy fails with `error in libcrypto`, delete the secret and re-paste the full key (GitHub preserves newlines when pasted directly into the secret field).
+1. hPanel → **Git** → **Deploy** (install path: `domains/deliverexapp.com/public_html`)
+2. Post-deploy script runs on the server automatically
 
 ### Manual workflow run
 
 GitHub → **Actions** → **Deploy to Hostinger** → **Run workflow**
+
+### SSH (manual server tasks only)
+
+Use SSH from your PC for first-time setup, storage fix, and diagnostics — not for GitHub Actions deploy.
+
+```powershell
+ssh -p 65002 u826622735@147.93.101.66
+cd ~/domains/deliverexapp.com/public_html
+bash scripts/hostinger-first-setup.sh
+bash scripts/fix-storage.sh
+```
 
 ---
 

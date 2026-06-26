@@ -1,13 +1,25 @@
 name: Deploy to Hostinger
 
+# Hostinger shared hosting often blocks SSH from GitHub Actions IPs.
+# This workflow builds the frontend, commits assets to backend/public/, and pushes.
+# The server deploys via hPanel Git (auto-pull or manual Deploy) + post-deploy script.
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "backend/public/**"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
 jobs:
-  deploy:
+  build-and-publish:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,87 +35,46 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: |
-          VITE_API_URL="${{ secrets.VITE_API_URL }}"
-          if [ -z "$VITE_API_URL" ]; then VITE_API_URL="https://deliverexapp.com/api"; fi
+          if [ -z "$VITE_API_URL" ]; then export VITE_API_URL="https://deliverexapp.com/api"; fi
           npm ci
           VITE_API_URL="$VITE_API_URL" npm run build
 
-      - name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add server to known_hosts
+      - name: Copy build to backend/public
         run: |
-          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          mkdir -p backend/public/assets
+          rsync -a frontend/dist/ backend/public/ \
+            --exclude index.php \
+            --exclude .htaccess \
+            --exclude ping.php \
+            --exclude storage
 
-      - name: Ensure server directories exist
+      - name: Commit and push published assets
         run: |
-          SSH_OPTS="-p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
-          REMOTE_CMD="mkdir -p '${{ secrets.DEPLOY_PATH }}/backend/public/assets' \
-            '${{ secrets.DEPLOY_PATH }}/backend/storage/logs' \
-            '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/cache' \
-            '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/sessions' \
-            '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/views'"
-          for attempt in 1 2 3; do
-            if ssh $SSH_OPTS "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "$REMOTE_CMD"; then
-              echo "Server directories OK (attempt $attempt)"
-              exit 0
-            fi
-            echo "SSH mkdir failed (attempt $attempt), retrying in 15s..."
-            sleep 15
-          done
-          echo "ERROR: could not create server directories after 3 attempts" >&2
-          exit 1
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backend/public/
+          if git diff --staged --quiet; then
+            echo "No frontend asset changes to publish."
+          else
+            git commit -m "chore: publish frontend build for Hostinger deploy"
+            git push
+          fi
 
-      - name: Sync code to server
-        run: |
-          rsync -avz --delete \
-            --filter 'P backend/vendor/' \
-            --filter 'P backend/.env' \
-            --filter 'P backend/storage/' \
-            --exclude '.git' \
-            --exclude 'backend/vendor' \
-            --exclude 'backend/.env' \
-            --exclude 'backend/public/assets' \
-            --exclude 'frontend/node_modules' \
-            --exclude 'frontend/dist' \
-            -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
-            ./ \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
-
-      - name: Upload frontend build
-        run: |
-          ssh -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "mkdir -p /tmp/deliverex-dist"
-          rsync -avz --delete \
-            -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
-            frontend/dist/ \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/deliverex-dist/"
-
-      - name: Run deployment script on server
-        run: |
-          ssh -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "export DEPLOY_PATH='${{ secrets.DEPLOY_PATH }}' SKIP_GIT_PULL=1 SKIP_SERVER_FRONTEND_BUILD=1 && bash '${{ secrets.DEPLOY_PATH }}/scripts/deployment.sh'"
-
-      - name: Verify production health
-        run: |
-          for i in 1 2 3 4 5; do
-            body="$(curl -fsS "https://deliverexapp.com/ping.php" 2>/dev/null || true)"
-            echo "$body"
-            echo "$body" | grep -q 'env=yes' && echo "$body" | grep -q 'vendor=yes' && exit 0
-            sleep 8
-          done
-          echo "ERROR: ping.php still missing env or vendor after deploy" >&2
-          exit 1
-
-      - name: Fetch deployment log on failure
-        if: failure()
+      - name: Production health check (informational)
         continue-on-error: true
         run: |
-          ssh -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "tail -80 '${{ secrets.DEPLOY_PATH }}/backend/storage/logs/deploy.log' 2>/dev/null || echo '(no deploy log)'"
+          echo "Checking https://deliverexapp.com/ping.php ..."
+          body="$(curl -fsS --connect-timeout 20 https://deliverexapp.com/ping.php 2>/dev/null || echo 'unreachable')"
+          echo "$body"
+          if echo "$body" | grep -q 'env=yes' && echo "$body" | grep -q 'vendor=yes'; then
+            echo "Production health: OK"
+          else
+            echo ""
+            echo "NOTE: Site may need hPanel Git Deploy."
+            echo "  hPanel → Git → Deploy (install path: domains/deliverexapp.com/public_html)"
+            echo "  Post-deploy: bash .../public_html/scripts/hostinger-hpanel-git-deploy.sh"
+            echo "  First-time SSH: bash scripts/hostinger-first-setup.sh && bash scripts/fix-storage.sh"
+          fi

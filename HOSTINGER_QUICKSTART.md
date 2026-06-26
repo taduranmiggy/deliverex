@@ -23,7 +23,7 @@ Path: `.../deliverex/backend/public` (buong path sa Step B)
 hPanel → **Git** → **Deployment script**
 
 ```bash
-bash /home/uXXXXXXX/domains/deliverexapp.com/deliverex/scripts/hostinger-hpanel-git-deploy.sh
+bash /home/uXXXXXXX/domains/deliverexapp.com/public_html/scripts/hostinger-hpanel-git-deploy.sh
 ```
 
 Palitan `uXXXXXXX` ng username mo, o kopyahin ang exact line mula sa Step B.
@@ -37,7 +37,7 @@ Palitan `uXXXXXXX` ng username mo, o kopyahin ang exact line mula sa Step B.
 hPanel → **SSH Access** → i-on → kopyahin ang command (hal. `ssh -p 65002 u123@ip`).
 
 ```bash
-cd ~/domains/deliverexapp.com/deliverex
+cd ~/domains/deliverexapp.com/public_html
 bash scripts/hostinger-hpanel-paths.sh
 ```
 

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 HOME_DIR="${HOME:-/home/$(whoami)}"
-REPO="$HOME_DIR/domains/deliverexapp.com/deliverex"
+REPO="$HOME_DIR/domains/deliverexapp.com/public_html"
 
 echo "=== hPanel settings for deliverexapp.com ==="
 echo ""
