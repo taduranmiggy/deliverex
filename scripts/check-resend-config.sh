@@ -85,9 +85,15 @@ if [ -n "$ENV_KEY" ]; then
       DOMAIN_COUNT="$(grep -o '"name"' /tmp/resend-api-test.json 2>/dev/null | wc -l | tr -d ' ')"
       echo "  Resend API: OK — key is valid (domains visible: ${DOMAIN_COUNT:-?})"
       ;;
-    401|403)
-      echo "  Resend API: FAILED — key rejected (invalid or revoked)"
-      echo "  FIX: Resend → API Keys → Create API Key → copy FULL key → update .deploy.secrets → deploy"
+    401|403|400)
+      MSG="$(grep -o '"message":"[^"]*"' /tmp/resend-api-test.json 2>/dev/null | head -1 | cut -d'"' -f4)"
+      echo "  Resend API: FAILED — ${MSG:-API key rejected (invalid or revoked)}"
+      echo "  FIX:"
+      echo "    1. Login to the SAME Resend account where deliverexapp.com is Verified"
+      echo "    2. API Keys → Create API Key → Full access → copy ENTIRE key (shown once)"
+      echo "    3. nano ~/domains/deliverexapp.com/.deploy.secrets"
+      echo "       RESEND_API_KEY=re_paste_full_key_no_quotes"
+      echo "    4. bash scripts/sync-resend-key.sh && bash scripts/check-resend-config.sh"
       ;;
     000)
       echo "  Resend API: network error — could not reach api.resend.com"
