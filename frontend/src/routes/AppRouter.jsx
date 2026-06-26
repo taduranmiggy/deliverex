@@ -12,13 +12,14 @@ import DriverLayout from '../layouts/DriverLayout'
 import ManagerLayout from '../layouts/ManagerLayout'
 import CustomerLayout from '../layouts/CustomerLayout'
 import PwaCustomerOnlyGuard from '../components/PwaCustomerOnlyGuard'
+import RootRoute from './RootRoute'
 
 function AppRouter() {
   return (
     <BrowserRouter>
       <PwaCustomerOnlyGuard>
         <Routes>
-          <Route path="/" element={<Navigate to="/customer" replace />} />
+          <Route path="/" element={<RootRoute />} />
           <Route path="/track" element={<Navigate to="/customer/track" replace />} />
 
           <Route path="/login" element={<LoginPage />} />

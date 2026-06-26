@@ -26,15 +26,16 @@ function CustomerLoginPage() {
     try {
       const result = await loginRequest({ email, password })
       const roleName = result.user?.role?.name
-      if (roleName !== 'customer' && isStandalonePwa()) {
-        setError('This app is for customers only. Staff and drivers should sign in through a web browser.')
+      if (roleName !== 'customer') {
+        setError(
+          isStandalonePwa()
+            ? 'This app is for customers only. Staff and drivers should sign in through a web browser.'
+            : 'This sign-in is for customer accounts only. Admin, manager, and dispatcher accounts should use Staff Login.',
+        )
         return
       }
       login(result.user, result.token)
-      const target =
-        roleName === 'customer'
-          ? location.state?.from?.pathname || roleHome(roleName)
-          : roleHome(roleName)
+      const target = location.state?.from?.pathname || roleHome(roleName)
       navigate(target, { replace: true })
     } catch (err) {
       setError(err.message)
@@ -49,7 +50,7 @@ function CustomerLoginPage() {
         <Link to="/customer" className="auth-back-home">
           ← Back to customer home
         </Link>
-        <h1>Sign in</h1>
+        <h1>Customer sign in</h1>
         <p className="auth-welcome auth-welcome--sub">
           Access your deliveries, link tracking IDs, and manage your shipments.
         </p>
@@ -82,22 +83,6 @@ function CustomerLoginPage() {
             Create account
           </Link>
         </p>
-        <p className="auth-alt-link" style={{ marginTop: 8, fontSize: '0.8125rem', color: 'var(--muted)' }}>
-          Admin, manager, or dispatcher?{' '}
-          <Link className="auth-inline-link" to="/login">
-            Staff sign in
-          </Link>
-          {' · '}
-          Driver?{' '}
-          <Link className="auth-inline-link" to="/driver/login">
-            Driver sign in
-          </Link>
-        </p>
-        {isStandalonePwa() ? (
-          <p className="auth-alt-link" style={{ marginTop: 8, fontSize: '0.8125rem', color: 'var(--muted)' }}>
-            Staff and drivers: open <strong>deliverexapp.com/login</strong> in your mobile browser — not this installed app.
-          </p>
-        ) : null}
       </div>
       <LoadingOverlay open={submitting} message="Signing in" submessage="Please wait." />
     </section>

@@ -145,7 +145,7 @@ function LoginPage() {
       <section className="auth-split-layout" aria-label="Sign in">
         <div className="auth-split-form-col">
           <div className="auth-split-form-inner">
-            <Link to="/customer" className="auth-back-home auth-back-home--split">
+            <Link to="/" className="auth-back-home auth-back-home--split">
               <IconChevronLeft />
               Back to home
             </Link>
