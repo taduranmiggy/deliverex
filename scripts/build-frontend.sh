@@ -24,6 +24,7 @@ load_node() {
 publish_dist() {
   local src="$1"
   echo "==> Publishing frontend to $PUBLIC ..."
+  mkdir -p "$PUBLIC/assets"
   rsync -a --delete "$src/" "$PUBLIC/" \
     --exclude index.php \
     --exclude .htaccess \

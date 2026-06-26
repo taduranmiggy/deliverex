@@ -38,6 +38,16 @@ jobs:
         run: |
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      - name: Ensure server directories exist
+        run: |
+          ssh -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "mkdir -p '${{ secrets.DEPLOY_PATH }}/backend/public/assets' \
+              '${{ secrets.DEPLOY_PATH }}/backend/storage/logs' \
+              '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/cache' \
+              '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/sessions' \
+              '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/views'"
+
       - name: Sync code to server
         run: |
           rsync -avz --delete \
@@ -47,6 +57,7 @@ jobs:
             --exclude '.git' \
             --exclude 'backend/vendor' \
             --exclude 'backend/.env' \
+            --exclude 'backend/public/assets' \
             --exclude 'frontend/node_modules' \
             --exclude 'frontend/dist' \
             -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no" \
