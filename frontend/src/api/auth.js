@@ -1,4 +1,4 @@
-import { apiRequest } from './client'
+import { apiRequest, loadRefreshBody, postRefreshRequest } from './client'
 import { buildSessionMeta } from '../services/session/DeviceSessionManager'
 
 export async function login(payload) {
@@ -9,10 +9,8 @@ export async function login(payload) {
 }
 
 export async function refreshSession(payload = {}) {
-  return apiRequest('/auth/refresh', {
-    method: 'POST',
-    body: JSON.stringify({ ...buildSessionMeta(), ...payload }),
-  })
+  const body = await loadRefreshBody(payload)
+  return postRefreshRequest(body)
 }
 
 export async function registerCustomer(payload) {

@@ -1,7 +1,9 @@
-import { API_URL } from '../../config/api.js'
-import SessionManager, { SESSION_EXPIRED_EVENT } from './SessionManager'
+import { API_URL } from '../config/api.js'
+import { buildSessionMeta, detectPlatform } from '../services/session/DeviceSessionManager'
+import { loadEncryptedRefresh } from '../services/session/secureStorage'
+import * as tokenStorage from '../services/session/tokenStorage'
 
-export { SESSION_EXPIRED_EVENT }
+export { SESSION_EXPIRED_EVENT } from '../services/session/SessionManager'
 
 function formatApiError(payload, status) {
   if (payload?.message) return String(payload.message)
@@ -18,7 +20,7 @@ function formatApiError(payload, status) {
  * FR 1.13 — wraps fetch: on 401, attempt one silent refresh then retry.
  */
 export async function apiRequest(path, options = {}, _retry = false) {
-  const token = SessionManager.getAccessToken()
+  const token = tokenStorage.getAccessToken()
   const isForm = options.body instanceof FormData
   const headers = {
     Accept: 'application/json',
@@ -35,7 +37,7 @@ export async function apiRequest(path, options = {}, _retry = false) {
     response = await fetch(`${API_URL}${path}`, {
       ...options,
       headers,
-      credentials: 'include', // FR 1.17 — send HttpOnly refresh cookie on web
+      credentials: 'include',
     })
   } catch {
     throw new Error(
@@ -43,24 +45,25 @@ export async function apiRequest(path, options = {}, _retry = false) {
     )
   }
 
-  // Proactive refresh when token is about to expire (not on auth endpoints).
   if (
     !_retry &&
     !path.startsWith('/auth/login') &&
     !path.startsWith('/auth/refresh') &&
-    SessionManager.isAccessTokenExpiringSoon()
+    tokenStorage.isAccessTokenExpiringSoon()
   ) {
     try {
-      await SessionManager.refreshAccessToken()
+      const { refreshAccessToken } = await import('../services/session/SessionManager')
+      await refreshAccessToken()
       return apiRequest(path, options, true)
     } catch {
-      // fall through — server will 401 if refresh failed
+      // fall through
     }
   }
 
   if (response.status === 401 && !_retry && !path.startsWith('/auth/')) {
     try {
-      await SessionManager.refreshAccessToken()
+      const { refreshAccessToken } = await import('../services/session/SessionManager')
+      await refreshAccessToken()
       return apiRequest(path, options, true)
     } catch {
       const error = await response.json().catch(() => ({}))
@@ -76,4 +79,31 @@ export async function apiRequest(path, options = {}, _retry = false) {
   if (response.status === 204) return null
 
   return response.json()
+}
+
+/** Used by auth.refreshSession — direct POST without interceptor recursion. */
+export async function postRefreshRequest(body) {
+  const response = await fetch(`${API_URL}/auth/refresh`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(formatApiError(data, response.status))
+  }
+  return data
+}
+
+export function buildRefreshBody(extra = {}) {
+  const platform = detectPlatform()
+  return { platform, ...buildSessionMeta(), ...extra }
+}
+
+export async function loadRefreshBody(extra = {}) {
+  const body = buildRefreshBody(extra)
+  const encRefresh = await loadEncryptedRefresh()
+  if (encRefresh) body.refresh_token = encRefresh
+  return body
 }
