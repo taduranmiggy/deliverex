@@ -35,7 +35,7 @@ class MasterDataController extends Controller
                     ->with('materialType:id,name')
                     ->orderBy('name')
                     ->get(),
-                'clients' => Client::query()->orderBy('client_name')->get(),
+                'clients' => Client::query()->orderBy('company_name')->get(),
                 'quarries' => Quarry::query()->orderBy('quarry_name')->get(),
                 'vehicle_types' => VehicleType::query()->orderBy('name')->get(),
                 'vehicles' => Vehicle::query()
@@ -59,7 +59,7 @@ class MasterDataController extends Controller
                     ->latest()
                     ->get(),
                 'client_preferences' => ClientQuarryVehiclePreference::query()
-                    ->with(['client:id,client_name', 'quarry:id,quarry_name', 'vehicleType:id,name,wheel_type'])
+                    ->with(['company:id,company_name', 'quarry:id,quarry_name', 'vehicleType:id,name,wheel_type'])
                     ->latest()
                     ->get(),
             ],
@@ -275,7 +275,7 @@ class MasterDataController extends Controller
 
         $model = $id ? ClientQuarryVehiclePreference::query()->findOrFail($id) : new ClientQuarryVehiclePreference();
         $model->fill($data)->save();
-        return response()->json($model->fresh()->load(['client:id,client_name', 'quarry:id,quarry_name', 'vehicleType:id,name,wheel_type']));
+        return response()->json($model->fresh()->load(['company:id,company_name', 'quarry:id,quarry_name', 'vehicleType:id,name,wheel_type']));
     }
 
     private function resolveArchiveModel(string $resource, int $id): ?object

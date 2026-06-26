@@ -9,6 +9,8 @@ class Client extends Company
 {
     protected $table = 'companies';
 
+    protected $appends = ['client_name', 'email', 'phone'];
+
     public function getFillable()
     {
         return array_merge(parent::getFillable(), [
