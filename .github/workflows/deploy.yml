@@ -40,14 +40,22 @@ jobs:
 
       - name: Ensure server directories exist
         run: |
-          ssh -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=no \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "mkdir -p '${{ secrets.DEPLOY_PATH }}/backend/public/assets' \
-              '${{ secrets.DEPLOY_PATH }}/backend/storage/app/public/delivery_documents' \
-              '${{ secrets.DEPLOY_PATH }}/backend/storage/logs' \
-              '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/cache' \
-              '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/sessions' \
-              '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/views'"
+          SSH_OPTS="-p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+          REMOTE_CMD="mkdir -p '${{ secrets.DEPLOY_PATH }}/backend/public/assets' \
+            '${{ secrets.DEPLOY_PATH }}/backend/storage/logs' \
+            '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/cache' \
+            '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/sessions' \
+            '${{ secrets.DEPLOY_PATH }}/backend/storage/framework/views'"
+          for attempt in 1 2 3; do
+            if ssh $SSH_OPTS "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "$REMOTE_CMD"; then
+              echo "Server directories OK (attempt $attempt)"
+              exit 0
+            fi
+            echo "SSH mkdir failed (attempt $attempt), retrying in 15s..."
+            sleep 15
+          done
+          echo "ERROR: could not create server directories after 3 attempts" >&2
+          exit 1
 
       - name: Sync code to server
         run: |
