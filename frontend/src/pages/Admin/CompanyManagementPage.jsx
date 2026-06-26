@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   createCompany, fetchCompanies, resendCompanyActivation, updateCompany,
 } from '../../api/admin'
@@ -29,6 +30,16 @@ function CompanyModal({ company, onClose, onSaved }) {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
+  useEffect(() => {
+    document.body.classList.add('dx-nav-locked')
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.classList.remove('dx-nav-locked')
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSaving(true)
@@ -47,12 +58,12 @@ function CompanyModal({ company, onClose, onSaved }) {
     }
   }
 
-  return (
+  return createPortal(
     <div className="dx-modal-backdrop" onClick={onClose}>
-      <div className="dx-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal>
+      <div className="dx-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal aria-labelledby="company-modal-title">
         <div className="dx-modal-header">
-          <h2>{isEdit ? 'Edit Company' : 'Create Company'}</h2>
-          <button type="button" className="dx-modal-close" onClick={onClose}>×</button>
+          <h2 id="company-modal-title">{isEdit ? 'Edit Company' : 'Create Company'}</h2>
+          <button type="button" className="dx-modal-close" onClick={onClose} aria-label="Close">×</button>
         </div>
         <form className="form-grid" style={{ padding: '20px 28px 28px', gridTemplateColumns: '1fr 1fr' }} onSubmit={handleSubmit}>
           <label style={{ gridColumn: '1/-1' }}>Company name <input required value={form.company_name} onChange={set('company_name')} /></label>
@@ -76,13 +87,14 @@ function CompanyModal({ company, onClose, onSaved }) {
             </p>
           )}
           {error && <p className="notice error" style={{ margin: 0, gridColumn: '1/-1' }}>{error}</p>}
-          <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10 }}>
+          <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button type="submit" className="btn-dx-primary" disabled={saving}>{saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create & send activation'}</button>
             <button type="button" className="btn-dx-secondary" onClick={onClose}>Cancel</button>
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -92,18 +104,28 @@ function CompanyManagementPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [msg, setMsg] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [statusTab, setStatusTab] = useState('all')
   const [page, setPage] = useState(1)
   const [modal, setModal] = useState(null)
   const [resendingId, setResendingId] = useState(null)
 
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  useEffect(() => {
+    setPage(1)
+  }, [search, statusTab])
+
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const params = new URLSearchParams({ page: String(page) })
-      if (search.trim()) params.set('search', search.trim())
+      if (search) params.set('search', search)
       if (statusTab !== 'all') params.set('status', statusTab)
       const res = await fetchCompanies(params.toString())
       setCompanies(res.data || [])
@@ -115,6 +137,7 @@ function CompanyManagementPage() {
       })
     } catch (err) {
       setError(err.message)
+      setCompanies([])
     } finally {
       setLoading(false)
     }
@@ -142,32 +165,63 @@ function CompanyManagementPage() {
     }
   }
 
+  const hasActiveFilters = statusTab !== 'all' || searchInput.trim() !== ''
+
+  const clearFilters = () => {
+    setSearchInput('')
+    setSearch('')
+    setStatusTab('all')
+    setPage(1)
+  }
+
   return (
     <>
-      <PageHeader title="Company Management" subtitle="Create B2B company accounts and manage activation">
+      <PageHeader
+        title="Company Management"
+        subtitle={`Create B2B company accounts and manage activation · ${meta.total} total`}
+      >
         <button type="button" className="btn-dx-primary" onClick={() => setModal({})}>
           <Plus size={16} /> New company
         </button>
       </PageHeader>
 
-      {msg && <p className="notice" style={{ marginTop: 12 }}>{msg}</p>}
-      {error && <p className="notice error" style={{ marginTop: 12 }}>{error}</p>}
+      {msg && <p className="notice">{msg}</p>}
+      {error && <p className="notice error">{error}</p>}
 
-      <div className="dx-panel" style={{ marginTop: 16 }}>
-        <div className="dx-filter-bar" style={{ marginBottom: 16 }}>
-          <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1) }} placeholder="Search company name or email…" />
-          <div className="dx-tab-row">
-            {STATUS_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                className={`dx-tab${statusTab === tab.value ? ' dx-tab--active' : ''}`}
-                onClick={() => { setStatusTab(tab.value); setPage(1) }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+      <div className="dx-panel">
+        <div className="dx-filter-tabs" style={{ marginBottom: 14 }}>
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              className={`dx-filter-tab${statusTab === tab.value ? ' dx-filter-tab--active' : ''}`}
+              onClick={() => setStatusTab(tab.value)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="Search company name or email…"
+            style={{ flex: '1 1 240px', maxWidth: 360, minWidth: 200 }}
+          />
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn-dx-secondary"
+              style={{ fontSize: '0.8125rem', padding: '7px 12px' }}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          )}
+          <span style={{ fontSize: '0.8125rem', color: 'var(--muted)', marginLeft: 'auto' }}>
+            {loading ? 'Loading…' : `${meta.total} ${meta.total === 1 ? 'company' : 'companies'}`}
+          </span>
         </div>
 
         <DataTable
@@ -176,28 +230,38 @@ function CompanyManagementPage() {
           empty={
             <EmptyState
               icon={Building2}
-              title={search || statusTab !== 'all' ? 'No companies match your filters' : 'No companies yet'}
-              message={search || statusTab !== 'all' ? 'Try adjusting your search or status filter.' : 'Create a company to send an activation email to the owner.'}
+              title={hasActiveFilters ? 'No companies match your filters' : 'No companies yet'}
+              message={hasActiveFilters ? 'Try adjusting your status filter or search.' : 'Create a company to send an activation email to the owner.'}
+              action={!hasActiveFilters ? (
+                <button type="button" className="btn-dx-primary" onClick={() => setModal({})}>
+                  <Plus size={16} /> New company
+                </button>
+              ) : undefined}
             />
           }
         >
           {companies.map((row) => (
             <tr key={row.id}>
-              <td><strong>{row.company_name}</strong></td>
-              <td>{row.company_email}</td>
-              <td>{row.contact_person || '—'}{row.contact_number ? ` · ${row.contact_number}` : ''}</td>
+              <td>
+                <strong>{row.company_name}</strong>
+              </td>
+              <td style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>{row.company_email}</td>
+              <td style={{ fontSize: '0.875rem' }}>
+                {row.contact_person || '—'}
+                {row.contact_number ? ` · ${row.contact_number}` : ''}
+              </td>
               <td><StatusBadge status={row.status} /></td>
               <td>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button type="button" className="btn-dx-secondary btn-sm" onClick={() => setModal(row)}>Edit</button>
+                <div className="dx-text-actions">
+                  <button type="button" onClick={() => setModal(row)}>Edit</button>
                   {row.status === 'pending_activation' && (
                     <button
                       type="button"
-                      className="btn-dx-secondary btn-sm"
                       disabled={resendingId === row.id}
                       onClick={() => handleResend(row)}
                     >
-                      <Mail size={14} /> {resendingId === row.id ? 'Sending…' : 'Resend activation'}
+                      <Mail size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                      {resendingId === row.id ? 'Sending…' : 'Resend activation'}
                     </button>
                   )}
                 </div>

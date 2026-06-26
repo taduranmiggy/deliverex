@@ -2,7 +2,7 @@
  * Deliverex Shared UI Components
  * Use these across all roles for visual consistency.
  */
-import { useEffect, useState } from 'react'
+import { Children, useEffect, useState } from 'react'
 import { API_URL } from '../../config/api.js'
 import {
   Loader2, Package, Search, TrendingUp, TrendingDown,
@@ -214,6 +214,8 @@ export function FilterSelect({ value, onChange, options, label, style = {} }) {
 
 /* ─── DataTable ─────────────────────────────────────────────── */
 export function DataTable({ headers, children, loading, empty, mobileCards = false }) {
+  const hasRows = Children.count(children) > 0
+
   return (
     <>
       <div className={`dx-data-table-wrap${mobileCards ? ' dx-data-table-wrap--cards-mobile' : ' dx-data-table-wrap--scroll'}`}>
@@ -224,7 +226,7 @@ export function DataTable({ headers, children, loading, empty, mobileCards = fal
           <tbody>
             {loading ? (
               <LoadingRows cols={headers.length} />
-            ) : children || (
+            ) : hasRows ? children : (
               <tr><td colSpan={headers.length} style={{ textAlign: 'center', color: 'var(--muted)', padding: '40px 0' }}>{empty ?? 'No records.'}</td></tr>
             )}
           </tbody>
