@@ -40,7 +40,11 @@ function DriverLoginPage() {
         setError('This portal is only for drivers.')
         return
       }
-      login(result.user, result.token)
+      await login(result.user, result.token, {
+        expires_in: result.expires_in,
+        session_id: result.session_id,
+        refresh_token: result.refresh_token,
+      })
       const target = result.user?.must_change_password
         ? '/driver/change-password'
         : location.state?.from?.pathname || roleHome(result.user?.role?.name)

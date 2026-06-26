@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\JobOrder;
 use App\Support\AuditLogger;
 use App\Support\DriverAccount;
+use App\Services\Auth\SessionService;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,11 +18,20 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function __construct(private readonly SessionService $sessions) {}
+
+    /**
+     * FR 1.12 — login issues JWT access token + refresh token (role-based TTL).
+     * Preserves existing response shape: { token, user } for all clients.
+     */
     public function login(Request $request)
     {
         $credentials = $request->validate([
             'email' => 'required|email',
             'password' => 'required|string',
+            'device_id' => 'nullable|string|max:64',
+            'device_label' => 'nullable|string|max:120',
+            'platform' => 'nullable|in:web,pwa,mobile',
         ]);
 
         $user = User::query()->where('email', $credentials['email'])->first();
@@ -40,7 +50,7 @@ class AuthController extends Controller
             ])->save();
         }
 
-        if (! Auth::attempt($credentials)) {
+        if (! Auth::attempt(['email' => $credentials['email'], 'password' => $credentials['password']])) {
             if ($user) {
                 $maxAttempts = config('auth.max_login_attempts', 5);
                 $lockMinutes = config('auth.lockout_minutes', 30);
@@ -80,21 +90,128 @@ class AuthController extends Controller
             $this->linkCustomerJobOrdersByEmail($user);
         }
 
-        $token = $user->createToken('api')->plainTextToken;
+        // Issue JWT session (replaces Sanctum token for new logins).
+        $issued = $this->sessions->createSession($user, $request);
+        $role = (string) ($user->role?->name ?? 'default');
 
-        AuditLogger::record($user, 'auth.login_success', User::class, $user->id, [], $request);
+        AuditLogger::record($user, 'auth.login_success', User::class, $user->id, [
+            'session_id' => $issued['session_id'],
+        ], $request);
 
         $this->prepareUserPayload($user);
 
-        return response()->json([
-            'token' => $token,
-            'user'  => $user,
-        ]);
+        $platform = $credentials['platform'] ?? 'web';
+        $payload = [
+            // Backward-compatible key used by all existing login pages.
+            'token' => $issued['access_token'],
+            'access_token' => $issued['access_token'],
+            'expires_in' => $issued['expires_in'],
+            'session_id' => $issued['session_id'],
+            'user' => $user,
+        ];
+
+        // FR 1.17 — PWA/mobile clients receive refresh token in body for encrypted storage.
+        if (in_array($platform, ['pwa', 'mobile'], true)) {
+            $payload['refresh_token'] = $issued['refresh_token'];
+        }
+
+        $response = response()->json($payload);
+
+        // FR 1.17 — browser clients store refresh token in HttpOnly cookie.
+        if ($platform === 'web' || $platform === 'pwa') {
+            return $response->withCookie($this->sessions->makeRefreshCookie($issued['refresh_token'], $role));
+        }
+
+        return $response;
     }
 
     /**
-     * Register a customer account (public). Other roles are provisioned by admins.
+     * FR 1.13 / FR 1.21 — silent refresh using HttpOnly cookie or body refresh_token.
      */
+    public function refresh(Request $request)
+    {
+        $plain = $request->cookie(config('session_auth.refresh_cookie'))
+            ?? $request->input('refresh_token');
+
+        if (! is_string($plain) || $plain === '') {
+            return response()->json(['message' => 'Refresh token required'], 401);
+        }
+
+        try {
+            $result = $this->sessions->refreshSession($plain, $request);
+        } catch (\RuntimeException $e) {
+            $code = $e->getCode() >= 400 && $e->getCode() < 600 ? (int) $e->getCode() : 401;
+
+            return response()->json(['message' => $e->getMessage()], $code)
+                ->withCookie($this->sessions->forgetRefreshCookie());
+        }
+
+        $role = (string) ($result['user']->role?->name ?? 'default');
+        $this->prepareUserPayload($result['user']);
+
+        $payload = [
+            'token' => $result['access_token'],
+            'access_token' => $result['access_token'],
+            'expires_in' => $result['expires_in'],
+            'session_id' => $result['session_id'],
+            'user' => $result['user'],
+        ];
+
+        $platform = $request->input('platform', 'web');
+        if (in_array($platform, ['pwa', 'mobile'], true)) {
+            $payload['refresh_token'] = $result['refresh_token'];
+        }
+
+        return $response->withCookie($this->sessions->makeRefreshCookie($result['refresh_token'], $role));
+    }
+
+    /** FR 1.18 — logout revokes current JWT session + legacy Sanctum tokens. */
+    public function logout(Request $request)
+    {
+        $user = $request->user();
+        $sessionId = $request->attributes->get('auth_session_id');
+
+        $this->sessions->revokeCurrentSession($user, is_string($sessionId) ? $sessionId : null);
+
+        AuditLogger::record($user, 'auth.logout', User::class, $user?->id, [], $request);
+
+        return response()->json(['message' => 'Logged out'])
+            ->withCookie($this->sessions->forgetRefreshCookie());
+    }
+
+    /** FR 1.18 — revoke a specific session or all sessions for the user. */
+    public function revoke(Request $request)
+    {
+        $data = $request->validate([
+            'session_id' => 'nullable|uuid',
+            'all' => 'nullable|boolean',
+        ]);
+
+        $user = $request->user();
+
+        if (! empty($data['all'])) {
+            $this->sessions->revokeAllForUser($user->id);
+        } elseif (! empty($data['session_id'])) {
+            $this->sessions->revokeCurrentSession($user, $data['session_id']);
+        } else {
+            $sessionId = $request->attributes->get('auth_session_id');
+            $this->sessions->revokeCurrentSession($user, is_string($sessionId) ? $sessionId : null);
+        }
+
+        return response()->json(['message' => 'Session revoked']);
+    }
+
+    /** GET /auth/session — current session metadata for timeout warnings. */
+    public function session(Request $request)
+    {
+        $user = $request->user();
+        $sessionId = $request->attributes->get('auth_session_id');
+
+        return response()->json(
+            $this->sessions->sessionPayload($user, is_string($sessionId) ? $sessionId : null),
+        );
+    }
+
     public function registerCustomer(Request $request)
     {
         $data = $request->validate([
@@ -166,13 +283,6 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'If the email exists, a verification link has been sent.',
         ]);
-    }
-
-    public function logout(Request $request)
-    {
-        $request->user()?->tokens()->delete();
-
-        return response()->json(['message' => 'Logged out']);
     }
 
     public function me(Request $request)

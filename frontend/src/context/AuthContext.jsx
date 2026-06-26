@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react'
 import { getProfile, logout as logoutApi } from '../api/auth'
+import SessionManager, { SESSION_EXPIRED_EVENT } from '../services/session/SessionManager'
 
 const AuthContext = createContext(null)
 
@@ -14,6 +15,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(null)
   const [bootstrapped, setBootstrapped] = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -21,12 +23,28 @@ export function AuthProvider({ children }) {
     const bootstrap = async () => {
       try {
         const rawUser = localStorage.getItem('deliverex_user')
-        const savedToken = localStorage.getItem('deliverex_token')
+        const savedToken = SessionManager.getAccessToken()
         if (rawUser) {
           setUser(JSON.parse(rawUser))
         }
         if (savedToken) {
           setToken(savedToken)
+
+          // FR 1.21 — if access token expired, try silent refresh before /auth/me.
+          if (SessionManager.isAccessTokenExpiringSoon(0)) {
+            try {
+              await SessionManager.refreshAccessToken()
+            } catch {
+              if (!cancelled) {
+                SessionManager.clear()
+                setUser(null)
+                setToken(null)
+                setSessionExpired(true)
+              }
+              return
+            }
+          }
+
           try {
             const me = await getProfile()
             if (!cancelled && me) {
@@ -34,17 +52,26 @@ export function AuthProvider({ children }) {
               localStorage.setItem('deliverex_user', JSON.stringify(me))
             }
           } catch {
-            if (!cancelled) {
-              localStorage.removeItem('deliverex_user')
-              localStorage.removeItem('deliverex_token')
-              setUser(null)
-              setToken(null)
+            try {
+              await SessionManager.refreshAccessToken()
+              const me = await getProfile()
+              if (!cancelled && me) {
+                setUser(me)
+                localStorage.setItem('deliverex_user', JSON.stringify(me))
+                setToken(SessionManager.getAccessToken())
+              }
+            } catch {
+              if (!cancelled) {
+                SessionManager.clear()
+                setUser(null)
+                setToken(null)
+                setSessionExpired(true)
+              }
             }
           }
         }
       } catch {
-        localStorage.removeItem('deliverex_user')
-        localStorage.removeItem('deliverex_token')
+        SessionManager.clear()
       } finally {
         if (!cancelled) {
           setBootstrapped(true)
@@ -54,14 +81,26 @@ export function AuthProvider({ children }) {
 
     bootstrap()
 
+    const onExpired = () => {
+      setUser(null)
+      setToken(null)
+      setSessionExpired(true)
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired)
+
     return () => {
       cancelled = true
+      window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired)
     }
   }, [])
 
-  const login = useCallback((nextUser, nextToken) => {
-    localStorage.setItem('deliverex_token', nextToken)
-    localStorage.setItem('deliverex_user', JSON.stringify(nextUser))
+  const login = useCallback(async (nextUser, nextToken, sessionPayload = {}) => {
+    await SessionManager.persist({
+      token: nextToken,
+      user: nextUser,
+      ...sessionPayload,
+    })
+    setSessionExpired(false)
     setUser(nextUser)
     setToken(nextToken)
   }, [])
@@ -77,16 +116,16 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try {
-      if (localStorage.getItem('deliverex_token')) {
+      if (SessionManager.getAccessToken()) {
         await logoutApi()
       }
     } catch {
       // Ignore network errors — still clear local session.
     }
-    localStorage.removeItem('deliverex_token')
-    localStorage.removeItem('deliverex_user')
+    SessionManager.clear()
     setUser(null)
     setToken(null)
+    setSessionExpired(false)
   }, [])
 
   const value = useMemo(
@@ -96,11 +135,13 @@ export function AuthProvider({ children }) {
       role: user?.role?.name ?? null,
       isAuthenticated: Boolean(user && token),
       bootstrapped,
+      sessionExpired,
       login,
       logout,
       updateUser,
+      clearSessionExpired: () => setSessionExpired(false),
     }),
-    [user, token, bootstrapped, login, logout, updateUser],
+    [user, token, bootstrapped, sessionExpired, login, logout, updateUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

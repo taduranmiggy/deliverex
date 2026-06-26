@@ -64,6 +64,10 @@ class UserController extends Controller
 
         $user->update($data);
 
+        if (isset($data['status']) && $data['status'] === 'inactive') {
+            app(\App\Services\Auth\SessionService::class)->revokeAllForUser($user->id);
+        }
+
         DriverAccount::sync($user->fresh());
 
         return response()->json($user->fresh()->load('role', 'driver'));

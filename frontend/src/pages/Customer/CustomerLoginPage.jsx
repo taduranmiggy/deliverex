@@ -34,7 +34,11 @@ function CustomerLoginPage() {
         )
         return
       }
-      login(result.user, result.token)
+      await login(result.user, result.token, {
+        expires_in: result.expires_in,
+        session_id: result.session_id,
+        refresh_token: result.refresh_token,
+      })
       const target = location.state?.from?.pathname || roleHome(roleName)
       navigate(target, { replace: true })
     } catch (err) {

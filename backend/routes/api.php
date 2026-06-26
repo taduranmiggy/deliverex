@@ -25,6 +25,7 @@ use App\Http\Controllers\Dispatcher\JobOrderController;
 use App\Http\Controllers\Dispatcher\MaterialMasterDataController;
 use App\Http\Controllers\Dispatcher\MasterDataOptionsController;
 use App\Http\Controllers\Driver\AssignmentController as DriverAssignmentController;
+use App\Http\Controllers\Driver\OfflineSyncController;
 use App\Http\Controllers\Driver\ProfileController as DriverProfileController;
 use App\Http\Controllers\Driver\CompletionProofController as DriverCompletionProofController;
 use App\Http\Controllers\Driver\DelayController as DriverDelayController;
@@ -44,6 +45,8 @@ use Illuminate\Support\Facades\Route;
 // ─── Public ──────────────────────────────────────────────────────────────────
 Route::post('/auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:10,1');
+Route::post('/auth/refresh', [AuthController::class, 'refresh'])
+    ->middleware('throttle:30,1');
 Route::post('/auth/register/customer', [AuthController::class, 'registerCustomer'])
     ->middleware('throttle:10,1');
 Route::get('/auth/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
@@ -59,9 +62,11 @@ Route::get('/customer/track/{trackingCode}', [CustomerTrackingController::class,
 Route::post('/customer/inquiry', [InquiryController::class, 'store']);
 
 // ─── Authenticated ────────────────────────────────────────────────────────────
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.api')->group(function () {
 
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::post('/auth/revoke', [AuthController::class, 'revoke']);
+    Route::get('/auth/session', [AuthController::class, 'session']);
     Route::get('/auth/me',      [AuthController::class, 'me']);
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
 
@@ -157,6 +162,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/issues',                             [DriverIssueController::class, 'store']);
         Route::post('/delays',                             [DriverDelayController::class, 'store']);
         Route::post('/completion-proof',                   [DriverCompletionProofController::class, 'store']);
+        Route::post('/offline-queue',                      [OfflineSyncController::class, 'store']);
+        Route::post('/offline-queue/synced',               [OfflineSyncController::class, 'markSynced']);
     });
 
     // ─── Manager ──────────────────────────────────────────────────────────────

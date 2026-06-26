@@ -55,12 +55,12 @@ function DriverOfflineBar() {
   } else if (barState === 'syncing') {
     cls     += ' driver-sync-bar--syncing'
     Icon     = Loader2
-    text     = `Syncing ${pendingCount} update${pendingCount !== 1 ? 's' : ''}…`
+    text     = `🔄 Syncing ${pendingCount} update${pendingCount !== 1 ? 's' : ''}…`
     spinning = true
   } else if (barState === 'synced') {
     cls  += ' driver-sync-bar--synced'
     Icon  = CheckCircle2
-    text  = `Synced successfully${lastSynced ? ` · ${fmtTime(lastSynced)}` : ''}`
+    text  = `✅ Synced successfully${lastSynced ? ` · ${fmtTime(lastSynced)}` : ''}`
   } else if (barState === 'failed') {
     cls     += ' driver-sync-bar--failed'
     Icon     = X

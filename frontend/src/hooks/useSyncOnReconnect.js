@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getConflictLog, getQueue } from '../utils/offlineQueue'
-import { syncQueue } from '../utils/syncQueue'
+import { offlineSyncWithRefresh } from '../services/session/OfflineSyncManager'
+import SessionManager from '../services/session/SessionManager'
 import useOnlineStatus from './useOnlineStatus'
 
 const SYNCED_DISMISS_MS = 4000 // auto-hide "Synced" banner after 4 s
@@ -47,9 +48,13 @@ function useSyncOnReconnect() {
 
     setSyncState('syncing')
     try {
-      const result = await syncQueue()
+      // FR 1.21 — silent refresh before syncing queued driver actions.
+      if (SessionManager.getAccessToken() && SessionManager.isAccessTokenExpiringSoon(60_000)) {
+        await SessionManager.refreshAccessToken()
+      }
+      const result = await offlineSyncWithRefresh()
       setLastSynced(new Date())
-      setPendingCount(result.remaining)
+      setPendingCount(result.remaining ?? 0)
       setConflictCount(getConflictLog().length)
 
       if (result.remaining === 0) {

@@ -88,7 +88,11 @@ function LoginPage() {
         setError('Driver accounts use the Deliverex driver mobile app — not this sign-in page.')
         return
       }
-      login(result.user, result.token)
+      await login(result.user, result.token, {
+        expires_in: result.expires_in,
+        session_id: result.session_id,
+        refresh_token: result.refresh_token,
+      })
       const target = location.state?.from?.pathname || roleHome(roleName)
       navigate(target, { replace: true })
     } catch (err) {
