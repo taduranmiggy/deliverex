@@ -9,7 +9,15 @@ createRoot(document.getElementById('root')).render(
   </StrictMode>,
 )
 
-if ('serviceWorker' in navigator) {
+const shouldRegisterServiceWorker =
+  'serviceWorker' in navigator
+  && (window.location.pathname === '/customer'
+    || window.location.pathname.startsWith('/customer/')
+    || window.matchMedia('(display-mode: standalone)').matches
+    || window.matchMedia('(display-mode: fullscreen)').matches
+    || window.navigator.standalone === true)
+
+if (shouldRegisterServiceWorker) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {

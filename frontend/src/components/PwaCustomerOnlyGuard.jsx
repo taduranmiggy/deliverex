@@ -12,7 +12,23 @@ function PwaCustomerOnlyGuard({ children }) {
   }
 
   if (pathname === '/login' || pathname.startsWith('/login/')) {
-    return <Navigate to="/customer/login" replace />
+    return (
+      <Navigate
+        to="/customer/login"
+        replace
+        state={{ notice: 'Staff accounts must use the web browser at deliverexapp.com/login — not the installed customer app.' }}
+      />
+    )
+  }
+
+  if (pathname.startsWith('/driver')) {
+    return (
+      <Navigate
+        to="/customer/login"
+        replace
+        state={{ notice: 'Driver sign-in is available in your mobile browser at deliverexapp.com/driver/login.' }}
+      />
+    )
   }
 
   return <Navigate to="/customer" replace />

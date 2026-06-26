@@ -4,6 +4,7 @@ import { login as loginRequest } from '../../api/auth'
 import useAuth from '../../hooks/useAuth'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import { roleHome } from '../../utils/roleUtils'
+import { isStandalonePwa } from '../../utils/pwaUtils'
 import '../Auth/LoginPage.css'
 
 function CustomerLoginPage() {
@@ -25,12 +26,15 @@ function CustomerLoginPage() {
     try {
       const result = await loginRequest({ email, password })
       const roleName = result.user?.role?.name
-      if (roleName !== 'customer') {
+      if (roleName !== 'customer' && isStandalonePwa()) {
         setError('This app is for customers only. Staff and drivers should sign in through a web browser.')
         return
       }
       login(result.user, result.token)
-      const target = location.state?.from?.pathname || roleHome(roleName)
+      const target =
+        roleName === 'customer'
+          ? location.state?.from?.pathname || roleHome(roleName)
+          : roleHome(roleName)
       navigate(target, { replace: true })
     } catch (err) {
       setError(err.message)
@@ -79,8 +83,21 @@ function CustomerLoginPage() {
           </Link>
         </p>
         <p className="auth-alt-link" style={{ marginTop: 8, fontSize: '0.8125rem', color: 'var(--muted)' }}>
-          Drivers and staff: open <strong>deliverexapp.com/driver</strong> or <strong>/login</strong> in your mobile browser — not this app.
+          Admin, manager, or dispatcher?{' '}
+          <Link className="auth-inline-link" to="/login">
+            Staff sign in
+          </Link>
+          {' · '}
+          Driver?{' '}
+          <Link className="auth-inline-link" to="/driver/login">
+            Driver sign in
+          </Link>
         </p>
+        {isStandalonePwa() ? (
+          <p className="auth-alt-link" style={{ marginTop: 8, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+            Staff and drivers: open <strong>deliverexapp.com/login</strong> in your mobile browser — not this installed app.
+          </p>
+        ) : null}
       </div>
       <LoadingOverlay open={submitting} message="Signing in" submessage="Please wait." />
     </section>
