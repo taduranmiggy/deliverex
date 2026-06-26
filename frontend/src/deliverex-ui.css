@@ -1471,6 +1471,43 @@
 .dx-activity-item:last-child { border-bottom: none; }
 .dx-activity-time { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 
+.dx-activity-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dx-activity-toolbar__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 2px;
+}
+
+.dx-activity-toolbar__btn--active {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.dx-activity-toolbar__link {
+  margin-left: 4px;
+  text-decoration: none;
+}
+
+.dx-activity-list {
+  min-height: 48px;
+}
+
+.admin-dashboard-page .dx-pagination-bar {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--stroke);
+}
+
 /* ── BAR CHART ───────────────────────────────────────────── */
 .dx-bar-chart {
   display: flex;

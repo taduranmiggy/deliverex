@@ -15,8 +15,7 @@ class AuditLogsController extends Controller
         $to       = $request->query('to');
         $search   = $request->query('search');
 
-        $query = AuditLog::with('user')
-            ->orderByDesc('created_at');
+        $query = AuditLog::with('user');
 
         if ($module && $module !== 'all') {
             $query->where('action', 'like', $module . '.%');
@@ -41,7 +40,11 @@ class AuditLogsController extends Controller
             });
         }
 
-        $logs = $query->paginate(50);
+        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
+        $sortDir = strtolower((string) $request->query('sort', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $query->reorder()->orderBy('created_at', $sortDir);
+
+        $logs = $query->paginate($perPage);
 
         $logs->getCollection()->transform(function (AuditLog $log) {
             return [
