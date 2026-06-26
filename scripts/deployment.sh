@@ -74,14 +74,14 @@ fi
 cd "$BACKEND"
 
 log "Installing PHP dependencies (composer install --no-dev)..."
-if command -v composer >/dev/null 2>&1; then
-  composer install --no-dev --optimize-autoloader --no-interaction
-elif [ -f "$BACKEND/composer.phar" ]; then
-  php composer.phar install --no-dev --optimize-autoloader --no-interaction
-elif [ -f "$DEPLOY_PATH/composer.phar" ]; then
-  php "$DEPLOY_PATH/composer.phar" install --no-dev --optimize-autoloader --no-interaction
-else
-  log_error "composer not found. Install via hPanel or place composer.phar in backend/."
+COMPOSER_CMD="$("$SCRIPT_DIR/ensure-composer.sh" "$BACKEND" "$DEPLOY_PATH")"
+log "Using: $COMPOSER_CMD"
+if ! $COMPOSER_CMD install --no-dev --optimize-autoloader --no-interaction; then
+  log_error "composer install failed"
+  exit 1
+fi
+if [ ! -f vendor/autoload.php ]; then
+  log_error "vendor/autoload.php missing after composer install"
   exit 1
 fi
 
