@@ -38,17 +38,17 @@ function LandingPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <nav style={{ background: 'var(--surface)', borderBottom: '1px solid var(--stroke)', position: 'sticky', top: 0, zIndex: 100, boxShadow: 'var(--shadow-xs)' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 0 }}>
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 'auto', textDecoration: 'none' }}>
-            <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'grid', placeItems: 'center' }}>
+      <nav className="customer-nav">
+        <div className="customer-nav-inner">
+          <Link to="/" className="customer-nav-brand">
+            <div className="customer-nav-brand-icon" aria-hidden>
               <Truck size={18} color="#fff" />
             </div>
-            <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text)', letterSpacing: '-0.03em' }}>Deliverex</span>
+            <span className="customer-nav-brand-text">Deliverex</span>
           </Link>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
-            <Link to="/customer/about" className="btn-dx-secondary btn-sm" style={{ background: 'transparent', border: 'none', boxShadow: 'none', color: 'var(--muted)', fontWeight: 600 }}>About</Link>
-            <Link to="/customer/services" className="btn-dx-secondary btn-sm" style={{ background: 'transparent', border: 'none', boxShadow: 'none', color: 'var(--muted)', fontWeight: 600 }}>Services</Link>
+          <div className="customer-nav-actions" style={{ marginLeft: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <Link to="/customer/about" className="customer-nav-link">About</Link>
+            <Link to="/customer/services" className="customer-nav-link">Services</Link>
             <Link to="/customer/support" className="btn-dx-secondary btn-sm">Support</Link>
             <Link to="/customer/track" className="btn-dx-secondary btn-sm">Track Delivery</Link>
             <Link to="/login" className="btn-dx-primary btn-sm">Sign in <ArrowRight size={13} /></Link>
@@ -96,7 +96,7 @@ function LandingPage() {
         </div>
       </section>
 
-      <section style={{ maxWidth: 1280, margin: '-32px auto 0', padding: '0 24px 80px' }}>
+      <section className="customer-container" style={{ marginTop: -32, paddingBottom: 80 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20, marginBottom: 48 }}>
           {[
             { Icon: Map, title: 'Real-Time Status', desc: 'Live updates from dispatch to delivery completion with GPS tracking.' },
@@ -125,8 +125,8 @@ function LandingPage() {
         </div>
       </section>
 
-      <footer style={{ background: 'var(--slate-800)', color: 'rgba(255,255,255,0.5)', padding: '40px 24px 24px', fontSize: '0.8125rem' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 24, marginBottom: 28 }}>
+      <footer style={{ background: 'var(--slate-800)', color: 'rgba(255,255,255,0.5)', padding: '40px 0 24px', fontSize: '0.8125rem' }}>
+        <div className="customer-container" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 24, marginBottom: 28 }}>
           <div>
             <p style={{ color: '#fff', fontWeight: 700, marginBottom: 10 }}>Deliverex</p>
             <p style={{ lineHeight: 1.6, margin: 0 }}>Logistics dispatch, delivery tracking, and proof-of-delivery for site preparation teams.</p>

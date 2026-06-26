@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import CustomerActionCard from '../../components/customer/CustomerActionCard'
+import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
 import { sendInquiry } from '../../api/customer'
 import useAuth from '../../hooks/useAuth'
+import { isStandalonePwa } from '../../utils/pwaUtils'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import {
   ChevronDown, Mail, MessageSquare, Phone, HelpCircle,
@@ -50,6 +52,7 @@ function FaqItem({ question, answer }) {
 function CustomerSupportPage() {
   const { user, isAuthenticated, role } = useAuth()
   const isCustomer = isAuthenticated && role === 'customer'
+  const signInPath = isStandalonePwa() ? '/customer/login' : '/login'
   const [chatOpen, setChatOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
@@ -77,14 +80,14 @@ function CustomerSupportPage() {
   }
 
   return (
-    <div className="customer-page pwa-page">
-      <header className="pwa-page-header">
-        <p className="pwa-page-eyebrow">Support</p>
-        <h1>Contact &amp; Help</h1>
-        <p>Get assistance with tracking, deliveries, and account questions.</p>
-      </header>
+    <CustomerPageShell>
+      <CustomerPageHeader
+        eyebrow="Support"
+        title="Contact & Help"
+        description="Get assistance with tracking, deliveries, and account questions."
+      />
 
-      <div className="customer-content" style={{ paddingBottom: 24 }}>
+      <div style={{ paddingBottom: 24 }}>
         <div className="pwa-action-grid pwa-action-grid--compact">
           <CustomerActionCard
             icon={MessageSquare}
@@ -157,7 +160,7 @@ function CustomerSupportPage() {
 
         {!isCustomer && (
           <p className="pwa-section__hint">
-            <Link to="/customer/login" className="auth-inline-link">Sign in</Link>
+            <Link to={signInPath} className="auth-inline-link">Sign in</Link>
             {' '}to link deliveries when submitting inquiries.
           </p>
         )}
@@ -165,7 +168,7 @@ function CustomerSupportPage() {
 
       <LoadingOverlay open={sending} message="Submitting inquiry" submessage="Please wait." />
       <DeliverexAssistantChat open={chatOpen} onOpenChange={setChatOpen} />
-    </div>
+    </CustomerPageShell>
   )
 }
 

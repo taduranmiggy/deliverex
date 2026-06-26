@@ -5,6 +5,8 @@ import { trackDelivery } from '../../api/customer'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
+import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
+import { isStandalonePwa } from '../../utils/pwaUtils'
 import { StatusBadge } from '../../components/ui'
 import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, MessageSquare, Package, RefreshCw, Search, Truck } from 'lucide-react'
 
@@ -109,27 +111,29 @@ function TrackingPage() {
     return () => clearInterval(iv)
   }, [pollKey, loadTrack])
 
+  const homePath = isStandalonePwa() ? '/customer' : '/'
+
   return (
-    <div className="tracking-page">
-      {/* Header */}
-      <header className="tracking-header">
-        <div className="header-stack">
-          <p className="tracking-eyebrow">Customer Tracking</p>
-          <h1>Track your delivery</h1>
-          <p>Monitor delivery progress, estimated arrival time, and proof-of-delivery information.</p>
-        </div>
-        <div className="tracking-header-aside">
-          <Link className="tracking-back" to="/customer">← Customer portal</Link>
-          <span className="tracking-badge">No account required</span>
-          <button type="button" className="btn-dx-secondary btn-sm" onClick={() => setChatOpen(true)}>
-            <MessageSquare size={14} /> Help
-          </button>
-        </div>
-      </header>
+    <CustomerPageShell>
+      <div className="tracking-page">
+        <CustomerPageHeader
+          eyebrow="Customer Tracking"
+          title="Track your delivery"
+          description="Monitor delivery progress, estimated arrival time, and proof-of-delivery information."
+          aside={(
+            <>
+              <Link className="tracking-back" to={homePath}>← Back to home</Link>
+              <span className="tracking-badge">No account required</span>
+              <button type="button" className="btn-dx-secondary btn-sm" onClick={() => setChatOpen(true)}>
+                <MessageSquare size={14} /> Help
+              </button>
+            </>
+          )}
+        />
 
-      {error && <p className="notice error tracking-notice" role="alert">{error}</p>}
+        {error && <p className="notice error tracking-notice" role="alert">{error}</p>}
 
-      <div className="tracking-grid">
+        <div className="tracking-grid">
         {/* Search form */}
         <form className="tracking-card tracking-form" onSubmit={handleTrack} aria-label="Track a delivery">
           <label className="tracking-label" htmlFor="tid">Tracking ID</label>
@@ -344,7 +348,7 @@ function TrackingPage() {
 
       <DeliverexAssistantChat open={chatOpen} onOpenChange={setChatOpen} />
       <LoadingOverlay open={loading} message="Loading delivery details" submessage="Please wait." />
-    </div>
+    </CustomerPageShell>
   )
 }
 

@@ -674,8 +674,10 @@
 }
 
 /* Bottom nav enhancements */
-.customer-layout-main {
-  padding-bottom: 76px;
+@media (max-width: 900px) {
+  .customer-layout-main {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .customer-bottom-nav-item__icon-wrap {

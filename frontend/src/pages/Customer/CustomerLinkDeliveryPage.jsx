@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { linkCustomerDelivery } from '../../api/customer'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
-import { PageHeader, SectionCard } from '../../components/ui'
+import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
+import { SectionCard } from '../../components/ui'
 import { Link2, Package } from 'lucide-react'
 
 function CustomerLinkDeliveryPage() {
@@ -32,8 +33,11 @@ function CustomerLinkDeliveryPage() {
   }
 
   return (
-    <div className="customer-page customer-page--narrow">
-      <PageHeader title="Link a delivery" subtitle="Enter the tracking ID from your shipment confirmation email." />
+    <CustomerPageShell className="customer-page-shell--narrow">
+      <CustomerPageHeader
+        title="Link a delivery"
+        description="Enter the tracking ID from your shipment confirmation email."
+      />
       <SectionCard>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <label>
@@ -62,7 +66,7 @@ function CustomerLinkDeliveryPage() {
         </form>
       </SectionCard>
       <LoadingOverlay open={submitting} message="Linking delivery" submessage="Please wait." />
-    </div>
+    </CustomerPageShell>
   )
 }
 

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { fetchCustomerOrders } from '../../api/customer'
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
+import CustomerPageShell from '../../components/customer/CustomerPageShell'
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from '../../components/ui'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 import { CheckCircle2, ExternalLink, FileText, Link2, MapPin, Package, Truck, X } from 'lucide-react'
@@ -292,7 +293,7 @@ function CustomerDeliveriesPage() {
   }
 
   return (
-    <div className="customer-content" style={{ paddingTop: 32 }}>
+    <CustomerPageShell>
       <PageHeader title="My Deliveries" subtitle="Review all shipments and delivery records associated with your account.">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Link to="/customer/link-delivery" className="btn-dx-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -388,7 +389,7 @@ function CustomerDeliveriesPage() {
       )}
 
       {selected && <DeliveryDetailModal order={selected} onClose={() => setSelected(null)} />}
-    </div>
+    </CustomerPageShell>
   )
 }
 
