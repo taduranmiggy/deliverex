@@ -185,6 +185,7 @@ class OcrService
 
         try {
             $response = Http::timeout($timeout)
+                ->connectTimeout(15)
                 ->acceptJson()
                 ->withToken($token)
                 ->attach('file', $handle, basename($diskPath))

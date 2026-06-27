@@ -4,14 +4,88 @@
  * Usage:
  *   php scripts/ocr-diagnose.php
  *   php scripts/ocr-diagnose.php 19
+ *   php scripts/ocr-diagnose.php --ping
  */
 require __DIR__.'/../vendor/autoload.php';
 $app = require __DIR__.'/../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
-$docId = isset($argv[1]) ? (int) $argv[1] : null;
-$doc = $docId
-    ? App\Models\DeliveryDocument::query()->find($docId)
+function ocr_diag_line(string $message): void
+{
+    echo $message."\n";
+    if (function_exists('ob_flush')) {
+        @ob_flush();
+    }
+    flush();
+}
+
+function ocr_diag_health_ping(): int
+{
+    $url = trim((string) config('ocr.remote_url'));
+    if ($url === '') {
+        ocr_diag_line('HEALTH=skip (OCR_REMOTE_URL empty)');
+
+        return 0;
+    }
+
+    $healthUrl = preg_replace('#/ocr/?$#i', '/health', $url) ?: $url;
+    ocr_diag_line('HEALTH_URL='.$healthUrl);
+
+    $started = microtime(true);
+    try {
+        $response = Illuminate\Support\Facades\Http::timeout(45)
+            ->connectTimeout(15)
+            ->acceptJson()
+            ->get($healthUrl);
+        $elapsed = round(microtime(true) - $started, 2);
+        ocr_diag_line('HEALTH_HTTP='.$response->status().' ELAPSED='.$elapsed.'s');
+        ocr_diag_line('HEALTH_BODY='.substr(trim($response->body()), 0, 240));
+
+        return $response->successful() ? 0 : 3;
+    } catch (Throwable $e) {
+        $elapsed = round(microtime(true) - $started, 2);
+        ocr_diag_line('HEALTH_ERROR='.$e->getMessage().' ELAPSED='.$elapsed.'s');
+
+        return 4;
+    }
+}
+
+$args = array_slice($argv, 1);
+$pingOnly = in_array('--ping', $args, true);
+$docIdArg = null;
+foreach ($args as $arg) {
+    if ($arg === '--ping') {
+        continue;
+    }
+    if (ctype_digit((string) $arg)) {
+        $docIdArg = (int) $arg;
+    }
+}
+
+ocr_diag_line('OCR_ENGINE='.config('ocr.engine'));
+ocr_diag_line('OCR_SYNC_MODE='.(config('ocr.sync_mode') ? 'true' : 'false'));
+ocr_diag_line('OCR_DEBUG_MODE='.(config('ocr.debug_mode') ? 'true' : 'false'));
+$remoteUrl = trim((string) config('ocr.remote_url'));
+ocr_diag_line('REMOTE_HOST='.(parse_url($remoteUrl, PHP_URL_HOST) ?: 'unset'));
+ocr_diag_line('REMOTE_TIMEOUT='.max(10, (int) config('ocr.remote_timeout', 180)).'s');
+
+if (strtolower((string) config('ocr.engine')) === 'remote') {
+    ocr_diag_line('--- remote health check ---');
+    $healthCode = ocr_diag_health_ping();
+    if ($pingOnly) {
+        exit($healthCode);
+    }
+    if ($healthCode !== 0) {
+        ocr_diag_line('WARN=remote health check failed; OCR call may hang or fail');
+    }
+}
+
+if ($pingOnly) {
+    exit(0);
+}
+
+$doc = $docIdArg
+    ? App\Models\DeliveryDocument::query()->find($docIdArg)
     : App\Models\DeliveryDocument::query()->latest()->first();
 
 if (! $doc) {
@@ -19,42 +93,44 @@ if (! $doc) {
     exit(1);
 }
 
-echo "DOC_ID={$doc->id}\n";
-echo 'FILE='.($doc->file_path ?? 'null')."\n";
-echo 'FILE_EXISTS='.(Illuminate\Support\Facades\Storage::disk('public')->exists($doc->file_path) ? 'yes' : 'no')."\n";
-echo 'OCR_ENGINE='.config('ocr.engine')."\n";
-echo 'OCR_SYNC_MODE='.(config('ocr.sync_mode') ? 'true' : 'false')."\n";
-echo 'OCR_DEBUG_MODE='.(config('ocr.debug_mode') ? 'true' : 'false')."\n";
+ocr_diag_line('DOC_ID='.$doc->id);
+ocr_diag_line('FILE='.($doc->file_path ?? 'null'));
+ocr_diag_line('FILE_EXISTS='.(Illuminate\Support\Facades\Storage::disk('public')->exists($doc->file_path) ? 'yes' : 'no'));
 
 $svc = app(App\Services\Ocr\OcrService::class);
 $svc->createPending($doc);
 
+ocr_diag_line('PROCESSING=started (remote OCR can take 30-180s on cold start)...');
+
+$started = microtime(true);
 try {
     $res = $svc->process($doc->fresh());
-    echo "STATUS={$res->processing_status}\n";
-    echo 'ERROR='.($res->error_message ?? 'none')."\n";
-    echo 'DR='.($res->delivery_receipt_number ?? 'null')."\n";
-    echo 'L='.($res->extracted_length ?? 'null')."\n";
-    echo 'W='.($res->extracted_width ?? 'null')."\n";
-    echo 'H='.($res->extracted_height ?? 'null')."\n";
-    echo 'V='.($res->extracted_volume ?? 'null')."\n";
-    echo 'ENGINE='.($res->engine ?? 'null')."\n";
-    echo 'DIAG='.json_encode($res->ocr_diagnostics, JSON_UNESCAPED_SLASHES)."\n";
+    ocr_diag_line('ELAPSED='.round(microtime(true) - $started, 2).'s');
+    ocr_diag_line("STATUS={$res->processing_status}");
+    ocr_diag_line('ERROR='.($res->error_message ?? 'none'));
+    ocr_diag_line('DR='.($res->delivery_receipt_number ?? 'null'));
+    ocr_diag_line('L='.($res->extracted_length ?? 'null'));
+    ocr_diag_line('W='.($res->extracted_width ?? 'null'));
+    ocr_diag_line('H='.($res->extracted_height ?? 'null'));
+    ocr_diag_line('V='.($res->extracted_volume ?? 'null'));
+    ocr_diag_line('ENGINE='.($res->engine ?? 'null'));
+    ocr_diag_line('DIAG='.json_encode($res->ocr_diagnostics, JSON_UNESCAPED_SLASHES));
 } catch (Throwable $e) {
-    echo 'EXCEPTION='.$e->getMessage()."\n";
+    ocr_diag_line('ELAPSED='.round(microtime(true) - $started, 2).'s');
+    ocr_diag_line('EXCEPTION='.$e->getMessage());
     exit(2);
 }
 
 $debugLog = storage_path('logs/ocr-debug.log');
-echo 'DEBUG_LOG='.($debugLog)."\n";
+ocr_diag_line('DEBUG_LOG='.$debugLog);
 if (is_file($debugLog)) {
-    echo "----- last 40 lines ocr-debug.log -----\n";
+    ocr_diag_line('----- last 40 lines ocr-debug.log -----');
     $lines = file($debugLog, FILE_IGNORE_NEW_LINES);
     if (is_array($lines)) {
         foreach (array_slice($lines, -40) as $line) {
-            echo $line."\n";
+            ocr_diag_line($line);
         }
     }
 } else {
-    echo "ocr-debug.log not found yet\n";
+    ocr_diag_line('ocr-debug.log not found yet');
 }

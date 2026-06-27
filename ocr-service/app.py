@@ -22,6 +22,8 @@ OCR_ENABLE_MORPH = os.getenv("OCR_ENABLE_MORPH", "true").lower() == "true"
 OCR_PSM_CANDIDATES = [x.strip() for x in os.getenv("OCR_PSM_CANDIDATES", "3,4,6,11,12").split(",") if x.strip()]
 OCR_OEM_CANDIDATES = [x.strip() for x in os.getenv("OCR_OEM_CANDIDATES", "3").split(",") if x.strip()]
 OCR_MAX_VARIANTS = max(1, int(os.getenv("OCR_MAX_VARIANTS", "4")))
+OCR_MAX_PASSES = max(1, int(os.getenv("OCR_MAX_PASSES", "12")))
+OCR_EARLY_EXIT_SCORE = float(os.getenv("OCR_EARLY_EXIT_SCORE", "0.55"))
 OCR_DEBUG_MODE = os.getenv("OCR_DEBUG_MODE", "true").lower() == "true"
 OCR_DEBUG_ROOT = os.getenv("OCR_DEBUG_ROOT", "/tmp/deliverex-ocr-debug")
 
@@ -224,7 +226,7 @@ def parse_tsv(tsv_text: str) -> dict[str, Any]:
     return {"avg_conf": avg_conf, "boxes": boxes[:25]}
 
 
-def run_tesseract(image_path: str, oem: str, psm: str) -> dict[str, Any]:
+def run_tesseract(image_path: str, oem: str, psm: str, *, include_tsv: bool = True) -> dict[str, Any]:
     base_cmd = ["tesseract", image_path]
     completed = subprocess.run(
         [*base_cmd, "stdout", "--oem", oem, "-l", OCR_LANG, "--psm", psm],
@@ -236,14 +238,16 @@ def run_tesseract(image_path: str, oem: str, psm: str) -> dict[str, Any]:
         message = (completed.stderr or completed.stdout or "Tesseract failed").strip()
         raise RuntimeError(message)
 
-    tsv_completed = subprocess.run(
-        [*base_cmd, "stdout", "--oem", oem, "-l", OCR_LANG, "--psm", psm, "tsv"],
-        capture_output=True,
-        text=True,
-        timeout=TESSERACT_TIMEOUT,
-    )
-    tsv_text = tsv_completed.stdout if tsv_completed.returncode == 0 else ""
-    tsv_data = parse_tsv(tsv_text)
+    tsv_data: dict[str, Any] = {"avg_conf": None, "boxes": []}
+    if include_tsv:
+        tsv_completed = subprocess.run(
+            [*base_cmd, "stdout", "--oem", oem, "-l", OCR_LANG, "--psm", psm, "tsv"],
+            capture_output=True,
+            text=True,
+            timeout=TESSERACT_TIMEOUT,
+        )
+        tsv_text = tsv_completed.stdout if tsv_completed.returncode == 0 else ""
+        tsv_data = parse_tsv(tsv_text)
 
     return {
         "text": completed.stdout.strip(),
@@ -320,7 +324,10 @@ async def ocr(
         raise HTTPException(status_code=400, detail=f"Image preprocessing failed: {exc}") from exc
 
     artifacts: list[str] = []
+    variant_paths: dict[str, str] = {}
     candidates: list[dict[str, Any]] = []
+    passes_run = 0
+    stop_early = False
 
     try:
         for variant_name, variant_img in variants.items():
@@ -330,11 +337,16 @@ async def ocr(
             ok = cv2.imwrite(temp_path, variant_img)
             if not ok:
                 continue
+            variant_paths[variant_name] = temp_path
 
             for oem in oem_candidates:
                 for psm in psm_candidates:
+                    if passes_run >= OCR_MAX_PASSES:
+                        stop_early = True
+                        break
+                    passes_run += 1
                     try:
-                        result = run_tesseract(temp_path, oem, psm)
+                        result = run_tesseract(temp_path, oem, psm, include_tsv=False)
                         text = str(result["text"])
                         score = score_text(text)
                         candidates.append(
@@ -346,11 +358,14 @@ async def ocr(
                                 "text_len": len(text),
                                 "text": text,
                                 "stderr": str(result["stderr"])[:180],
-                                "avg_conf": result["avg_conf"],
-                                "boxes": result["boxes"],
+                                "avg_conf": None,
+                                "boxes": [],
                                 "command": result["command"],
                             }
                         )
+                        if score >= OCR_EARLY_EXIT_SCORE and len(text) >= 40:
+                            stop_early = True
+                            break
                     except subprocess.TimeoutExpired as exc:
                         raise HTTPException(status_code=504, detail="Tesseract timed out") from exc
                     except RuntimeError as exc:
@@ -368,12 +383,26 @@ async def ocr(
                                 "command": f"tesseract {temp_path} stdout --oem {oem} -l {OCR_LANG} --psm {psm}",
                             }
                         )
+                if stop_early:
+                    break
+            if stop_early:
+                break
 
         if not candidates:
             raise HTTPException(status_code=500, detail="OCR could not produce any candidate output")
 
         ranked = sorted(candidates, key=lambda item: (item["score"], item["text_len"]), reverse=True)
         best = ranked[0]
+        best_path = variant_paths.get(best["variant"])
+        if best_path:
+            try:
+                enriched = run_tesseract(best_path, str(best.get("oem", "3")), str(best["psm"]), include_tsv=True)
+                best["avg_conf"] = enriched["avg_conf"]
+                best["boxes"] = enriched["boxes"]
+                best["text"] = enriched["text"] or best["text"]
+                best["command"] = enriched["command"]
+            except (subprocess.TimeoutExpired, RuntimeError):
+                pass
         text = best["text"].strip()
 
         return {
@@ -400,11 +429,15 @@ async def ocr(
                 "bounding_boxes": best.get("boxes", []),
                 "variants_tested": len(variants),
                 "passes_tested": len(candidates),
+                "passes_run": passes_run,
+                "stopped_early": stop_early,
                 "preprocess_steps": debug_steps,
                 "config": {
                     "psm_candidates": psm_candidates,
                     "oem_candidates": oem_candidates,
                     "max_variants": max_variants,
+                    "max_passes": OCR_MAX_PASSES,
+                    "early_exit_score": OCR_EARLY_EXIT_SCORE,
                     "enable_deskew": enable_deskew,
                     "enable_morph": enable_morph,
                 },
