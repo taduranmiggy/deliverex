@@ -17,19 +17,21 @@ echo "FRONTEND_DIST=$FRONTEND_DIST"
 cd "$DEPLOY_PATH"
 chmod +x "$SCRIPT_DIR/"*.sh 2>/dev/null || true
 
-# Pull latest code (GitHub Actions is the sole deploy trigger)
-if [ -d .git ]; then
-  PREVIOUS_SHA="$(git rev-parse HEAD 2>/dev/null || echo none)"
-  echo "Previous SHA: ${PREVIOUS_SHA:0:7}"
-
-  git fetch origin main
-  git reset --hard origin/main
-
-  NEW_SHA="$(git rev-parse HEAD)"
-  echo "Deployed SHA: ${NEW_SHA:0:7}"
-else
+if [ ! -d .git ]; then
   echo "ERROR: $DEPLOY_PATH is not a git repository." >&2
   exit 1
+fi
+
+# Git sync: workflow may already have run git reset (SKIP_GIT_PULL=1 + DEPLOY_PREVIOUS_SHA).
+if [ "${SKIP_GIT_PULL:-0}" != "1" ]; then
+  DEPLOY_PREVIOUS_SHA="$(git rev-parse HEAD 2>/dev/null || echo none)"
+  echo "Previous SHA: ${DEPLOY_PREVIOUS_SHA:0:7}"
+  git fetch origin main
+  git reset --hard origin/main
+  echo "Deployed SHA: $(git rev-parse --short HEAD)"
+else
+  DEPLOY_PREVIOUS_SHA="${DEPLOY_PREVIOUS_SHA:-$(git rev-parse HEAD 2>/dev/null || echo none)}"
+  echo "Using pre-synced code at $(git rev-parse --short HEAD) (previous ${DEPLOY_PREVIOUS_SHA:0:7})"
 fi
 
 # Publish frontend build from CI artifact (never committed to main)
@@ -50,6 +52,6 @@ fi
 export SKIP_GIT_PULL=1
 export SKIP_FRONTEND=1
 export SKIP_SERVER_FRONTEND_BUILD=1
-export DEPLOY_PREVIOUS_SHA="$PREVIOUS_SHA"
+export DEPLOY_PREVIOUS_SHA
 
 exec bash "$SCRIPT_DIR/deployment.sh"

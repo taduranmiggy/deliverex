@@ -65,7 +65,7 @@ jobs:
           target: "/tmp/deliverex-deploy/"
           overwrite: true
 
-      - name: Run deployment on server
+      - name: Sync repository and deploy on server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -80,8 +80,19 @@ jobs:
             export FRONTEND_DIST="/tmp/deliverex-deploy/frontend-dist.tar.gz"
             export APP_URL="${APP_URL}"
             mkdir -p /tmp/deliverex-deploy
-            chmod +x "$DEPLOY_PATH/scripts/"*.sh 2>/dev/null || true
-            bash "$DEPLOY_PATH/scripts/deploy-from-ci.sh"
+            if [ ! -d "$DEPLOY_PATH/.git" ]; then
+              echo "ERROR: $DEPLOY_PATH is not a git repository."
+              exit 1
+            fi
+            cd "$DEPLOY_PATH"
+            export DEPLOY_PREVIOUS_SHA="$(git rev-parse HEAD 2>/dev/null || echo none)"
+            echo "Syncing server repo to origin/main (was ${DEPLOY_PREVIOUS_SHA:0:7})..."
+            git fetch origin main
+            git reset --hard origin/main
+            echo "Server now at $(git rev-parse --short HEAD)"
+            chmod +x scripts/*.sh
+            export SKIP_GIT_PULL=1
+            bash scripts/deploy-from-ci.sh
 
       - name: Verify production health
         run: bash scripts/health-check.sh "$APP_URL"
