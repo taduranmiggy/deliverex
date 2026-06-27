@@ -73,22 +73,35 @@ jobs:
       - name: Trigger server deploy (pull model)
         run: |
           HOOK_URL="${APP_URL%/}/deploy-hook.php"
+          DEPLOY_OK=0
           for attempt in 1 2 3; do
             echo "Deploy attempt ${attempt}/3 → ${HOOK_URL}"
-            if curl -fsS -X POST "$HOOK_URL" \
+            resp="$(curl -sS -w $'\n__HTTP__:%{http_code}' -X POST "$HOOK_URL" \
               -H "X-Deploy-Token: ${{ secrets.DEPLOY_HOOK_TOKEN }}" \
               --connect-timeout 30 --max-time 900 \
               -d "run_id=${{ github.run_id }}" \
               -d "sha=${{ github.sha }}" \
-              -d "repo=${{ github.repository }}"; then
-              echo "Deploy webhook finished successfully."
-              exit 0
+              -d "repo=${{ github.repository }}" 2>&1)" || true
+            code="$(echo "$resp" | grep '__HTTP__:' | tail -1 | cut -d: -f2)"
+            body="$(echo "$resp" | grep -v '__HTTP__:')"
+            echo "$body"
+            if [ "$code" = "405" ] || echo "$body" | grep -qi '<html'; then
+              echo "ERROR: deploy-hook not reachable (HTTP ${code:-?})."
+              echo "Upload backend/public/deploy-hook.php to the server, or deploy routes/web.php with the Laravel fallback route."
+            elif echo "$body" | grep -q 'deploy complete'; then
+              DEPLOY_OK=1
+              break
+            elif echo "$body" | grep -qE '^(forbidden|run_id required|deploy error|GITHUB_DEPLOY_TOKEN)'; then
+              echo "ERROR: deploy-hook rejected the request — check server secrets."
+              exit 1
             fi
-            echo "Deploy failed — retrying in 20s..."
+            echo "Deploy not complete — retrying in 20s..."
             sleep 20
           done
-          echo "ERROR: deploy-hook.php did not complete deploy."
-          exit 1
+          if [ "$DEPLOY_OK" != "1" ]; then
+            echo "ERROR: deploy-hook.php did not complete deploy."
+            exit 1
+          fi
 
       - name: Verify production health
         env:
