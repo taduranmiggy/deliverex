@@ -183,7 +183,11 @@ run_deploy_steps() {
     return 1
   fi
 
-  CURRENT_SHA="$(git rev-parse HEAD 2>/dev/null || echo "${DEPLOY_SHA:-unknown}")"
+  if [ -n "${DEPLOY_SHA:-}" ] && [ "${DEPLOY_SHA}" != "unknown" ]; then
+    CURRENT_SHA="${DEPLOY_SHA}"
+  else
+    CURRENT_SHA="$(git rev-parse HEAD 2>/dev/null || echo "unknown")"
+  fi
   echo "$DEPLOY_PREVIOUS_SHA" >"$SHARED_STATE/previous-sha" 2>/dev/null || true
   echo "$CURRENT_SHA" >"$SHARED_STATE/current-sha" 2>/dev/null || true
 
