@@ -1358,6 +1358,29 @@
 }
 .dx-doc-queue-item:hover { border-color: var(--color-primary); background: var(--color-primary-light); }
 .dx-doc-queue-item--active { border-color: var(--color-primary); background: var(--color-primary-light); }
+.dx-doc-queue-item--compact {
+  padding: 8px 10px;
+  margin-bottom: 4px;
+}
+.dx-doc-queue-item__customer {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dx-doc-queue-item__meta {
+  margin-top: 2px;
+  font-size: 0.6875rem;
+  color: var(--subtle);
+  text-transform: capitalize;
+}
+.dx-ocr-queue-scroll {
+  max-height: 58vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
 
 .dx-preview-pane {
   background: var(--slate-50);

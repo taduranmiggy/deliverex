@@ -68,7 +68,7 @@ function OcrReviewPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [jobOrderIdFilter, setJobOrderIdFilter] = useState('')
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(20)
+  const [perPage, setPerPage] = useState(10)
   const [total, setTotal] = useState(0)
 
   const load = useCallback(async (filter = 'all') => {
@@ -215,6 +215,11 @@ function OcrReviewPage() {
   const canReprocess = selected && ['pending', 'processing', 'failed', 'processed', 'completed', 'needs_review'].includes(selected.processing_status)
   const isStub = selected?.engine === 'stub'
   const showTesseractWarning = isStub || (selected?.processing_status === 'failed' && selected?.error_message?.toLowerCase().includes('tesseract'))
+  const diagnostics = selected?.ocr_diagnostics || {}
+  const parserStatus = diagnostics?.parser_status
+  const showsNoText = parserStatus === 'no_text' || String(selected?.extracted_text || '').startsWith('(No text detected')
+  const parserMiss = parserStatus === 'parser_miss'
+  const parserPartial = parserStatus === 'partial'
 
   return (
     <>
@@ -294,32 +299,34 @@ function OcrReviewPage() {
               <Loader2 size={16} style={{ animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
               Loading queue…
             </div>
-          ) :
-            queue.length === 0 ? <EmptyState icon={FileSearch} title="Queue empty" message="No documents in this category." /> :
-            queue.map((item) => {
-              const b = getBadge(item)
-              return (
-                <button key={item.id} type="button"
-                  className={`dx-doc-queue-item${item.id === selected?.id ? ' dx-doc-queue-item--active' : ''}`}
-                  onClick={() => setSelected(item)}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <strong style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>DOC-{String(item.id).padStart(3, '0')}</strong>
-                    <span className={b.cls}>{b.label}</span>
-                  </div>
-                  <div style={{ fontSize: '0.8125rem', color: 'var(--muted)', marginTop: 6 }}>
-                    {item.document?.assignment?.job_order?.customer_name ?? 'Client record'}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--subtle)', marginTop: 3, textTransform: 'capitalize' }}>
-                    {item.document?.type ?? 'document'}
-                    {item.engine ? ` · ${item.engine}` : ''}
-                  </div>
-                  <div style={{ marginTop: 6 }}>
-                    <span className={getReviewBadge(item).cls}>{getReviewBadge(item).label}</span>
-                  </div>
-                </button>
-              )
-            })
+          ) : queue.length === 0 ? <EmptyState icon={FileSearch} title="Queue empty" message="No documents in this category." /> : (
+            <div className="dx-ocr-queue-scroll">
+              {queue.map((item) => {
+                const b = getBadge(item)
+                return (
+                  <button key={item.id} type="button"
+                    className={`dx-doc-queue-item dx-doc-queue-item--compact${item.id === selected?.id ? ' dx-doc-queue-item--active' : ''}`}
+                    onClick={() => setSelected(item)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <strong style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>DOC-{String(item.id).padStart(3, '0')}</strong>
+                      <span className={b.cls}>{b.label}</span>
+                    </div>
+                    <div className="dx-doc-queue-item__customer">
+                      {item.document?.assignment?.job_order?.customer_name ?? 'Client record'}
+                    </div>
+                    <div className="dx-doc-queue-item__meta">
+                      {item.document?.type ?? 'document'}
+                      {item.engine ? ` · ${item.engine}` : ''}
+                    </div>
+                    <div style={{ marginTop: 4 }}>
+                      <span className={getReviewBadge(item).cls}>{getReviewBadge(item).label}</span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )
           }
           {!loading && total > 0 && (
             <PaginationBar
@@ -328,7 +335,7 @@ function OcrReviewPage() {
               total={total}
               onPage={setPage}
               onPerPage={(n) => { setPerPage(n); setPage(1) }}
-              perPageOptions={[10, 25, 50]}
+              perPageOptions={[5, 10, 25, 50]}
             />
           )}
         </div>
@@ -471,6 +478,32 @@ function OcrReviewPage() {
                 <p className={`notice${selected.processing_status === 'failed' || isStub ? ' error' : ''}`} style={{ margin: 0 }}>
                   {selected.error_message}
                 </p>
+              )}
+              {(showsNoText || parserMiss || parserPartial) && (
+                <div className={`notice${showsNoText || parserMiss ? ' error' : ''}`} style={{ margin: 0 }}>
+                  {showsNoText && (
+                    <div><strong>No text detected.</strong> The image may be blurred, low contrast, too dark, or skewed. Try re-uploading a clearer image or click Reprocess OCR.</div>
+                  )}
+                  {parserMiss && (
+                    <div><strong>Text detected, but structured fields were not parsed.</strong> OCR output exists, but receipt/dimensions pattern matching failed.</div>
+                  )}
+                  {parserPartial && !showsNoText && !parserMiss && (
+                    <div><strong>Partial extraction.</strong> Some OCR fields were parsed, but important fields are still missing.</div>
+                  )}
+                </div>
+              )}
+              {!!selected?.ocr_diagnostics && (
+                <div style={{ border: '1px dashed var(--stroke)', borderRadius: 10, padding: 10, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                  <strong style={{ color: 'var(--ink)', display: 'block', marginBottom: 6 }}>OCR Engine Diagnostics</strong>
+                  <div>Parser status: {parserStatus || 'unknown'}</div>
+                  {diagnostics?.chosen_variant && <div>Chosen variant: {diagnostics.chosen_variant}</div>}
+                  {diagnostics?.chosen_psm && <div>Chosen PSM: {diagnostics.chosen_psm}</div>}
+                  {Array.isArray(diagnostics?.candidate_scores) && diagnostics.candidate_scores.length > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      Top candidates: {diagnostics.candidate_scores.slice(0, 3).map((entry) => `${entry.variant}/psm${entry.psm} (${entry.score})`).join(' · ')}
+                    </div>
+                  )}
+                </div>
               )}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {!isReadOnly && (

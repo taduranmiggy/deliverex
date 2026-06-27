@@ -37,6 +37,11 @@ return [
     'remote_url' => env('OCR_REMOTE_URL'),
     'remote_token' => env('OCR_REMOTE_TOKEN'),
     'remote_timeout' => (int) env('OCR_REMOTE_TIMEOUT', 180),
+    'remote_psm_candidates' => array_values(array_filter(array_map('trim', explode(',', (string) env('OCR_REMOTE_PSM_CANDIDATES', '6,11,7'))))),
+    'remote_max_variants' => (int) env('OCR_REMOTE_MAX_VARIANTS', 4),
+    'remote_enable_deskew' => filter_var(env('OCR_REMOTE_ENABLE_DESKEW', true), FILTER_VALIDATE_BOOLEAN),
+    'remote_enable_morph' => filter_var(env('OCR_REMOTE_ENABLE_MORPH', true), FILTER_VALIDATE_BOOLEAN),
+    'diagnostics_enabled' => filter_var(env('OCR_DIAGNOSTICS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
 
     /*
     |--------------------------------------------------------------------------

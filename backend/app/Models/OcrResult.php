@@ -25,6 +25,7 @@ class OcrResult extends Model
         'delivery_date',
         'confidence_score',
         'engine',
+        'ocr_diagnostics',
         'error_message',
         'review_notes',
         'reviewed_at',
@@ -40,6 +41,7 @@ class OcrResult extends Model
         'extracted_width' => 'float',
         'extracted_height' => 'float',
         'extracted_volume' => 'float',
+        'ocr_diagnostics' => 'array',
     ];
 
     public function document()
