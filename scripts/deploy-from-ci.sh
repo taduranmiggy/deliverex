@@ -1,40 +1,38 @@
 #!/usr/bin/env bash
-# Entry point for GitHub Actions SSH deploy — single deployment path.
+# Entry point for GitHub Actions SSH deploy — no server git required.
+# CI uploads app-code.tar.gz + frontend-dist.tar.gz, then runs deployment.sh.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_PATH="${DEPLOY_PATH:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+APP_CODE="${APP_CODE:-/tmp/deliverex-deploy/app-code.tar.gz}"
 FRONTEND_DIST="${FRONTEND_DIST:-/tmp/deliverex-deploy/frontend-dist.tar.gz}"
+DEPLOY_SHA="${DEPLOY_SHA:-unknown}"
 
-mkdir -p /tmp/deliverex-deploy 2>/dev/null || true
+mkdir -p /tmp/deliverex-deploy "$DEPLOY_PATH" 2>/dev/null || true
 export DEPLOY_PATH
 export APP_URL="${APP_URL:-https://deliverexapp.com}"
 
 echo "========== deploy-from-ci started =========="
 echo "DEPLOY_PATH=$DEPLOY_PATH"
-echo "FRONTEND_DIST=$FRONTEND_DIST"
+echo "DEPLOY_SHA=$DEPLOY_SHA"
 
-cd "$DEPLOY_PATH"
-chmod +x "$SCRIPT_DIR/"*.sh 2>/dev/null || true
-
-if [ ! -d .git ]; then
-  echo "ERROR: $DEPLOY_PATH is not a git repository." >&2
+if [ ! -d "$DEPLOY_PATH" ]; then
+  echo "ERROR: DEPLOY_PATH does not exist: $DEPLOY_PATH" >&2
   exit 1
 fi
 
-# Git sync: workflow may already have run git reset (SKIP_GIT_PULL=1 + DEPLOY_PREVIOUS_SHA).
-if [ "${SKIP_GIT_PULL:-0}" != "1" ]; then
-  DEPLOY_PREVIOUS_SHA="$(git rev-parse HEAD 2>/dev/null || echo none)"
-  echo "Previous SHA: ${DEPLOY_PREVIOUS_SHA:0:7}"
-  git fetch origin main
-  git reset --hard origin/main
-  echo "Deployed SHA: $(git rev-parse --short HEAD)"
-else
-  DEPLOY_PREVIOUS_SHA="${DEPLOY_PREVIOUS_SHA:-$(git rev-parse HEAD 2>/dev/null || echo none)}"
-  echo "Using pre-synced code at $(git rev-parse --short HEAD) (previous ${DEPLOY_PREVIOUS_SHA:0:7})"
+if [ ! -f "$APP_CODE" ]; then
+  echo "ERROR: Application tarball missing: $APP_CODE" >&2
+  exit 1
 fi
 
-# Publish frontend build from CI artifact (never committed to main)
+cd "$DEPLOY_PATH"
+
+echo "Extracting application code from CI..."
+tar -xzf "$APP_CODE" -C "$DEPLOY_PATH"
+chmod +x scripts/*.sh deployment.sh 2>/dev/null || true
+
 if [ -f "$FRONTEND_DIST" ]; then
   echo "Extracting frontend build to backend/public ..."
   mkdir -p backend/public/assets
@@ -44,14 +42,16 @@ if [ -f "$FRONTEND_DIST" ]; then
     echo "ERROR: frontend index.html missing after extract" >&2
     exit 1
   fi
-  echo "Frontend assets published."
 else
-  echo "WARN: No frontend artifact at $FRONTEND_DIST — using existing backend/public"
+  echo "WARN: No frontend artifact at $FRONTEND_DIST"
 fi
+
+rm -f "$APP_CODE"
 
 export SKIP_GIT_PULL=1
 export SKIP_FRONTEND=1
 export SKIP_SERVER_FRONTEND_BUILD=1
-export DEPLOY_PREVIOUS_SHA
+export SKIP_ROLLBACK=1
+export DEPLOY_PREVIOUS_SHA=none
 
 exec bash "$SCRIPT_DIR/deployment.sh"

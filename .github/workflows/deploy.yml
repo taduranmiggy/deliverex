@@ -1,7 +1,8 @@
 name: Deploy to Hostinger
 
-# Single deployment path: push → build → SSH → deployment.sh → health check
-# Requires GitHub Secrets: SSH_HOST, SSH_PORT, SSH_USER, SSH_PRIVATE_KEY, DEPLOY_PATH
+# Push → build → SCP code to server → deployment.sh → health check
+# No server git required (works after hPanel Git disconnect).
+# Secrets: SSH_HOST, SSH_PORT, SSH_USER, SSH_PRIVATE_KEY, DEPLOY_PATH
 on:
   push:
     branches:
@@ -51,21 +52,28 @@ jobs:
           npm ci
           VITE_API_URL="$VITE_API_URL" npm run build
 
-      - name: Archive frontend build
-        run: tar -czf frontend-dist.tar.gz -C frontend/dist .
+      - name: Archive deploy artifacts
+        run: |
+          tar -czf frontend-dist.tar.gz -C frontend/dist .
+          tar -czf app-code.tar.gz \
+            --exclude='backend/vendor' \
+            --exclude='backend/node_modules' \
+            --exclude='backend/storage' \
+            --exclude='backend/.env' \
+            backend scripts deployment.sh
 
-      - name: Upload frontend artifact to server
+      - name: Upload artifacts to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "frontend-dist.tar.gz"
+          source: "app-code.tar.gz,frontend-dist.tar.gz"
           target: "/tmp/deliverex-deploy/"
           overwrite: true
 
-      - name: Sync repository and deploy on server
+      - name: Deploy on server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -77,22 +85,24 @@ jobs:
           script: |
             set -euo pipefail
             export DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            export APP_CODE="/tmp/deliverex-deploy/app-code.tar.gz"
             export FRONTEND_DIST="/tmp/deliverex-deploy/frontend-dist.tar.gz"
             export APP_URL="${APP_URL}"
-            mkdir -p /tmp/deliverex-deploy
-            if [ ! -d "$DEPLOY_PATH/.git" ]; then
-              echo "ERROR: $DEPLOY_PATH is not a git repository."
+            export DEPLOY_SHA="${{ github.sha }}"
+            mkdir -p /tmp/deliverex-deploy "$DEPLOY_PATH"
+            if [ ! -d "$DEPLOY_PATH" ]; then
+              echo "ERROR: DEPLOY_PATH does not exist: $DEPLOY_PATH"
               exit 1
             fi
-            cd "$DEPLOY_PATH"
-            export DEPLOY_PREVIOUS_SHA="$(git rev-parse HEAD 2>/dev/null || echo none)"
-            echo "Syncing server repo to origin/main (was ${DEPLOY_PREVIOUS_SHA:0:7})..."
-            git fetch origin main
-            git reset --hard origin/main
-            echo "Server now at $(git rev-parse --short HEAD)"
-            chmod +x scripts/*.sh
-            export SKIP_GIT_PULL=1
-            bash scripts/deploy-from-ci.sh
+            if [ ! -f "$APP_CODE" ]; then
+              echo "ERROR: Missing $APP_CODE"
+              exit 1
+            fi
+            # Always refresh deploy scripts from CI (server may have no .git after hPanel disconnect)
+            echo "Updating deploy scripts from CI tarball..."
+            tar -xzf "$APP_CODE" -C "$DEPLOY_PATH" scripts deployment.sh
+            chmod +x "$DEPLOY_PATH/scripts/"*.sh "$DEPLOY_PATH/deployment.sh" 2>/dev/null || true
+            bash "$DEPLOY_PATH/scripts/deploy-from-ci.sh"
 
       - name: Verify production health
         run: bash scripts/health-check.sh "$APP_URL"

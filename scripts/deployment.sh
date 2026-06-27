@@ -64,10 +64,12 @@ run_deploy_steps() {
   cd "$DEPLOY_PATH"
   chmod +x "$SCRIPT_DIR/"*.sh 2>/dev/null || true
 
-  if [ "${SKIP_GIT_PULL:-0}" != "1" ]; then
+  if [ "${SKIP_GIT_PULL:-0}" != "1" ] && [ -d .git ]; then
     log "Pulling latest code from origin/main..."
     git fetch origin main
     git reset --hard origin/main
+  elif [ "${SKIP_GIT_PULL:-0}" != "1" ] && [ ! -d .git ]; then
+    log "No .git on server — expecting code from CI tarball (OK)."
   else
     log "Skipping git pull (already updated by CI)."
   fi
@@ -181,7 +183,7 @@ run_deploy_steps() {
     return 1
   fi
 
-  CURRENT_SHA="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+  CURRENT_SHA="$(git rev-parse HEAD 2>/dev/null || echo "${DEPLOY_SHA:-unknown}")"
   echo "$DEPLOY_PREVIOUS_SHA" >"$SHARED_STATE/previous-sha" 2>/dev/null || true
   echo "$CURRENT_SHA" >"$SHARED_STATE/current-sha" 2>/dev/null || true
 
