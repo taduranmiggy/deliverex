@@ -1,6 +1,6 @@
 <?php
 /**
- * CI deploy webhook handler — included by backend/public/deploy-hook.php and Laravel web route.
+ * CI deploy webhook — downloads artifact via PHP (no shell), queues deploy for cron CLI.
  */
 declare(strict_types=1);
 
@@ -36,12 +36,6 @@ if ($githubToken === '') {
     exit;
 }
 
-if (! function_exists('exec') && ! function_exists('shell_exec')) {
-    http_response_code(503);
-    echo "shell disabled on host\n";
-    exit;
-}
-
 $workDir = '/tmp/deliverex-deploy';
 @mkdir($workDir, 0755, true);
 $zipPath = $workDir . '/artifact-' . $runId . '.zip';
@@ -61,49 +55,34 @@ try {
         throw new RuntimeException('deliverex-deploy.tar.gz missing after artifact extract');
     }
 
-    extractDeployTarPaths($bundlePath, $repoRoot, ['scripts', 'deployment.sh']);
-    $deployScript = $repoRoot . '/scripts/deploy-from-ci.sh';
-    if (! is_file($deployScript)) {
-        throw new RuntimeException('deploy-from-ci.sh missing after bootstrap extract');
+    $stateDir = dirname($repoRoot) . '/shared/deploy-state';
+    @mkdir($stateDir, 0755, true);
+    $pendingFile = $stateDir . '/pending-deploy.json';
+    $payload = json_encode([
+        'bundle' => $bundlePath,
+        'sha' => $sha !== '' ? $sha : 'unknown',
+        'run_id' => $runId,
+        'repo' => $repo,
+        'app_url' => $secrets['APP_URL'] ?? 'https://deliverexapp.com',
+        'queued_at' => gmdate('c'),
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+    if ($payload === false) {
+        throw new RuntimeException('failed to encode pending deploy payload');
     }
 
-    $logDir = dirname($repoRoot) . '/shared/deploy-logs';
-    @mkdir($logDir, 0755, true);
-    $logFile = $logDir . '/deploy-' . date('Ymd-His') . '-' . substr(preg_replace('/[^a-f0-9]/', '', $sha), 0, 7) . '.log';
-
-    set_time_limit(0);
-    ignore_user_abort(true);
-
-    $env = implode(' ', [
-        'DEPLOY_PATH=' . escapeshellarg($repoRoot),
-        'DEPLOY_BUNDLE=' . escapeshellarg($bundlePath),
-        'DEPLOY_SHA=' . escapeshellarg($sha !== '' ? $sha : 'unknown'),
-        'APP_URL=' . escapeshellarg($secrets['APP_URL'] ?? 'https://deliverexapp.com'),
-        'SKIP_HEALTH_CHECK=1',
-    ]);
-
-    $inner = 'cd ' . escapeshellarg($repoRoot)
-        . ' && chmod +x scripts/*.sh deployment.sh 2>/dev/null'
-        . ' && ' . $env . ' bash ' . escapeshellarg($deployScript) . ' 2>&1';
-
-    echo "deploy running run_id={$runId} sha={$sha}\n";
-    echo "log={$logFile}\n\n";
-
-    passthru($inner . ' >> ' . escapeshellarg($logFile) . ' 2>&1', $code);
-
-    if (is_readable($logFile)) {
-        echo "\n--- deploy log tail ---\n";
-        $lines = file($logFile, FILE_IGNORE_NEW_LINES) ?: [];
-        echo implode("\n", array_slice($lines, -40)) . "\n";
+    $tmp = $pendingFile . '.tmp';
+    if (file_put_contents($tmp, $payload) === false) {
+        throw new RuntimeException('failed to write pending deploy file');
+    }
+    if (! rename($tmp, $pendingFile)) {
+        throw new RuntimeException('failed to finalize pending deploy file');
     }
 
-    if ($code !== 0) {
-        http_response_code(500);
-        echo "deploy failed exit={$code}\n";
-        exit($code);
-    }
-
-    echo "deploy complete sha={$sha}\n";
+    http_response_code(202);
+    echo "deploy queued run_id={$runId} sha={$sha}\n";
+    echo "pending={$pendingFile}\n";
+    echo "cron applies within 1 minute (scripts/process-deploy-queue.sh)\n";
 } catch (Throwable $e) {
     http_response_code(500);
     echo 'deploy error: ' . $e->getMessage() . "\n";
@@ -247,16 +226,5 @@ function extractDeployTarballFromZip(string $zipPath, string $bundlePath): void
 
     if (! $found) {
         throw new RuntimeException('deliverex-deploy.tar.gz not found inside artifact zip');
-    }
-}
-
-/** @param list<string> $paths */
-function extractDeployTarPaths(string $tarball, string $dest, array $paths): void
-{
-    $pathArgs = implode(' ', array_map('escapeshellarg', $paths));
-    $cmd = 'tar -xzf ' . escapeshellarg($tarball) . ' -C ' . escapeshellarg($dest) . ' ' . $pathArgs;
-    exec($cmd, $output, $code);
-    if ($code !== 0) {
-        throw new RuntimeException('tar extract failed: ' . implode("\n", $output));
     }
 }

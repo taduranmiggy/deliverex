@@ -88,6 +88,10 @@ jobs:
             if [ "$code" = "405" ] || echo "$body" | grep -qi '<html'; then
               echo "ERROR: deploy-hook not reachable (HTTP ${code:-?})."
               echo "Upload backend/public/deploy-hook.php to the server, or deploy routes/web.php with the Laravel fallback route."
+            elif echo "$body" | grep -q 'deploy queued'; then
+              echo "Deploy queued on server — waiting for cron to apply."
+              DEPLOY_OK=1
+              break
             elif echo "$body" | grep -q 'deploy complete'; then
               DEPLOY_OK=1
               break
@@ -106,6 +110,6 @@ jobs:
       - name: Verify production health
         env:
           EXPECTED_DEPLOY_SHA: ${{ github.sha }}
-          HEALTH_CHECK_ATTEMPTS: 12
-          HEALTH_CHECK_INTERVAL: 10
+          HEALTH_CHECK_ATTEMPTS: 60
+          HEALTH_CHECK_INTERVAL: 15
         run: bash scripts/health-check.sh "$APP_URL"
