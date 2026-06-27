@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { createAssignment, fetchJobOrders, getBestFit } from '../../api/dispatcher'
 import { useToast } from '../../context/ToastContext'
@@ -7,7 +7,10 @@ import { IconRouteArrow } from '../../components/DxIcons'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus } from '../../utils/statusLabels'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
+import { PaginationBar } from '../../components/ui'
 import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-react'
+
+const ALT_PER_PAGE_OPTIONS = [3, 5, 10, 15]
 
 // ─── Priority helpers ──────────────────────────────────────────────────────────
 const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 }
@@ -225,6 +228,9 @@ function AssignDriverVehiclePage() {
   const [modalError, setModalError] = useState('')
   const [manualDriverId, setManualDriverId] = useState('')
   const [manualVehicleId, setManualVehicleId] = useState('')
+  const [overrideTab, setOverrideTab] = useState('suggested')
+  const [altPage, setAltPage] = useState(1)
+  const [altPerPage, setAltPerPage] = useState(5)
 
   const location = useLocation()
   const preselectJobId = location.state?.jobOrderId ?? null
@@ -266,6 +272,8 @@ function AssignDriverVehiclePage() {
     setOverrideOptions({ drivers: [], vehicles: [] })
     setManualDriverId('')
     setManualVehicleId('')
+    setOverrideTab('suggested')
+    setAltPage(1)
     getBestFit(selected.id)
       .then((res) => {
         setRecommended(res.recommended || null)
@@ -339,6 +347,18 @@ function AssignDriverVehiclePage() {
   const alternatives = recommendations.filter((r) =>
     !(top && r.driver_id === top.driver_id && r.vehicle_id === top.vehicle_id)
   )
+
+  const altTotalPages = Math.max(1, Math.ceil(alternatives.length / altPerPage))
+  const safeAltPage = Math.min(altPage, altTotalPages)
+
+  const paginatedAlternatives = useMemo(
+    () => alternatives.slice((safeAltPage - 1) * altPerPage, safeAltPage * altPerPage),
+    [alternatives, safeAltPage, altPerPage],
+  )
+
+  useEffect(() => {
+    if (altPage > altTotalPages) setAltPage(altTotalPages)
+  }, [altPage, altTotalPages])
 
   return (
     <section>
@@ -486,14 +506,37 @@ function AssignDriverVehiclePage() {
             )}
           </div>
 
+          <div className="dx-filter-tabs" role="tablist" aria-label="Override options" style={{ marginBottom: 10 }}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={overrideTab === 'suggested'}
+              className={`dx-filter-tab${overrideTab === 'suggested' ? ' dx-filter-tab--active' : ''}`}
+              onClick={() => setOverrideTab('suggested')}
+            >
+              Suggested
+              <span className="dx-filter-tab__badge">{alternatives.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={overrideTab === 'all'}
+              className={`dx-filter-tab${overrideTab === 'all' ? ' dx-filter-tab--active' : ''}`}
+              onClick={() => setOverrideTab('all')}
+            >
+              All Drivers
+              <span className="dx-filter-tab__badge">{overrideOptions.drivers.length}</span>
+            </button>
+          </div>
+
           {/* Safe manual override selector (uses same assignment endpoint) */}
-          {!!selected && !loading && (
+          {!!selected && !loading && overrideTab === 'all' && (
             <div style={{ background: '#fff', border: '1px solid #fde68a', borderRadius: 12, padding: '12px 14px', marginBottom: 10 }}>
               <p style={{ margin: '0 0 8px', fontSize: '0.8125rem', fontWeight: 700, color: '#92400e' }}>
-                Safe Override Selection
+                All Available Drivers
               </p>
               <p style={{ margin: '0 0 10px', fontSize: '0.75rem', color: 'var(--muted)' }}>
-                Select from available drivers and vehicles only, then confirm override.
+                Select from all available drivers and feasible vehicles, then confirm override.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
                 <select
@@ -533,7 +576,7 @@ function AssignDriverVehiclePage() {
             </div>
           )}
 
-          {!selected || loading ? (
+          {overrideTab === 'all' ? null : !selected || loading ? (
             <div style={{ background: '#fff', border: '1px dashed var(--stroke)', borderRadius: 12, padding: '32px 16px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.875rem' }}>
               {loading ? 'Loading…' : 'Select a job to see alternatives.'}
             </div>
@@ -542,16 +585,28 @@ function AssignDriverVehiclePage() {
               {top ? 'Only one match available.' : 'No matches found.'}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {alternatives.map((item) => (
-                <CandidateCard
-                  key={`${item.driver_id}-${item.vehicle_id}`}
-                  item={item}
-                  isTop={false}
-                  onOverride={() => openModal(item, true)}
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {paginatedAlternatives.map((item) => (
+                  <CandidateCard
+                    key={`${item.driver_id}-${item.vehicle_id}`}
+                    item={item}
+                    isTop={false}
+                    onOverride={() => openModal(item, true)}
+                  />
+                ))}
+              </div>
+              {alternatives.length > 0 && (
+                <PaginationBar
+                  page={safeAltPage}
+                  perPage={altPerPage}
+                  total={alternatives.length}
+                  onPage={setAltPage}
+                  onPerPage={(n) => { setAltPerPage(n); setAltPage(1) }}
+                  perPageOptions={ALT_PER_PAGE_OPTIONS}
                 />
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       </div>
