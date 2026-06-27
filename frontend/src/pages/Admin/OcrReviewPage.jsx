@@ -37,19 +37,25 @@ const REVIEW_STATUS_BADGE = {
 const ISSUE_TYPES = [
   { value: '', label: 'Select issue type (optional)' },
   { value: 'missing_data', label: 'Missing data' },
-  { value: 'ocr_mismatch', label: 'OCR mismatch' },
+  { value: 'poor_image_quality', label: 'Poor image quality' },
   { value: 'wrong_upload', label: 'Wrong upload' },
   { value: 'incomplete_document', label: 'Incomplete document' },
   { value: 'other', label: 'Other' },
 ]
 
+function formatIssueType(issueType) {
+  if (!issueType) return '—'
+  if (issueType === 'ocr_mismatch') return 'Poor image quality'
+  return issueType.replaceAll('_', ' ').replace(/\b\w/g, (ch) => ch.toUpperCase())
+}
+
 function OcrReviewPage() {
   const toast = useToast()
   const { user } = useAuth()
   const roleName = String(user?.role?.name || '').toLowerCase()
+  const isAdmin = roleName === 'admin'
   const isDispatcher = roleName === 'dispatcher'
-  const isManager = roleName === 'manager'
-  const isReadOnly = isManager
+  const isReadOnly = !isAdmin
   const [queue, setQueue]           = useState([])
   const [error, setError]           = useState('')
   const [selected, setSelected]     = useState(null)
@@ -226,7 +232,7 @@ function OcrReviewPage() {
       <PageHeader
         title={isReadOnly ? 'Delivery Documentation' : isDispatcher ? 'OCR Review' : 'OCR Validation'}
         subtitle={isReadOnly
-          ? 'View OCR results and delivery documents — read-only'
+          ? 'View OCR results and delivery documents — read-only. Admin approval is required for final validation.'
           : isDispatcher
             ? 'Operational delivery verification using OCR data and system records'
             : 'System-wide OCR validation, oversight, and delivery audit review'}
@@ -240,7 +246,7 @@ function OcrReviewPage() {
       {isReadOnly && (
         <div className="dx-readonly-notice" style={{ marginBottom: 16 }}>
           <Info size={14} aria-hidden />
-          Manager view only — validation and reprocessing are handled by Admin and Dispatcher roles.
+          Read-only view — only Admin can validate, flag/reject, and reprocess OCR.
         </div>
       )}
       {error && <p className="notice error">{error}</p>}
@@ -440,7 +446,7 @@ function OcrReviewPage() {
               )}
               {isReadOnly && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: '0.875rem' }}>
-                  <div><strong>Issue Type:</strong> {selected.issue_type || '—'}</div>
+                  <div><strong>Issue Type:</strong> {formatIssueType(selected.issue_type)}</div>
                   <div><strong>Review Status:</strong> {getReviewBadge(selected).label}</div>
                 </div>
               )}

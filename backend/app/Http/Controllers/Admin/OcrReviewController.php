@@ -117,14 +117,24 @@ class OcrReviewController extends Controller
      */
     public function validateResult(Request $request, OcrResult $ocrResult)
     {
+        $role = strtolower((string) $request->user()?->role?->name);
+        if ($role !== 'admin') {
+            return response()->json([
+                'message' => 'Only Admin can validate or modify OCR review results.',
+            ], 403);
+        }
+
         $data = $request->validate([
             'action'           => 'required|in:approve,reject,flag',
             'corrected_text'   => 'nullable|string',
             'reject_reason'    => 'nullable|string|max:500',
             'notes'            => 'nullable|string|max:1000',
-            'issue_type'       => 'nullable|in:missing_data,ocr_mismatch,wrong_upload,incomplete_document,other',
+            'issue_type'       => 'nullable|in:missing_data,poor_image_quality,ocr_mismatch,wrong_upload,incomplete_document,other',
             'confidence_score' => 'nullable|numeric|min:0|max:1',
         ]);
+        $issueType = ($data['issue_type'] ?? null) === 'ocr_mismatch'
+            ? 'poor_image_quality'
+            : ($data['issue_type'] ?? null);
 
         match ($data['action']) {
             'approve' => $ocrResult->forceFill([
@@ -143,7 +153,7 @@ class OcrReviewController extends Controller
                 'review_status'     => 'rejected',
                 'is_validated'      => false,
                 'error_message'     => trim(implode(' · ', array_filter([
-                    $data['issue_type'] ?? null,
+                    $issueType,
                     $data['reject_reason'] ?? 'Rejected by reviewer.',
                 ]))),
                 'review_notes'      => $data['notes'] ?? null,
@@ -155,7 +165,7 @@ class OcrReviewController extends Controller
                 'review_status'     => 'flagged',
                 'is_validated'      => false,
                 'error_message'     => trim(implode(' · ', array_filter([
-                    $data['issue_type'] ?? null,
+                    $issueType,
                     $data['reject_reason'] ?? 'Flagged for further review.',
                 ]))),
                 'review_notes'      => $data['notes'] ?? null,
