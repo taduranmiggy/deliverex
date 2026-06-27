@@ -1,6 +1,12 @@
 # Deliverex — Production Deployment
 
-Zero-maintenance deploy for Hostinger. **One-time setup** (5 min), then every `git push` → build → auto-deploy with no manual SSH.
+**Single deploy path:** GitHub Actions → SSH → `deployment.sh`. See **[docs/DEPLOYMENT_ARCHITECTURE.md](docs/DEPLOYMENT_ARCHITECTURE.md)** for the full guide.
+
+```
+git push origin main  →  GitHub Actions  →  SSH  →  deployment.sh  →  health check
+```
+
+Legacy webhook / hPanel auto-deploy / cron paths are **deprecated** — disable them in hPanel.
 
 ---
 

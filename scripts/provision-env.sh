@@ -1,24 +1,23 @@
 #!/usr/bin/env bash
-# Create or restore backend/.env for production (survives hPanel Git redeploy).
-# Sources (in order): .deliverex.env backup → .deploy.secrets → existing mysql .env
+# Ensure shared/.env exists and is symlinked — NEVER overwrite an existing shared/.env.
+# Creates shared/.env once from secrets or legacy backup only when missing.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEPLOY_PATH="${DEPLOY_PATH:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-BACKEND="$DEPLOY_PATH/backend"
-ENV_FILE="$BACKEND/.env"
-ENV_BACKUP="$(dirname "$DEPLOY_PATH")/.deliverex.env"
-SECRETS_FILE="$(dirname "$DEPLOY_PATH")/.deploy.secrets"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/shared-paths.sh"
 
 log() { echo "[provision-env] $*"; }
 
 write_env_from_secrets() {
+  local secrets_file="$1"
+  local target="$2"
   # shellcheck disable=SC1090
-  source "$SECRETS_FILE"
+  source "$secrets_file"
 
-  : "${DB_DATABASE:?DB_DATABASE missing in $SECRETS_FILE}"
-  : "${DB_USERNAME:?DB_USERNAME missing in $SECRETS_FILE}"
-  : "${DB_PASSWORD:?DB_PASSWORD missing in $SECRETS_FILE}"
+  : "${DB_DATABASE:?DB_DATABASE missing in $secrets_file}"
+  : "${DB_USERNAME:?DB_USERNAME missing in $secrets_file}"
+  : "${DB_PASSWORD:?DB_PASSWORD missing in $secrets_file}"
 
   RESEND_API_KEY="${RESEND_API_KEY:-}"
   RESEND_API_KEY="$(printf '%s' "$RESEND_API_KEY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
@@ -27,7 +26,7 @@ write_env_from_secrets() {
   local domain="${APP_DOMAIN:-deliverexapp.com}"
   local db_pass_env="${DB_PASSWORD//\"/\\\"}"
 
-  cat > "$ENV_FILE" <<EOF
+  cat > "$target" <<EOF
 APP_NAME=Deliverex
 APP_ENV=production
 APP_KEY=
@@ -72,91 +71,35 @@ SANCTUM_STATEFUL_DOMAINS=${domain}
 OCR_ENGINE=${OCR_ENGINE:-local}
 OCR_SYNC_MODE=true
 EOF
-}
-
-save_backup() {
-  cp "$ENV_FILE" "$ENV_BACKUP"
-  chmod 600 "$ENV_BACKUP" 2>/dev/null || true
-  log "Backed up to $ENV_BACKUP"
-}
-
-is_production_env() {
-  [ -f "$ENV_FILE" ] && grep -q '^DB_CONNECTION=mysql' "$ENV_FILE"
+  chmod 600 "$target" 2>/dev/null || true
 }
 
 read_env_var() {
-  local key="$1"
-  grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^"//;s/"$//'
+  local file="$1"
+  local key="$2"
+  grep -E "^${key}=" "$file" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^"//;s/"$//'
 }
 
-bootstrap_secrets_from_env() {
-  [ -f "$SECRETS_FILE" ] && return 0
-  is_production_env || return 1
-  local db_pass db_name db_user
-  db_pass="$(read_env_var DB_PASSWORD)"
-  db_name="$(read_env_var DB_DATABASE)"
-  db_user="$(read_env_var DB_USERNAME)"
-  [ -n "$db_pass" ] && [ -n "$db_name" ] && [ -n "$db_user" ] || return 1
-  cat > "$SECRETS_FILE" <<EOF
-DB_DATABASE=${db_name}
-DB_USERNAME=${db_user}
-DB_PASSWORD=${db_pass}
-DB_HOST=$(read_env_var DB_HOST)
-APP_URL=$(read_env_var APP_URL)
-APP_DOMAIN=deliverexapp.com
-EOF
-  chmod 600 "$SECRETS_FILE" 2>/dev/null || true
-  log "Created $SECRETS_FILE from existing .env"
-}
-
-mkdir -p "$BACKEND"
-
-bootstrap_secrets_from_env || true
-
-if [ -f "$ENV_BACKUP" ]; then
-  log "Restoring from $ENV_BACKUP"
-  cp "$ENV_BACKUP" "$ENV_FILE"
-  chmod 600 "$ENV_FILE" 2>/dev/null || true
-elif [ -f "$SECRETS_FILE" ]; then
-  log "Building .env from $SECRETS_FILE"
-  write_env_from_secrets
-  save_backup
-elif is_production_env; then
-  log "Keeping existing mysql .env and creating backup"
-  save_backup
-  bootstrap_secrets_from_env || true
-elif [ -f "$ENV_FILE" ] && grep -q '^DB_CONNECTION=sqlite' "$ENV_FILE"; then
-  log "ERROR: .env uses sqlite (dev template). Create $SECRETS_FILE first."
-  log "  Run once: bash scripts/setup-hostinger-autodeploy.sh"
-  exit 1
-else
-  log "ERROR: No .env backup or secrets file."
-  log "  Run once: bash scripts/setup-hostinger-autodeploy.sh"
-  log "  Expected: $ENV_BACKUP or $SECRETS_FILE"
-  exit 1
-fi
-
-if ! grep -q '^DB_CONNECTION=mysql' "$ENV_FILE"; then
-  log "ERROR: .env must use DB_CONNECTION=mysql for production"
-  exit 1
-fi
-
-# Merge Resend/mail settings from .deploy.secrets into restored .env (backup may predate email setup).
-if [ -f "$SECRETS_FILE" ]; then
+merge_secret_keys_into_env() {
+  local secrets_file="$1"
+  local env_file="$2"
+  [ -f "$secrets_file" ] || return 0
   # shellcheck disable=SC1090
-  source "$SECRETS_FILE"
+  source "$secrets_file"
+
   merge_env_var() {
     local key="$1"
     local val="$2"
     val="$(printf '%s' "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
     [ -n "$val" ] || return 0
-    if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
-      sed -i.bak "s|^${key}=.*|${key}=${val}|" "$ENV_FILE" 2>/dev/null || true
-      rm -f "$ENV_FILE.bak" 2>/dev/null || true
+    if grep -q "^${key}=" "$env_file" 2>/dev/null; then
+      sed -i.bak "s|^${key}=.*|${key}=${val}|" "$env_file" 2>/dev/null || true
+      rm -f "$env_file.bak" 2>/dev/null || true
     else
-      echo "${key}=${val}" >>"$ENV_FILE"
+      echo "${key}=${val}" >>"$env_file"
     fi
   }
+
   merge_env_var "MAIL_MAILER" "resend"
   merge_env_var "MAIL_FROM_ADDRESS" "noreply@deliverexapp.com"
   merge_env_var "MAIL_FROM_NAME" "Deliverex"
@@ -166,9 +109,71 @@ if [ -f "$SECRETS_FILE" ]; then
   merge_env_var "FRONTEND_URL" "${APP_URL:-https://deliverexapp.com}"
   if [ -n "${RESEND_API_KEY:-}" ]; then
     merge_env_var "RESEND_API_KEY" "$RESEND_API_KEY"
-    log "Merged RESEND_API_KEY from .deploy.secrets into backend/.env"
-  else
-    log "WARN: RESEND_API_KEY not set in .deploy.secrets — emails will fail until added"
+    log "Merged RESEND_API_KEY from secrets"
   fi
-  save_backup
+}
+
+mkdir -p "$SHARED_ROOT" "$BACKEND"
+
+# Resolve secrets file (shared first, legacy fallback)
+SECRETS_FILE="$SHARED_SECRETS"
+if [ ! -f "$SECRETS_FILE" ] && [ -f "$LEGACY_SECRETS" ]; then
+  SECRETS_FILE="$LEGACY_SECRETS"
 fi
+
+# Bootstrap secrets from existing env if missing
+if [ ! -f "$SHARED_SECRETS" ] && [ -f "$SHARED_ENV" ] && grep -q '^DB_CONNECTION=mysql' "$SHARED_ENV"; then
+  db_pass="$(read_env_var "$SHARED_ENV" DB_PASSWORD)"
+  db_name="$(read_env_var "$SHARED_ENV" DB_DATABASE)"
+  db_user="$(read_env_var "$SHARED_ENV" DB_USERNAME)"
+  if [ -n "$db_pass" ] && [ -n "$db_name" ] && [ -n "$db_user" ]; then
+    cat > "$SHARED_SECRETS" <<EOF
+DB_DATABASE=${db_name}
+DB_USERNAME=${db_user}
+DB_PASSWORD=${db_pass}
+DB_HOST=$(read_env_var "$SHARED_ENV" DB_HOST)
+APP_URL=$(read_env_var "$SHARED_ENV" APP_URL)
+APP_DOMAIN=deliverexapp.com
+EOF
+    chmod 600 "$SHARED_SECRETS" 2>/dev/null || true
+    log "Created $SHARED_SECRETS from existing shared/.env"
+  fi
+fi
+
+if [ -f "$SHARED_ENV" ]; then
+  log "Using existing $SHARED_ENV (never overwritten)"
+  merge_secret_keys_into_env "$SHARED_SECRETS" "$SHARED_ENV"
+elif [ -f "$LEGACY_ENV_BACKUP" ]; then
+  log "Creating $SHARED_ENV from legacy backup (one-time)"
+  cp "$LEGACY_ENV_BACKUP" "$SHARED_ENV"
+  chmod 600 "$SHARED_ENV" 2>/dev/null || true
+  merge_secret_keys_into_env "$SHARED_SECRETS" "$SHARED_ENV"
+elif [ -f "$SECRETS_FILE" ]; then
+  log "Creating $SHARED_ENV from secrets (one-time)"
+  write_env_from_secrets "$SECRETS_FILE" "$SHARED_ENV"
+elif [ -f "$BACKEND_ENV" ] && [ ! -L "$BACKEND_ENV" ] && grep -q '^DB_CONNECTION=mysql' "$BACKEND_ENV"; then
+  log "Creating $SHARED_ENV from existing backend/.env (one-time)"
+  cp "$BACKEND_ENV" "$SHARED_ENV"
+  chmod 600 "$SHARED_ENV" 2>/dev/null || true
+else
+  log "ERROR: No shared/.env and no secrets to bootstrap from."
+  log "  Run once via SSH: bash scripts/setup-hostinger-autodeploy.sh"
+  log "  Expected: $SHARED_ENV or $SHARED_SECRETS"
+  exit 1
+fi
+
+if ! grep -q '^DB_CONNECTION=mysql' "$SHARED_ENV"; then
+  log "ERROR: shared/.env must use DB_CONNECTION=mysql for production"
+  exit 1
+fi
+
+# Ensure backend/.env symlinks to shared/.env
+if [ -f "$BACKEND_ENV" ] && [ ! -L "$BACKEND_ENV" ]; then
+  rm -f "$BACKEND_ENV"
+fi
+ln -sfn "$SHARED_ENV" "$BACKEND_ENV"
+log "backend/.env → shared/.env"
+
+# Keep legacy backup in sync (non-destructive copy for compatibility)
+cp "$SHARED_ENV" "$LEGACY_ENV_BACKUP" 2>/dev/null || true
+chmod 600 "$LEGACY_ENV_BACKUP" 2>/dev/null || true

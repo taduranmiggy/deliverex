@@ -1,7 +1,7 @@
 name: Deploy to Hostinger
 
-# Push to main → build frontend (if needed) → trigger server deploy hook.
-# Server-side: hPanel post-deploy script OR cron OR deploy-hook (see DEPLOY_HOSTINGER.md).
+# Single deployment path: push → build → SSH → deployment.sh → health check
+# Requires GitHub Secrets: SSH_HOST, SSH_PORT, SSH_USER, SSH_PRIVATE_KEY, DEPLOY_PATH
 on:
   push:
     branches:
@@ -9,20 +9,34 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: deploy-main
   cancel-in-progress: false
 
 jobs:
-  build-frontend:
+  deploy:
     runs-on: ubuntu-latest
+    env:
+      APP_URL: ${{ secrets.APP_URL != '' && secrets.APP_URL || 'https://deliverexapp.com' }}
+      VITE_API_URL: ${{ secrets.VITE_API_URL != '' && secrets.VITE_API_URL || 'https://deliverexapp.com/api' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate SSH secrets
+        run: |
+          missing=0
+          if [ -z "${{ secrets.SSH_HOST }}" ]; then echo "ERROR: SSH_HOST not set"; missing=1; fi
+          if [ -z "${{ secrets.SSH_PORT }}" ]; then echo "ERROR: SSH_PORT not set"; missing=1; fi
+          if [ -z "${{ secrets.SSH_USER }}" ]; then echo "ERROR: SSH_USER not set"; missing=1; fi
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then echo "ERROR: SSH_PRIVATE_KEY not set"; missing=1; fi
+          if [ -z "${{ secrets.DEPLOY_PATH }}" ]; then echo "ERROR: DEPLOY_PATH not set"; missing=1; fi
+          if [ "$missing" -ne 0 ]; then
+            echo "See docs/DEPLOYMENT_ARCHITECTURE.md for one-time setup."
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -33,61 +47,41 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: |
-          if [ -z "${VITE_API_URL:-}" ]; then export VITE_API_URL="https://deliverexapp.com/api"; fi
           npm ci
           VITE_API_URL="$VITE_API_URL" npm run build
 
-      - name: Copy build to backend/public
-        run: |
-          mkdir -p backend/public/assets
-          rsync -a frontend/dist/ backend/public/ \
-            --exclude index.php \
-            --exclude .htaccess \
-            --exclude ping.php \
-            --exclude deploy-hook.php \
-            --exclude storage
+      - name: Archive frontend build
+        run: tar -czf frontend-dist.tar.gz -C frontend/dist .
 
-      - name: Commit and push published assets (if changed)
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add backend/public/
-          if git diff --staged --quiet; then
-            echo "Frontend assets already up to date in repo."
-          else
-            git commit -m "chore: publish frontend build for Hostinger deploy"
-            git push
-          fi
+      - name: Upload frontend artifact to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "frontend-dist.tar.gz"
+          target: "/tmp/deliverex-deploy/"
+          overwrite: true
 
-  trigger-hostinger:
-    runs-on: ubuntu-latest
-    needs: build-frontend
-    steps:
-      - name: Trigger Hostinger deploy hook
-        continue-on-error: true
-        env:
-          DEPLOY_HOOK_TOKEN: ${{ secrets.DEPLOY_HOOK_TOKEN }}
-        run: |
-          if [ -z "${DEPLOY_HOOK_TOKEN:-}" ]; then
-            echo "DEPLOY_HOOK_TOKEN not set — server will deploy via hPanel auto-pull or cron (within ~5 min)."
-            exit 0
-          fi
-          echo "Calling deploy hook..."
-          curl -fsS --connect-timeout 20 --max-time 600 -X POST \
-            -H "X-Deploy-Token: $DEPLOY_HOOK_TOKEN" \
-            "https://deliverexapp.com/deploy-hook.php"
-          echo "Deploy hook finished."
+      - name: Run deployment on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          command_timeout: 15m
+          envs: APP_URL
+          script: |
+            set -euo pipefail
+            export DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            export FRONTEND_DIST="/tmp/deliverex-deploy/frontend-dist.tar.gz"
+            export APP_URL="${APP_URL}"
+            mkdir -p /tmp/deliverex-deploy
+            chmod +x "$DEPLOY_PATH/scripts/"*.sh 2>/dev/null || true
+            bash "$DEPLOY_PATH/scripts/deploy-from-ci.sh"
 
-      - name: Production health check (informational)
-        continue-on-error: true
-        run: |
-          sleep 45
-          body="$(curl -fsS --connect-timeout 20 https://deliverexapp.com/ping.php 2>/dev/null || echo 'pending')"
-          echo "$body"
-          if echo "$body" | grep -q 'vendor=yes'; then
-            echo "Production: ready"
-          else
-            echo "Production: deploy may still be running — check hPanel post-deploy script or cron."
+      - name: Verify production health
+        run: bash scripts/health-check.sh "$APP_URL"

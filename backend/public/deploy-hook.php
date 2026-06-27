@@ -1,6 +1,6 @@
 <?php
-// Trigger server deploy from GitHub Actions (POST with X-Deploy-Token header).
-// One-time: bash scripts/setup-hostinger-autodeploy.sh creates DEPLOY_HOOK_TOKEN.
+// DEPRECATED — deploys use GitHub Actions SSH (docs/DEPLOYMENT_ARCHITECTURE.md).
+// Disable hPanel auto-deploy and remove DEPLOY_HOOK_TOKEN usage to avoid race conditions.
 declare(strict_types=1);
 
 header('Content-Type: text/plain; charset=utf-8');

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Git pull + full deploy (used by cron and deploy webhook).
+# DEPRECATED — GitHub Actions SSH is the sole deploy trigger.
+# Remove this cron job from hPanel to prevent race conditions with CI deploys.
 set -euo pipefail
+
+echo "WARN: hostinger-cron-deploy.sh is deprecated. Remove cron; use GitHub Actions." >&2
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_PATH="$(cd "$SCRIPT_DIR/.." && pwd)"
