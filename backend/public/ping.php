@@ -52,6 +52,14 @@ if (file_exists($backendRoot . '/vendor/autoload.php') && $envExists) {
 }
 echo 'db=' . $db . "\n";
 
+$currentShaFile = $sharedRoot . '/deploy-state/current-sha';
+if (is_readable($currentShaFile)) {
+    $deploySha = trim((string) file_get_contents($currentShaFile));
+    if ($deploySha !== '' && $deploySha !== 'none' && $deploySha !== 'unknown') {
+        echo 'deploy=' . substr($deploySha, 0, 7) . "\n";
+    }
+}
+
 $repoRoot = dirname($backendRoot);
 if (is_dir($repoRoot . '/.git')) {
     $head = @trim((string) @file_get_contents($repoRoot . '/.git/HEAD'));

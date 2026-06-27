@@ -6,6 +6,7 @@ BASE_URL="${1:-https://deliverexapp.com}"
 PING_URL="${BASE_URL%/}/ping.php"
 MAX_ATTEMPTS="${HEALTH_CHECK_ATTEMPTS:-12}"
 SLEEP_SECS="${HEALTH_CHECK_INTERVAL:-10}"
+EXPECTED_DEPLOY_SHA="${EXPECTED_DEPLOY_SHA:-}"
 
 log() { echo "[health-check] $*"; }
 
@@ -21,6 +22,21 @@ check_body() {
       failed=1
     fi
   done
+
+  if [ -n "$EXPECTED_DEPLOY_SHA" ]; then
+    local expected_short="${EXPECTED_DEPLOY_SHA:0:7}"
+    local live_deploy
+    live_deploy="$(echo "$body" | grep -E '^deploy=' | head -1 | cut -d= -f2 || true)"
+    if [ -z "$live_deploy" ]; then
+      log "FAIL: deploy= missing in ping.php (server may need deploy-hook.php update)"
+      failed=1
+    elif [ "$live_deploy" != "$expected_short" ]; then
+      log "FAIL: deploy=${live_deploy} expected ${expected_short}"
+      failed=1
+    else
+      log "PASS: deploy=${live_deploy} matches expected commit"
+    fi
+  fi
 
   if [ "$failed" -ne 0 ]; then
     return 1

@@ -73,25 +73,26 @@ jobs:
       - name: Trigger server deploy (pull model)
         run: |
           HOOK_URL="${APP_URL%/}/deploy-hook.php"
-          for attempt in 1 2 3 4 5; do
-            echo "Webhook attempt ${attempt}/5 → ${HOOK_URL}"
+          for attempt in 1 2 3; do
+            echo "Deploy attempt ${attempt}/3 → ${HOOK_URL}"
             if curl -fsS -X POST "$HOOK_URL" \
               -H "X-Deploy-Token: ${{ secrets.DEPLOY_HOOK_TOKEN }}" \
-              --connect-timeout 30 --max-time 120 \
+              --connect-timeout 30 --max-time 900 \
               -d "run_id=${{ github.run_id }}" \
               -d "sha=${{ github.sha }}" \
               -d "repo=${{ github.repository }}"; then
-              echo "Deploy webhook accepted."
+              echo "Deploy webhook finished successfully."
               exit 0
             fi
-            echo "Webhook failed — retrying in 15s..."
-            sleep 15
+            echo "Deploy failed — retrying in 20s..."
+            sleep 20
           done
-          echo "ERROR: deploy-hook.php did not accept deploy request."
+          echo "ERROR: deploy-hook.php did not complete deploy."
           exit 1
 
       - name: Verify production health
         env:
-          HEALTH_CHECK_ATTEMPTS: 40
-          HEALTH_CHECK_INTERVAL: 15
+          EXPECTED_DEPLOY_SHA: ${{ github.sha }}
+          HEALTH_CHECK_ATTEMPTS: 12
+          HEALTH_CHECK_INTERVAL: 10
         run: bash scripts/health-check.sh "$APP_URL"

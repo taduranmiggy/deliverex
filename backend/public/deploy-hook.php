@@ -70,22 +70,39 @@ try {
     @mkdir($logDir, 0755, true);
     $logFile = $logDir . '/deploy-' . date('Ymd-His') . '-' . substr(preg_replace('/[^a-f0-9]/', '', $sha), 0, 7) . '.log';
 
+    set_time_limit(0);
+    ignore_user_abort(true);
+
     $env = implode(' ', [
         'DEPLOY_PATH=' . escapeshellarg($repoRoot),
         'DEPLOY_BUNDLE=' . escapeshellarg($bundlePath),
         'DEPLOY_SHA=' . escapeshellarg($sha !== '' ? $sha : 'unknown'),
         'APP_URL=' . escapeshellarg($secrets['APP_URL'] ?? 'https://deliverexapp.com'),
+        'SKIP_HEALTH_CHECK=1',
     ]);
 
-    $cmd = sprintf(
-        'nohup bash -c %s >> %s 2>&1 &',
-        escapeshellarg("cd " . escapeshellarg($repoRoot) . " && chmod +x scripts/*.sh deployment.sh 2>/dev/null; {$env} bash " . escapeshellarg($deployScript)),
-        escapeshellarg($logFile)
-    );
+    $inner = 'cd ' . escapeshellarg($repoRoot)
+        . ' && chmod +x scripts/*.sh deployment.sh 2>/dev/null'
+        . ' && ' . $env . ' bash ' . escapeshellarg($deployScript) . ' 2>&1';
 
-    exec($cmd);
-    echo "deploy started run_id={$runId} sha={$sha}\n";
-    echo "log={$logFile}\n";
+    echo "deploy running run_id={$runId} sha={$sha}\n";
+    echo "log={$logFile}\n\n";
+
+    passthru($inner . ' >> ' . escapeshellarg($logFile) . ' 2>&1', $code);
+
+    if (is_readable($logFile)) {
+        echo "\n--- deploy log tail ---\n";
+        $lines = file($logFile, FILE_IGNORE_NEW_LINES) ?: [];
+        echo implode("\n", array_slice($lines, -40)) . "\n";
+    }
+
+    if ($code !== 0) {
+        http_response_code(500);
+        echo "deploy failed exit={$code}\n";
+        exit($code);
+    }
+
+    echo "deploy complete sha={$sha}\n";
 } catch (Throwable $e) {
     http_response_code(500);
     echo 'deploy error: ' . $e->getMessage() . "\n";
