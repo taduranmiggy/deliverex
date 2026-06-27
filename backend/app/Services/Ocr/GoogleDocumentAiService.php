@@ -24,10 +24,11 @@ class GoogleDocumentAiService
      */
     public function extractFromImage(string $diskPath): array
     {
-        $credentialsPath = trim((string) config('ocr.google_credentials_path', ''));
-        $projectId = trim((string) config('ocr.google_project', ''));
-        $location = trim((string) config('ocr.document_ai_location', 'us'));
-        $processorId = trim((string) config('ocr.document_ai_processor_id', ''));
+        $credentialsPath = $this->resolveCredentialsPath((string) config('services.document_ai.credentials', ''));
+        $projectId = trim((string) config('services.document_ai.project', ''));
+        $location = trim((string) config('services.document_ai.location', 'us'));
+        $processorId = trim((string) config('services.document_ai.processor_id', ''));
+        $timeout = max(5, (int) config('services.document_ai.timeout', 30));
 
         if ($credentialsPath === '' || ! is_file($credentialsPath) || ! is_readable($credentialsPath)) {
             throw new RuntimeException('Google Document AI credentials file is missing or unreadable.');
@@ -69,7 +70,9 @@ class GoogleDocumentAiService
                 'skip_human_review' => true,
             ]);
 
-            $response = $client->processDocument($request);
+            $response = $client->processDocument($request, [
+                'timeoutMillis' => $timeout * 1000,
+            ]);
             $document = $response->getDocument();
             if (! $document instanceof Document) {
                 throw new RuntimeException('Document AI returned an empty document payload.');
@@ -122,6 +125,24 @@ class GoogleDocumentAiService
             'bmp' => 'image/bmp',
             default => 'application/octet-stream',
         };
+    }
+
+    private function resolveCredentialsPath(string $configuredPath): string
+    {
+        $configuredPath = trim($configuredPath);
+        if ($configuredPath === '') {
+            return '';
+        }
+
+        $normalized = str_replace('\\', '/', $configuredPath);
+        $isAbsolute = str_starts_with($normalized, '/')
+            || preg_match('/^[A-Za-z]:\//', $normalized) === 1;
+
+        if ($isAbsolute) {
+            return $configuredPath;
+        }
+
+        return base_path($configuredPath);
     }
 
     private function extractAverageEntityConfidence(Document $document): ?float

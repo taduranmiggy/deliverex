@@ -56,18 +56,6 @@ return [
     'remote_enable_deskew' => filter_var(env('OCR_REMOTE_ENABLE_DESKEW', true), FILTER_VALIDATE_BOOLEAN),
     'remote_enable_morph' => filter_var(env('OCR_REMOTE_ENABLE_MORPH', true), FILTER_VALIDATE_BOOLEAN),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Google Cloud Document AI
-    |--------------------------------------------------------------------------
-    */
-    'google_credentials_path' => env('GOOGLE_APPLICATION_CREDENTIALS', storage_path('app/google/document-ai.json')),
-    'google_project' => env('GOOGLE_CLOUD_PROJECT'),
-    'document_ai_location' => env('DOCUMENT_AI_LOCATION', 'us'),
-    'document_ai_processor_id' => env('DOCUMENT_AI_PROCESSOR_ID'),
-    'document_ai_timeout' => (int) env('DOCUMENT_AI_TIMEOUT', 30),
-    'document_ai_retries' => (int) env('DOCUMENT_AI_RETRIES', 1),
-
     'diagnostics_enabled' => filter_var(env('OCR_DIAGNOSTICS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
     'debug_mode' => filter_var(env('OCR_DEBUG_MODE', true), FILTER_VALIDATE_BOOLEAN),
 

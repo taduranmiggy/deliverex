@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'document_ai' => [
+        'credentials' => env('GOOGLE_APPLICATION_CREDENTIALS', 'storage/app/google/document-ai.json'),
+        'project' => env('GOOGLE_CLOUD_PROJECT'),
+        'location' => env('DOCUMENT_AI_LOCATION', 'us'),
+        'processor_id' => env('DOCUMENT_AI_PROCESSOR_ID'),
+        'timeout' => (int) env('DOCUMENT_AI_TIMEOUT', 30),
+        'retries' => (int) env('DOCUMENT_AI_RETRIES', 1),
+    ],
+
 ];
