@@ -157,7 +157,8 @@ bash scripts/rollback.sh
 | `vendor=no` | composer failed | Check `shared/storage/logs/deploy.log` |
 | `db=no` | Wrong DB credentials | Edit `shared/.env` (never deleted by deploy) |
 | `storage=no` | Symlink broken | Re-run `deployment.sh` |
-| Site breaks after push | hPanel auto-deploy still ON | Disable hPanel Git auto-deploy |
+| Site breaks after push | hPanel auto-deploy still ON | Disconnect Git in hPanel ⋮ menu |
+| `git pull` merge conflict / local changes | Server scripts edited locally | `bash scripts/sync-repo.sh` then redeploy |
 | Double deploy / race | cron + webhook + CI | Remove cron/webhook; CI only |
 | Frontend stale | Old flow committed assets | New flow uploads via SCP — hard refresh |
 
