@@ -72,4 +72,41 @@ class OcrServiceParsingTest extends TestCase
         $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.0001);
         $this->assertSame('DR-2936506', $parsed['delivery_receipt_number']);
     }
+
+    public function test_extracts_providential_cm_table_and_dr_number(): void
+    {
+        $text = <<<TXT
+        DELIVERY RECEIPT
+        DR No. DR-2936806
+        Item Qty Description L (cm) W (cm) H (cm) V (m3)
+        1 1 Crushed Aggregate 730 230 215 36.09
+        Truck No. ABC 1234
+        Length: 7.30 m Width: 2.10 m Height: 2.15 m Volume: 36.09 m3
+        TXT;
+
+        $parsed = $this->parse($text);
+
+        $this->assertSame('DR-2936806', $parsed['delivery_receipt_number']);
+        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
+    }
+
+    public function test_rejects_random_numbers_that_only_multiply_to_volume(): void
+    {
+        $text = <<<TXT
+        DELIVERY RECEIPT DR-2936806
+        reference S210185 batch 829 lane 1 row 9 total 7461
+        730 230 215 36.09
+        TXT;
+
+        $parsed = $this->parse($text);
+
+        $this->assertSame('DR-2936806', $parsed['delivery_receipt_number']);
+        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
+    }
 }

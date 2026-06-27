@@ -514,53 +514,38 @@ class OcrService
     private function extractStructuredFieldsWithDebug(string $text): array
     {
         $normalized = $this->normalizeOcrText($text);
-        $lengthParsed = $this->extractMeasurement($normalized, [
-            'length', 'len', 'lngth', 'lengt', '1ength', 'iength', 'l',
-        ]);
-        $widthParsed = $this->extractMeasurement($normalized, [
-            'width', 'wid', 'wdth', 'w1dth', 'w',
-        ]);
-        $heightParsed = $this->extractMeasurement($normalized, [
-            'height', 'hgt', 'he1ght', 'hieght', 'h',
-        ]);
-        $volumeParsed = $this->extractMeasurement($normalized, [
-            'volume', 'vol', 'cbm', 'm3', 'cu m', 'cubic',
-        ]);
-        $length = $lengthParsed['value'];
-        $width = $widthParsed['value'];
-        $height = $heightParsed['value'];
-        $volume = $volumeParsed['value'];
 
-        if ($length === null || $width === null || $height === null) {
-            $dims = $this->extractInlineDimensions($normalized);
-            $length ??= $dims['length'];
-            $width ??= $dims['width'];
-            $height ??= $dims['height'];
-        }
+        $candidates = [
+            'tabular' => $this->extractTabularDimensions($normalized),
+            'column' => $this->extractColumnLabeledDimensions($normalized),
+            'labeled' => $this->extractLabeledDimensions($normalized),
+            'inline' => array_merge($this->extractInlineDimensions($normalized), ['volume' => null]),
+        ];
 
-        if ($length === null || $width === null || $height === null || $volume === null) {
-            $tabular = $this->extractTabularDimensions($normalized);
-            $length ??= $tabular['length'];
-            $width ??= $tabular['width'];
-            $height ??= $tabular['height'];
-            if ($volume === null) {
-                $volume = $tabular['volume'];
-            } elseif ($tabular['volume'] !== null && $length !== null && $width !== null && $height !== null) {
-                $calc = $length * $width * $height;
-                $currentDelta = abs($volume - $calc) / max($calc, 0.0001);
-                $tabularDelta = abs($tabular['volume'] - $calc) / max($calc, 0.0001);
-                if ($tabularDelta < $currentDelta) {
-                    $volume = $tabular['volume'];
-                }
+        $bestKey = null;
+        $bestScore = -1.0;
+        $best = ['length' => null, 'width' => null, 'height' => null, 'volume' => null];
+        foreach ($candidates as $key => $candidate) {
+            $score = $this->scoreDimensionCandidate($candidate);
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $bestKey = $key;
+                $best = $candidate;
             }
         }
 
+        $best = $this->normalizeDimensionUnits($best);
+        $length = $best['length'];
+        $width = $best['width'];
+        $height = $best['height'];
+        $volume = $best['volume'];
+
         if ($volume === null && $length !== null && $width !== null && $height !== null) {
-            // Last-resort estimate when OCR captured dimensions but not explicit volume.
             $volume = round($length * $width * $height, 4);
         }
 
         $drParsed = $this->extractReceiptNumber($text);
+        $matchSource = $bestKey ?? 'none';
 
         return [
             'values' => [
@@ -571,12 +556,185 @@ class OcrService
                 'delivery_receipt_number' => $drParsed['value'],
             ],
             'matches' => [
-                'length_match' => $lengthParsed['match'],
-                'width_match' => $widthParsed['match'],
-                'height_match' => $heightParsed['match'],
-                'volume_match' => $volumeParsed['match'],
+                'length_match' => $matchSource,
+                'width_match' => $matchSource,
+                'height_match' => $matchSource,
+                'volume_match' => $matchSource,
                 'dr_match' => $drParsed['match'],
+                'parser_source' => $matchSource,
+                'parser_score' => $bestScore >= 0 ? round($bestScore, 4) : null,
             ],
+        ];
+    }
+
+    /**
+     * @return array{length:?float,width:?float,height:?float,volume:?float}
+     */
+    private function extractLabeledDimensions(string $text): array
+    {
+        $lengthParsed = $this->extractMeasurement($text, [
+            'length', 'len', 'lngth', 'lengt', '1ength', 'iength',
+        ]);
+        $widthParsed = $this->extractMeasurement($text, [
+            'width', 'wid', 'wdth', 'w1dth',
+        ]);
+        $heightParsed = $this->extractMeasurement($text, [
+            'height', 'hgt', 'he1ght', 'hieght',
+        ]);
+        $volumeParsed = $this->extractMeasurement($text, [
+            'volume', 'vol', 'cbm', 'cu m', 'cubic',
+        ]);
+
+        return [
+            'length' => $lengthParsed['value'],
+            'width' => $widthParsed['value'],
+            'height' => $heightParsed['value'],
+            'volume' => $volumeParsed['value'],
+        ];
+    }
+
+    /**
+     * @return array{length:?float,width:?float,height:?float,volume:?float}
+     */
+    private function extractColumnLabeledDimensions(string $text): array
+    {
+        $length = $this->extractUnitColumnValue($text, ['l', 'length'], ['cm', 'm']);
+        $width = $this->extractUnitColumnValue($text, ['w', 'width'], ['cm', 'm']);
+        $height = $this->extractUnitColumnValue($text, ['h', 'height'], ['cm', 'm']);
+        $volume = $this->extractUnitColumnValue($text, ['v', 'volume', 'vol'], ['m3', 'm³', 'cbm']);
+
+        return [
+            'length' => $length,
+            'width' => $width,
+            'height' => $height,
+            'volume' => $volume,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $labels
+     * @param  list<string>  $units
+     */
+    private function extractUnitColumnValue(string $text, array $labels, array $units): ?float
+    {
+        foreach ($labels as $label) {
+            foreach ($units as $unit) {
+                $unitPattern = preg_quote($unit, '/');
+                $pattern = '/\b'.preg_quote($label, '/').'\s*\(\s*'.$unitPattern.'\s*\)\s*[:=]?\s*([0-9]+(?:[.,][0-9]+)?)/i';
+                if (preg_match($pattern, $text, $m)) {
+                    return $this->toFloat($m[1] ?? null);
+                }
+            }
+
+            $pattern = '/\b'.preg_quote($label, '/').'\s*[:=]\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:cm|mm|m|meter|meters|cbm|m3|m³)\b/i';
+            if (preg_match($pattern, $text, $m)) {
+                return $this->toFloat($m[1] ?? null);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{length:?float,width:?float,height:?float,volume:?float}  $candidate
+     */
+    private function scoreDimensionCandidate(array $candidate): float
+    {
+        $length = $candidate['length'];
+        $width = $candidate['width'];
+        $height = $candidate['height'];
+        $volume = $candidate['volume'];
+
+        if ($length === null || $width === null || $height === null) {
+            return -1.0;
+        }
+
+        if ($length <= 0 || $width <= 0 || $height <= 0) {
+            return -1.0;
+        }
+
+        [$lengthM, $widthM, $heightM] = $this->toMetersTriple($length, $width, $height);
+        if ($lengthM === null || $widthM === null || $heightM === null) {
+            return -1.0;
+        }
+
+        if (! $this->arePlausibleMeters($lengthM, $widthM, $heightM)) {
+            return -1.0;
+        }
+
+        $score = 1.0;
+        $filled = collect([$length, $width, $height, $volume])->filter(static fn ($v) => $v !== null)->count();
+        $score += $filled * 0.5;
+
+        if ($volume !== null && $volume > 0) {
+            $calc = $lengthM * $widthM * $heightM;
+            $delta = abs($calc - $volume) / max($volume, 0.0001);
+            if ($delta > 0.2) {
+                return -1.0;
+            }
+            $score += max(0.0, 3.0 - ($delta * 10.0));
+        } else {
+            $score += 0.5;
+        }
+
+        if ($widthM < 1.0 || $heightM < 1.0) {
+            $score -= 1.5;
+        }
+
+        return $score;
+    }
+
+    /**
+     * @return array{0:?float,1:?float,2:?float}
+     */
+    private function toMetersTriple(float $length, float $width, float $height): array
+    {
+        $max = max($length, $width, $height);
+        if ($max > 50) {
+            return [$length / 100, $width / 100, $height / 100];
+        }
+
+        return [$length, $width, $height];
+    }
+
+    private function arePlausibleMeters(float $lengthM, float $widthM, float $heightM): bool
+    {
+        foreach ([$lengthM, $widthM, $heightM] as $value) {
+            if ($value < 0.4 || $value > 30.0) {
+                return false;
+            }
+        }
+
+        if ($widthM > $lengthM + 5.0) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array{length:?float,width:?float,height:?float,volume:?float}  $dims
+     * @return array{length:?float,width:?float,height:?float,volume:?float}
+     */
+    private function normalizeDimensionUnits(array $dims): array
+    {
+        $length = $dims['length'];
+        $width = $dims['width'];
+        $height = $dims['height'];
+        if ($length === null || $width === null || $height === null) {
+            return $dims;
+        }
+
+        $max = max($length, $width, $height);
+        if ($max <= 50) {
+            return $dims;
+        }
+
+        return [
+            'length' => round($length / 100, 4),
+            'width' => round($width / 100, 4),
+            'height' => round($height / 100, 4),
+            'volume' => $dims['volume'],
         ];
     }
 
@@ -584,19 +742,8 @@ class OcrService
     {
         $match = null;
         foreach ($labels as $label) {
-            $pattern = '/(?:\b'.preg_quote($label, '/').'\b)\s*[:=]?\s*([0-9]+(?:[.,][0-9]+)?)(?:\s*(?:cm|mm|m|meter|meters|cbm|m3))?/i';
+            $pattern = '/(?:\b'.preg_quote($label, '/').'\b)\s*[:=]?\s*([0-9]+(?:[.,][0-9]+)?)(?:\s*(?:cm|mm|m|meter|meters|cbm|m3|m³))?/i';
             if (preg_match($pattern, $text, $m)) {
-                $match = trim((string) ($m[0] ?? ''));
-
-                return ['value' => $this->toFloat($m[1] ?? null), 'match' => $match];
-            }
-        }
-
-        // Fallback: allow a nearby number after any provided label token.
-        $escaped = array_map(static fn (string $label): string => preg_quote($label, '/'), $labels);
-        if ($escaped !== []) {
-            $nearbyPattern = '/(?:'.implode('|', $escaped).')[^\d]{0,8}([0-9]+(?:[.,][0-9]+)?)/i';
-            if (preg_match($nearbyPattern, $text, $m)) {
                 $match = trim((string) ($m[0] ?? ''));
 
                 return ['value' => $this->toFloat($m[1] ?? null), 'match' => $match];
@@ -609,33 +756,48 @@ class OcrService
     private function extractReceiptNumber(string $text): array
     {
         $patterns = [
-            '/(?:delivery\s*receipt(?:\s*(?:no|number))?|receipt(?:\s*(?:no|number))?|delivery\s*no)\s*[:#-]?\s*([a-z]{1,4}[-\/]?[a-z0-9]{3,})/i',
-            '/\b(dr[-\s]?[a-z0-9]{3,})\b/i',
-            '/\bdr\s*[-:#]?\s*([a-z0-9]{3,})\b/i',
-            '/\b([a-z]{1,4}[-\/]?[0-9]{4,})\b/i',
+            '/\bdr\s*(?:no|number|#)?\s*[:.\-]?\s*(?:dr\s*[-:\s]?)?(\d{5,8})\b/i',
+            '/\b(dr[-\s]?\d{5,8})\b/i',
+            '/(?:delivery\s*receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*(dr[-\s]?\d{5,8})/i',
+            '/(?:delivery\s*receipt(?:\s*(?:no|number))?|receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*(dr[-\/]?[0-9]{5,8})/i',
+            '/(?:delivery\s*receipt(?:\s*(?:no|number))?|receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*([a-z]{1,4}[-\/]?[0-9]{4,})/i',
         ];
 
         foreach ($patterns as $pattern) {
             if (preg_match($pattern, $text, $m)) {
-                $value = strtoupper(trim((string) ($m[1] ?? '')));
-                if ($value === '') {
-                    continue;
-                }
-                if (! str_starts_with($value, 'DR') && preg_match('/\bdr\b/i', $text)) {
-                    $value = 'DR-'.$value;
-                }
-                if ($value === 'DR' || $value === 'DR-') {
+                $rawMatch = trim((string) ($m[0] ?? ''));
+                $value = $this->normalizeReceiptNumber((string) ($m[1] ?? ''), $rawMatch);
+                if ($value === '' || $value === 'DR' || $value === 'DR-') {
                     continue;
                 }
 
                 return [
                     'value' => $value,
-                    'match' => trim((string) ($m[0] ?? '')),
+                    'match' => $rawMatch,
                 ];
             }
         }
 
         return ['value' => null, 'match' => null];
+    }
+
+    private function normalizeReceiptNumber(string $value, string $fullMatch): string
+    {
+        $value = strtoupper(trim($value));
+        $value = preg_replace('/\s+/', '', $value) ?? $value;
+        if ($value === '') {
+            return '';
+        }
+
+        if (preg_match('/^DR[-]?(\d+)$/i', $value)) {
+            return preg_replace('/^DR[-]?(\d+)$/i', 'DR-$1', $value) ?? $value;
+        }
+
+        if (preg_match('/^\d{5,8}$/', $value) && preg_match('/\bdr\b/i', $fullMatch)) {
+            return 'DR-'.$value;
+        }
+
+        return $value;
     }
 
     private function extractInlineDimensions(string $text): array
@@ -666,61 +828,32 @@ class OcrService
         }
 
         $values = array_values(array_filter(array_map(fn ($v) => $this->toFloat($v), $matches[0]), static fn ($v) => $v !== null));
-        if (count($values) < 3) {
+        if (count($values) < 4) {
             return ['length' => null, 'width' => null, 'height' => null, 'volume' => null];
         }
 
-        // Heuristic: prefer quadruples where A*B*C ~= D (common L/W/H/V delivery table row).
+        $best = ['length' => null, 'width' => null, 'height' => null, 'volume' => null];
+        $bestScore = -1.0;
+
         for ($i = 0; $i <= count($values) - 4; $i++) {
-            $a = $values[$i];
-            $b = $values[$i + 1];
-            $c = $values[$i + 2];
-            $d = $values[$i + 3];
-            if ($a === null || $b === null || $c === null) {
-                continue;
-            }
-            if ($a <= 0 || $b <= 0 || $c <= 0) {
-                continue;
-            }
-            if ($a > 1000 || $b > 1000 || $c > 1000) {
-                continue;
-            }
-            if ($d === null || $d <= 0 || $d > 100000) {
-                continue;
-            }
-            $calc = $a * $b * $c;
-            $ratio = abs($calc - $d) / max($d, 0.0001);
-            if ($ratio > 0.35) {
-                continue;
-            }
-
-            return [
-                'length' => $a,
-                'width' => $b,
-                'height' => $c,
-                'volume' => $d,
+            $candidate = [
+                'length' => $values[$i],
+                'width' => $values[$i + 1],
+                'height' => $values[$i + 2],
+                'volume' => $values[$i + 3],
             ];
-        }
-
-        // Fallback: first sane triple if explicit volume match is unavailable.
-        for ($i = 0; $i <= count($values) - 3; $i++) {
-            $a = $values[$i];
-            $b = $values[$i + 1];
-            $c = $values[$i + 2];
-            if ($a === null || $b === null || $c === null) {
-                continue;
-            }
-            if ($a > 0 && $b > 0 && $c > 0 && $a <= 1000 && $b <= 1000 && $c <= 1000) {
-                return [
-                    'length' => $a,
-                    'width' => $b,
-                    'height' => $c,
-                    'volume' => null,
-                ];
+            $score = $this->scoreDimensionCandidate($candidate);
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $best = $candidate;
             }
         }
 
-        return ['length' => null, 'width' => null, 'height' => null, 'volume' => null];
+        if ($bestScore < 0) {
+            return ['length' => null, 'width' => null, 'height' => null, 'volume' => null];
+        }
+
+        return $best;
     }
 
     private function normalizeOcrText(string $text): string
