@@ -21,9 +21,22 @@ if (! is_dir($sharedRoot)) {
 }
 echo 'env_backup=' . (file_exists($sharedRoot . '/.env') ? 'yes' : 'no') . "\n";
 
-$storageLinked = is_link($backendRoot . '/public/storage')
-    && (is_dir($backendRoot . '/public/storage') || file_exists($backendRoot . '/public/storage'));
-echo 'storage=' . ($storageLinked ? 'yes' : 'no') . "\n";
+$storageOk = false;
+$publicStorage = $backendRoot.'/public/storage';
+$appPublic = $backendRoot.'/storage/app/public';
+
+if (is_link($publicStorage) || is_dir($publicStorage)) {
+    $storageOk = is_dir($appPublic)
+        || is_dir($publicStorage)
+        || @is_readable($publicStorage);
+}
+
+if (! $storageOk && is_dir($appPublic)) {
+    $resolved = @realpath($appPublic);
+    $storageOk = $resolved !== false && is_readable($resolved);
+}
+
+echo 'storage='.($storageOk ? 'yes' : 'no')."\n";
 
 $db = 'no';
 if (file_exists($backendRoot . '/vendor/autoload.php') && $envExists) {

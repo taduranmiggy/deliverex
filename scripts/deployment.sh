@@ -158,9 +158,13 @@ run_deploy_steps() {
   mkdir -p "$SHARED_POD" 2>/dev/null || true
   touch "$SHARED_STORAGE/logs/laravel.log" 2>/dev/null || true
 
-  log "Linking storage (php artisan storage:link)..."
-  rm -f "$BACKEND/public/storage" 2>/dev/null || true
-  "${ARTISAN[@]}" storage:link
+  log "Linking public storage..."
+  bash "$SCRIPT_DIR/link-storage.sh"
+
+  if [ ! -L "$BACKEND/public/storage" ] && [ ! -d "$BACKEND/public/storage" ]; then
+    log_error "public/storage link missing after link-storage.sh"
+    return 1
+  fi
 
   log "Restarting queue workers (php artisan queue:restart)..."
   "${ARTISAN[@]}" queue:restart || true
