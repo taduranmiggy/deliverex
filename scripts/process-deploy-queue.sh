@@ -12,6 +12,7 @@ LOCK="$SHARED_STATE/deploy.lock"
 LOG_DIR="$SHARED_STATE/deploy-logs"
 LOG_FILE="$LOG_DIR/cron-deploy.log"
 VARS_TMP="/tmp/deliverex-deploy-vars.$$"
+LAST_QUEUED_RUN_FILE="$SHARED_STATE/last-queued-run-id"
 
 mkdir -p "$LOG_DIR" "$SHARED_STATE" 2>/dev/null || true
 
@@ -25,6 +26,149 @@ cleanup() {
   rm -f "$VARS_TMP"
 }
 trap cleanup EXIT
+
+read_secret() {
+  local key="$1"
+  local default_value="${2:-}"
+  local value=""
+  if [ -f "$SHARED_SECRETS" ]; then
+    value="$(grep -E "^${key}=" "$SHARED_SECRETS" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  fi
+  if [ -z "$value" ]; then
+    value="$default_value"
+  fi
+  printf '%s' "$value"
+}
+
+queue_latest_from_github_if_needed() {
+  [ -f "$PENDING" ] && return 0
+
+  local github_token repo app_url
+  github_token="$(read_secret GITHUB_DEPLOY_TOKEN)"
+  repo="$(read_secret GITHUB_REPO taduranmiggy/deliverex)"
+  app_url="$(read_secret APP_URL https://deliverexapp.com)"
+
+  if [ -z "$github_token" ]; then
+    log "WARN: GITHUB_DEPLOY_TOKEN missing; cannot poll GitHub artifacts."
+    return 0
+  fi
+
+  local runs_json run_id sha last_queued
+  runs_json="$(curl -fsS \
+    -H "Authorization: Bearer $github_token" \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -H "User-Agent: Deliverex-Deploy-Cron" \
+    "https://api.github.com/repos/$repo/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=1" \
+    2>>"$LOG_FILE" || true)"
+
+  if [ -z "$runs_json" ]; then
+    log "WARN: Could not fetch workflow runs from GitHub."
+    return 0
+  fi
+
+  run_id="$(printf '%s' "$runs_json" | php -r '$j=json_decode(stream_get_contents(STDIN),true); echo $j["workflow_runs"][0]["id"] ?? "";' 2>>"$LOG_FILE" || true)"
+  sha="$(printf '%s' "$runs_json" | php -r '$j=json_decode(stream_get_contents(STDIN),true); echo $j["workflow_runs"][0]["head_sha"] ?? "";' 2>>"$LOG_FILE" || true)"
+
+  if [ -z "$run_id" ]; then
+    log "WARN: No successful deploy workflow run found yet."
+    return 0
+  fi
+
+  last_queued="$(cat "$LAST_QUEUED_RUN_FILE" 2>/dev/null || true)"
+  if [ "$run_id" = "$last_queued" ]; then
+    return 0
+  fi
+
+  local artifacts_json artifact_id
+  artifacts_json="$(curl -fsS \
+    -H "Authorization: Bearer $github_token" \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -H "User-Agent: Deliverex-Deploy-Cron" \
+    "https://api.github.com/repos/$repo/actions/runs/$run_id/artifacts?per_page=100" \
+    2>>"$LOG_FILE" || true)"
+
+  artifact_id="$(printf '%s' "$artifacts_json" | php -r '
+    $j=json_decode(stream_get_contents(STDIN),true);
+    if (!is_array($j) || !isset($j["artifacts"])) exit(0);
+    foreach ($j["artifacts"] as $a) {
+      $name = (string)($a["name"] ?? "");
+      if ($name === "deliverex-deploy" || str_starts_with($name, "deliverex-deploy-")) {
+        echo (string)($a["id"] ?? "");
+        exit(0);
+      }
+    }
+  ' 2>>"$LOG_FILE" || true)"
+
+  if [ -z "$artifact_id" ]; then
+    log "WARN: No deliverex-deploy artifact found for run $run_id."
+    return 0
+  fi
+
+  local zip_path bundle_path
+  zip_path="/tmp/deliverex-deploy/artifact-${run_id}.zip"
+  bundle_path="/tmp/deliverex-deploy/deliverex-deploy.tar.gz"
+  mkdir -p /tmp/deliverex-deploy
+
+  if ! curl -fsS -L \
+    -H "Authorization: Bearer $github_token" \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -H "User-Agent: Deliverex-Deploy-Cron" \
+    "https://api.github.com/repos/$repo/actions/artifacts/$artifact_id/zip" \
+    -o "$zip_path" 2>>"$LOG_FILE"; then
+    log "WARN: Failed to download artifact zip for run $run_id."
+    return 0
+  fi
+
+  if ! ZIP_PATH="$zip_path" BUNDLE_PATH="$bundle_path" php -r '
+    $zipPath = getenv("ZIP_PATH");
+    $bundlePath = getenv("BUNDLE_PATH");
+    if (!class_exists("ZipArchive")) { fwrite(STDERR, "ZipArchive missing\n"); exit(1); }
+    $z = new ZipArchive();
+    if ($z->open($zipPath) !== true) { fwrite(STDERR, "cannot open zip\n"); exit(1); }
+    $ok = false;
+    for ($i = 0; $i < $z->numFiles; $i++) {
+      $name = $z->getNameIndex($i);
+      if ($name !== false && basename($name) === "deliverex-deploy.tar.gz") {
+        $content = $z->getFromIndex($i);
+        if ($content !== false) {
+          file_put_contents($bundlePath, $content);
+          $ok = true;
+        }
+        break;
+      }
+    }
+    $z->close();
+    if (!$ok) { fwrite(STDERR, "bundle not found in zip\n"); exit(1); }
+  ' 2>>"$LOG_FILE"; then
+    log "WARN: Failed extracting deliverex-deploy.tar.gz from artifact zip."
+    return 0
+  fi
+
+  if [ ! -f "$bundle_path" ]; then
+    log "WARN: Bundle file missing after extraction."
+    return 0
+  fi
+
+  cat >"$PENDING" <<EOF
+{
+  "bundle": "$bundle_path",
+  "sha": "${sha:-unknown}",
+  "run_id": "$run_id",
+  "repo": "$repo",
+  "app_url": "$app_url",
+  "queued_at": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+}
+EOF
+  echo "$run_id" >"$LAST_QUEUED_RUN_FILE"
+  log "Queued deploy from GitHub artifact run_id=$run_id sha=${sha:0:7}"
+}
+
+if [ ! -f "$PENDING" ]; then
+  queue_latest_from_github_if_needed
+fi
 
 if [ ! -f "$PENDING" ]; then
   exit 0

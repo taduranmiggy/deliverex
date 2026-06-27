@@ -104,8 +104,9 @@ jobs:
             echo "WARN: Unexpected response HTTP ${code:-?} — retrying in 20s..."
             sleep 20
           done
-          echo "ERROR: Could not reach deploy-hook after 8 attempts (Hostinger timeout from GitHub)."
-          exit 1
+          echo "WARN: Could not reach deploy-hook after 8 attempts (Hostinger timeout from GitHub)."
+          echo "WARN: Cron poller on server will still pull latest successful artifact."
+          exit 0
 
       - name: Wait for cron deploy and verify health
         env:
