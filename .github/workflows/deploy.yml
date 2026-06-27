@@ -52,26 +52,64 @@ jobs:
           npm ci
           VITE_API_URL="$VITE_API_URL" npm run build
 
-      - name: Archive deploy artifacts
+      - name: Configure SSH
         run: |
-          tar -czf frontend-dist.tar.gz -C frontend/dist .
-          tar -czf app-code.tar.gz \
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          cat >> ~/.ssh/config <<EOF
+          Host hostinger
+            HostName ${{ secrets.SSH_HOST }}
+            User ${{ secrets.SSH_USER }}
+            Port ${{ secrets.SSH_PORT }}
+            IdentityFile ~/.ssh/deploy_key
+            ConnectTimeout 60
+            ServerAliveInterval 30
+            ServerAliveCountMax 5
+            StrictHostKeyChecking accept-new
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Test SSH connectivity
+        run: |
+          for attempt in 1 2 3; do
+            echo "SSH test attempt ${attempt}/3..."
+            if ssh -F ~/.ssh/config -o BatchMode=yes hostinger 'echo SSH OK'; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "ERROR: Cannot reach Hostinger via SSH — check SSH_HOST, SSH_PORT, and hPanel SSH Access."
+          exit 1
+
+      - name: Archive deploy bundle
+        run: |
+          mkdir -p .deploy-staging/frontend-dist
+          cp -a frontend/dist/. .deploy-staging/frontend-dist/
+          tar -czf deliverex-deploy.tar.gz \
             --exclude='backend/vendor' \
             --exclude='backend/node_modules' \
             --exclude='backend/storage' \
             --exclude='backend/.env' \
-            backend scripts deployment.sh
+            backend scripts deployment.sh \
+            -C .deploy-staging frontend-dist
+          ls -lh deliverex-deploy.tar.gz
 
-      - name: Upload artifacts to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          source: "app-code.tar.gz,frontend-dist.tar.gz"
-          target: "/tmp/deliverex-deploy/"
-          overwrite: true
+      - name: Upload deploy bundle to server
+        run: |
+          ssh -F ~/.ssh/config hostinger 'mkdir -p /tmp/deliverex-deploy'
+          for attempt in 1 2 3 4 5; do
+            echo "Upload attempt ${attempt}/5..."
+            if scp -F ~/.ssh/config -o BatchMode=yes deliverex-deploy.tar.gz hostinger:/tmp/deliverex-deploy/deliverex-deploy.tar.gz; then
+              echo "Upload succeeded on attempt ${attempt}"
+              exit 0
+            fi
+            echo "Upload failed — retrying in 25s..."
+            sleep 25
+          done
+          echo "ERROR: SCP failed after 5 attempts (dial tcp / i/o timeout from GitHub runner to Hostinger)."
+          exit 1
 
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.2.0
@@ -85,8 +123,7 @@ jobs:
           script: |
             set -euo pipefail
             export DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
-            export APP_CODE="/tmp/deliverex-deploy/app-code.tar.gz"
-            export FRONTEND_DIST="/tmp/deliverex-deploy/frontend-dist.tar.gz"
+            export DEPLOY_BUNDLE="/tmp/deliverex-deploy/deliverex-deploy.tar.gz"
             export APP_URL="${APP_URL}"
             export DEPLOY_SHA="${{ github.sha }}"
             mkdir -p /tmp/deliverex-deploy "$DEPLOY_PATH"
@@ -94,13 +131,12 @@ jobs:
               echo "ERROR: DEPLOY_PATH does not exist: $DEPLOY_PATH"
               exit 1
             fi
-            if [ ! -f "$APP_CODE" ]; then
-              echo "ERROR: Missing $APP_CODE"
+            if [ ! -f "$DEPLOY_BUNDLE" ]; then
+              echo "ERROR: Missing $DEPLOY_BUNDLE"
               exit 1
             fi
-            # Always refresh deploy scripts from CI (server may have no .git after hPanel disconnect)
-            echo "Updating deploy scripts from CI tarball..."
-            tar -xzf "$APP_CODE" -C "$DEPLOY_PATH" scripts deployment.sh
+            echo "Updating deploy scripts from CI bundle..."
+            tar -xzf "$DEPLOY_BUNDLE" -C "$DEPLOY_PATH" scripts deployment.sh
             chmod +x "$DEPLOY_PATH/scripts/"*.sh "$DEPLOY_PATH/deployment.sh" 2>/dev/null || true
             bash "$DEPLOY_PATH/scripts/deploy-from-ci.sh"
 
