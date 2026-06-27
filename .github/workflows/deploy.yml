@@ -1,8 +1,9 @@
 name: Deploy to Hostinger
 
-# Push → build → SCP code to server → deployment.sh → health check
-# No server git required (works after hPanel Git disconnect).
-# Secrets: SSH_HOST, SSH_PORT, SSH_USER, SSH_PRIVATE_KEY, DEPLOY_PATH
+# Push → build → upload artifact → webhook → server pulls from GitHub → health check
+# Hostinger often blocks inbound SSH from GitHub runners; server-initiated HTTPS pull works.
+# Secrets: DEPLOY_HOOK_TOKEN (+ optional APP_URL, VITE_API_URL)
+# Server shared/.deploy.secrets: GITHUB_DEPLOY_TOKEN (PAT with repo + actions:read)
 on:
   push:
     branches:
@@ -11,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: deploy-main
@@ -26,16 +28,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate SSH secrets
+      - name: Validate deploy secrets
         run: |
-          missing=0
-          if [ -z "${{ secrets.SSH_HOST }}" ]; then echo "ERROR: SSH_HOST not set"; missing=1; fi
-          if [ -z "${{ secrets.SSH_PORT }}" ]; then echo "ERROR: SSH_PORT not set"; missing=1; fi
-          if [ -z "${{ secrets.SSH_USER }}" ]; then echo "ERROR: SSH_USER not set"; missing=1; fi
-          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then echo "ERROR: SSH_PRIVATE_KEY not set"; missing=1; fi
-          if [ -z "${{ secrets.DEPLOY_PATH }}" ]; then echo "ERROR: DEPLOY_PATH not set"; missing=1; fi
-          if [ "$missing" -ne 0 ]; then
-            echo "See docs/DEPLOYMENT_ARCHITECTURE.md for one-time setup."
+          if [ -z "${{ secrets.DEPLOY_HOOK_TOKEN }}" ]; then
+            echo "ERROR: DEPLOY_HOOK_TOKEN not set in GitHub Actions secrets."
+            echo "Also add GITHUB_DEPLOY_TOKEN to server shared/.deploy.secrets (PAT: repo + actions:read)."
             exit 1
           fi
 
@@ -52,37 +49,6 @@ jobs:
           npm ci
           VITE_API_URL="$VITE_API_URL" npm run build
 
-      - name: Configure SSH
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
-          cat >> ~/.ssh/config <<EOF
-          Host hostinger
-            HostName ${{ secrets.SSH_HOST }}
-            User ${{ secrets.SSH_USER }}
-            Port ${{ secrets.SSH_PORT }}
-            IdentityFile ~/.ssh/deploy_key
-            ConnectTimeout 60
-            ServerAliveInterval 30
-            ServerAliveCountMax 5
-            StrictHostKeyChecking accept-new
-          EOF
-          chmod 600 ~/.ssh/config
-
-      - name: Test SSH connectivity
-        run: |
-          for attempt in 1 2 3; do
-            echo "SSH test attempt ${attempt}/3..."
-            if ssh -F ~/.ssh/config -o BatchMode=yes hostinger 'echo SSH OK'; then
-              exit 0
-            fi
-            sleep 15
-          done
-          echo "ERROR: Cannot reach Hostinger via SSH — check SSH_HOST, SSH_PORT, and hPanel SSH Access."
-          exit 1
-
       - name: Archive deploy bundle
         run: |
           mkdir -p .deploy-staging/frontend-dist
@@ -96,49 +62,36 @@ jobs:
             -C .deploy-staging frontend-dist
           ls -lh deliverex-deploy.tar.gz
 
-      - name: Upload deploy bundle to server
+      - name: Upload deploy bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deliverex-deploy
+          path: deliverex-deploy.tar.gz
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Trigger server deploy (pull model)
         run: |
-          ssh -F ~/.ssh/config hostinger 'mkdir -p /tmp/deliverex-deploy'
+          HOOK_URL="${APP_URL%/}/deploy-hook.php"
           for attempt in 1 2 3 4 5; do
-            echo "Upload attempt ${attempt}/5..."
-            if scp -F ~/.ssh/config -o BatchMode=yes deliverex-deploy.tar.gz hostinger:/tmp/deliverex-deploy/deliverex-deploy.tar.gz; then
-              echo "Upload succeeded on attempt ${attempt}"
+            echo "Webhook attempt ${attempt}/5 → ${HOOK_URL}"
+            if curl -fsS -X POST "$HOOK_URL" \
+              -H "X-Deploy-Token: ${{ secrets.DEPLOY_HOOK_TOKEN }}" \
+              --connect-timeout 30 --max-time 120 \
+              -d "run_id=${{ github.run_id }}" \
+              -d "sha=${{ github.sha }}" \
+              -d "repo=${{ github.repository }}"; then
+              echo "Deploy webhook accepted."
               exit 0
             fi
-            echo "Upload failed — retrying in 25s..."
-            sleep 25
+            echo "Webhook failed — retrying in 15s..."
+            sleep 15
           done
-          echo "ERROR: SCP failed after 5 attempts (dial tcp / i/o timeout from GitHub runner to Hostinger)."
+          echo "ERROR: deploy-hook.php did not accept deploy request."
           exit 1
 
-      - name: Deploy on server
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          command_timeout: 15m
-          envs: APP_URL
-          script: |
-            set -euo pipefail
-            export DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
-            export DEPLOY_BUNDLE="/tmp/deliverex-deploy/deliverex-deploy.tar.gz"
-            export APP_URL="${APP_URL}"
-            export DEPLOY_SHA="${{ github.sha }}"
-            mkdir -p /tmp/deliverex-deploy "$DEPLOY_PATH"
-            if [ ! -d "$DEPLOY_PATH" ]; then
-              echo "ERROR: DEPLOY_PATH does not exist: $DEPLOY_PATH"
-              exit 1
-            fi
-            if [ ! -f "$DEPLOY_BUNDLE" ]; then
-              echo "ERROR: Missing $DEPLOY_BUNDLE"
-              exit 1
-            fi
-            echo "Updating deploy scripts from CI bundle..."
-            tar -xzf "$DEPLOY_BUNDLE" -C "$DEPLOY_PATH" scripts deployment.sh
-            chmod +x "$DEPLOY_PATH/scripts/"*.sh "$DEPLOY_PATH/deployment.sh" 2>/dev/null || true
-            bash "$DEPLOY_PATH/scripts/deploy-from-ci.sh"
-
       - name: Verify production health
+        env:
+          HEALTH_CHECK_ATTEMPTS: 40
+          HEALTH_CHECK_INTERVAL: 15
         run: bash scripts/health-check.sh "$APP_URL"

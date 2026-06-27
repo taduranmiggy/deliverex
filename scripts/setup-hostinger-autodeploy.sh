@@ -30,6 +30,8 @@ else
 
   read -r -p "RESEND_API_KEY (optional, press Enter to skip): " RESEND_API_KEY
 
+  DEPLOY_HOOK_TOKEN="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+
   cat > "$SHARED_SECRETS" <<EOF
 # Deliverex production secrets (outside git — survives redeploy)
 DB_DATABASE=${DB_DATABASE}
@@ -39,6 +41,9 @@ DB_HOST=localhost
 APP_URL=https://${DOMAIN}
 APP_DOMAIN=${DOMAIN}
 RESEND_API_KEY=${RESEND_API_KEY}
+DEPLOY_HOOK_TOKEN=${DEPLOY_HOOK_TOKEN}
+# GitHub PAT with repo + actions:read — server downloads CI artifacts
+GITHUB_DEPLOY_TOKEN=
 EOF
   chmod 600 "$SHARED_SECRETS"
   echo "==> Wrote $SHARED_SECRETS"
@@ -70,25 +75,24 @@ echo "============================================"
 echo " GitHub Actions secrets (add once)"
 echo "============================================"
 echo ""
-echo "SSH_HOST=<Hostinger server IP>"
-echo "SSH_PORT=65002"
-echo "SSH_USER=${USER_NAME}"
-echo "SSH_PRIVATE_KEY=<contents of deploy private key>"
-echo "DEPLOY_PATH=${DEPLOY_PATH}"
+echo "DEPLOY_HOOK_TOKEN=${DEPLOY_HOOK_TOKEN:-<from shared/.deploy.secrets>}"
 echo "APP_URL=https://${DOMAIN}"
 echo "VITE_API_URL=https://${DOMAIN}/api"
+echo ""
+echo "Server shared/.deploy.secrets must also include:"
+echo "  GITHUB_DEPLOY_TOKEN=<GitHub PAT with repo + actions:read>"
 echo ""
 echo "============================================"
 echo " hPanel checklist"
 echo "============================================"
 echo ""
 echo "1. Document root: ${DEPLOY_PATH}/backend/public"
-echo "2. DISABLE hPanel Git Auto Deployment"
+echo "2. DISCONNECT hPanel Git repository (stops auto-deploy race)"
 echo "3. REMOVE post-deploy script and cron deploy jobs"
-echo "4. Add deploy SSH public key in hPanel → SSH Access"
+echo "4. Upload backend/public/deploy-hook.php if not yet updated"
 echo ""
 echo "5. Verify: bash ${DEPLOY_PATH}/scripts/deployment.sh"
-echo "6. Push to main — GitHub Actions deploys automatically"
+echo "6. Push to main — GitHub Actions builds + webhook deploys automatically"
 echo ""
 echo "See docs/DEPLOYMENT_ARCHITECTURE.md"
 echo "============================================"
