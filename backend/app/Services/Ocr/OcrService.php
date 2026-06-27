@@ -209,8 +209,12 @@ class OcrService
         if (! $response->successful()) {
             $message = $response->json('detail')
                 ?: $response->json('message')
-                ?: trim($response->body())
+                ?: trim(strip_tags($response->body()))
                 ?: 'Remote OCR service returned HTTP '.$response->status();
+
+            if ($response->status() === 502) {
+                $message .= ' Render OCR service is down or failed to start. Redeploy the Render web service and check its logs.';
+            }
 
             return $this->fail($result, 'Remote OCR failed: '.$message, $debugContext);
         }

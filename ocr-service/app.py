@@ -6,8 +6,18 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import cv2
-import numpy as np
+try:
+    import cv2
+    import numpy as np
+
+    CV2_AVAILABLE = True
+    CV2_IMPORT_ERROR: str | None = None
+except ImportError as exc:
+    cv2 = None  # type: ignore[assignment]
+    np = None  # type: ignore[assignment]
+    CV2_AVAILABLE = False
+    CV2_IMPORT_ERROR = str(exc)
+
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 
 
@@ -54,7 +64,17 @@ def estimate_confidence(text: str) -> float | None:
     return 0.55
 
 
-def decode_image(contents: bytes) -> np.ndarray:
+def require_opencv() -> None:
+    if CV2_AVAILABLE:
+        return
+    detail = "OpenCV is not available in this container"
+    if CV2_IMPORT_ERROR:
+        detail = f"{detail}: {CV2_IMPORT_ERROR}"
+    raise HTTPException(status_code=500, detail=detail)
+
+
+def decode_image(contents: bytes) -> "np.ndarray":
+    require_opencv()
     np_bytes = np.frombuffer(contents, dtype=np.uint8)
     image = cv2.imdecode(np_bytes, cv2.IMREAD_UNCHANGED)
     if image is None:
@@ -260,6 +280,8 @@ def run_tesseract(image_path: str, oem: str, psm: str, *, include_tsv: bool = Tr
 
 @app.get("/health")
 def health() -> dict:
+    tesseract_version = None
+    tesseract_error = None
     try:
         completed = subprocess.run(
             ["tesseract", "--version"],
@@ -268,11 +290,24 @@ def health() -> dict:
             text=True,
             timeout=10,
         )
+        tesseract_version = completed.stdout.splitlines()[0] if completed.stdout else "tesseract"
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Tesseract unavailable: {exc}") from exc
+        tesseract_error = str(exc)
 
-    first_line = completed.stdout.splitlines()[0] if completed.stdout else "tesseract"
-    return {"status": "ok", "engine": "render-tesseract", "version": first_line}
+    status = "ok" if CV2_AVAILABLE and tesseract_error is None else "degraded"
+    payload = {
+        "status": status,
+        "engine": "render-tesseract",
+        "opencv": CV2_AVAILABLE,
+        "version": tesseract_version or "unknown",
+    }
+    if CV2_IMPORT_ERROR:
+        payload["opencv_error"] = CV2_IMPORT_ERROR
+    if tesseract_error:
+        payload["tesseract_error"] = tesseract_error
+        raise HTTPException(status_code=500, detail=payload)
+
+    return payload
 
 
 @app.post("/ocr")
@@ -286,6 +321,7 @@ async def ocr(
     x_ocr_enable_morph: str | None = Header(default=None),
 ) -> dict:
     require_bearer(authorization)
+    require_opencv()
 
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:

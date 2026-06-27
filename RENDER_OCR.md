@@ -63,3 +63,52 @@ php artisan ocr:check
 4. Confirm the OCR result engine is `render-tesseract`.
 
 Render Free can sleep after idle time. If the first OCR request is slow or times out, wait for the service to wake up and click Reprocess OCR again.
+
+## 5. Troubleshooting 502 Bad Gateway
+
+If Hostinger shows:
+
+```text
+HEALTH_HTTP=502
+ERROR=Remote OCR failed: Application failed to respond
+```
+
+the Laravel app is fine — the Render OCR container is not responding. Fix it on Render, not Hostinger.
+
+1. Open the Render service dashboard -> **Logs**.
+2. Look for deploy/build errors or startup crashes (common after adding OpenCV):
+   - `ImportError: libGL.so.1`
+   - `ImportError: libgomp.so.1`
+3. Confirm settings:
+   - Root directory: blank
+   - Dockerfile path: `ocr-service/Dockerfile`
+   - Env: `OCR_SERVICE_TOKEN=<secret>`
+4. Click **Manual Deploy -> Deploy latest commit** after pushing repo changes.
+5. Wait until Render shows **Live**, then test in browser:
+
+```text
+https://your-render-service.onrender.com/health
+```
+
+Expected JSON:
+
+```json
+{"status":"ok","engine":"render-tesseract","opencv":true,"version":"tesseract 5.x"}
+```
+
+6. On Hostinger:
+
+```bash
+php scripts/ocr-diagnose.php --ping
+php scripts/ocr-diagnose.php 19
+```
+
+Recommended Render env for Free tier (keeps responses under Hostinger timeout):
+
+```env
+OCR_PSM_CANDIDATES=6,11,4
+OCR_MAX_VARIANTS=2
+OCR_MAX_PASSES=8
+TESSERACT_TIMEOUT=60
+OCR_DEBUG_MODE=false
+```
