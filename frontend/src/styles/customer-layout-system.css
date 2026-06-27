@@ -93,6 +93,58 @@
   padding-bottom: 0;
 }
 
+.customer-legal-footer {
+  border-top: 1px solid var(--stroke);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.customer-legal-footer__inner {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.customer-legal-footer nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.customer-legal-footer a {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.customer-legal-footer a:hover {
+  color: var(--color-primary);
+}
+
+.customer-legal-footer--compact {
+  border-top: 0;
+  background: transparent;
+}
+
+.auth-footer-split-wrap .customer-legal-footer {
+  background: transparent;
+  border-top: 0;
+}
+
+.auth-footer-split-wrap .customer-legal-footer__inner {
+  justify-content: center;
+  min-height: 40px;
+}
+
+.auth-footer-split-wrap .customer-legal-footer__inner > span {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .customer-layout-main {
     padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));

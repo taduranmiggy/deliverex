@@ -227,6 +227,14 @@ class MasterDataController extends Controller
 
         $model = $id ? Driver::query()->findOrFail($id) : new Driver();
         $model->fill($data)->save();
+
+        if (! $model->user_id && $model->status !== 'inactive') {
+            $accountResponse = $this->generateDriverAccount($model);
+            if ($accountResponse->getStatusCode() >= 400) {
+                return $accountResponse;
+            }
+        }
+
         return response()->json($model->fresh()->load('user:id,name,email'));
     }
 

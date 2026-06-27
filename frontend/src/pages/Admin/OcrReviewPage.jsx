@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { exportOcrReport, fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, validateOcr } from '../../api/admin'
-import { EmptyState, PageHeader } from '../../components/ui'
+import { EmptyState, PageHeader, PaginationBar } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import useAuth from '../../hooks/useAuth'
 import { Check, FileSearch, Flag, Info, Loader2, RefreshCw, X } from 'lucide-react'
@@ -67,12 +67,16 @@ function OcrReviewPage() {
   const [dateTo, setDateTo] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [jobOrderIdFilter, setJobOrderIdFilter] = useState('')
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(20)
+  const [total, setTotal] = useState(0)
 
   const load = useCallback(async (filter = 'all') => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetchOcrQueue(1, filter, {
+      const res = await fetchOcrQueue(page, filter, {
+        per_page: perPage,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         status: statusFilter || undefined,
@@ -80,15 +84,17 @@ function OcrReviewPage() {
       })
       const data = res.data || []
       setQueue(data)
+      setTotal(res.total ?? data.length)
       setSelected((prev) => data.find((d) => d.id === prev?.id) ?? data[0] ?? null)
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
-  }, [dateFrom, dateTo, statusFilter, jobOrderIdFilter])
+  }, [dateFrom, dateTo, statusFilter, jobOrderIdFilter, page, perPage])
 
   useEffect(() => { load(tab) }, [tab, load])
+  useEffect(() => { setPage(1) }, [tab, dateFrom, dateTo, statusFilter, jobOrderIdFilter, perPage])
 
   useEffect(() => {
     const needsPoll = queue.some((q) => ['pending', 'processing'].includes(q.processing_status))
@@ -222,7 +228,7 @@ function OcrReviewPage() {
       >
         {!isDispatcher && !isReadOnly && (
           <button type="button" className="btn-dx-primary" onClick={handleExport} disabled={exporting}>
-            {exporting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Exporting…</> : 'Export .xlsx'}
+            {exporting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Exporting...</> : 'Export XLSX'}
           </button>
         )}
       </PageHeader>
@@ -315,6 +321,16 @@ function OcrReviewPage() {
               )
             })
           }
+          {!loading && total > 0 && (
+            <PaginationBar
+              page={page}
+              perPage={perPage}
+              total={total}
+              onPage={setPage}
+              onPerPage={(n) => { setPerPage(n); setPage(1) }}
+              perPageOptions={[10, 25, 50]}
+            />
+          )}
         </div>
 
         <div className="dx-panel" style={{ marginBottom: 0 }}>
@@ -340,7 +356,7 @@ function OcrReviewPage() {
         </div>
 
         <div className="dx-panel" style={{ marginBottom: 0 }}>
-          <h3 className="dx-panel-title">{isReadOnly ? 'Document Details' : 'Validation Panel'}</h3>
+          <h3 className="dx-panel-title">Final OCR Dataset</h3>
           {!selected ? (
             <EmptyState icon={FileSearch} title="No document selected" message="Select a document from the queue to review." />
           ) : (

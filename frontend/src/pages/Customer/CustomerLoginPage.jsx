@@ -50,13 +50,13 @@ function CustomerLoginPage() {
 
   return (
     <section className="auth-page auth-page--dx">
-      <div className="auth-card auth-card--dx auth-card--signup">
+      <div className="auth-card auth-card--dx">
         <Link to="/customer" className="auth-back-home">
           ← Back to customer home
         </Link>
-        <h1>Customer sign in</h1>
+        <h1>Customer Login</h1>
         <p className="auth-welcome auth-welcome--sub">
-          Access your deliveries, link tracking IDs, and manage your shipments.
+          Sign in to view deliveries, link tracking IDs, and manage your shipments.
         </p>
 
         {notice ? <p className="auth-success-dx">{notice}</p> : null}
@@ -72,17 +72,18 @@ function CustomerLoginPage() {
           </label>
           {error ? <p className="auth-error-dx">{error}</p> : null}
           <button className="btn-dx-login" type="submit" disabled={submitting}>
-            {submitting ? 'Signing in…' : 'Sign in'}
+            {submitting ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
 
-        <div className="auth-demo-dx" style={{ marginTop: 16 }}>
-          <strong>Demo customer:</strong>
-          <div>customer@deliverex.com / customer123</div>
-        </div>
+        <p className="auth-forgot-row" style={{ marginTop: 16 }}>
+          <Link to="/customer/forgot-password" className="auth-forgot-plain">
+            Forgot Password?
+          </Link>
+        </p>
 
         <p className="auth-alt-link" style={{ marginTop: 16, color: 'var(--muted)' }}>
-          Company accounts are created by your administrator. Contact them if you need access.
+          Customer accounts are created by your administrator when a company or delivery is set up.
         </p>
       </div>
       <LoadingOverlay open={submitting} message="Signing in" submessage="Please wait." />

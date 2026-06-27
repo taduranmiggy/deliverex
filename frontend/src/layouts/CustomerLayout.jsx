@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import PageTransition from '../components/PageTransition'
 import CustomerBottomNav from '../components/customer/CustomerBottomNav'
+import CustomerLegalFooter from '../components/customer/CustomerLegalFooter'
 import CustomerNavBar from '../components/customer/CustomerNavBar'
 import SessionStatusBar from '../components/session/SessionStatusBar'
 
@@ -16,6 +17,7 @@ function CustomerLayout() {
         </main>
       </PageTransition>
 
+      <CustomerLegalFooter />
       <CustomerBottomNav />
     </div>
   )

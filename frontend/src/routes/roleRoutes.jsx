@@ -34,6 +34,7 @@ import CustomerCompanyUsersPage from '../pages/Customer/CustomerCompanyUsersPage
 import CustomerHomePage from '../pages/Customer/CustomerHomePage'
 import TrackingPage from '../pages/Customer/TrackingPage'
 import CustomerLoginPage from '../pages/Customer/CustomerLoginPage'
+import CustomerForgotPasswordPage from '../pages/Customer/CustomerForgotPasswordPage'
 import CustomerDeliveriesPage from '../pages/Customer/CustomerDeliveriesPage'
 import CustomerLinkDeliveryPage from '../pages/Customer/CustomerLinkDeliveryPage'
 import CustomerAccountPage from '../pages/Customer/CustomerAccountPage'
@@ -41,6 +42,7 @@ import CustomerSupportPage from '../pages/Customer/CustomerSupportPage'
 import CustomerHistoryPage from '../pages/Customer/CustomerHistoryPage'
 import AboutUsPage from '../pages/Customer/AboutUsPage'
 import ServicesPage from '../pages/Customer/ServicesPage'
+import CustomerLegalPage from '../pages/Customer/CustomerLegalPage'
 import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
 
 export const roleRoutes = {
@@ -89,8 +91,12 @@ export const roleRoutes = {
     <Route key="customer-about" path="about" element={<AboutUsPage />} />,
     <Route key="customer-services" path="services" element={<ServicesPage />} />,
     <Route key="customer-login" path="login" element={<CustomerLoginPage />} />,
+    <Route key="customer-forgot" path="forgot-password" element={<CustomerForgotPasswordPage />} />,
     <Route key="customer-track" path="track" element={<TrackingPage />} />,
     <Route key="customer-support" path="support" element={<CustomerSupportPage />} />,
+    <Route key="customer-privacy" path="privacy-policy" element={<CustomerLegalPage type="privacy-policy" />} />,
+    <Route key="customer-terms" path="terms-and-conditions" element={<CustomerLegalPage type="terms-and-conditions" />} />,
+    <Route key="customer-data-privacy" path="data-privacy-notice" element={<CustomerLegalPage type="data-privacy-notice" />} />,
     <Route key="customer-history" path="history" element={<CustomerHistoryPage />} />,
     <Route key="customer-account" path="account" element={<CustomerAccountPage />} />,
     <Route key="customer-auth-gate" element={<ProtectedCustomerOutlet />}>

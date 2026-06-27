@@ -34,10 +34,10 @@ const BLANK = {
 }
 
 const STEPS = [
-  { id: 1, label: 'Company',   hint: 'Company & contacts' },
-  { id: 2, label: 'Material',  hint: 'Type, spec & load' },
-  { id: 3, label: 'Source & Destination', hint: 'Pickup & delivery' },
-  { id: 4, label: 'Schedule',  hint: 'Start, end & priority' },
+  { id: 1, label: 'Client Information', hint: 'Company & contacts' },
+  { id: 2, label: 'Material Information', hint: 'Type, spec, vehicle & volume' },
+  { id: 3, label: 'Route', hint: 'Pickup & delivery' },
+  { id: 4, label: 'Schedule', hint: 'Date, time & priority' },
   { id: 5, label: 'Review & Confirm', hint: 'Check and submit' },
 ]
 
@@ -209,6 +209,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
   const isEdit       = Boolean(initial?.id)
   const clients      = options.companies || options.clients || []
   const materialTypes = useMemo(() => options.material_types || [], [options.material_types])
+  const vehicleTypes = options.vehicle_types || []
   const quarries     = options.quarries        || []
   const toast        = useToast()
   const pickupLocationItems = useMemo(() => {
@@ -278,10 +279,10 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       material_specification_id: String(initialSpecificationId),
       load_volume_m3: initial.load_volume_m3 ?? initial.volume_m3 ?? '',
       scheduled_start: initial.scheduled_start ? new Date(initial.scheduled_start).toISOString().slice(0, 16) : '',
-      scheduled_end: initial.scheduled_end ? new Date(initial.scheduled_end).toISOString().slice(0, 16) : '',
+      scheduled_end: '',
       priority: initial.priority ?? 'normal',
-      special_handling_instructions: initial.special_handling_instructions ?? initial.job_requirements ?? '',
-      notes: initial.notes ?? '',
+      special_handling_instructions: '',
+      notes: '',
     }
   }
 
@@ -495,12 +496,16 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     if (step === 1) {
       if (!form.company_id && !form.client_id)
         errs.client = 'Select an active company.'
+      if (!form.customer_email?.trim())
+        errs.customer_email = 'Company email is required.'
     }
     if (step === 2) {
       if (!form.material_type_id && materialTypeSelection?.type !== 'custom')
         errs.material_type = 'Material type is required.'
       if (!form.material_specification_id && specSelection?.type !== 'custom')
         errs.material_specification = 'Specification / size is required.'
+      if (!form.preferred_vehicle_type_id)
+        errs.preferred_vehicle_type_id = 'Vehicle type is required for dispatch matching.'
       if (form.load_volume_m3 === '' || Number.isNaN(Number(form.load_volume_m3)))
         errs.load_volume_m3 = 'Load volume is required.'
     }
@@ -564,10 +569,10 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     specification_size:       specSelection?.label ?? null,
     load_volume_m3:           form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
     volume_m3:                form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
-    special_handling_instructions: form.special_handling_instructions || null,
-    job_requirements:         form.special_handling_instructions || null,
+    special_handling_instructions: null,
+    job_requirements:         null,
     scheduled_start:          form.scheduled_start || null,
-    scheduled_end:            form.scheduled_end || null,
+    scheduled_end:            null,
     priority:                 form.priority,
   })
 
@@ -597,10 +602,10 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
   const pickupAddr = form.pickup_location || [form.pickup_province, form.pickup_city, form.pickup_street].filter(Boolean).join(', ')
   const dropAddr   = form.dropoff_location || [form.dropoff_province, form.dropoff_city, form.dropoff_street].filter(Boolean).join(', ')
   const clientLabel = clientSelection?.label || '—'
-  const materialLabel = [materialTypeSelection?.label, specSelection?.label].filter(Boolean).join(' · ')
 
   // ─ PRIORITY label
   const PRIORITY_LABELS = { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' }
+  const vehicleTypeLabel = vehicleTypes.find((v) => String(v.id) === String(form.preferred_vehicle_type_id))?.name
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -642,7 +647,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
         {/* ── STEP 1: Client Information ── */}
         {currentStep === 1 && (
           <>
-            <p className="dx-wizard-step-title">Company Information</p>
+            <p className="dx-wizard-step-title">Client Information</p>
             <p className="dx-wizard-step-subtitle">Select the B2B company for this delivery. Contact details are filled from the company record.</p>
 
             <div className="dx-wiz-grid" style={{ marginBottom: 14 }}>
@@ -657,7 +662,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
               </FieldWrap>
 
               <FieldWrap label={<>Contact Person {autoFilled.contact_person && <AutoFilledTag />}</>}>
-                <WizInput value={form.contact_person} onChange={set('contact_person')} placeholder="From company record" readOnly />
+                <WizInput value={form.contact_person} onChange={set('contact_person')} placeholder="From company record" />
               </FieldWrap>
 
               <FieldWrap label={<>Contact Number {autoFilled.customer_contact && <AutoFilledTag />}</>} error={fieldErrors.customer_contact}>
@@ -668,7 +673,6 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
                   value={form.customer_contact}
                   onChange={set('customer_contact')}
                   placeholder="From company record"
-                  readOnly
                   error={fieldErrors.customer_contact}
                 />
               </FieldWrap>
@@ -681,7 +685,6 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
                   value={form.customer_email}
                   onChange={set('customer_email')}
                   placeholder="From company record"
-                  readOnly
                   error={fieldErrors.customer_email}
                 />
               </FieldWrap>
@@ -692,8 +695,8 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
         {/* ── STEP 2: Material & Load ── */}
         {currentStep === 2 && (
           <>
-            <p className="dx-wizard-step-title">Material &amp; Load Details</p>
-            <p className="dx-wizard-step-subtitle">What material is being delivered, and how much?</p>
+            <p className="dx-wizard-step-title">Material Information</p>
+            <p className="dx-wizard-step-subtitle">What material is being delivered, which vehicle type should be matched, and how much volume is required?</p>
 
             <div className="dx-wiz-grid" style={{ marginBottom: 14 }}>
               <FieldWrap
@@ -732,7 +735,18 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
                 />
               </FieldWrap>
 
-              <FieldWrap label="Load Volume (m³)" required error={fieldErrors.load_volume_m3}>
+              <FieldWrap label={<>Vehicle Type {autoFilled.preferred_vehicle_type_id && <AutoFilledTag />}</>} required error={fieldErrors.preferred_vehicle_type_id}>
+                <select value={form.preferred_vehicle_type_id} onChange={set('preferred_vehicle_type_id')} className={`dx-wiz-input${fieldErrors.preferred_vehicle_type_id ? ' dx-wiz-input--error' : ''}`} style={{ cursor: 'pointer' }}>
+                  <option value="">Select vehicle type</option>
+                  {vehicleTypes.map((vt) => (
+                    <option key={vt.id} value={vt.id}>
+                      {vt.name}{vt.wheel_type ? ` (${vt.wheel_type})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </FieldWrap>
+
+              <FieldWrap label="Volume (m³)" required error={fieldErrors.load_volume_m3}>
                 <WizInput
                   type="text"
                   inputMode="decimal"
@@ -751,7 +765,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
         {/* ── STEP 3: Route ── */}
         {currentStep === 3 && (
           <>
-            <p className="dx-wizard-step-title">Source &amp; Destination</p>
+            <p className="dx-wizard-step-title">Route</p>
             <p className="dx-wizard-step-subtitle">Where is the material coming from, and where does it need to go?</p>
 
             <div className="dx-wiz-grid" style={{ marginBottom: 12 }}>
@@ -763,7 +777,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
                   value={pickupLocationSelection}
                   onChange={handlePickupLocationChange}
                   error={fieldErrors.pickup_location || null}
-                  placeholder="Search quarry, supplier, or pickup location…"
+                  placeholder="Search pickup location..."
                   customOptionLabel={(q) => `Use custom pickup: ${q}`}
                   emptyMessage="No saved pickup locations."
                 />
@@ -784,7 +798,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
                   className="btn-dx-secondary"
                   onClick={() => setShowLocationDetails((v) => !v)}
                 >
-                  {showLocationDetails ? '− Hide Details' : '+ Add Details'}
+                  {showLocationDetails ? 'Hide details' : '+ Add details'}
                 </button>
               </div>
             </div>
@@ -794,52 +808,29 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
                 <FieldWrap label="Pickup Barangay">
                   <WizInput value={form.pickup_barangay} onChange={set('pickup_barangay')} placeholder="Optional" />
                 </FieldWrap>
-                <FieldWrap label="Pickup Landmark / Notes">
+                <FieldWrap label="Pickup Landmark">
                   <WizInput value={form.pickup_landmark} onChange={set('pickup_landmark')} placeholder="Optional" />
-                </FieldWrap>
-                <FieldWrap label="Pickup Street">
-                  <WizInput value={form.pickup_street} onChange={set('pickup_street')} placeholder="Optional" />
-                </FieldWrap>
-                <FieldWrap label="Pickup City">
-                  <WizInput value={form.pickup_city} onChange={set('pickup_city')} placeholder="Optional" />
                 </FieldWrap>
                 <FieldWrap label="Delivery Barangay">
                   <WizInput value={form.dropoff_barangay} onChange={set('dropoff_barangay')} placeholder="Optional" />
                 </FieldWrap>
-                <FieldWrap label="Delivery Landmark / Notes">
+                <FieldWrap label="Delivery Landmark">
                   <WizInput value={form.dropoff_landmark} onChange={set('dropoff_landmark')} placeholder="Optional" />
-                </FieldWrap>
-                <FieldWrap label="Delivery Street">
-                  <WizInput value={form.dropoff_street} onChange={set('dropoff_street')} placeholder="Optional" />
-                </FieldWrap>
-                <FieldWrap label="Delivery City">
-                  <WizInput value={form.dropoff_city} onChange={set('dropoff_city')} placeholder="Optional" />
                 </FieldWrap>
               </div>
             )}
-            <div className="dx-wiz-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 10, marginBottom: 0 }}>
-              <FieldWrap label="Pickup Province">
-                <WizInput value={form.pickup_province} onChange={set('pickup_province')} placeholder="Optional" />
-              </FieldWrap>
-              <FieldWrap label="Delivery Province">
-                <WizInput value={form.dropoff_province} onChange={set('dropoff_province')} placeholder="Optional" />
-              </FieldWrap>
-            </div>
           </>
         )}
 
         {/* ── STEP 4: Schedule ── */}
         {currentStep === 4 && (
           <>
-            <p className="dx-wizard-step-title">Schedule &amp; Instructions</p>
-            <p className="dx-wizard-step-subtitle">When should this delivery happen? Add any special handling notes.</p>
+            <p className="dx-wizard-step-title">Schedule</p>
+            <p className="dx-wizard-step-subtitle">Set the delivery date, time, and priority.</p>
 
             <div className="dx-wiz-grid" style={{ marginBottom: 16 }}>
-              <FieldWrap label="Scheduled Start" required error={fieldErrors.scheduled_start}>
+              <FieldWrap label="Date & Time" required error={fieldErrors.scheduled_start}>
                 <WizInput type="datetime-local" min={scheduleMin} value={form.scheduled_start} onChange={set('scheduled_start')} error={fieldErrors.scheduled_start} />
-              </FieldWrap>
-              <FieldWrap label="Scheduled End" error={fieldErrors.scheduled_end}>
-                <WizInput type="datetime-local" min={form.scheduled_start || scheduleMin} value={form.scheduled_end} onChange={set('scheduled_end')} error={fieldErrors.scheduled_end} />
               </FieldWrap>
               <FieldWrap label="Priority">
                 <select value={form.priority} onChange={set('priority')} className="dx-wiz-input" style={{ cursor: 'pointer' }}>
@@ -848,24 +839,6 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
                   <option value="high">High</option>
                   <option value="urgent">Urgent</option>
                 </select>
-              </FieldWrap>
-              <FieldWrap label="Special Handling Instructions" full>
-                <textarea
-                  rows={3}
-                  value={form.special_handling_instructions}
-                  onChange={set('special_handling_instructions')}
-                  placeholder="Permits, handling requirements, site access conditions…"
-                  className="dx-wiz-textarea"
-                />
-              </FieldWrap>
-              <FieldWrap label="Internal Notes" full>
-                <textarea
-                  rows={2}
-                  value={form.notes}
-                  onChange={set('notes')}
-                  placeholder="Dispatcher-only notes (not visible to customer)…"
-                  className="dx-wiz-textarea"
-                />
               </FieldWrap>
             </div>
           </>
@@ -878,39 +851,27 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
             <p className="dx-wizard-step-subtitle">Everything looks good? Review the details below before creating the job order.</p>
 
             <ReviewBlock title="Client Information" onEdit={goToStep} stepNum={1}>
-              <RR label="Client"         value={clientLabel} />
+              <RR label="Company"        value={clientLabel} />
               <RR label="Contact Person" value={form.contact_person} />
               <RR label="Contact Number" value={form.customer_contact} />
               <RR label="Email"          value={form.customer_email} />
             </ReviewBlock>
 
-            <ReviewBlock title="Material & Load" onEdit={goToStep} stepNum={2} cols={3}>
+            <ReviewBlock title="Material Information" onEdit={goToStep} stepNum={2} cols={3}>
               <RR label="Material Type"    value={materialTypeSelection?.label} />
               <RR label="Specification"    value={specSelection?.label} />
-              <RR label="Load Volume"      value={form.load_volume_m3 ? `${form.load_volume_m3} m³` : null} />
+              <RR label="Vehicle Type"     value={vehicleTypeLabel} />
+              <RR label="Volume"           value={form.load_volume_m3 ? `${form.load_volume_m3} m³` : null} />
             </ReviewBlock>
 
-            <ReviewBlock title="Source & Destination" onEdit={goToStep} stepNum={3} cols={2}>
+            <ReviewBlock title="Route" onEdit={goToStep} stepNum={3} cols={2}>
               <RR label="Pickup Location" value={pickupAddr} />
               <RR label="Delivery Location" value={dropAddr} />
             </ReviewBlock>
 
             <ReviewBlock title="Schedule" onEdit={goToStep} stepNum={4} cols={2}>
-              <RR label="Scheduled Start" value={form.scheduled_start ? new Date(form.scheduled_start).toLocaleString() : null} />
-              <RR label="Scheduled End"   value={form.scheduled_end   ? new Date(form.scheduled_end).toLocaleString()   : null} />
+              <RR label="Date & Time" value={form.scheduled_start ? new Date(form.scheduled_start).toLocaleString() : null} />
               <RR label="Priority"        value={PRIORITY_LABELS[form.priority] ?? form.priority} />
-              {form.special_handling_instructions && (
-                <div className="dx-review-row" style={{ gridColumn: '1 / -1' }}>
-                  <span className="dx-review-row__label">Special Instructions</span>
-                  <span className="dx-review-row__value" style={{ whiteSpace: 'pre-line' }}>{form.special_handling_instructions}</span>
-                </div>
-              )}
-              {form.notes && (
-                <div className="dx-review-row" style={{ gridColumn: '1 / -1' }}>
-                  <span className="dx-review-row__label">Notes</span>
-                  <span className="dx-review-row__value" style={{ whiteSpace: 'pre-line' }}>{form.notes}</span>
-                </div>
-              )}
             </ReviewBlock>
 
             {error && <p className="notice error" style={{ marginTop: 6 }}>{error}</p>}
@@ -1041,10 +1002,10 @@ function CreateJobOrderPage() {
         const jobId      = formatJobPublicId(o.id).toLowerCase()
         const material   = (o.material_type || '').toLowerCase()
         const dropoff    = buildDisplayAddress('dropoff', o).toLowerCase()
-        const quarry     = (o.quarry?.quarry_name || '').toLowerCase()
+        const pickupSource = (o.quarry?.quarry_name || '').toLowerCase()
         const driver     = (o.assignments?.[0]?.driver?.user?.name || '').toLowerCase()
         return clientName.includes(q) || trackCode.includes(q) || jobId.includes(q)
-          || material.includes(q) || dropoff.includes(q) || quarry.includes(q) || driver.includes(q)
+          || material.includes(q) || dropoff.includes(q) || pickupSource.includes(q) || driver.includes(q)
       })
     }
     return list
@@ -1173,7 +1134,7 @@ function CreateJobOrderPage() {
               </span>
               <input
                 type="text"
-                placeholder="Search ID, client, material, quarry, driver…"
+                placeholder="Search ID, client, material, pickup, driver..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label="Search within filtered orders"
@@ -1307,11 +1268,9 @@ function CreateJobOrderPage() {
                 <div className="dx-kv"><span>Load</span>
                   <strong>{selected.load_volume_m3 || selected.volume_m3 ? `${selected.load_volume_m3 ?? selected.volume_m3} m³` : '—'}</strong>
                 </div>
-                <div className="dx-kv"><span>Quarry</span><strong>{selected.quarry?.quarry_name || '—'}</strong></div>
                 <div className="dx-kv"><span>Schedule</span>
                   <strong>
                     {selected.scheduled_start ? new Date(selected.scheduled_start).toLocaleString() : '—'}
-                    {selected.scheduled_end ? ` – ${new Date(selected.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
                   </strong>
                 </div>
                 <div className="dx-kv"><span>Priority</span><strong style={{ textTransform: 'capitalize' }}>{selected.priority}</strong></div>

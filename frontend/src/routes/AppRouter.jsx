@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import ProtectedRoutes from './ProtectedRoutes'
 import { roleRoutes } from './roleRoutes'
+import ResetPasswordPage from '../pages/Auth/ResetPasswordPage'
 import CompanyActivationPage from '../pages/Auth/CompanyActivationPage'
 import LoginPage from '../pages/Auth/LoginPage'
 import DriverLoginPage from '../pages/Auth/DriverLoginPage'
@@ -25,6 +26,7 @@ function AppRouter() {
           <Route path="/track" element={<Navigate to="/customer/track" replace />} />
 
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/activate-company/:token" element={<CompanyActivationPage />} />
           <Route path="/driver/login" element={<DriverLoginPage />} />
           <Route

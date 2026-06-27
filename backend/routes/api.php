@@ -22,7 +22,6 @@ use App\Http\Controllers\IssueReportController;
 use App\Http\Controllers\VehicleUtilizationController;
 use App\Http\Controllers\Dispatcher\AssignmentController as DispatcherAssignmentController;
 use App\Http\Controllers\Dispatcher\BestFitController;
-use App\Http\Controllers\Dispatcher\ClientHistoryController;
 use App\Http\Controllers\Dispatcher\CalendarController;
 use App\Http\Controllers\Dispatcher\DelayController as DispatcherDelayController;
 use App\Http\Controllers\Dispatcher\JobOrderController;
@@ -168,8 +167,6 @@ Route::middleware('auth.api')->group(function () {
 
         Route::post('/assignments',                   [DispatcherAssignmentController::class, 'store']);
 
-        Route::get('/clients/{client}/history',       [ClientHistoryController::class, 'show']);
-        Route::get('/companies/{company}/history',  [ClientHistoryController::class, 'showCompany']);
         Route::get('/best-fit/{jobOrder}',            [BestFitController::class, 'show']);
         Route::get('/calendar',                       [CalendarController::class, 'index']);
         Route::post('/master-data/material-types',    [MaterialMasterDataController::class, 'storeMaterialType']);

@@ -22,8 +22,10 @@ class OcrReviewController extends Controller
             ->orderByDesc('created_at');
         $this->applyFilters($query, $request);
 
+        $perPage = min(50, max(10, (int) $request->query('per_page', 20)));
+
         return response()->json(
-            $query->paginate(20)->through(function (OcrResult $ocr) {
+            $query->paginate($perPage)->through(function (OcrResult $ocr) {
                 $expectedVolume = (float) ($ocr->document?->assignment?->jobOrder?->load_volume_m3 ?? $ocr->document?->assignment?->jobOrder?->volume_m3 ?? 0);
                 $actualVolume = (float) ($ocr->extracted_volume ?? 0);
                 $volumeDelta = $expectedVolume > 0 ? abs($expectedVolume - $actualVolume) / $expectedVolume : null;

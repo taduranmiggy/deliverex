@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { sendInquiry } from '../api/customer'
 import DeliverexAssistantChat from '../components/DeliverexAssistantChat'
-import { ArrowRight, CheckCircle2, Clock, Map, MessageSquare, Package, Search, Shield, Truck, X } from 'lucide-react'
+import CustomerLegalFooter from '../components/customer/CustomerLegalFooter'
+import { ArrowRight, CheckCircle2, FileCheck2, HeadphonesIcon, History, MessageSquare, Package, Search, Truck, X } from 'lucide-react'
 
 function LandingPage() {
   const navigate = useNavigate()
@@ -63,10 +64,10 @@ function LandingPage() {
             Trusted logistics tracking for construction & site services
           </div>
           <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.12, marginBottom: 20, color: '#fff' }}>
-            Track and verify your<br />site deliveries with confidence.
+            Track Your Delivery
           </h1>
           <p style={{ fontSize: 'clamp(1rem, 2vw, 1.2rem)', color: 'rgba(255,255,255,0.75)', maxWidth: 520, margin: '0 auto 40px', lineHeight: 1.65 }}>
-            Deliverex provides live status, ETA windows, and proof-of-delivery confirmation for every shipment.
+            Enter your Tracking ID to view delivery status, estimated arrival, and proof-of-delivery updates.
           </p>
 
           <form onSubmit={handleTrack} style={{ display: 'flex', gap: 10, maxWidth: 520, margin: '0 auto 20px', flexWrap: 'wrap' }}>
@@ -97,16 +98,14 @@ function LandingPage() {
       </section>
 
       <section className="customer-container" style={{ marginTop: -32, paddingBottom: 80 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20, marginBottom: 48 }}>
+        <div className="dx-feature-cards" style={{ marginBottom: 48 }}>
           {[
-            { Icon: Map, title: 'Real-Time Status', desc: 'Live updates from dispatch to delivery completion with GPS tracking.' },
-            { Icon: Clock, title: 'ETA Windows', desc: 'Accurate arrival estimates and schedule management for better planning.' },
-            { Icon: Package, title: 'Proof of Delivery', desc: 'Digital confirmation and documents for every delivery, with OCR processing.' },
-            { Icon: Shield, title: 'Secure & Reliable', desc: 'Role-based access ensures the right people see the right information.' },
-            { Icon: CheckCircle2, title: 'Best-Fit Assignment', desc: 'AI-powered vehicle and driver assignment for optimal fleet utilization.' },
-            { Icon: Truck, title: 'Fleet Management', desc: 'Complete fleet visibility for dispatchers, managers, and administrators.' },
+            { Icon: Package, title: 'Delivery Tracking', desc: 'Look up shipment status and delivery progress with a Tracking ID.' },
+            { Icon: FileCheck2, title: 'Proof of Delivery', desc: 'View delivery confirmation and document updates after completion.' },
+            { Icon: History, title: 'Delivery History', desc: 'Signed-in company users can review previous deliveries in one place.' },
+            { Icon: HeadphonesIcon, title: 'Customer Support', desc: 'Contact the support team for delivery, account, and tracking help.' },
           ].map(({ Icon, title, desc }) => (
-            <div key={title} className="card" style={{ background: 'var(--surface)' }}>
+            <div key={title} className="dx-feature-card" style={{ background: 'var(--surface)' }}>
               <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--color-primary-light)', display: 'grid', placeItems: 'center', marginBottom: 16 }}>
                 <Icon size={24} style={{ color: 'var(--color-primary)' }} />
               </div>
@@ -143,6 +142,7 @@ function LandingPage() {
             <p style={{ margin: '6px 0' }}><Link to="/login" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Sign in</Link></p>
             <p style={{ margin: '6px 0', color: 'rgba(255,255,255,0.65)', fontSize: '0.875rem' }}>Company accounts are created by your administrator.</p>
           </div>
+          <CustomerLegalFooter variant="dark" compact />
         </div>
         <p style={{ textAlign: 'center', margin: 0, borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 20 }}>
           Deliverex Logistics · Providential 628 Site Preparation Services

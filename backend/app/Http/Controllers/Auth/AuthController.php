@@ -223,13 +223,6 @@ class AuthController extends Controller
         );
     }
 
-    public function registerCustomer(Request $request)
-    {
-        return response()->json([
-            'message' => 'Customer self-registration is disabled. Contact your administrator to create a company account.',
-        ], 403);
-    }
-
     public function verifyEmail(Request $request, int $id, string $hash)
     {
         $user = User::query()->findOrFail($id);

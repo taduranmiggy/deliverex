@@ -46,6 +46,7 @@ class BestFitAssignmentService
                     $driverModel,
                     $vehicleModel,
                     $requiredVolume,
+                    $driverDiversity[$driverModel->id] ?? [],
                 );
 
                 $vehicleCapacity = $vehicleModel->cbm_capacity
@@ -233,7 +234,8 @@ class BestFitAssignmentService
         JobOrder $jobOrder,
         Driver $driver,
         Vehicle $vehicle,
-        ?float $requiredVolumeM3
+        ?float $requiredVolumeM3,
+        array $driverDiversity = []
     ): array {
         $factors = [];
 
@@ -316,6 +318,13 @@ class BestFitAssignmentService
             $driverDetail .= ' · preferred for special handling';
         }
 
+        $recentAssignments = (int) ($driverDiversity['recent_assignments'] ?? 0);
+        if ($recentAssignments > 0) {
+            $rotationPenalty = min(10, $recentAssignments * 2);
+            $driverContribution = max(0, $driverContribution - $rotationPenalty);
+            $driverDetail .= " - rotation penalty for {$recentAssignments} recent assignment".($recentAssignments === 1 ? '' : 's');
+        }
+
         $factors[] = $this->factor(
             'driver_available',
             'Driver Available',
@@ -348,9 +357,35 @@ class BestFitAssignmentService
             $efficiencyDetail,
         );
 
-        // 4. Vehicle Type Match (max 15)
-        $typeMax = 15;
-        $typeContribution = 10;
+        // 4. Distance / Route Readiness (max 10)
+        $distanceMax = 10;
+        $distanceContribution = 6;
+        $distanceMatched = true;
+        $distanceDetail = 'Pickup and delivery route are available for dispatch';
+
+        if ($jobOrder->dropoff_latitude !== null && $jobOrder->dropoff_longitude !== null) {
+            $distanceContribution = 10;
+            $distanceDetail = 'Delivery coordinates available for route and ETA checks';
+        } elseif (! empty($jobOrder->pickup_location) && ! empty($jobOrder->dropoff_location)) {
+            $distanceContribution = 8;
+        } elseif (empty($jobOrder->pickup_location) || empty($jobOrder->dropoff_location)) {
+            $distanceContribution = 3;
+            $distanceMatched = false;
+            $distanceDetail = 'Route is incomplete; dispatcher should verify locations';
+        }
+
+        $factors[] = $this->factor(
+            'distance',
+            'Distance',
+            $distanceMatched,
+            $distanceContribution,
+            $distanceMax,
+            $distanceDetail,
+        );
+
+        // 5. Vehicle Type Match (max 10)
+        $typeMax = 10;
+        $typeContribution = 7;
         $typeMatched = true;
         $typeDetail = 'General fleet vehicle accepted for this material';
 
@@ -375,11 +410,11 @@ class BestFitAssignmentService
             }
 
             if ($keywordHit) {
-                $typeContribution = 15;
+                $typeContribution = 10;
                 $typeMatched = true;
                 $typeDetail = 'Vehicle type suits material ('.$jobOrder->material_type.')';
             } else {
-                $typeContribution = 5;
+                $typeContribution = 3;
                 $typeMatched = false;
                 $typeDetail = 'Vehicle type is not ideal for material ('.$jobOrder->material_type.')';
             }
@@ -394,14 +429,14 @@ class BestFitAssignmentService
             $typeDetail,
         );
 
-        // 5. Schedule Match (max 15)
-        $scheduleMax = 15;
-        $scheduleContribution = 8;
+        // 6. Schedule Match (max 10)
+        $scheduleMax = 10;
+        $scheduleContribution = 5;
         $scheduleMatched = true;
         $scheduleDetail = 'No schedule conflict for driver or vehicle';
 
         if ($vehicle->status === 'available') {
-            $scheduleContribution += 3;
+            $scheduleContribution += 2;
             $scheduleDetail = 'Vehicle is available · no schedule conflict';
         } elseif ($vehicle->status === 'assigned') {
             $scheduleContribution += 1;
@@ -409,17 +444,17 @@ class BestFitAssignmentService
         }
 
         $priorityBonus = match ($jobOrder->priority) {
-            'urgent' => 4,
-            'high'   => 3,
+            'urgent' => 3,
+            'high'   => 2,
             'low'    => 1,
-            default  => 2,
+            default  => 1,
         };
         $scheduleContribution += $priorityBonus;
 
         if ($jobOrder->scheduled_start) {
             $hours = $jobOrder->scheduled_start->diffInHours(now(), false);
             if ($hours > 0 && $hours < 72) {
-                $timingBonus = (int) max(0, min(4, 4 - floor($hours / 18)));
+                $timingBonus = (int) max(0, min(2, 2 - floor($hours / 24)));
                 $scheduleContribution += $timingBonus;
                 $scheduleDetail .= ' · job in '.round($hours).' hours';
             }

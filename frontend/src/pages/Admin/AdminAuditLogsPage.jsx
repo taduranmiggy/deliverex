@@ -27,7 +27,7 @@ const MODULE_COLORS = {
   System:         '#64748b',
 }
 
-const PER_PAGE_OPTIONS = [10, 25, 50, 100]
+const PER_PAGE_OPTIONS = [10, 25, 50]
 
 /* ── Helpers ────────────────────────────────────────────────── */
 function escapeCsv(v) {

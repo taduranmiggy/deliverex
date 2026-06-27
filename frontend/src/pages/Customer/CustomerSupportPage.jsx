@@ -25,6 +25,14 @@ const FAQS = [
     a: 'Yes. Once a delivery is completed, proof-of-delivery records appear in the tracking results and in your delivery history when signed in.',
   },
   {
+    q: 'How do I get a customer account?',
+    a: 'Accounts are created by your administrator or linked automatically when a dispatcher creates a delivery using your email.',
+  },
+  {
+    q: 'How do I reset my password?',
+    a: 'On the customer login page, choose Forgot Password and enter your account email. A reset link will be sent if the account exists.',
+  },
+  {
     q: 'How do I link a delivery to my account?',
     a: 'Sign in, go to Link Delivery, and enter your Tracking ID. The email on the shipment must match your account email.',
   },

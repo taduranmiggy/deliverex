@@ -56,3 +56,17 @@ export async function changePassword(payload) {
     body: JSON.stringify(payload),
   })
 }
+
+export async function forgotPassword(payload) {
+  return apiRequest('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function resetPassword(payload) {
+  return apiRequest('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}

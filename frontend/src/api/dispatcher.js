@@ -47,13 +47,6 @@ export function createMaterialSpecification(materialTypeId, name) {
   })
 }
 
-export function fetchClientHistory(clientId, params = {}) {
-  const qs = new URLSearchParams(
-    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
-  ).toString()
-  return apiRequest(`/dispatch/clients/${clientId}/history${qs ? '?' + qs : ''}`)
-}
-
 export function fetchDelayReports(params = {}) {
   const qs = new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),

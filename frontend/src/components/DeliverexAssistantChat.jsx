@@ -12,12 +12,12 @@ const MAIN_OPTIONS = [
   'What is a Tracking ID?',
   'Account Help',
   'Contact Support',
-  'General Questions',
+  'FAQs',
 ]
 
 const QUICK_AFTER_TRACK = ['Track Another Delivery', 'Contact Support', 'Return to Menu']
 const QUICK_AFTER_FAQ = ['Track My Delivery', 'Account Help', 'Contact Support', 'Return to Menu']
-const ACCOUNT_OPTIONS = ['Create Account', 'Login', 'Link Delivery', 'Forgot Password']
+const ACCOUNT_OPTIONS = ['Login', 'Link Delivery', 'Forgot Password']
 
 const WELCOME_MESSAGE = `Hello! I can help you with:
 
@@ -93,8 +93,8 @@ const FAQ_ITEMS = [
     a: 'Deliveries for your company are linked automatically when a dispatcher creates them. You can also sign in and use Link Delivery if needed.',
   },
   {
-    q: 'How do I create an account?',
-    a: 'Company accounts are created by a Deliverex administrator. You will receive an activation email to set your password.',
+    q: 'How do I get a customer account?',
+    a: 'Accounts are created by a Deliverex administrator or linked when a dispatcher creates a delivery using your email.',
   },
   {
     q: 'What do delivery statuses mean?',
@@ -252,7 +252,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     }
 
     if (option === 'Account Help') {
-      pushAssistant(['text', 'Choose an account topic: Create Account, Login, Link Delivery, or Forgot Password.'])
+      pushAssistant(['text', 'Choose an account topic: Login, Link Delivery, or Forgot Password.'])
       setActiveOptions([...ACCOUNT_OPTIONS, ...QUICK_AFTER_FAQ])
       return
     }
@@ -264,7 +264,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
       return
     }
 
-    if (option === 'General Questions') {
+    if (option === 'FAQs') {
       pushAssistant(['faq'])
       pushAssistant(['status_guide'])
       setActiveOptions(QUICK_AFTER_FAQ)
@@ -282,7 +282,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     }
 
     if (option === 'Account Help') {
-      pushAssistant(['text', 'Choose an account topic: Create Account, Login, Link Delivery, or Forgot Password.'])
+      pushAssistant(['text', 'Choose an account topic: Login, Link Delivery, or Forgot Password.'])
       setActiveOptions([...ACCOUNT_OPTIONS, ...QUICK_AFTER_FAQ])
       return
     }
@@ -302,15 +302,9 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
   const handleAccountOption = useCallback((option) => {
     pushUser(option)
 
-    if (option === 'Create Account') {
-      pushAssistant(['text', 'Company accounts are created by a Deliverex administrator. Contact your account manager to get an activation email.'])
-      setActiveOptions(QUICK_AFTER_FAQ)
-      return
-    }
-
     if (option === 'Login') {
       pushAssistant(['text', 'Use your registered email and password to sign in.'])
-      pushAssistant(['link', { text: 'Go to Login', href: '/customer/login' }])
+      pushAssistant(['link', { text: 'Customer Login', href: '/customer/login' }])
       setActiveOptions(QUICK_AFTER_FAQ)
       return
     }
@@ -326,8 +320,8 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     }
 
     if (option === 'Forgot Password') {
-      pushAssistant(['text', 'If you forgot your password, contact support so the team can help you recover account access.'])
-      pushAssistant(['contact'])
+      pushAssistant(['text', 'Enter your account email on the forgot password page. We will send a reset link if the account exists.'])
+      pushAssistant(['link', { text: 'Forgot Password', href: '/customer/forgot-password' }])
       setActiveOptions(QUICK_AFTER_FAQ)
     }
   }, [pushAssistant, pushUser])
@@ -391,7 +385,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
       return
     }
     if (lower.includes('account') || lower.includes('login') || lower.includes('password')) {
-      pushAssistant(['text', 'For account help, choose Create Account, Login, Link Delivery, or Forgot Password from the options below.'])
+      pushAssistant(['text', 'For account help, choose Login, Link Delivery, or Forgot Password from the options below.'])
       setActiveOptions([...ACCOUNT_OPTIONS, ...QUICK_AFTER_FAQ])
       return
     }
@@ -468,7 +462,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     if (kind === 'faq') {
       return (
         <div className="dx-msg-bubble dx-msg-bubble--panel">
-          <p className="dx-chat-panel-title">General Questions (FAQ)</p>
+          <p className="dx-chat-panel-title">FAQs</p>
           <div className="dx-chat-faq-list">
             {FAQ_ITEMS.map(({ q, a }) => (
               <div key={q} className="dx-chat-faq-item">
