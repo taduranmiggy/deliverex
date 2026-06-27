@@ -73,29 +73,38 @@ jobs:
       - name: Queue server deploy
         run: |
           HOOK_URL="${APP_URL%/}/deploy-hook.php"
-          echo "POST → ${HOOK_URL}"
-          resp="$(curl -sS -w $'\n__HTTP__:%{http_code}' -X POST "$HOOK_URL" \
-            -H "X-Deploy-Token: ${{ secrets.DEPLOY_HOOK_TOKEN }}" \
-            --connect-timeout 30 --max-time 900 \
-            -d "run_id=${{ github.run_id }}" \
-            -d "sha=${{ github.sha }}" \
-            -d "repo=${{ github.repository }}" 2>&1)" || true
-          code="$(echo "$resp" | grep '__HTTP__:' | tail -1 | cut -d: -f2)"
-          body="$(echo "$resp" | grep -v '__HTTP__:' | tr -d '\r')"
-          echo "$body"
-          if echo "$body" | grep -qi '<html'; then
-            echo "ERROR: Got HTML — deploy-hook.php not configured correctly."
-            exit 1
-          fi
-          if echo "$body" | grep -qE '^(forbidden|run_id required|deploy error|GITHUB_DEPLOY_TOKEN|shell disabled)'; then
-            echo "ERROR: deploy-hook rejected the request."
-            exit 1
-          fi
-          if [ "$code" = "202" ] || echo "$body" | grep -qE 'deploy queued|deploy complete'; then
-            echo "Deploy accepted (HTTP ${code:-?}) — cron will apply within 1 minute."
-            exit 0
-          fi
-          echo "ERROR: Unexpected deploy-hook response (HTTP ${code:-?})."
+          for attempt in 1 2 3 4 5 6 7 8; do
+            echo "POST attempt ${attempt}/8 → ${HOOK_URL}"
+            resp="$(curl -sS -w $'\n__HTTP__:%{http_code}' -X POST "$HOOK_URL" \
+              -H "X-Deploy-Token: ${{ secrets.DEPLOY_HOOK_TOKEN }}" \
+              --connect-timeout 45 --max-time 900 \
+              -d "run_id=${{ github.run_id }}" \
+              -d "sha=${{ github.sha }}" \
+              -d "repo=${{ github.repository }}" 2>&1)" || true
+            code="$(echo "$resp" | grep '__HTTP__:' | tail -1 | cut -d: -f2)"
+            body="$(echo "$resp" | grep -v '__HTTP__:' | tr -d '\r')"
+            echo "$body"
+            if echo "$body" | grep -qi '<html'; then
+              echo "ERROR: Got HTML — deploy-hook.php not configured correctly."
+              exit 1
+            fi
+            if echo "$body" | grep -qE '^(forbidden|run_id required|deploy error|GITHUB_DEPLOY_TOKEN|shell disabled)'; then
+              echo "ERROR: deploy-hook rejected the request."
+              exit 1
+            fi
+            if [ "$code" = "202" ] || echo "$body" | grep -qE 'deploy queued|deploy complete'; then
+              echo "Deploy accepted (HTTP ${code:-?}) — cron will apply within 1 minute."
+              exit 0
+            fi
+            if [ -z "$code" ] || [ "$code" = "000" ]; then
+              echo "WARN: Connection timeout from GitHub runner — retrying in 30s..."
+              sleep 30
+              continue
+            fi
+            echo "WARN: Unexpected response HTTP ${code:-?} — retrying in 20s..."
+            sleep 20
+          done
+          echo "ERROR: Could not reach deploy-hook after 8 attempts (Hostinger timeout from GitHub)."
           exit 1
 
       - name: Wait for cron deploy and verify health
