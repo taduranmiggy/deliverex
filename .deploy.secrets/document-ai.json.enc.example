@@ -1,0 +1,10 @@
+This is a placeholder file.
+Replace it with your real encrypted binary payload:
+  .deploy.secrets/document-ai.json.enc
+
+Generate with:
+  openssl enc -aes-256-cbc -pbkdf2 -iter 100000 -salt \
+    -in document-ai.json \
+    -out .deploy.secrets/document-ai.json.enc \
+    -pass pass:"YOUR_STRONG_PASSPHRASE"
+

@@ -69,7 +69,14 @@ FRONTEND_URL=${app_url}
 CORS_ALLOWED_ORIGINS=${app_url}
 SANCTUM_STATEFUL_DOMAINS=${domain}
 OCR_ENGINE=${OCR_ENGINE:-local}
+OCR_PROVIDER=${OCR_PROVIDER:-document_ai}
 OCR_SYNC_MODE=true
+GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-storage/app/google/document-ai.json}
+GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
+DOCUMENT_AI_LOCATION=${DOCUMENT_AI_LOCATION:-us}
+DOCUMENT_AI_PROCESSOR_ID=${DOCUMENT_AI_PROCESSOR_ID:-}
+DOCUMENT_AI_TIMEOUT=${DOCUMENT_AI_TIMEOUT:-30}
+DOCUMENT_AI_RETRIES=${DOCUMENT_AI_RETRIES:-1}
 EOF
   chmod 600 "$target" 2>/dev/null || true
 }
@@ -107,6 +114,13 @@ merge_secret_keys_into_env() {
   merge_env_var "MAIL_SUPPORT_ADDRESS" "${MAIL_SUPPORT_ADDRESS:-deliverexapp@gmail.com}"
   merge_env_var "MAIL_QUEUE" "false"
   merge_env_var "FRONTEND_URL" "${APP_URL:-https://deliverexapp.com}"
+  merge_env_var "OCR_PROVIDER" "${OCR_PROVIDER:-document_ai}"
+  merge_env_var "GOOGLE_APPLICATION_CREDENTIALS" "${GOOGLE_APPLICATION_CREDENTIALS:-storage/app/google/document-ai.json}"
+  merge_env_var "GOOGLE_CLOUD_PROJECT" "${GOOGLE_CLOUD_PROJECT:-}"
+  merge_env_var "DOCUMENT_AI_LOCATION" "${DOCUMENT_AI_LOCATION:-us}"
+  merge_env_var "DOCUMENT_AI_PROCESSOR_ID" "${DOCUMENT_AI_PROCESSOR_ID:-}"
+  merge_env_var "DOCUMENT_AI_TIMEOUT" "${DOCUMENT_AI_TIMEOUT:-30}"
+  merge_env_var "DOCUMENT_AI_RETRIES" "${DOCUMENT_AI_RETRIES:-1}"
   if [ -n "${RESEND_API_KEY:-}" ]; then
     merge_env_var "RESEND_API_KEY" "$RESEND_API_KEY"
     log "Merged RESEND_API_KEY from secrets"

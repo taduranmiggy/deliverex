@@ -23,6 +23,11 @@ class OcrService
     /** Legacy alias kept for older rows */
     public const STATUS_COMPLETED = 'completed';
 
+    public function __construct(
+        private readonly GoogleDocumentAiService $googleDocumentAiService,
+    ) {
+    }
+
     /**
      * Create a placeholder result used before OCR runs.
      */
@@ -107,6 +112,13 @@ class OcrService
             return $this->fail($result, 'Unsupported image type for OCR: '.$ext, $debugContext);
         }
 
+        if ($this->usesDocumentAiProvider()) {
+            $googleResult = $this->processWithGoogleDocumentAi($result, $document, $diskPath, $debugContext);
+            if ($googleResult instanceof OcrResult) {
+                return $googleResult;
+            }
+        }
+
         if ($this->usesRemoteEngine()) {
             return $this->processWithRemoteService($result, $document, $diskPath, $debugContext);
         }
@@ -162,6 +174,45 @@ class OcrService
     private function usesRemoteEngine(): bool
     {
         return strtolower((string) config('ocr.engine', 'local')) === 'remote';
+    }
+
+    private function usesDocumentAiProvider(): bool
+    {
+        return strtolower((string) config('ocr.provider', 'document_ai')) === 'document_ai';
+    }
+
+    private function processWithGoogleDocumentAi(OcrResult $result, DeliveryDocument $document, string $diskPath, array $debugContext): ?OcrResult
+    {
+        try {
+            $payload = $this->googleDocumentAiService->extractFromImage($diskPath);
+        } catch (Throwable $e) {
+            Log::warning('Google Document AI failed, falling back to legacy OCR.', [
+                'document_id' => $document->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if (! is_array($payload)) {
+            Log::warning('Google Document AI returned malformed payload, falling back to legacy OCR.', [
+                'document_id' => $document->id,
+            ]);
+
+            return null;
+        }
+
+        $text = trim((string) ($payload['text'] ?? ''));
+        $confidence = is_numeric($payload['confidence'] ?? null)
+            ? (float) $payload['confidence']
+            : null;
+        $engine = trim((string) ($payload['engine'] ?? 'google-document-ai')) ?: 'google-document-ai';
+        $diagnostics = is_array($payload['diagnostics'] ?? null) ? $payload['diagnostics'] : [];
+
+        $debugContext['tesseract_command'] = (string) ($payload['command'] ?? 'google.documentai.processDocument');
+        $debugContext['preprocessed_path'] = (string) ($payload['preprocessed_image_path'] ?? '');
+
+        return $this->persistExtraction($result, $document, $text, $confidence, $engine, $diagnostics, $debugContext);
     }
 
     private function processWithRemoteService(OcrResult $result, DeliveryDocument $document, string $diskPath, array $debugContext): OcrResult

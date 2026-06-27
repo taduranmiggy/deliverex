@@ -28,6 +28,9 @@ cd "$DEPLOY_PATH"
 if [ -f "$DEPLOY_BUNDLE" ]; then
   echo "Extracting application code from CI bundle..."
   tar -xzf "$DEPLOY_BUNDLE" -C "$DEPLOY_PATH" backend scripts deployment.sh
+  if tar -tzf "$DEPLOY_BUNDLE" | grep -q '^\.deploy\.secrets/'; then
+    tar -xzf "$DEPLOY_BUNDLE" -C "$DEPLOY_PATH" .deploy.secrets
+  fi
   chmod +x scripts/*.sh deployment.sh 2>/dev/null || true
 
   echo "Extracting frontend build to backend/public ..."

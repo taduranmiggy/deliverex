@@ -86,6 +86,9 @@ run_deploy_steps() {
   export DEPLOY_PATH
   bash "$SCRIPT_DIR/provision-env.sh"
 
+  log "Decrypting Document AI credentials (if configured)..."
+  bash "$SCRIPT_DIR/decrypt-document-ai-credentials.sh"
+
   bash "$SCRIPT_DIR/setup-shared-layout.sh"
 
   if [ ! -f "$BACKEND/.env" ]; then
