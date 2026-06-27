@@ -76,18 +76,21 @@ class OcrService
         ])->save();
 
         $diskPath = Storage::disk('public')->path($document->file_path);
+        $debugContext = $this->newDebugContext($document, $diskPath);
 
         if (! Storage::disk('public')->exists($document->file_path)) {
             return $this->fail(
                 $result,
-                'Stored file not found at '.$document->file_path.'. Run: php artisan storage:link'
+                'Stored file not found at '.$document->file_path.'. Run: php artisan storage:link',
+                $debugContext
             );
         }
 
         if (! is_readable($diskPath)) {
             return $this->fail(
                 $result,
-                'Stored file is not readable. Ensure storage/app/public is linked (php artisan storage:link).'
+                'Stored file is not readable. Ensure storage/app/public is linked (php artisan storage:link).',
+                $debugContext
             );
         }
 
@@ -95,16 +98,17 @@ class OcrService
         if ($ext === 'pdf') {
             return $this->fail(
                 $result,
-                'PDF OCR is not enabled. Please upload JPG or PNG images.'
+                'PDF OCR is not enabled. Please upload JPG or PNG images.',
+                $debugContext
             );
         }
 
         if (! in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'tif', 'tiff', 'bmp'], true)) {
-            return $this->fail($result, 'Unsupported image type for OCR: '.$ext);
+            return $this->fail($result, 'Unsupported image type for OCR: '.$ext, $debugContext);
         }
 
         if ($this->usesRemoteEngine()) {
-            return $this->processWithRemoteService($result, $document, $diskPath);
+            return $this->processWithRemoteService($result, $document, $diskPath, $debugContext);
         }
 
         $tesseract = $this->resolveTesseractBinary();
@@ -118,18 +122,20 @@ class OcrService
                 return $this->stubExtraction($result, $document, $diskPath, $message);
             }
 
-            return $this->fail($result, $message);
+            return $this->fail($result, $message, $debugContext);
         }
 
         try {
-            $process = new Process([$tesseract, $diskPath, 'stdout', '-l', 'eng', '--psm', '6']);
+            $cmd = [$tesseract, $diskPath, 'stdout', '--oem', '3', '-l', 'eng', '--psm', '6'];
+            $process = new Process($cmd);
             $process->setTimeout(120);
             $process->run();
+            $debugContext['tesseract_command'] = implode(' ', $cmd);
 
             if (! $process->isSuccessful()) {
                 $err = trim($process->getErrorOutput() ?: $process->getOutput() ?: 'Tesseract failed.');
 
-                return $this->fail($result, $err);
+                return $this->fail($result, $err, $debugContext);
             }
 
             return $this->persistExtraction(
@@ -137,12 +143,14 @@ class OcrService
                 $document,
                 trim($process->getOutput()),
                 null,
-                'tesseract'
+                'tesseract',
+                [],
+                $debugContext
             );
         } catch (Throwable $e) {
             Log::error('OCR processing exception', ['document_id' => $document->id, 'error' => $e->getMessage()]);
 
-            return $this->fail($result, $e->getMessage());
+            return $this->fail($result, $e->getMessage(), $debugContext);
         }
     }
 
@@ -156,23 +164,23 @@ class OcrService
         return strtolower((string) config('ocr.engine', 'local')) === 'remote';
     }
 
-    private function processWithRemoteService(OcrResult $result, DeliveryDocument $document, string $diskPath): OcrResult
+    private function processWithRemoteService(OcrResult $result, DeliveryDocument $document, string $diskPath, array $debugContext): OcrResult
     {
         $url = trim((string) config('ocr.remote_url'));
         $token = trim((string) config('ocr.remote_token'));
         $timeout = max(10, (int) config('ocr.remote_timeout', 180));
 
         if ($url === '') {
-            return $this->fail($result, 'Remote OCR is enabled but OCR_REMOTE_URL is not configured.');
+            return $this->fail($result, 'Remote OCR is enabled but OCR_REMOTE_URL is not configured.', $debugContext);
         }
 
         if ($token === '') {
-            return $this->fail($result, 'Remote OCR is enabled but OCR_REMOTE_TOKEN is not configured.');
+            return $this->fail($result, 'Remote OCR is enabled but OCR_REMOTE_TOKEN is not configured.', $debugContext);
         }
 
         $handle = @fopen($diskPath, 'r');
         if (! $handle) {
-            return $this->fail($result, 'Could not open stored file for remote OCR.');
+            return $this->fail($result, 'Could not open stored file for remote OCR.', $debugContext);
         }
 
         try {
@@ -182,6 +190,7 @@ class OcrService
                 ->attach('file', $handle, basename($diskPath))
                 ->withHeaders([
                     'X-OCR-PSM-Candidates' => implode(',', (array) config('ocr.remote_psm_candidates', [])),
+                    'X-OCR-OEM-Candidates' => '3',
                     'X-OCR-Max-Variants' => (string) config('ocr.remote_max_variants', 4),
                     'X-OCR-Enable-Deskew' => config('ocr.remote_enable_deskew', true) ? 'true' : 'false',
                     'X-OCR-Enable-Morph' => config('ocr.remote_enable_morph', true) ? 'true' : 'false',
@@ -191,7 +200,7 @@ class OcrService
             fclose($handle);
             Log::error('Remote OCR request failed', ['document_id' => $document->id, 'error' => $e->getMessage()]);
 
-            return $this->fail($result, 'Remote OCR request failed: '.$e->getMessage());
+            return $this->fail($result, 'Remote OCR request failed: '.$e->getMessage(), $debugContext);
         }
 
         fclose($handle);
@@ -202,12 +211,12 @@ class OcrService
                 ?: trim($response->body())
                 ?: 'Remote OCR service returned HTTP '.$response->status();
 
-            return $this->fail($result, 'Remote OCR failed: '.$message);
+            return $this->fail($result, 'Remote OCR failed: '.$message, $debugContext);
         }
 
         $payload = $response->json();
         if (! is_array($payload)) {
-            return $this->fail($result, 'Remote OCR returned an invalid JSON response.');
+            return $this->fail($result, 'Remote OCR returned an invalid JSON response.', $debugContext);
         }
 
         $text = trim((string) ($payload['text'] ?? ''));
@@ -217,7 +226,10 @@ class OcrService
         $engine = trim((string) ($payload['engine'] ?? 'render-tesseract')) ?: 'render-tesseract';
         $diagnostics = is_array($payload['diagnostics'] ?? null) ? $payload['diagnostics'] : [];
 
-        return $this->persistExtraction($result, $document, $text, $confidence, $engine, $diagnostics);
+        $debugContext['tesseract_command'] = (string) ($payload['command'] ?? 'remote:multipass');
+        $debugContext['preprocessed_path'] = (string) ($payload['preprocessed_image_path'] ?? '');
+
+        return $this->persistExtraction($result, $document, $text, $confidence, $engine, $diagnostics, $debugContext);
     }
 
     private function persistExtraction(
@@ -227,10 +239,12 @@ class OcrService
         ?float $confidence,
         string $engine,
         array $diagnostics = [],
+        array $debugContext = [],
     ): OcrResult {
         $confidence ??= $this->estimateConfidence($text);
         $displayText = $text !== '' ? $text : '(No text detected — image may be blank or low contrast.)';
-        $structured = $this->extractStructuredFields($text);
+        $parsed = $this->extractStructuredFieldsWithDebug($text);
+        $structured = $parsed['values'];
         $system = $this->buildSystemContext($document);
         $hasStructured = $structured['length'] !== null
             || $structured['width'] !== null
@@ -243,7 +257,7 @@ class OcrService
             $status = self::STATUS_NEEDS_REVIEW;
         }
 
-        $diagnostics = $this->buildDiagnostics($diagnostics, $text, $confidence, $structured);
+        $diagnostics = $this->buildDiagnostics($diagnostics, $text, $confidence, $structured, $parsed['matches']);
 
         $result->forceFill([
             'processing_status'  => $status,
@@ -266,6 +280,8 @@ class OcrService
             'ocr_diagnostics'    => config('ocr.diagnostics_enabled', true) ? $diagnostics : null,
             'error_message'      => null,
         ])->save();
+
+        $this->writeDebugReport($result->fresh(), $debugContext, $text, $confidence, $parsed['matches'], $structured);
 
         return $result->fresh();
     }
@@ -426,7 +442,7 @@ class OcrService
         return 0.55;
     }
 
-    private function fail(OcrResult $result, string $message): OcrResult
+    private function fail(OcrResult $result, string $message, array $debugContext = []): OcrResult
     {
         $result->forceFill([
             'processing_status' => self::STATUS_FAILED,
@@ -437,10 +453,18 @@ class OcrService
             'error_message'     => $message,
         ])->save();
 
+        $this->writeDebugReport($result->fresh(), $debugContext, '', null, [], [
+            'length' => null,
+            'width' => null,
+            'height' => null,
+            'volume' => null,
+            'delivery_receipt_number' => null,
+        ], $message);
+
         return $result->fresh();
     }
 
-    private function buildDiagnostics(array $upstream, string $text, ?float $confidence, array $structured): array
+    private function buildDiagnostics(array $upstream, string $text, ?float $confidence, array $structured, array $regexMatches): array
     {
         $parserStatus = 'parsed';
         if ($text === '') {
@@ -465,6 +489,7 @@ class OcrService
         return array_merge($upstream, [
             'parser_status' => $parserStatus,
             'text_length' => strlen($text),
+            'regex_matches' => $regexMatches,
             'structured_hits' => [
                 'length' => $structured['length'] !== null,
                 'width' => $structured['width'] !== null,
@@ -478,20 +503,28 @@ class OcrService
 
     private function extractStructuredFields(string $text): array
     {
-        $normalized = $this->normalizeOcrText($text);
+        return $this->extractStructuredFieldsWithDebug($text)['values'];
+    }
 
-        $length = $this->extractMeasurement($normalized, [
+    private function extractStructuredFieldsWithDebug(string $text): array
+    {
+        $normalized = $this->normalizeOcrText($text);
+        $lengthParsed = $this->extractMeasurement($normalized, [
             'length', 'len', 'lngth', 'lengt', '1ength', 'iength', 'l',
         ]);
-        $width = $this->extractMeasurement($normalized, [
+        $widthParsed = $this->extractMeasurement($normalized, [
             'width', 'wid', 'wdth', 'w1dth', 'w',
         ]);
-        $height = $this->extractMeasurement($normalized, [
+        $heightParsed = $this->extractMeasurement($normalized, [
             'height', 'hgt', 'he1ght', 'hieght', 'h',
         ]);
-        $volume = $this->extractMeasurement($normalized, [
+        $volumeParsed = $this->extractMeasurement($normalized, [
             'volume', 'vol', 'cbm', 'm3', 'cu m', 'cubic',
         ]);
+        $length = $lengthParsed['value'];
+        $width = $widthParsed['value'];
+        $height = $heightParsed['value'];
+        $volume = $volumeParsed['value'];
 
         if ($length === null || $width === null || $height === null) {
             $dims = $this->extractInlineDimensions($normalized);
@@ -522,21 +555,35 @@ class OcrService
             $volume = round($length * $width * $height, 4);
         }
 
+        $drParsed = $this->extractReceiptNumber($text);
+
         return [
-            'length' => $length,
-            'width' => $width,
-            'height' => $height,
-            'volume' => $volume,
-            'delivery_receipt_number' => $this->extractReceiptNumber($text),
+            'values' => [
+                'length' => $length,
+                'width' => $width,
+                'height' => $height,
+                'volume' => $volume,
+                'delivery_receipt_number' => $drParsed['value'],
+            ],
+            'matches' => [
+                'length_match' => $lengthParsed['match'],
+                'width_match' => $widthParsed['match'],
+                'height_match' => $heightParsed['match'],
+                'volume_match' => $volumeParsed['match'],
+                'dr_match' => $drParsed['match'],
+            ],
         ];
     }
 
-    private function extractMeasurement(string $text, array $labels): ?float
+    private function extractMeasurement(string $text, array $labels): array
     {
+        $match = null;
         foreach ($labels as $label) {
             $pattern = '/(?:\b'.preg_quote($label, '/').'\b)\s*[:=]?\s*([0-9]+(?:[.,][0-9]+)?)(?:\s*(?:cm|mm|m|meter|meters|cbm|m3))?/i';
             if (preg_match($pattern, $text, $m)) {
-                return $this->toFloat($m[1] ?? null);
+                $match = trim((string) ($m[0] ?? ''));
+
+                return ['value' => $this->toFloat($m[1] ?? null), 'match' => $match];
             }
         }
 
@@ -545,14 +592,16 @@ class OcrService
         if ($escaped !== []) {
             $nearbyPattern = '/(?:'.implode('|', $escaped).')[^\d]{0,8}([0-9]+(?:[.,][0-9]+)?)/i';
             if (preg_match($nearbyPattern, $text, $m)) {
-                return $this->toFloat($m[1] ?? null);
+                $match = trim((string) ($m[0] ?? ''));
+
+                return ['value' => $this->toFloat($m[1] ?? null), 'match' => $match];
             }
         }
 
-        return null;
+        return ['value' => null, 'match' => null];
     }
 
-    private function extractReceiptNumber(string $text): ?string
+    private function extractReceiptNumber(string $text): array
     {
         $patterns = [
             '/(?:delivery\s*receipt(?:\s*(?:no|number))?|receipt(?:\s*(?:no|number))?|delivery\s*no)\s*[:#-]?\s*([a-z]{1,4}[-\/]?[a-z0-9]{3,})/i',
@@ -574,11 +623,14 @@ class OcrService
                     continue;
                 }
 
-                return $value;
+                return [
+                    'value' => $value,
+                    'match' => trim((string) ($m[0] ?? '')),
+                ];
             }
         }
 
-        return null;
+        return ['value' => null, 'match' => null];
     }
 
     private function extractInlineDimensions(string $text): array
@@ -713,5 +765,81 @@ class OcrService
             'vehicle_plate_no' => $assignment?->vehicle?->plate_no,
             'delivery_date' => $assignment?->arrived_at ?: $assignment?->completed_at ?: now(),
         ];
+    }
+
+    private function newDebugContext(DeliveryDocument $document, string $diskPath): array
+    {
+        return [
+            'document_id' => $document->id,
+            'filename' => basename($diskPath),
+            'disk_path' => $diskPath,
+            'preprocessed_path' => null,
+            'tesseract_command' => null,
+        ];
+    }
+
+    private function writeDebugReport(
+        OcrResult $result,
+        array $debugContext,
+        string $rawText,
+        ?float $confidence,
+        array $regexMatches,
+        array $dataset,
+        ?string $errorMessage = null
+    ): void {
+        if (! config('ocr.debug_mode', true)) {
+            return;
+        }
+
+        $statusReport = [
+            'ocr_executed' => $result->processing_status !== self::STATUS_PENDING,
+            'text_extracted' => trim($rawText) !== '',
+            'parser_executed' => true,
+            'dataset_mapping_ok' => collect($dataset)->filter(static fn ($v) => $v !== null && $v !== '')->isNotEmpty(),
+        ];
+
+        $content = implode(PHP_EOL, [
+            '====================',
+            'OCR DEBUG REPORT',
+            '====================',
+            'timestamp: '.now()->toDateTimeString(),
+            'document_id: '.($debugContext['document_id'] ?? $result->document_id),
+            '1. Uploaded file: '.($debugContext['filename'] ?? 'unknown'),
+            '2. Preprocessed image path: '.($debugContext['preprocessed_path'] ?: 'n/a'),
+            '3. Tesseract command executed: '.($debugContext['tesseract_command'] ?: 'n/a'),
+            '4. Raw OCR output:',
+            trim($rawText) !== '' ? $rawText : '[empty]',
+            '5. OCR confidence: '.($confidence !== null ? number_format($confidence * 100, 2).'%' : 'n/a'),
+            '6. Parsed values:',
+            '   Length: '.($dataset['length'] ?? '—'),
+            '   Width: '.($dataset['width'] ?? '—'),
+            '   Height: '.($dataset['height'] ?? '—'),
+            '   Volume: '.($dataset['volume'] ?? '—'),
+            '   DR Number: '.($dataset['delivery_receipt_number'] ?? '—'),
+            '7. Regex matches:',
+            '   length_match: '.($regexMatches['length_match'] ?? '—'),
+            '   width_match: '.($regexMatches['width_match'] ?? '—'),
+            '   height_match: '.($regexMatches['height_match'] ?? '—'),
+            '   volume_match: '.($regexMatches['volume_match'] ?? '—'),
+            '   dr_match: '.($regexMatches['dr_match'] ?? '—'),
+            '8. Final dataset:',
+            json_encode([
+                'length' => $dataset['length'] ?? null,
+                'width' => $dataset['width'] ?? null,
+                'height' => $dataset['height'] ?? null,
+                'volume' => $dataset['volume'] ?? null,
+                'dr_no' => $dataset['delivery_receipt_number'] ?? null,
+            ], JSON_UNESCAPED_SLASHES),
+            'OCR STATUS:',
+            ($statusReport['ocr_executed'] ? '✓' : '✗').' OCR executed',
+            ($statusReport['text_extracted'] ? '✓' : '✗').' Text extracted',
+            ($statusReport['parser_executed'] ? '✓' : '✗').' Parser executed',
+            ($statusReport['dataset_mapping_ok'] ? '✓' : '✗').' Dataset mapping',
+            'processing_status: '.$result->processing_status,
+            'error_message: '.($errorMessage ?: $result->error_message ?: 'none'),
+            '',
+        ]);
+
+        @file_put_contents(storage_path('logs/ocr-debug.log'), $content.PHP_EOL, FILE_APPEND);
     }
 }

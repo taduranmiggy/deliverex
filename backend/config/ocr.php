@@ -42,6 +42,7 @@ return [
     'remote_enable_deskew' => filter_var(env('OCR_REMOTE_ENABLE_DESKEW', true), FILTER_VALIDATE_BOOLEAN),
     'remote_enable_morph' => filter_var(env('OCR_REMOTE_ENABLE_MORPH', true), FILTER_VALIDATE_BOOLEAN),
     'diagnostics_enabled' => filter_var(env('OCR_DIAGNOSTICS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+    'debug_mode' => filter_var(env('OCR_DEBUG_MODE', true), FILTER_VALIDATE_BOOLEAN),
 
     /*
     |--------------------------------------------------------------------------

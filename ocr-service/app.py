@@ -1,6 +1,8 @@
 import os
+import shutil
 import subprocess
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +19,11 @@ TESSERACT_TIMEOUT = int(os.getenv("TESSERACT_TIMEOUT", "120"))
 OCR_LANG = os.getenv("OCR_LANG", "eng").strip() or "eng"
 OCR_ENABLE_DESKEW = os.getenv("OCR_ENABLE_DESKEW", "true").lower() == "true"
 OCR_ENABLE_MORPH = os.getenv("OCR_ENABLE_MORPH", "true").lower() == "true"
-OCR_PSM_CANDIDATES = [x.strip() for x in os.getenv("OCR_PSM_CANDIDATES", "6,11,7").split(",") if x.strip()]
+OCR_PSM_CANDIDATES = [x.strip() for x in os.getenv("OCR_PSM_CANDIDATES", "3,4,6,11,12").split(",") if x.strip()]
+OCR_OEM_CANDIDATES = [x.strip() for x in os.getenv("OCR_OEM_CANDIDATES", "3").split(",") if x.strip()]
 OCR_MAX_VARIANTS = max(1, int(os.getenv("OCR_MAX_VARIANTS", "4")))
+OCR_DEBUG_MODE = os.getenv("OCR_DEBUG_MODE", "true").lower() == "true"
+OCR_DEBUG_ROOT = os.getenv("OCR_DEBUG_ROOT", "/tmp/deliverex-ocr-debug")
 
 
 def configured_token() -> str:
@@ -95,18 +100,18 @@ def build_variants(
     enable_deskew: bool,
     enable_morph: bool,
     max_variants: int,
-) -> dict[str, np.ndarray]:
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     gray = remove_alpha(raw)
     gray = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
-    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    denoise = cv2.GaussianBlur(gray, (3, 3), 0)
 
-    variants: dict[str, np.ndarray] = {"gray": with_border(gray)}
+    variants: dict[str, np.ndarray] = {"gray": with_border(denoise)}
 
-    _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    _, otsu = cv2.threshold(denoise, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     variants["otsu"] = with_border(otsu)
 
     adaptive = cv2.adaptiveThreshold(
-        gray,
+        denoise,
         255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv2.THRESH_BINARY,
@@ -128,7 +133,13 @@ def build_variants(
         limited[name] = image
         if len(limited) >= max(1, max_variants):
             break
-    return limited
+    steps = {
+        "gray": gray,
+        "threshold": adaptive,
+        "denoise": denoise,
+        "final": next(iter(limited.values())) if limited else adaptive,
+    }
+    return limited, steps
 
 
 def parse_bool(raw: str | None, fallback: bool) -> bool:
@@ -159,6 +170,13 @@ def parse_psm(raw: str | None, fallback: list[str]) -> list[str]:
     return values or fallback
 
 
+def parse_oem(raw: str | None, fallback: list[str]) -> list[str]:
+    if raw is None:
+        return fallback
+    values = [x.strip() for x in raw.split(",") if x.strip().isdigit()]
+    return values or fallback
+
+
 def score_text(text: str) -> float:
     if not text:
         return 0.0
@@ -170,9 +188,46 @@ def score_text(text: str) -> float:
     return (0.45 * length_score) + (0.2 * min(digit_ratio * 4.0, 1.0)) + (0.2 * min(keyword_hits / 5.0, 1.0)) + (0.15 * alpha_num)
 
 
-def run_tesseract(image_path: str, psm: str) -> tuple[str, str]:
+def parse_tsv(tsv_text: str) -> dict[str, Any]:
+    lines = [line for line in tsv_text.splitlines() if line.strip()]
+    if len(lines) <= 1:
+        return {"avg_conf": None, "boxes": []}
+
+    header = lines[0].split("\t")
+    boxes: list[dict[str, Any]] = []
+    confidences: list[float] = []
+    for raw in lines[1:]:
+        cols = raw.split("\t")
+        if len(cols) != len(header):
+            continue
+        row = dict(zip(header, cols))
+        text = str(row.get("text", "")).strip()
+        if not text:
+            continue
+        try:
+            conf = float(row.get("conf", "-1"))
+        except ValueError:
+            conf = -1.0
+        if conf >= 0:
+            confidences.append(conf)
+        boxes.append(
+            {
+                "text": text,
+                "left": int(float(row.get("left", "0") or 0)),
+                "top": int(float(row.get("top", "0") or 0)),
+                "width": int(float(row.get("width", "0") or 0)),
+                "height": int(float(row.get("height", "0") or 0)),
+                "confidence": conf if conf >= 0 else None,
+            }
+        )
+    avg_conf = (sum(confidences) / len(confidences)) if confidences else None
+    return {"avg_conf": avg_conf, "boxes": boxes[:25]}
+
+
+def run_tesseract(image_path: str, oem: str, psm: str) -> dict[str, Any]:
+    base_cmd = ["tesseract", image_path]
     completed = subprocess.run(
-        ["tesseract", image_path, "stdout", "-l", OCR_LANG, "--psm", psm],
+        [*base_cmd, "stdout", "--oem", oem, "-l", OCR_LANG, "--psm", psm],
         capture_output=True,
         text=True,
         timeout=TESSERACT_TIMEOUT,
@@ -180,7 +235,23 @@ def run_tesseract(image_path: str, psm: str) -> tuple[str, str]:
     if completed.returncode != 0:
         message = (completed.stderr or completed.stdout or "Tesseract failed").strip()
         raise RuntimeError(message)
-    return completed.stdout.strip(), (completed.stderr or "").strip()
+
+    tsv_completed = subprocess.run(
+        [*base_cmd, "stdout", "--oem", oem, "-l", OCR_LANG, "--psm", psm, "tsv"],
+        capture_output=True,
+        text=True,
+        timeout=TESSERACT_TIMEOUT,
+    )
+    tsv_text = tsv_completed.stdout if tsv_completed.returncode == 0 else ""
+    tsv_data = parse_tsv(tsv_text)
+
+    return {
+        "text": completed.stdout.strip(),
+        "stderr": (completed.stderr or "").strip(),
+        "avg_conf": tsv_data["avg_conf"],
+        "boxes": tsv_data["boxes"],
+        "command": f"tesseract {image_path} stdout --oem {oem} -l {OCR_LANG} --psm {psm}",
+    }
 
 
 @app.get("/health")
@@ -205,6 +276,7 @@ async def ocr(
     file: UploadFile = File(...),
     authorization: str | None = Header(default=None),
     x_ocr_psm_candidates: str | None = Header(default=None),
+    x_ocr_oem_candidates: str | None = Header(default=None),
     x_ocr_max_variants: str | None = Header(default=None),
     x_ocr_enable_deskew: str | None = Header(default=None),
     x_ocr_enable_morph: str | None = Header(default=None),
@@ -220,13 +292,28 @@ async def ocr(
         raise HTTPException(status_code=413, detail="Image is too large for OCR")
 
     psm_candidates = parse_psm(x_ocr_psm_candidates, OCR_PSM_CANDIDATES)
+    oem_candidates = parse_oem(x_ocr_oem_candidates, OCR_OEM_CANDIDATES)
     max_variants = parse_int(x_ocr_max_variants, OCR_MAX_VARIANTS, minimum=1, maximum=8)
     enable_deskew = parse_bool(x_ocr_enable_deskew, OCR_ENABLE_DESKEW)
     enable_morph = parse_bool(x_ocr_enable_morph, OCR_ENABLE_MORPH)
+    debug_id = str(uuid.uuid4())[:8]
+    debug_dir = os.path.join(OCR_DEBUG_ROOT, debug_id)
+    preprocessed_image_path = ""
+    debug_steps: dict[str, str] = {}
+    if OCR_DEBUG_MODE:
+        os.makedirs(debug_dir, exist_ok=True)
 
     try:
         raw = decode_image(contents)
-        variants = build_variants(raw, enable_deskew=enable_deskew, enable_morph=enable_morph, max_variants=max_variants)
+        variants, steps = build_variants(raw, enable_deskew=enable_deskew, enable_morph=enable_morph, max_variants=max_variants)
+        if OCR_DEBUG_MODE:
+            original_path = os.path.join(debug_dir, "original.jpg")
+            cv2.imwrite(original_path, raw)
+            for name, image in steps.items():
+                step_path = os.path.join(debug_dir, f"{name}.jpg")
+                cv2.imwrite(step_path, image)
+                debug_steps[name] = step_path
+            preprocessed_image_path = debug_steps.get("final", "")
     except HTTPException:
         raise
     except Exception as exc:
@@ -244,33 +331,43 @@ async def ocr(
             if not ok:
                 continue
 
-            for psm in psm_candidates:
-                try:
-                    text, stderr = run_tesseract(temp_path, psm)
-                    score = score_text(text)
-                    candidates.append(
-                        {
-                            "variant": variant_name,
-                            "psm": psm,
-                            "score": round(score, 4),
-                            "text_len": len(text),
-                            "text": text,
-                            "stderr": stderr[:180],
-                        }
-                    )
-                except subprocess.TimeoutExpired as exc:
-                    raise HTTPException(status_code=504, detail="Tesseract timed out") from exc
-                except RuntimeError as exc:
-                    candidates.append(
-                        {
-                            "variant": variant_name,
-                            "psm": psm,
-                            "score": 0.0,
-                            "text_len": 0,
-                            "text": "",
-                            "stderr": str(exc)[:180],
-                        }
-                    )
+            for oem in oem_candidates:
+                for psm in psm_candidates:
+                    try:
+                        result = run_tesseract(temp_path, oem, psm)
+                        text = str(result["text"])
+                        score = score_text(text)
+                        candidates.append(
+                            {
+                                "variant": variant_name,
+                                "oem": oem,
+                                "psm": psm,
+                                "score": round(score, 4),
+                                "text_len": len(text),
+                                "text": text,
+                                "stderr": str(result["stderr"])[:180],
+                                "avg_conf": result["avg_conf"],
+                                "boxes": result["boxes"],
+                                "command": result["command"],
+                            }
+                        )
+                    except subprocess.TimeoutExpired as exc:
+                        raise HTTPException(status_code=504, detail="Tesseract timed out") from exc
+                    except RuntimeError as exc:
+                        candidates.append(
+                            {
+                                "variant": variant_name,
+                                "oem": oem,
+                                "psm": psm,
+                                "score": 0.0,
+                                "text_len": 0,
+                                "text": "",
+                                "stderr": str(exc)[:180],
+                                "avg_conf": None,
+                                "boxes": [],
+                                "command": f"tesseract {temp_path} stdout --oem {oem} -l {OCR_LANG} --psm {psm}",
+                            }
+                        )
 
         if not candidates:
             raise HTTPException(status_code=500, detail="OCR could not produce any candidate output")
@@ -281,24 +378,32 @@ async def ocr(
 
         return {
             "text": text,
-            "confidence": estimate_confidence(text),
+            "confidence": best.get("avg_conf") / 100.0 if isinstance(best.get("avg_conf"), float) else estimate_confidence(text),
             "engine": "render-tesseract",
+            "command": best.get("command"),
+            "preprocessed_image_path": preprocessed_image_path,
             "diagnostics": {
                 "chosen_variant": best["variant"],
+                "chosen_oem": best.get("oem"),
                 "chosen_psm": best["psm"],
                 "candidate_scores": [
                     {
                         "variant": item["variant"],
+                        "oem": item.get("oem"),
                         "psm": item["psm"],
                         "score": item["score"],
                         "text_len": item["text_len"],
+                        "avg_conf": item.get("avg_conf"),
                     }
                     for item in ranked[:8]
                 ],
+                "bounding_boxes": best.get("boxes", []),
                 "variants_tested": len(variants),
                 "passes_tested": len(candidates),
+                "preprocess_steps": debug_steps,
                 "config": {
                     "psm_candidates": psm_candidates,
+                    "oem_candidates": oem_candidates,
                     "max_variants": max_variants,
                     "enable_deskew": enable_deskew,
                     "enable_morph": enable_morph,
@@ -310,4 +415,9 @@ async def ocr(
             try:
                 os.unlink(path)
             except FileNotFoundError:
+                pass
+        if not OCR_DEBUG_MODE:
+            try:
+                shutil.rmtree(debug_dir, ignore_errors=True)
+            except Exception:
                 pass
