@@ -75,12 +75,12 @@ jobs:
           HOOK_URL="${APP_URL%/}/deploy-hook.php"
           for attempt in 1 2 3 4 5 6 7 8; do
             echo "POST attempt ${attempt}/8 → ${HOOK_URL}"
-            resp="$(curl -sS -w $'\n__HTTP__:%{http_code}' -X POST "$HOOK_URL" \
+            resp="$(curl -sS -w $'\n__HTTP__:%{http_code}' -G "$HOOK_URL" \
               -H "X-Deploy-Token: ${{ secrets.DEPLOY_HOOK_TOKEN }}" \
               --connect-timeout 45 --max-time 900 \
-              -d "run_id=${{ github.run_id }}" \
-              -d "sha=${{ github.sha }}" \
-              -d "repo=${{ github.repository }}" 2>&1)" || true
+              --data-urlencode "run_id=${{ github.run_id }}" \
+              --data-urlencode "sha=${{ github.sha }}" \
+              --data-urlencode "repo=${{ github.repository }}" 2>&1)" || true
             code="$(echo "$resp" | grep '__HTTP__:' | tail -1 | cut -d: -f2)"
             body="$(echo "$resp" | grep -v '__HTTP__:' | tr -d '\r')"
             echo "$body"
@@ -88,7 +88,7 @@ jobs:
               echo "ERROR: Got HTML — deploy-hook.php not configured correctly."
               exit 1
             fi
-            if echo "$body" | grep -qE '^(forbidden|run_id required|deploy error|GITHUB_DEPLOY_TOKEN|shell disabled)'; then
+            if echo "$body" | grep -qE '^(forbidden|run_id required|deploy error|GITHUB_DEPLOY_TOKEN|shell disabled)' || echo "$body" | grep -q 'Page Expired'; then
               echo "ERROR: deploy-hook rejected the request."
               exit 1
             fi
