@@ -892,39 +892,6 @@ button.table-row {
 }
 
 @media (max-width: 1024px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar.sidebar--deliverex {
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    border-right: none;
-    border-bottom: 1px solid var(--stroke);
-    padding: 12px 12px !important;
-  }
-
-  .sidebar:not(.sidebar--deliverex) {
-    flex-direction: row;
-    align-items: center;
-    gap: 12px;
-    border-right: none;
-    border-bottom: 1px solid var(--stroke);
-  }
-
-  .sidebar nav {
-    display: flex;
-    flex-wrap: wrap;
-    flex: 1;
-    gap: 4px !important;
-  }
-
-  .sidebar .profile {
-    display: none;
-  }
-
   .split {
     grid-template-columns: 1fr;
   }
