@@ -166,6 +166,45 @@ export function LoadingRows({ cols = 4, rows = 5 }) {
   )
 }
 
+/* ─── Skeleton ──────────────────────────────────────────────── */
+/**
+ * Reusable shimmer skeleton placeholder for loading states.
+ * Complements <LoadingRows> (tables) for cards/blocks/text.
+ *
+ *   <Skeleton width="60%" />            // single line
+ *   <Skeleton height={120} radius={12} />  // block
+ *   <Skeleton variant="circle" width={40} height={40} />
+ */
+export function Skeleton({ width = '100%', height = 14, radius = 6, variant = 'line', style = {} }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: 'block',
+        width,
+        height: variant === 'circle' ? width : height,
+        borderRadius: variant === 'circle' ? '50%' : radius,
+        background: 'var(--slate-200, #e2e8f0)',
+        animation: 'shimmer 1.4s infinite',
+        ...style,
+      }}
+    />
+  )
+}
+
+/**
+ * A stack of block skeletons — drop-in placeholder while a card/section loads.
+ */
+export function SkeletonBlock({ lines = 3, gap = 10 }) {
+  return (
+    <div role="status" aria-label="Loading" style={{ display: 'grid', gap }}>
+      {Array.from({ length: lines }).map((_, i) => (
+        <Skeleton key={i} width={i === lines - 1 ? '70%' : '100%'} />
+      ))}
+    </div>
+  )
+}
+
 /* ─── LoadingSpinner ────────────────────────────────────────── */
 export function LoadingSpinner({ size = 20, label = 'Loading…' }) {
   return (

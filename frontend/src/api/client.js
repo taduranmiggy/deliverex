@@ -17,6 +17,21 @@ function formatApiError(payload, status) {
 }
 
 /**
+ * Build an Error that preserves the human message (back-compat: callers still
+ * read `err.message`) AND additionally exposes `err.status` and the structured
+ * Laravel validation map as `err.fieldErrors`. This is purely additive — no
+ * existing consumer behavior changes.
+ */
+function buildApiError(payload, status) {
+  const err = new Error(formatApiError(payload, status))
+  err.status = status
+  if (payload?.errors && typeof payload.errors === 'object') {
+    err.fieldErrors = payload.errors
+  }
+  return err
+}
+
+/**
  * FR 1.13 — wraps fetch: on 401, attempt one silent refresh then retry.
  */
 export async function apiRequest(path, options = {}, _retry = false) {
@@ -67,13 +82,13 @@ export async function apiRequest(path, options = {}, _retry = false) {
       return apiRequest(path, options, true)
     } catch {
       const error = await response.json().catch(() => ({}))
-      throw new Error(formatApiError(error, response.status))
+      throw buildApiError(error, response.status)
     }
   }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(formatApiError(error, response.status))
+    throw buildApiError(error, response.status)
   }
 
   if (response.status === 204) return null

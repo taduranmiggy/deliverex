@@ -178,7 +178,7 @@ function AdminDashboard() {
           <SectionCard title="Quick Navigation">
             <nav aria-label="Admin quick navigation">
               {[
-                { label: 'OCR Validation Queue', to: '/admin/ocr-validation', count: summary.ocr, urgent: summary.ocr > 0, hint: 'Review scanned documents' },
+                { label: 'OCR Review Queue', to: '/admin/ocr-validation', count: summary.ocr, urgent: summary.ocr > 0, hint: 'Review scanned documents' },
                 { label: 'Job Orders', to: '/admin/job-orders', count: null, hint: 'View and monitor orders' },
                 { label: 'Manage Users & Roles', to: '/admin/users', count: summary.users, hint: 'Accounts and permissions' },
                 { label: 'Master Data', to: '/admin/master-data', count: null, hint: 'Clients, vehicles, quarries' },

@@ -8,7 +8,7 @@ const NAV = [
   { to: '/manager/analytics', label: 'Analytics', Icon: BarChart3 },
   { to: '/manager/delivery-history', label: 'History', Icon: History },
   { to: '/manager/reports', label: 'Reports', Icon: TrendingUp },
-  { to: '/manager/delivery-documentation', label: 'OCR / Delivery Documentation', Icon: FileSearch },
+  { to: '/manager/delivery-documentation', label: 'OCR Review', Icon: FileSearch },
   { to: '/manager/fleet-tracking', label: 'Fleet Tracking', Icon: MapPin },
   { to: '/manager/notifications', label: 'Notifications', Icon: Bell },
 ]

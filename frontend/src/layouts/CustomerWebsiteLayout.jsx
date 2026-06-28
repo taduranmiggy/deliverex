@@ -1,5 +1,7 @@
+import { Suspense } from 'react'
 import { Outlet } from 'react-router-dom'
 import PageTransition from '../components/PageTransition'
+import RouteFallback from '../components/RouteFallback'
 import CustomerLegalFooter from '../components/customer/CustomerLegalFooter'
 import CustomerWebsiteNavBar from '../components/customer/CustomerWebsiteNavBar'
 import SessionStatusBar from '../components/session/SessionStatusBar'
@@ -14,7 +16,9 @@ function CustomerWebsiteLayout() {
 
         <PageTransition>
           <main className="customer-layout-main">
-            <Outlet />
+            <Suspense fallback={<RouteFallback />}>
+              <Outlet />
+            </Suspense>
           </main>
         </PageTransition>
 

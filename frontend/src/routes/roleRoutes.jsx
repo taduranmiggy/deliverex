@@ -1,50 +1,64 @@
 import { lazy } from 'react'
 import { Route, Navigate } from 'react-router-dom'
-import CompanyManagementPage from '../pages/Admin/CompanyManagementPage'
-import AdminDashboard from '../pages/Admin/AdminDashboard'
-import AdminJobOrdersPage from '../pages/Admin/AdminJobOrdersPage'
-import UserManagementPage from '../pages/Admin/UserManagementPage'
-import OcrReviewPage from '../pages/Admin/OcrReviewPage'
-import AdminMasterDataPage from '../pages/Admin/AdminMasterDataPage'
-import AdminAuditLogsPage from '../pages/Admin/AdminAuditLogsPage'
-import AdminEmailLogsPage from '../pages/Admin/AdminEmailLogsPage'
-import AdminChatbotPage from '../pages/Admin/AdminChatbotPage'
-import NotificationsPage from '../pages/Admin/NotificationsPage'
-import DispatcherDashboard from '../pages/Dispatcher/DispatcherDashboard'
-import CreateJobOrderPage from '../pages/Dispatcher/CreateJobOrderPage'
-import AssignDriverVehiclePage from '../pages/Dispatcher/AssignDriverVehiclePage'
-import DeliveryMonitoringPage from '../pages/Dispatcher/DeliveryMonitoringPage'
-import DispatcherCalendarPage from '../pages/Dispatcher/DispatcherCalendarPage'
-import DispatcherNotificationsPage from '../pages/Dispatcher/DispatcherNotificationsPage'
-import DriverHomePage from '../pages/Driver/DriverHomePage'
-import DriverJobsPage from '../pages/Driver/DriverJobsPage'
-import DriverNotificationsPage from '../pages/Driver/DriverNotificationsPage'
-import DeliveryStatusUpdatePage from '../pages/Driver/DeliveryStatusUpdatePage'
+import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
 
+// Route-level code splitting: every page is loaded on demand so each role only
+// downloads the chunks it actually visits. Suspense boundaries live in the
+// layouts (StaffAppShell, DriverLayout, CustomerLayout, CustomerWebsiteLayout).
+// All pages are default exports, so lazy() works without interop changes.
+
+// Admin
+const CompanyManagementPage = lazy(() => import('../pages/Admin/CompanyManagementPage'))
+const AdminDashboard = lazy(() => import('../pages/Admin/AdminDashboard'))
+const AdminJobOrdersPage = lazy(() => import('../pages/Admin/AdminJobOrdersPage'))
+const UserManagementPage = lazy(() => import('../pages/Admin/UserManagementPage'))
+const OcrReviewPage = lazy(() => import('../pages/Admin/OcrReviewPage'))
+const AdminMasterDataPage = lazy(() => import('../pages/Admin/AdminMasterDataPage'))
+const AdminAuditLogsPage = lazy(() => import('../pages/Admin/AdminAuditLogsPage'))
+const AdminEmailLogsPage = lazy(() => import('../pages/Admin/AdminEmailLogsPage'))
+const AdminChatbotPage = lazy(() => import('../pages/Admin/AdminChatbotPage'))
+const NotificationsPage = lazy(() => import('../pages/Admin/NotificationsPage'))
+
+// Dispatcher
+const DispatcherDashboard = lazy(() => import('../pages/Dispatcher/DispatcherDashboard'))
+const CreateJobOrderPage = lazy(() => import('../pages/Dispatcher/CreateJobOrderPage'))
+const AssignDriverVehiclePage = lazy(() => import('../pages/Dispatcher/AssignDriverVehiclePage'))
+const DeliveryMonitoringPage = lazy(() => import('../pages/Dispatcher/DeliveryMonitoringPage'))
+const DispatcherCalendarPage = lazy(() => import('../pages/Dispatcher/DispatcherCalendarPage'))
+const DispatcherNotificationsPage = lazy(() => import('../pages/Dispatcher/DispatcherNotificationsPage'))
+
+// Driver
+const DriverHomePage = lazy(() => import('../pages/Driver/DriverHomePage'))
+const DriverJobsPage = lazy(() => import('../pages/Driver/DriverJobsPage'))
+const DriverNotificationsPage = lazy(() => import('../pages/Driver/DriverNotificationsPage'))
+const DeliveryStatusUpdatePage = lazy(() => import('../pages/Driver/DeliveryStatusUpdatePage'))
 const DriverJobDetailsPage = lazy(() => import('../pages/Driver/DriverJobDetailsPage'))
 const DocumentUploadPage = lazy(() => import('../pages/Driver/DocumentUploadPage'))
 const DriverProfilePage = lazy(() => import('../pages/Driver/DriverProfilePage'))
-import ManagerDashboard from '../pages/Manager/ManagerDashboard'
-import AnalyticsPage from '../pages/Manager/AnalyticsPage'
-import ReportsPage from '../pages/Manager/ReportsPage'
-import ManagerDeliveryHistoryPage from '../pages/Manager/ManagerDeliveryHistoryPage'
-import ManagerNotificationsPage from '../pages/Manager/ManagerNotificationsPage'
-import ManagerFleetTrackingPage from '../pages/Manager/ManagerFleetTrackingPage'
-import CustomerCompanyUsersPage from '../pages/Customer/CustomerCompanyUsersPage'
-import CustomerHomePage from '../pages/Customer/CustomerHomePage'
-import TrackingPage from '../pages/Customer/TrackingPage'
-import CustomerLoginPage from '../pages/Customer/CustomerLoginPage'
-import CustomerForgotPasswordPage from '../pages/Customer/CustomerForgotPasswordPage'
-import CustomerDeliveriesPage from '../pages/Customer/CustomerDeliveriesPage'
-import CustomerLinkDeliveryPage from '../pages/Customer/CustomerLinkDeliveryPage'
-import CustomerAccountPage from '../pages/Customer/CustomerAccountPage'
-import CustomerSupportPage from '../pages/Customer/CustomerSupportPage'
-import CustomerHistoryPage from '../pages/Customer/CustomerHistoryPage'
-import AboutUsPage from '../pages/Customer/AboutUsPage'
-import ServicesPage from '../pages/Customer/ServicesPage'
-import CustomerLegalPage from '../pages/Customer/CustomerLegalPage'
-import CustomerWebsiteDashboardPage from '../pages/CustomerWeb/CustomerWebsiteDashboardPage'
-import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
+
+// Manager
+const ManagerDashboard = lazy(() => import('../pages/Manager/ManagerDashboard'))
+const AnalyticsPage = lazy(() => import('../pages/Manager/AnalyticsPage'))
+const ReportsPage = lazy(() => import('../pages/Manager/ReportsPage'))
+const ManagerDeliveryHistoryPage = lazy(() => import('../pages/Manager/ManagerDeliveryHistoryPage'))
+const ManagerNotificationsPage = lazy(() => import('../pages/Manager/ManagerNotificationsPage'))
+const ManagerFleetTrackingPage = lazy(() => import('../pages/Manager/ManagerFleetTrackingPage'))
+
+// Customer (PWA + website share several pages)
+const CustomerCompanyUsersPage = lazy(() => import('../pages/Customer/CustomerCompanyUsersPage'))
+const CustomerHomePage = lazy(() => import('../pages/Customer/CustomerHomePage'))
+const TrackingPage = lazy(() => import('../pages/Customer/TrackingPage'))
+const CustomerLoginPage = lazy(() => import('../pages/Customer/CustomerLoginPage'))
+const CustomerForgotPasswordPage = lazy(() => import('../pages/Customer/CustomerForgotPasswordPage'))
+const CustomerDeliveriesPage = lazy(() => import('../pages/Customer/CustomerDeliveriesPage'))
+const CustomerLinkDeliveryPage = lazy(() => import('../pages/Customer/CustomerLinkDeliveryPage'))
+const CustomerAccountPage = lazy(() => import('../pages/Customer/CustomerAccountPage'))
+const CustomerSupportPage = lazy(() => import('../pages/Customer/CustomerSupportPage'))
+const CustomerHistoryPage = lazy(() => import('../pages/Customer/CustomerHistoryPage'))
+const AboutUsPage = lazy(() => import('../pages/Customer/AboutUsPage'))
+const ServicesPage = lazy(() => import('../pages/Customer/ServicesPage'))
+const CustomerLegalPage = lazy(() => import('../pages/Customer/CustomerLegalPage'))
+const CustomerWebsiteDashboardPage = lazy(() => import('../pages/CustomerWeb/CustomerWebsiteDashboardPage'))
 
 export const roleRoutes = {
   admin: [

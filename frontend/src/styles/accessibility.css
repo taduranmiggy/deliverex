@@ -1,0 +1,120 @@
+/**
+ * Accessibility + shared page styles (additive).
+ *
+ * focus-visible rules only add keyboard focus rings; they never remove the
+ * existing mouse :focus behavior (which uses :focus, not :focus-visible).
+ * This restores visible keyboard navigation without changing any layout.
+ */
+
+:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Honor users who prefer reduced motion across the app's subtle animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── 404 / Not Found page ─────────────────────────────────────── */
+.dx-notfound {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(37, 99, 235, 0.08), transparent 60%),
+    var(--bg, #f1f5f9);
+}
+
+.dx-notfound__card {
+  width: 100%;
+  max-width: 460px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--stroke, #e2e8f0);
+  border-radius: 18px;
+  padding: 40px 32px;
+  text-align: center;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.12);
+}
+
+.dx-notfound__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  color: var(--text, #0f172a);
+  margin-bottom: 24px;
+}
+
+.dx-notfound__brand-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+
+.dx-notfound__code {
+  font-size: 4rem;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0 0 8px;
+}
+
+.dx-notfound__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text, #0f172a);
+  margin: 0 0 8px;
+}
+
+.dx-notfound__message {
+  font-size: 0.9rem;
+  color: var(--muted, #64748b);
+  line-height: 1.6;
+  margin: 0 auto 28px;
+  max-width: 340px;
+}
+
+.dx-notfound__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.dx-notfound__actions .btn-dx-primary,
+.dx-notfound__actions .btn-dx-secondary {
+  min-width: 130px;
+  justify-content: center;
+}

@@ -17,6 +17,7 @@ import CustomerWebsiteLayout from '../layouts/CustomerWebsiteLayout'
 import PwaCustomerOnlyGuard from '../components/PwaCustomerOnlyGuard'
 import BrowserCustomerPortalGuard from '../components/BrowserCustomerPortalGuard'
 import RootRoute from './RootRoute'
+import NotFoundPage from '../pages/NotFoundPage'
 
 function AppRouter() {
   return (
@@ -106,6 +107,8 @@ function AppRouter() {
           >
             {roleRoutes.customerWebsite}
           </Route>
+
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </PwaCustomerOnlyGuard>
     </BrowserRouter>

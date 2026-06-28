@@ -45,26 +45,26 @@ function DriverOfflineBar() {
     cls  += ' driver-sync-bar--offline'
     Icon  = WifiOff
     text  = pendingCount > 0
-      ? `Offline — ${pendingCount} update${pendingCount !== 1 ? 's' : ''} pending`
-      : 'Offline Mode'
+      ? `Offline — ${pendingCount} update${pendingCount !== 1 ? 's' : ''} queued`
+      : 'Offline'
   } else if (barState === 'pending') {
     cls     += ' driver-sync-bar--pending'
     Icon     = AlertTriangle
-    text     = `${pendingCount} update${pendingCount !== 1 ? 's' : ''} waiting to sync`
+    text     = `Queued — ${pendingCount} update${pendingCount !== 1 ? 's' : ''} to sync`
     btnLabel = 'Sync Queue'
   } else if (barState === 'syncing') {
     cls     += ' driver-sync-bar--syncing'
     Icon     = Loader2
-    text     = `🔄 Syncing ${pendingCount} update${pendingCount !== 1 ? 's' : ''}…`
+    text     = `Syncing ${pendingCount} update${pendingCount !== 1 ? 's' : ''}…`
     spinning = true
   } else if (barState === 'synced') {
     cls  += ' driver-sync-bar--synced'
     Icon  = CheckCircle2
-    text  = `✅ Synced successfully${lastSynced ? ` · ${fmtTime(lastSynced)}` : ''}`
+    text  = `Synced${lastSynced ? ` · ${fmtTime(lastSynced)}` : ''}`
   } else if (barState === 'failed') {
     cls     += ' driver-sync-bar--failed'
     Icon     = X
-    text     = `Sync failed — ${pendingCount} update${pendingCount !== 1 ? 's' : ''} still pending`
+    text     = `Failed — ${pendingCount} update${pendingCount !== 1 ? 's' : ''} still pending`
     btnLabel = 'Retry'
   }
 

@@ -230,7 +230,7 @@ function OcrReviewPage() {
   return (
     <>
       <PageHeader
-        title={isReadOnly ? 'Delivery Documentation' : isDispatcher ? 'OCR Review' : 'OCR Validation'}
+        title="OCR Review"
         subtitle={isReadOnly
           ? 'View OCR results and delivery documents — read-only. Admin approval is required for final validation.'
           : isDispatcher
@@ -499,17 +499,21 @@ function OcrReviewPage() {
                 </div>
               )}
               {!!selected?.ocr_diagnostics && (
-                <div style={{ border: '1px dashed var(--stroke)', borderRadius: 10, padding: 10, fontSize: '0.8125rem', color: 'var(--muted)' }}>
-                  <strong style={{ color: 'var(--ink)', display: 'block', marginBottom: 6 }}>OCR Engine Diagnostics</strong>
-                  <div>Parser status: {parserStatus || 'unknown'}</div>
-                  {diagnostics?.chosen_variant && <div>Chosen variant: {diagnostics.chosen_variant}</div>}
-                  {diagnostics?.chosen_psm && <div>Chosen PSM: {diagnostics.chosen_psm}</div>}
-                  {Array.isArray(diagnostics?.candidate_scores) && diagnostics.candidate_scores.length > 0 && (
-                    <div style={{ marginTop: 6 }}>
-                      Top candidates: {diagnostics.candidate_scores.slice(0, 3).map((entry) => `${entry.variant}/psm${entry.psm} (${entry.score})`).join(' · ')}
-                    </div>
-                  )}
-                </div>
+                <details className="dx-ocr-diagnostics" style={{ border: '1px dashed var(--stroke)', borderRadius: 10, padding: 10, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                  <summary style={{ color: 'var(--ink)', fontWeight: 700, cursor: 'pointer' }}>
+                    Technical OCR Diagnostics
+                  </summary>
+                  <div style={{ marginTop: 8 }}>
+                    <div>Parser status: {parserStatus || 'unknown'}</div>
+                    {diagnostics?.chosen_variant && <div>Chosen variant: {diagnostics.chosen_variant}</div>}
+                    {diagnostics?.chosen_psm && <div>Chosen PSM: {diagnostics.chosen_psm}</div>}
+                    {Array.isArray(diagnostics?.candidate_scores) && diagnostics.candidate_scores.length > 0 && (
+                      <div style={{ marginTop: 6 }}>
+                        Top candidates: {diagnostics.candidate_scores.slice(0, 3).map((entry) => `${entry.variant}/psm${entry.psm} (${entry.score})`).join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                </details>
               )}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {!isReadOnly && (

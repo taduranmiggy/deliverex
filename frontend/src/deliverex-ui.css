@@ -5173,3 +5173,47 @@
   .dx-job-card:hover, .dx-report-tab:hover, .driver-job-card:hover,
   .driver-job-row:hover, .btn-dx-primary:hover { transform: none; }
 }
+
+/* ── Shared offline-sync status chip (Driver App + Customer PWA) ───────── */
+.dx-sync-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.dx-sync-chip svg { flex-shrink: 0; }
+.dx-sync-chip--online  { background: rgba(37, 99, 235, 0.10);  color: #1d4ed8; border-color: rgba(37, 99, 235, 0.20); }
+.dx-sync-chip--synced  { background: rgba(22, 163, 74, 0.12);  color: #15803d; border-color: rgba(22, 163, 74, 0.22); }
+.dx-sync-chip--syncing { background: rgba(37, 99, 235, 0.10);  color: #1d4ed8; border-color: rgba(37, 99, 235, 0.20); }
+.dx-sync-chip--queued  { background: rgba(217, 119, 6, 0.12);  color: #b45309; border-color: rgba(217, 119, 6, 0.22); }
+.dx-sync-chip--offline { background: rgba(100, 116, 139, 0.15); color: #475569; border-color: rgba(100, 116, 139, 0.25); }
+.dx-sync-chip--failed  { background: rgba(220, 38, 38, 0.12);  color: #b91c1c; border-color: rgba(220, 38, 38, 0.22); }
+
+.customer-offline-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(100, 116, 139, 0.08);
+  border-bottom: 1px solid var(--stroke, #e2e8f0);
+  font-size: 0.8125rem;
+  color: var(--muted, #64748b);
+}
+
+/* ── Subtle reusable micro-interaction utilities ──────────────────────── */
+@keyframes dxFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dxPopIn {
+  0%   { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.dx-fade-in { animation: dxFadeIn 0.24s ease-out both; }
+.dx-pop-in  { animation: dxPopIn 0.18s ease-out both; }

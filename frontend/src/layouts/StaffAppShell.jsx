@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import LogoutButton from '../components/LogoutButton'
 import PageTransition from '../components/PageTransition'
+import RouteFallback from '../components/RouteFallback'
 import useAuth from '../hooks/useAuth'
 import { Bell, Menu, X } from 'lucide-react'
 
@@ -113,7 +114,9 @@ function StaffAppShell({
         </header>
         <main id="main-content" tabIndex={-1} className="page-content">
           <PageTransition>
-            <Outlet />
+            <Suspense fallback={<RouteFallback />}>
+              <Outlet />
+            </Suspense>
           </PageTransition>
         </main>
       </div>

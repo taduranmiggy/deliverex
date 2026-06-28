@@ -3,16 +3,18 @@
 namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Driver\StoreDeliveryDocumentRequest;
 use App\Jobs\ProcessDeliveryDocumentOcr;
 use App\Models\DeliveryDocument;
 use App\Models\DispatchAssignment;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Ocr\OcrService;
+use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rules\File;
 
 class DocumentController extends Controller
 {
@@ -22,22 +24,9 @@ class DocumentController extends Controller
     ) {
     }
 
-    public function store(Request $request)
+    public function store(StoreDeliveryDocumentRequest $request)
     {
-        $data = $request->validate([
-            'assignment_id' => 'required|exists:dispatch_assignments,id',
-            'type'          => 'nullable|in:pod,receipt,gate_pass,weighbridge,signed_doc,invoice,job_order,departure,other',
-            'notes'         => 'nullable|string|max:2000',
-            'file'          => [
-                'required',
-                File::types(['jpg', 'jpeg', 'png'])
-                    ->max(10240),
-            ],
-        ], [
-            'file.required' => 'Please select an image to upload.',
-            'file.max'      => 'Image must be under 10 MB.',
-            'file.mimes'    => 'Only JPG, JPEG, and PNG images are supported for OCR.',
-        ]);
+        $data = $request->validated();
 
         $assignment = DispatchAssignment::findOrFail($data['assignment_id']);
         $driver     = DriverAccount::require($request->user());
@@ -54,7 +43,13 @@ class DocumentController extends Controller
             ], 422);
         }
 
-        $path = $request->file('file')->store('delivery_documents', 'public');
+        $uploadedFile = $request->file('file');
+
+        // Inspect the upload BEFORE it is moved off the temp path. This adds
+        // defensive logging only — the bytes handed to OCR are never altered.
+        $uploadMeta = $this->inspectUpload($uploadedFile);
+
+        $path = $uploadedFile->store('delivery_documents', 'public');
 
         if (! $path) {
             return response()->json(['message' => 'Failed to store uploaded file. Check storage permissions.'], 500);
@@ -67,6 +62,8 @@ class DocumentController extends Controller
             'uploaded_by'   => $request->user()?->id,
             'notes'         => $data['notes'] ?? null,
         ]);
+
+        $this->recordUploadAudit($request, $document, $assignment, $uploadMeta);
 
         if ($type === 'pod') {
             $assignment->update([
@@ -119,5 +116,67 @@ class DocumentController extends Controller
         ProcessDeliveryDocumentOcr::dispatch($document->id);
 
         return $document->fresh()->ocrResult;
+    }
+
+    /**
+     * Inspect the uploaded file for content/extension mismatches.
+     *
+     * Read-only: it never modifies the file (no metadata stripping/re-encoding),
+     * so OCR receives the exact original bytes. EXIF stripping is intentionally
+     * skipped here because re-encoding could drop orientation data and degrade
+     * OCR accuracy — the safer alternative is to log + audit instead.
+     */
+    private function inspectUpload(?UploadedFile $file): array
+    {
+        if (! $file) {
+            return ['suspicious' => false];
+        }
+
+        $aliases = ['jpg' => 'jpeg', 'jpeg' => 'jpeg', 'png' => 'png'];
+
+        $clientExt   = strtolower((string) $file->getClientOriginalExtension());
+        $detectedExt = strtolower((string) $file->guessExtension());
+        $clientMime  = (string) $file->getClientMimeType();
+
+        $normClient   = $aliases[$clientExt] ?? $clientExt;
+        $normDetected = $aliases[$detectedExt] ?? $detectedExt;
+
+        // Suspicious = the real (sniffed) content type disagrees with the
+        // declared extension, e.g. a script renamed to .jpg.
+        $suspicious = $detectedExt !== '' && $normClient !== '' && $normClient !== $normDetected;
+
+        return [
+            'original_name'      => $file->getClientOriginalName(),
+            'client_extension'   => $clientExt,
+            'detected_extension' => $detectedExt,
+            'client_mime'        => $clientMime,
+            'size_bytes'         => $file->getSize(),
+            'suspicious'         => $suspicious,
+        ];
+    }
+
+    private function recordUploadAudit(Request $request, DeliveryDocument $document, DispatchAssignment $assignment, array $uploadMeta): void
+    {
+        $meta = array_merge([
+            'document_id'   => $document->id,
+            'assignment_id' => $assignment->id,
+            'job_order_id'  => $assignment->job_order_id,
+            'type'          => $document->type,
+        ], $uploadMeta);
+
+        try {
+            if (! empty($uploadMeta['suspicious'])) {
+                Log::warning('Suspicious delivery document upload (content/extension mismatch)', $meta);
+                AuditLogger::record($request->user(), 'document.upload_suspicious', DeliveryDocument::class, $document->id, $meta, $request);
+            }
+
+            AuditLogger::record($request->user(), 'document.uploaded', DeliveryDocument::class, $document->id, $meta, $request);
+        } catch (\Throwable $e) {
+            // Audit logging must never block a real upload/OCR run.
+            Log::warning('Failed to record document upload audit', [
+                'document_id' => $document->id,
+                'error'       => $e->getMessage(),
+            ]);
+        }
     }
 }
