@@ -47,16 +47,24 @@ check_body() {
 }
 
 attempt=1
+unreachable_streak=0
 while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
   log "Attempt $attempt/$MAX_ATTEMPTS — $PING_URL"
 
   body=""
   if body="$(curl -fsS --connect-timeout 15 --max-time 30 "$PING_URL" 2>/dev/null)"; then
+    unreachable_streak=0
     if check_body "$body"; then
       exit 0
     fi
   else
+    unreachable_streak=$((unreachable_streak + 1))
     log "FAIL: Could not reach $PING_URL"
+    # Hostinger often blocks GitHub runner IPs — do not fail CI for 30+ minutes.
+    if [ "${ALLOW_UNREACHABLE_HEALTH_CHECK:-0}" = "1" ] && [ "$unreachable_streak" -ge 5 ]; then
+      log "WARN: Site unreachable from GitHub runner — skipping health gate (cron deploy may still apply)."
+      exit 0
+    fi
   fi
 
   if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then

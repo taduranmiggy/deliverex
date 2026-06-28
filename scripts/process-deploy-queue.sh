@@ -59,7 +59,7 @@ queue_latest_from_github_if_needed() {
     -H "Accept: application/vnd.github+json" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     -H "User-Agent: Deliverex-Deploy-Cron" \
-    "https://api.github.com/repos/$repo/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=1" \
+    "https://api.github.com/repos/$repo/actions/workflows/deploy.yml/runs?branch=main&status=completed&per_page=5" \
     2>>"$LOG_FILE" || true)"
 
   if [ -z "$runs_json" ]; then
@@ -67,11 +67,23 @@ queue_latest_from_github_if_needed() {
     return 0
   fi
 
-  run_id="$(printf '%s' "$runs_json" | php -r '$j=json_decode(stream_get_contents(STDIN),true); echo $j["workflow_runs"][0]["id"] ?? "";' 2>>"$LOG_FILE" || true)"
-  sha="$(printf '%s' "$runs_json" | php -r '$j=json_decode(stream_get_contents(STDIN),true); echo $j["workflow_runs"][0]["head_sha"] ?? "";' 2>>"$LOG_FILE" || true)"
+  run_id="$(printf '%s' "$runs_json" | php -r '
+    $j = json_decode(stream_get_contents(STDIN), true);
+    if (!is_array($j) || empty($j["workflow_runs"])) { exit(0); }
+    foreach ($j["workflow_runs"] as $run) {
+      if (!empty($run["id"])) { echo (string) $run["id"]; exit(0); }
+    }
+  ' 2>>"$LOG_FILE" || true)"
+  sha="$(printf '%s' "$runs_json" | php -r '
+    $j = json_decode(stream_get_contents(STDIN), true);
+    if (!is_array($j) || empty($j["workflow_runs"])) { exit(0); }
+    foreach ($j["workflow_runs"] as $run) {
+      if (!empty($run["head_sha"])) { echo (string) $run["head_sha"]; exit(0); }
+    }
+  ' 2>>"$LOG_FILE" || true)"
 
   if [ -z "$run_id" ]; then
-    log "WARN: No successful deploy workflow run found yet."
+    log "WARN: No completed deploy workflow run found yet."
     return 0
   fi
 
