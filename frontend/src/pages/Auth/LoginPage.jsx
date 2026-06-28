@@ -188,13 +188,6 @@ function LoginPage() {
               </button>
             </form>
 
-            <div className="auth-demo-dx auth-demo-split">
-              <strong>Demo credentials:</strong>
-              <div>Admin: admin@deliverex.com / admin123</div>
-              <div>Dispatcher: dispatcher@deliverex.com / dispatcher123</div>
-              <div>Manager: manager@deliverex.com / manager123</div>
-              <div>Customer: customer@deliverex.com / customer123</div>
-            </div>
             <p className="auth-alt-link" style={{ marginTop: 16, color: 'var(--muted)' }}>
               B2B company accounts are provisioned by an administrator.
             </p>
