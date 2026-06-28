@@ -1206,6 +1206,10 @@
 
 .dx-map-pin:hover { transform: scale(1.15); }
 
+.dx-map-pin--destination {
+  background: #dc2626;
+}
+
 .dx-map-pin--selected {
   width: 34px;
   height: 34px;

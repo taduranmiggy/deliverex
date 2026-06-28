@@ -12,7 +12,7 @@
  *     onViewDetails }   ← optional callback for popup "View Details"
  */
 import { useEffect, useRef, useMemo } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -24,15 +24,21 @@ delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, shadowUrl: markerShadow })
 
 const DEFAULT_CENTER = [14.5995, 120.9842]
-const NORMAL_SIZE    = 26
-const SELECTED_SIZE  = 34
+const NORMAL_SIZE = 26
+const SELECTED_SIZE = 34
 
 // ── Custom icon factory ────────────────────────────────────────────────────
-function makeIcon(isSelected) {
+function makeIcon(isSelected, kind = 'driver') {
   const size = isSelected ? SELECTED_SIZE : NORMAL_SIZE
+  const pinClass = [
+    'dx-map-pin',
+    kind === 'destination' ? 'dx-map-pin--destination' : '',
+    isSelected ? 'dx-map-pin--selected' : '',
+  ].filter(Boolean).join(' ')
+
   return L.divIcon({
     className: '',
-    html: `<div class="dx-map-pin${isSelected ? ' dx-map-pin--selected' : ''}"></div>`,
+    html: `<div class="${pinClass}"></div>`,
     iconSize:   [size, size],
     iconAnchor: [size / 2, size / 2],
     popupAnchor: [0, -(size / 2 + 6)],
@@ -69,7 +75,7 @@ function MapController({ markers, selectedId, markerRefs }) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-function LiveFleetMap({ markers = [], selectedId = null, onSelect }) {
+function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = [] }) {
   const markerRefs = useRef({})
 
   const valid = useMemo(
@@ -83,6 +89,17 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect }) {
     const lng = valid.reduce((s, m) => s + m.lng, 0) / valid.length
     return [lat, lng]
   }, [valid])
+
+  const validRouteLines = useMemo(
+    () =>
+      routeLines.filter((line) =>
+        Number.isFinite(line?.from?.lat) &&
+        Number.isFinite(line?.from?.lng) &&
+        Number.isFinite(line?.to?.lat) &&
+        Number.isFinite(line?.to?.lng),
+      ),
+    [routeLines],
+  )
 
   if (valid.length === 0) {
     return (
@@ -113,13 +130,31 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect }) {
 
       <MapController markers={valid} selectedId={selectedId} markerRefs={markerRefs} />
 
+      {validRouteLines.map((line) => (
+        <Polyline
+          key={line.id}
+          positions={[
+            [line.from.lat, line.from.lng],
+            [line.to.lat, line.to.lng],
+          ]}
+          pathOptions={{
+            color: '#2563eb',
+            weight: 3,
+            opacity: 0.75,
+            dashArray: '6 8',
+          }}
+        />
+      ))}
+
       {valid.map((m) => {
         const isSelected = m.id === selectedId
+        const markerKind = m.kind ?? 'driver'
+        const popupTitle = markerKind === 'destination' ? (m.jobId ?? 'Delivery Destination') : (m.jobId ?? m.label)
         return (
           <Marker
             key={m.id}
             position={[m.lat, m.lng]}
-            icon={makeIcon(isSelected)}
+            icon={makeIcon(isSelected, markerKind)}
             zIndexOffset={isSelected ? 1000 : 0}
             ref={(ref) => { if (ref) markerRefs.current[m.id] = ref }}
             eventHandlers={{
@@ -130,32 +165,50 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect }) {
               <div className="dx-map-popup">
                 {/* Header */}
                 <div className="dx-map-popup__title">
-                  {m.jobId ?? m.label}
+                  {popupTitle}
                 </div>
 
-                {/* Key-value rows */}
-                <div className="dx-map-popup__row">
-                  <span className="dx-map-popup__label">Driver</span>
-                  <span>{m.label ?? '—'}</span>
-                </div>
-                <div className="dx-map-popup__row">
-                  <span className="dx-map-popup__label">Vehicle</span>
-                  <span>{m.vehicle ?? '—'}</span>
-                </div>
-                <div className="dx-map-popup__row">
-                  <span className="dx-map-popup__label">Status</span>
-                  <span>{fmtStatus(m.status)}</span>
-                </div>
-                {m.gpsAt && (
-                  <div className="dx-map-popup__row">
-                    <span className="dx-map-popup__label">Last GPS</span>
-                    <span style={{ fontSize: '0.75rem' }}>
-                      {new Date(m.gpsAt).toLocaleString(undefined, {
-                        month: 'short', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
+                {markerKind === 'destination' ? (
+                  <>
+                    <div className="dx-map-popup__row">
+                      <span className="dx-map-popup__label">Customer</span>
+                      <span>{m.customerName ?? '—'}</span>
+                    </div>
+                    <div className="dx-map-popup__row">
+                      <span className="dx-map-popup__label">Address</span>
+                      <span>{m.address ?? '—'}</span>
+                    </div>
+                    <div className="dx-map-popup__row">
+                      <span className="dx-map-popup__label">Job Order</span>
+                      <span>{m.jobId ?? '—'}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="dx-map-popup__row">
+                      <span className="dx-map-popup__label">Driver</span>
+                      <span>{m.label ?? '—'}</span>
+                    </div>
+                    <div className="dx-map-popup__row">
+                      <span className="dx-map-popup__label">Vehicle</span>
+                      <span>{m.vehicle ?? '—'}</span>
+                    </div>
+                    <div className="dx-map-popup__row">
+                      <span className="dx-map-popup__label">Status</span>
+                      <span>{fmtStatus(m.status)}</span>
+                    </div>
+                    {m.gpsAt && (
+                      <div className="dx-map-popup__row">
+                        <span className="dx-map-popup__label">Last GPS</span>
+                        <span style={{ fontSize: '0.75rem' }}>
+                          {new Date(m.gpsAt).toLocaleString(undefined, {
+                            month: 'short', day: 'numeric',
+                            hour: '2-digit', minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Actions */}
@@ -176,7 +229,7 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect }) {
                       rel="noopener noreferrer"
                       className="dx-map-popup__btn dx-map-popup__btn--secondary"
                     >
-                      ↗ Maps
+                      ↗ OpenStreetMap
                     </a>
                   )}
                 </div>
@@ -189,4 +242,18 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect }) {
   )
 }
 
-export default LiveFleetMap
+function LiveFleetMapWithUnavailableMessage(props) {
+  const { unavailableMessage } = props
+  return (
+    <>
+      <LiveFleetMap {...props} />
+      {unavailableMessage ? (
+        <p style={{ marginTop: 10, marginBottom: 0, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+          {unavailableMessage}
+        </p>
+      ) : null}
+    </>
+  )
+}
+
+export default LiveFleetMapWithUnavailableMessage

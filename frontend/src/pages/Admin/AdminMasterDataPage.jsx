@@ -63,6 +63,29 @@ function sanitizePayload(tab, form) {
   return p
 }
 
+function validatePositiveVehicleFields(form) {
+  const fields = [
+    ['length_cm', 'Length'],
+    ['width_cm', 'Width'],
+    ['height_cm', 'Height'],
+    ['cbm_capacity', 'CBM capacity'],
+  ]
+
+  for (const [key, label] of fields) {
+    const value = form?.[key]
+    if (value === '' || value == null) continue
+    const num = Number(value)
+    if (!Number.isFinite(num)) {
+      return `${label} must be a valid number.`
+    }
+    if (num <= 0) {
+      return `${label} must be greater than zero.`
+    }
+  }
+
+  return ''
+}
+
 function rowMatches(row, tab, search) {
   const q = String(search || '').toLowerCase()
   if (!q) return true
@@ -84,9 +107,26 @@ function MasterRecordModal({ tab, item, data, onClose, onSaved }) {
   const [error, setError] = useState('')
   const [form, setForm] = useState(() => buildInitialForm(tab, item))
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const setPositive = (k) => (e) => {
+    const next = e.target.value
+    if (next.startsWith('-')) return
+    setForm((f) => ({ ...f, [k]: next }))
+  }
+  const blockNegativeKey = (e) => {
+    if (e.key === '-' || e.key === 'e' || e.key === 'E') {
+      e.preventDefault()
+    }
+  }
 
   const submit = async (e) => {
     e.preventDefault()
+    if (tab === 'vehicles') {
+      const msg = validatePositiveVehicleFields(form)
+      if (msg) {
+        setError(msg)
+        return
+      }
+    }
     setSaving(true)
     setError('')
     try {
@@ -170,10 +210,10 @@ function MasterRecordModal({ tab, item, data, onClose, onSaved }) {
                   {vt.map((r) => <option key={r.id} value={r.id}>{r.name} {r.wheel_type ? `(${r.wheel_type})` : ''}</option>)}
                 </select>
               </label>
-              <label>Length (cm) <input type="number" step="0.01" value={form.length_cm} onChange={set('length_cm')} /></label>
-              <label>Width (cm) <input type="number" step="0.01" value={form.width_cm} onChange={set('width_cm')} /></label>
-              <label>Height (cm) <input type="number" step="0.01" value={form.height_cm} onChange={set('height_cm')} /></label>
-              <label>CBM capacity <input type="number" step="0.001" value={form.cbm_capacity} onChange={set('cbm_capacity')} /></label>
+              <label>Length (cm) <input type="number" min="0.01" step="0.01" value={form.length_cm} onChange={setPositive('length_cm')} onKeyDown={blockNegativeKey} /></label>
+              <label>Width (cm) <input type="number" min="0.01" step="0.01" value={form.width_cm} onChange={setPositive('width_cm')} onKeyDown={blockNegativeKey} /></label>
+              <label>Height (cm) <input type="number" min="0.01" step="0.01" value={form.height_cm} onChange={setPositive('height_cm')} onKeyDown={blockNegativeKey} /></label>
+              <label>CBM capacity <input type="number" min="0.001" step="0.001" value={form.cbm_capacity} onChange={setPositive('cbm_capacity')} onKeyDown={blockNegativeKey} /></label>
               <StatusSelect value={form.status} onChange={set('status')} />
             </>
           )}

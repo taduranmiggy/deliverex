@@ -934,3 +934,110 @@
   color: var(--danger);
   font-size: 0.875rem;
 }
+
+/* ─── Company activation page enhancements ───────────────────────────── */
+.auth-activation-form {
+  gap: 14px;
+}
+
+.auth-password-row--activation {
+  position: relative;
+}
+
+.auth-password-row--activation > span {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.auth-password-row--activation input {
+  padding-right: 44px;
+}
+
+.activation-strength {
+  display: grid;
+  gap: 8px;
+  margin-top: -4px;
+}
+
+.activation-strength__bar-wrap {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.activation-strength__bar {
+  display: block;
+  height: 100%;
+  width: 8%;
+  border-radius: inherit;
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.activation-strength__bar--weak { background: #dc2626; }
+.activation-strength__bar--fair { background: #f97316; }
+.activation-strength__bar--good { background: #eab308; }
+.activation-strength__bar--strong { background: #16a34a; }
+
+.activation-strength__bar--fill-0 { width: 8%; }
+.activation-strength__bar--fill-1 { width: 25%; }
+.activation-strength__bar--fill-2 { width: 40%; }
+.activation-strength__bar--fill-3 { width: 58%; }
+.activation-strength__bar--fill-4 { width: 78%; }
+.activation-strength__bar--fill-5 { width: 100%; }
+
+.activation-strength__label {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.activation-strength__label--weak { color: #b91c1c; }
+.activation-strength__label--fair { color: #c2410c; }
+.activation-strength__label--good { color: #a16207; }
+.activation-strength__label--strong { color: #166534; }
+
+.activation-rules {
+  list-style: none;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  background: #f8fafc;
+  display: grid;
+  gap: 6px;
+}
+
+.activation-rules li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.activation-rules li span:first-child {
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.activation-rules li.is-complete {
+  color: #166534;
+}
+
+.activation-match {
+  margin: -4px 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.activation-match.is-match {
+  color: #166534;
+}
+
+.activation-match.is-mismatch {
+  color: #b91c1c;
+}

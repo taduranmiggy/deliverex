@@ -16,8 +16,10 @@ function CustomerNavBar() {
   const navLinkCls = ({ isActive }) =>
     `customer-nav-link${isActive ? ' active' : ''}`
 
+  const pwaMode = isStandalonePwa()
+
   return (
-    <nav className="customer-nav" role="navigation" aria-label="Customer navigation">
+    <nav className={`customer-nav${pwaMode ? ' customer-nav--pwa' : ''}`} role="navigation" aria-label="Customer navigation">
       <div className="customer-nav-inner">
         <Link to={homePath} className="customer-nav-brand">
           <div className="customer-nav-brand-icon" aria-hidden>

@@ -131,22 +131,45 @@ function TrackingPage() {
           )}
         />
 
-        {error && <p className="notice error tracking-notice" role="alert">{error}</p>}
-
         <div className="tracking-grid">
         {/* Search form */}
-        <form className="tracking-card tracking-form" onSubmit={handleTrack} aria-label="Track a delivery">
-          <label className="tracking-label" htmlFor="tid">Tracking ID</label>
-          <div className="tracking-input-row">
-            <input
-              id="tid" type="text" placeholder="Enter tracking ID" value={code}
-              onChange={(e) => setCode(e.target.value)}
-              aria-invalid={Boolean(error)} autoComplete="off"
-            />
-            <button type="submit" className="btn-dx-primary" disabled={loading}>
-              {loading ? <RefreshCw size={16} style={{ animation: 'spin 0.7s linear infinite' }} /> : <Search size={16} />}
-              {loading ? 'Searching…' : 'Track'}
-            </button>
+        <form className="tracking-card tracking-form pwa-track-card pwa-track-card--page" onSubmit={handleTrack} aria-label="Track a delivery" noValidate>
+          <h2 className="pwa-track-card__title">Look up shipment</h2>
+          <div className="pwa-track-search">
+            <label className="pwa-track-search__label" htmlFor="tid">Tracking ID</label>
+            <div className="pwa-track-search__row tracking-input-row">
+              <div className={`pwa-track-search__input-wrap${error ? ' pwa-track-search__input-wrap--invalid' : ''}`}>
+                <Search size={18} className="pwa-track-search__icon" aria-hidden />
+                <input
+                  id="tid"
+                  type="text"
+                  className="pwa-track-search__input"
+                  placeholder="e.g. XKFP2NQRLA"
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value)
+                    if (error) setError('')
+                  }}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? 'track-error' : 'track-hint'}
+                  autoComplete="off"
+                  inputMode="text"
+                />
+              </div>
+              <button type="submit" className="pwa-btn pwa-btn--primary pwa-track-search__submit" disabled={loading} aria-busy={loading}>
+                {loading ? (
+                  <RefreshCw size={18} className="pwa-btn__spinner" aria-hidden />
+                ) : (
+                  <Search size={18} aria-hidden />
+                )}
+                <span>{loading ? 'Searching…' : 'Track Delivery'}</span>
+              </button>
+            </div>
+            {error ? (
+              <p id="track-error" className="pwa-track-search__error" role="alert">{error}</p>
+            ) : (
+              <p id="track-hint" className="pwa-track-search__hint">Example: XKFP2NQRLA</p>
+            )}
           </div>
           <div className="tracking-actions">
             {pollKey && (
@@ -155,14 +178,13 @@ function TrackingPage() {
               </span>
             )}
           </div>
-          <p className="tracking-hint">Example: XKFP2NQRLA</p>
 
           {/* How it works */}
-          <div style={{ marginTop: 24, padding: '18px', background: 'var(--slate-50)', borderRadius: 12, border: '1px solid var(--stroke)' }}>
-            <p style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: 12 }}>How it works</p>
-            {['Get your Tracking ID from your dispatcher or provider.', 'Enter it above and click Track.', 'View delivery status, ETA window, and proof-of-delivery documents.'].map((step, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 8, fontSize: '0.8125rem', color: 'var(--muted)' }}>
-                <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--color-primary-light)', color: 'var(--color-primary)', display: 'grid', placeItems: 'center', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+          <div className="pwa-track-howto">
+            <p className="pwa-track-howto__title">How it works</p>
+            {['Get your Tracking ID from your dispatcher or provider.', 'Enter it above and tap Track Delivery.', 'View delivery status, ETA window, and proof-of-delivery documents.'].map((step, i) => (
+              <div key={i} className="pwa-track-howto__step">
+                <span className="pwa-track-howto__num" aria-hidden>{i + 1}</span>
                 {step}
               </div>
             ))}

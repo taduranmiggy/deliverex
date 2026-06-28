@@ -61,6 +61,22 @@
 }
 
 /* ── Hero & home ─────────────────────────────────────────── */
+.pwa-home-header,
+.pwa-track-card {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pwa-home-header {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+.pwa-track-card {
+  margin-left: max(16px, env(safe-area-inset-left, 0px));
+  margin-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
 .pwa-hero {
   width: 100%;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
@@ -109,20 +125,14 @@
   }
 }
 
-/* Action grid: 1 col on narrow phones */
+/* Action grid: 1 col only on very narrow phones */
 @media (max-width: 359px) {
   .pwa-action-grid {
     grid-template-columns: 1fr;
   }
 }
 
-@media (min-width: 360px) and (max-width: 520px) {
-  .pwa-action-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (min-width: 521px) {
+@media (min-width: 360px) {
   .pwa-action-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

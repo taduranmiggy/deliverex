@@ -33,7 +33,19 @@ class CompanyActivationController extends Controller
     public function activate(Request $request, string $token)
     {
         $data = $request->validate([
-            'password' => 'required|string|min:8|confirmed',
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+                'confirmed',
+                'regex:/[A-Z]/',
+                'regex:/[a-z]/',
+                'regex:/[0-9]/',
+                'regex:/[^A-Za-z0-9]/',
+            ],
+        ], [
+            'password.min' => 'Password must be at least 8 characters.',
+            'password.regex' => 'Password must include uppercase, lowercase, number, and special character.',
         ]);
 
         $company = $this->companies->validateActivationToken($token);

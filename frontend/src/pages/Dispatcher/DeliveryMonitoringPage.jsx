@@ -5,7 +5,7 @@ import LiveFleetMap from '../../components/LiveFleetMap'
 import { PageHeader, ProofImageModal, StatusBadge } from '../../components/ui'
 import { Car, CheckCircle2, ExternalLink, MapPin, RefreshCw, ShieldCheck } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
-import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
+import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { getDelayReasonLabel } from '../../utils/driverAssignment'
 
 function formatGpsTime(iso) {
@@ -13,6 +13,19 @@ function formatGpsTime(iso) {
   return new Date(iso).toLocaleString(undefined, {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
+}
+
+function parseCoordinate(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function buildOsmCoordinateUrl(lat, lng) {
+  return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`
+}
+
+function buildOsmSearchUrl(query) {
+  return `https://www.openstreetmap.org/search?query=${encodeURIComponent(query || '')}`
 }
 
 function DeliveryMonitoringPage() {
@@ -73,6 +86,15 @@ function DeliveryMonitoringPage() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!document.hidden) {
+        load()
+      }
+    }, 30000)
+    return () => clearInterval(timer)
+  }, [load])
+
   const handleAcknowledge = async (reportId) => {
     setAcknowledgingId(reportId)
     try {
@@ -85,31 +107,66 @@ function DeliveryMonitoringPage() {
     }
   }
 
-  // ── Map markers — enriched with all popup data ─────────────────────────
-  const mapMarkers = useMemo(
-    () =>
-      assignments
-        .map((a) => {
-          const gps = gpsMap[a.id]
-          if (!gps) return null
-          return {
-            id:      a.id,
-            lat:     gps.lat,
-            lng:     gps.lng,
-            label:   a.driver?.user?.name ?? 'Driver',
-            sublabel: `${formatJobPublicId(a.job_order_id)} · ${a.status}`,
-            // enriched fields for popup
-            jobId:    formatJobPublicId(a.job_order_id),
-            vehicle:  a.vehicle?.plate_no ?? '—',
-            status:   a.status,
-            gpsAt:    gps.at,
-            mapsUrl:  `https://www.google.com/maps?q=${gps.lat},${gps.lng}`,
-            onViewDetails: handleSelect,
-          }
+  const { mapMarkers, routeLines, unavailableMessage } = useMemo(() => {
+    const markers = []
+    const lines = []
+    let missingDriverGps = false
+
+    assignments.forEach((a) => {
+      const gps = gpsMap[a.id]
+      const dropoffLat = parseCoordinate(a.job_order?.dropoff_latitude)
+      const dropoffLng = parseCoordinate(a.job_order?.dropoff_longitude)
+      const destinationAddress = buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '—'
+      const destinationAvailable = Number.isFinite(dropoffLat) && Number.isFinite(dropoffLng)
+      const jobPublicId = formatJobPublicId(a.job_order_id)
+
+      if (destinationAvailable) {
+        markers.push({
+          id: `destination-${a.id}`,
+          kind: 'destination',
+          lat: dropoffLat,
+          lng: dropoffLng,
+          jobId: jobPublicId,
+          customerName: buildDisplayName(a.job_order) || '—',
+          address: destinationAddress,
+          mapsUrl: buildOsmCoordinateUrl(dropoffLat, dropoffLng),
         })
-        .filter(Boolean),
-    [assignments, gpsMap, handleSelect],
-  )
+      }
+
+      if (gps && Number.isFinite(gps.lat) && Number.isFinite(gps.lng)) {
+        markers.push({
+          id: a.id,
+          kind: 'driver',
+          lat: gps.lat,
+          lng: gps.lng,
+          label: a.driver?.user?.name ?? 'Driver',
+          sublabel: `${jobPublicId} · ${a.status}`,
+          jobId: jobPublicId,
+          vehicle: a.vehicle?.plate_no ?? '—',
+          status: a.status,
+          gpsAt: gps.at,
+          mapsUrl: buildOsmCoordinateUrl(gps.lat, gps.lng),
+          onViewDetails: handleSelect,
+        })
+
+        if (destinationAvailable) {
+          lines.push({
+            id: `line-${a.id}`,
+            from: { lat: gps.lat, lng: gps.lng },
+            to: { lat: dropoffLat, lng: dropoffLng },
+          })
+        }
+      } else if (destinationAvailable) {
+        missingDriverGps = true
+      }
+    })
+
+    return {
+      mapMarkers: markers,
+      routeLines: lines,
+      unavailableMessage: missingDriverGps ? 'Driver location is currently unavailable.' : '',
+    }
+  }, [assignments, gpsMap, handleSelect])
 
   return (
     <>
@@ -134,6 +191,8 @@ function DeliveryMonitoringPage() {
           <h3 className="dx-panel-title">Last Known Locations</h3>
           <LiveFleetMap
             markers={mapMarkers}
+            routeLines={routeLines}
+            unavailableMessage={unavailableMessage}
             selectedId={selectedId}
             onSelect={handleSelect}
           />
@@ -159,10 +218,8 @@ function DeliveryMonitoringPage() {
                 const isPastDue = a.job_order?.scheduled_end && new Date(a.job_order.scheduled_end).getTime() < Date.now()
                 const isActive  = selectedId === a.id
                 const mapsUrl   = gps
-                  ? `https://www.google.com/maps?q=${gps.lat},${gps.lng}`
-                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                      buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '',
-                    )}`
+                  ? buildOsmCoordinateUrl(gps.lat, gps.lng)
+                  : buildOsmSearchUrl(buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '')
 
                 return (
                   <div
@@ -293,7 +350,7 @@ function DeliveryMonitoringPage() {
                         style={{ marginTop: 8, display: 'inline-flex', gap: 4 }}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <ExternalLink size={12} /> Open in Maps
+                        <ExternalLink size={12} /> Open in OpenStreetMap
                       </a>
                     </div>
                   </div>

@@ -149,6 +149,33 @@
   .customer-layout-main {
     padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }
+
+  .customer-page-shell {
+    padding-block: 16px 28px;
+  }
+
+  .customer-page-header {
+    margin-bottom: 16px;
+    gap: 12px;
+  }
+
+  .customer-page-header h1 {
+    font-size: 1.25rem;
+    margin-bottom: 6px;
+  }
+
+  .customer-page-description {
+    font-size: 0.875rem;
+    line-height: 1.45;
+  }
+
+  .customer-page-header__aside {
+    width: 100%;
+  }
+}
+
+.customer-layout--pwa .customer-page-shell {
+  padding-block: 12px 20px;
 }
 
 /* Tracking — align with container, no extra width */

@@ -4,10 +4,13 @@ import CustomerBottomNav from '../components/customer/CustomerBottomNav'
 import CustomerLegalFooter from '../components/customer/CustomerLegalFooter'
 import CustomerNavBar from '../components/customer/CustomerNavBar'
 import SessionStatusBar from '../components/session/SessionStatusBar'
+import { isStandalonePwa } from '../utils/pwaUtils'
 
 function CustomerLayout() {
+  const pwaMode = isStandalonePwa()
+
   return (
-    <div className="customer-layout" id="main-content">
+    <div className={`customer-layout${pwaMode ? ' customer-layout--pwa' : ''}`} id="main-content">
       <SessionStatusBar />
       <CustomerNavBar />
 
@@ -17,7 +20,7 @@ function CustomerLayout() {
         </main>
       </PageTransition>
 
-      <CustomerLegalFooter />
+      <CustomerLegalFooter compact={pwaMode} />
       <CustomerBottomNav />
     </div>
   )

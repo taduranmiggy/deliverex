@@ -60,11 +60,17 @@ function CustomerHomePage() {
     return counts
   }, [customerOrders])
 
+  const [trackError, setTrackError] = useState('')
+
   const handleTrack = (e) => {
     e.preventDefault()
-    if (trackCode.trim()) {
-      navigate('/customer/track', { state: { prefillTracking: trackCode.trim() } })
+    const trimmed = trackCode.trim()
+    if (!trimmed) {
+      setTrackError('Enter your tracking ID to continue.')
+      return
     }
+    setTrackError('')
+    navigate('/customer/track', { state: { prefillTracking: trimmed } })
   }
 
   const guestActions = [
@@ -79,46 +85,66 @@ function CustomerHomePage() {
 
   return (
     <div className="pwa-home">
-      <section className="pwa-hero">
-        <div className="pwa-hero__inner">
-          {isCustomer ? (
-            <>
-              <p className="pwa-hero__eyebrow">Welcome back</p>
-              <h1 className="pwa-hero__title">{user?.name?.split(' ')[0] ?? 'Customer'}</h1>
-              <p className="pwa-hero__subtitle">
-                Monitor delivery progress, estimated arrivals, and proof-of-delivery records.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="pwa-hero__eyebrow">Deliverex Customer</p>
-              <h1 className="pwa-hero__title">Track Your Deliveries Easily</h1>
-              <p className="pwa-hero__subtitle">
-                Monitor delivery status, estimated arrival time, proof-of-delivery records, and shipment history.
-              </p>
-            </>
-          )}
+      <header className="pwa-home-header">
+        {isCustomer ? (
+          <>
+            <p className="pwa-home-header__eyebrow">Welcome back</p>
+            <h1 className="pwa-home-header__title">Hi, {user?.name?.split(' ')[0] ?? 'Customer'}</h1>
+            <p className="pwa-home-header__subtitle">
+              Track shipments, view ETAs, and access proof of delivery.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="pwa-home-header__eyebrow">Deliverex Customer</p>
+            <h1 className="pwa-home-header__title">Your deliveries, one tap away</h1>
+            <p className="pwa-home-header__subtitle">
+              Look up status, ETAs, and delivery records — no account required.
+            </p>
+          </>
+        )}
+      </header>
 
-          <form className="pwa-hero__track" onSubmit={handleTrack}>
-            <div className="pwa-hero__track-input-wrap">
-              <Search size={18} className="pwa-hero__track-icon" aria-hidden />
+      <section className="pwa-track-card" aria-labelledby="home-track-heading">
+        <h2 id="home-track-heading" className="pwa-track-card__title">Track a delivery</h2>
+        <form className="pwa-track-search" onSubmit={handleTrack} noValidate>
+          <label className="pwa-track-search__label" htmlFor="home-track-id">Tracking ID</label>
+          <div className="pwa-track-search__row">
+            <div className={`pwa-track-search__input-wrap${trackError ? ' pwa-track-search__input-wrap--invalid' : ''}`}>
+              <Search size={18} className="pwa-track-search__icon" aria-hidden />
               <input
+                id="home-track-id"
                 type="text"
-                placeholder="Enter Tracking ID"
+                className="pwa-track-search__input"
+                placeholder="e.g. XKFP2NQRLA"
                 value={trackCode}
-                onChange={(e) => setTrackCode(e.target.value)}
+                onChange={(e) => {
+                  setTrackCode(e.target.value)
+                  if (trackError) setTrackError('')
+                }}
                 aria-label="Tracking ID"
+                aria-invalid={Boolean(trackError)}
+                aria-describedby={trackError ? 'home-track-error' : undefined}
+                autoComplete="off"
+                inputMode="text"
               />
             </div>
-            <button type="submit" className="pwa-hero__track-btn">Track Delivery</button>
-          </form>
-
-          {!isCustomer && (
-            <div className="pwa-hero__cta-row">
-              <Link to="/customer/login" className="btn-dx-primary pwa-hero__cta">Sign In</Link>
-            </div>
+            <button type="submit" className="pwa-btn pwa-btn--primary pwa-track-search__submit">
+              Track Delivery
+            </button>
+          </div>
+          {trackError ? (
+            <p id="home-track-error" className="pwa-track-search__error" role="alert">{trackError}</p>
+          ) : (
+            <p className="pwa-track-search__hint">Enter the ID from your dispatcher or delivery receipt.</p>
           )}
-        </div>
+        </form>
+
+        {!isCustomer && (
+          <div className="pwa-track-card__footer">
+            <Link to="/customer/login" className="pwa-btn pwa-btn--outline pwa-btn--block">Sign in to your account</Link>
+          </div>
+        )}
       </section>
 
       <div className="customer-content pwa-home__body">

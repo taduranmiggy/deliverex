@@ -31,7 +31,7 @@ function CustomerBottomNav() {
           }
         >
           <span className="customer-bottom-nav-item__icon-wrap">
-            <Icon size={20} className="customer-bottom-nav-item__icon" />
+            <Icon size={22} className="customer-bottom-nav-item__icon" strokeWidth={2} />
           </span>
           <span className="customer-bottom-nav-item__label">{label}</span>
         </NavLink>

@@ -35,7 +35,7 @@ class UserController extends Controller
         $this->assertInternalStaffRole($role->name, isCreate: true);
 
         $user = User::create($data);
-        $user->load('role');
+        DriverAccount::sync($user->fresh());
 
         return response()->json($user->fresh()->load('role', 'driver'), 201);
     }
@@ -88,13 +88,7 @@ class UserController extends Controller
             ]);
         }
 
-        if ($roleName === 'driver') {
-            throw ValidationException::withMessages([
-                'role_id' => ['Driver accounts must be created via Master Data → Generate Account.'],
-            ]);
-        }
-
-        $allowed = ['admin', 'dispatcher', 'manager'];
+        $allowed = ['admin', 'dispatcher', 'manager', 'driver'];
         if (! in_array($roleName, $allowed, true)) {
             throw ValidationException::withMessages([
                 'role_id' => ['Invalid role for admin user management.'],

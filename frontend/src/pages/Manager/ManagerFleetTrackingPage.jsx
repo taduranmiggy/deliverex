@@ -1,12 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiRequest } from '../../api/client'
 import LiveFleetMap from '../../components/LiveFleetMap'
 import { PageHeader, StatusBadge } from '../../components/ui'
-import { ExternalLink, MapPin, RefreshCw } from 'lucide-react'
+import { ExternalLink, RefreshCw } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
+import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 
 function fetchActiveDeliveries() {
   return apiRequest('/manager/active-deliveries')
+}
+
+function parseCoordinate(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function buildOsmCoordinateUrl(lat, lng) {
+  return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`
 }
 
 function ManagerFleetTrackingPage() {
@@ -14,7 +24,7 @@ function ManagerFleetTrackingPage() {
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setRefreshing(true)
     setError('')
     try {
@@ -25,24 +35,79 @@ function ManagerFleetTrackingPage() {
     } finally {
       setRefreshing(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     load()
-  }, [])
+  }, [load])
 
-  const markers = useMemo(
-    () => rows
-      .filter((r) => r.gps)
-      .map((r) => ({
-        id: r.id,
-        lat: r.gps.lat,
-        lng: r.gps.lng,
-        label: r.driver ?? 'Driver',
-        sublabel: r.job_order ? formatJobPublicId(r.job_order.id) : `#${r.id}`,
-      })),
-    [rows],
-  )
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!document.hidden) {
+        load()
+      }
+    }, 30000)
+    return () => clearInterval(timer)
+  }, [load])
+
+  const { markers, routeLines, unavailableMessage } = useMemo(() => {
+    const items = []
+    const lines = []
+    let missingDriverGps = false
+
+    rows.forEach((r) => {
+      const jobPublicId = r.job_order ? formatJobPublicId(r.job_order.id) : `#${r.id}`
+      const dropoffLat = parseCoordinate(r.job_order?.dropoff_latitude)
+      const dropoffLng = parseCoordinate(r.job_order?.dropoff_longitude)
+      const destinationAddress = buildDisplayAddress('dropoff', r.job_order) || r.job_order?.dropoff_location || '—'
+      const destinationAvailable = Number.isFinite(dropoffLat) && Number.isFinite(dropoffLng)
+
+      if (destinationAvailable) {
+        items.push({
+          id: `destination-${r.id}`,
+          kind: 'destination',
+          lat: dropoffLat,
+          lng: dropoffLng,
+          jobId: jobPublicId,
+          customerName: buildDisplayName(r.job_order) || '—',
+          address: destinationAddress,
+          mapsUrl: buildOsmCoordinateUrl(dropoffLat, dropoffLng),
+        })
+      }
+
+      if (r.gps && Number.isFinite(r.gps.lat) && Number.isFinite(r.gps.lng)) {
+        items.push({
+          id: r.id,
+          kind: 'driver',
+          lat: r.gps.lat,
+          lng: r.gps.lng,
+          label: r.driver ?? 'Driver',
+          sublabel: jobPublicId,
+          jobId: jobPublicId,
+          vehicle: r.vehicle ?? '—',
+          status: r.status,
+          gpsAt: r.gps.at,
+          mapsUrl: buildOsmCoordinateUrl(r.gps.lat, r.gps.lng),
+        })
+
+        if (destinationAvailable) {
+          lines.push({
+            id: `line-${r.id}`,
+            from: { lat: r.gps.lat, lng: r.gps.lng },
+            to: { lat: dropoffLat, lng: dropoffLng },
+          })
+        }
+      } else if (destinationAvailable) {
+        missingDriverGps = true
+      }
+    })
+
+    return {
+      markers: items,
+      routeLines: lines,
+      unavailableMessage: missingDriverGps ? 'Driver location is currently unavailable.' : '',
+    }
+  }, [rows])
 
   return (
     <>
@@ -56,7 +121,7 @@ function ManagerFleetTrackingPage() {
 
       <div className="dx-panel" style={{ marginBottom: 20 }}>
         <h3 className="dx-panel-title">Last Known Locations</h3>
-        <LiveFleetMap markers={markers} />
+        <LiveFleetMap markers={markers} routeLines={routeLines} unavailableMessage={unavailableMessage} />
       </div>
 
       <div className="dx-panel">
@@ -81,8 +146,8 @@ function ManagerFleetTrackingPage() {
                     </td>
                     <td>
                       {r.gps && (
-                        <a href={`https://www.google.com/maps?q=${r.gps.lat},${r.gps.lng}`} target="_blank" rel="noopener noreferrer" className="btn-dx-secondary btn-sm">
-                          <ExternalLink size={12} /> Maps
+                        <a href={buildOsmCoordinateUrl(r.gps.lat, r.gps.lng)} target="_blank" rel="noopener noreferrer" className="btn-dx-secondary btn-sm">
+                          <ExternalLink size={12} /> OpenStreetMap
                         </a>
                       )}
                     </td>

@@ -4,27 +4,29 @@ import { ChevronRight } from 'lucide-react'
 function CustomerActionCard({ icon: Icon, title, description, to, onClick }) {
   const inner = (
     <>
-      <div className="pwa-action-card__icon">
-        <Icon size={22} strokeWidth={2} />
+      <div className="pwa-action-card__icon" aria-hidden>
+        <Icon size={26} strokeWidth={2} />
       </div>
       <div className="pwa-action-card__body">
         <p className="pwa-action-card__title">{title}</p>
         {description ? <p className="pwa-action-card__desc">{description}</p> : null}
       </div>
-      <ChevronRight size={18} className="pwa-action-card__chevron" aria-hidden />
+      <ChevronRight size={16} className="pwa-action-card__chevron" aria-hidden />
     </>
   )
 
+  const className = 'pwa-action-card pwa-action-card--app'
+
   if (to) {
     return (
-      <Link to={to} className="pwa-action-card">
+      <Link to={to} className={className}>
         {inner}
       </Link>
     )
   }
 
   return (
-    <button type="button" className="pwa-action-card" onClick={onClick}>
+    <button type="button" className={className} onClick={onClick}>
       {inner}
     </button>
   )
