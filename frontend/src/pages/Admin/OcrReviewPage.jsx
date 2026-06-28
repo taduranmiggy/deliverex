@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { exportOcrReport, fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, validateOcr } from '../../api/admin'
 import { EmptyState, PageHeader, PaginationBar } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
@@ -76,31 +76,44 @@ function OcrReviewPage() {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
   const [total, setTotal] = useState(0)
+  const loadRequestId = useRef(0)
 
-  const load = useCallback(async (filter = 'all') => {
+  const load = useCallback(async (filter = 'all', pageNum = page) => {
+    const requestId = ++loadRequestId.current
     setLoading(true)
     setError('')
     try {
-      const res = await fetchOcrQueue(page, filter, {
+      const res = await fetchOcrQueue(pageNum, filter, {
         per_page: perPage,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-        status: statusFilter || undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
         job_order_id: jobOrderIdFilter || undefined,
       })
+      if (requestId !== loadRequestId.current) return
       const data = res.data || []
       setQueue(data)
       setTotal(res.total ?? data.length)
       setSelected((prev) => data.find((d) => d.id === prev?.id) ?? data[0] ?? null)
     } catch (err) {
+      if (requestId !== loadRequestId.current) return
       setError(err.message)
     } finally {
-      setLoading(false)
+      if (requestId === loadRequestId.current) setLoading(false)
     }
   }, [dateFrom, dateTo, statusFilter, jobOrderIdFilter, page, perPage])
 
-  useEffect(() => { load(tab) }, [tab, load])
-  useEffect(() => { setPage(1) }, [tab, dateFrom, dateTo, statusFilter, jobOrderIdFilter, perPage])
+  useEffect(() => { load(tab, page) }, [tab, page, load])
+
+  const clearFilters = () => {
+    setPage(1)
+    setDateFrom('')
+    setDateTo('')
+    setStatusFilter('all')
+    setJobOrderIdFilter('')
+  }
+
+  const hasActiveFilters = Boolean(dateFrom || dateTo || statusFilter !== 'all' || jobOrderIdFilter)
 
   useEffect(() => {
     const needsPoll = queue.some((q) => ['pending', 'processing'].includes(q.processing_status))
@@ -194,7 +207,7 @@ function OcrReviewPage() {
         filter: tab,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-        status: statusFilter || undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
         job_order_id: jobOrderIdFilter || undefined,
       })
       const url = URL.createObjectURL(blob)
@@ -255,15 +268,15 @@ function OcrReviewPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
           <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
             Date From
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            <input type="date" value={dateFrom} onChange={(e) => { setPage(1); setDateFrom(e.target.value) }} />
           </label>
           <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
             Date To
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            <input type="date" value={dateTo} onChange={(e) => { setPage(1); setDateTo(e.target.value) }} />
           </label>
           <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
             Delivery Status
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <select value={statusFilter} onChange={(e) => { setPage(1); setStatusFilter(e.target.value) }}>
               <option value="all">All</option>
               <option value="pending_review">Pending Review</option>
               <option value="verified">Verified</option>
@@ -277,10 +290,17 @@ function OcrReviewPage() {
               type="search"
               placeholder="e.g. 12345"
               value={jobOrderIdFilter}
-              onChange={(e) => setJobOrderIdFilter(e.target.value)}
+              onChange={(e) => { setPage(1); setJobOrderIdFilter(e.target.value) }}
             />
           </label>
         </div>
+        {hasActiveFilters && (
+          <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn-dx-secondary btn-sm" onClick={clearFilters}>
+              Clear filters
+            </button>
+          </div>
+        )}
       </div>
 
       {showTesseractWarning && (
@@ -295,7 +315,7 @@ function OcrReviewPage() {
         <div className="dx-panel" style={{ marginBottom: 0 }}>
           <div className="dx-ocr-tabs">
             {FILTER_TABS.map((t) => (
-              <button key={t.key} type="button" className={`dx-ocr-tab${tab === t.key ? ' dx-ocr-tab--active' : ''}`} onClick={() => setTab(t.key)}>
+              <button key={t.key} type="button" className={`dx-ocr-tab${tab === t.key ? ' dx-ocr-tab--active' : ''}`} onClick={() => { setPage(1); setTab(t.key) }}>
                 {t.label}
               </button>
             ))}
@@ -305,7 +325,18 @@ function OcrReviewPage() {
               <Loader2 size={16} style={{ animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
               Loading queue…
             </div>
-          ) : queue.length === 0 ? <EmptyState icon={FileSearch} title="Queue empty" message="No documents in this category." /> : (
+          ) : queue.length === 0 ? (
+            <EmptyState
+              icon={FileSearch}
+              title="Queue empty"
+              message={hasActiveFilters
+                ? 'No documents match the current filters. Try Clear filters or switch tabs.'
+                : 'No documents in this category.'}
+              action={hasActiveFilters ? (
+                <button type="button" className="btn-dx-secondary btn-sm" onClick={clearFilters}>Clear filters</button>
+              ) : null}
+            />
+          ) : (
             <div className="dx-ocr-queue-scroll">
               {queue.map((item) => {
                 const b = getBadge(item)
