@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchAssignmentAuditTrails } from '../../api/assignmentAudit'
 import { fetchAnalytics, fetchReports } from '../../api/manager'
+import ExportConfirmModal from '../../components/ExportConfirmModal'
 import { DataTable, EmptyState, PageHeader, StatusBadge } from '../../components/ui'
-import { ClipboardList, Download, FileText, Users, X } from 'lucide-react'
+import { ClipboardList, Download, FileText, Users } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayName } from '../../utils/jobOrderHelpers'
 
@@ -288,69 +289,17 @@ function ReportsPage() {
         )}
       </div>
 
-      {showExportSummary && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Confirm export"
-          onClick={() => setShowExportSummary(false)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1200,
-            background: 'rgba(15,23,42,0.55)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-          }}
-        >
-          <div
-            className="dx-pop-in"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'var(--surface, #fff)', borderRadius: 14, width: '100%', maxWidth: 440,
-              boxShadow: '0 24px 64px rgba(0,0,0,0.35)', overflow: 'hidden',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--stroke)' }}>
-              <strong style={{ fontSize: '0.95rem' }}>Export summary</strong>
-              <button type="button" onClick={() => setShowExportSummary(false)} aria-label="Close"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: 4, borderRadius: 6 }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={{ padding: '18px 20px' }}>
-              <p style={{ color: 'var(--muted)', fontSize: '0.8125rem', margin: '0 0 14px' }}>
-                Review what will be included before downloading the CSV file.
-              </p>
-              <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 10, columnGap: 16, margin: 0, fontSize: '0.875rem' }}>
-                <dt style={{ color: 'var(--muted)' }}>Report</dt>
-                <dd style={{ margin: 0, fontWeight: 600, textAlign: 'right' }}>{exportSummary.report}</dd>
-                <dt style={{ color: 'var(--muted)' }}>Date range</dt>
-                <dd style={{ margin: 0, fontWeight: 600, textAlign: 'right' }}>{exportSummary.dateRange}</dd>
-                <dt style={{ color: 'var(--muted)' }}>Applied filters</dt>
-                <dd style={{ margin: 0, fontWeight: 600, textAlign: 'right' }}>{exportSummary.filters}</dd>
-                <dt style={{ color: 'var(--muted)' }}>Rows in export</dt>
-                <dd style={{ margin: 0, fontWeight: 700, textAlign: 'right' }}>
-                  {exportSummary.rows.toLocaleString()}
-                  {exportSummary.total > exportSummary.rows && (
-                    <span style={{ color: 'var(--muted)', fontWeight: 500 }}> {' '}of {exportSummary.total.toLocaleString()} total</span>
-                  )}
-                </dd>
-              </dl>
-              {exportSummary.total > exportSummary.rows && (
-                <p style={{ color: 'var(--color-warning, #b45309)', fontSize: '0.75rem', margin: '14px 0 0' }}>
-                  Only the rows currently loaded on this page are exported. Adjust filters or paging to change the selection.
-                </p>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', padding: '14px 20px', borderTop: '1px solid var(--stroke)' }}>
-              <button type="button" className="btn-dx-secondary" onClick={() => setShowExportSummary(false)}>Cancel</button>
-              <button type="button" className="btn-dx-primary" onClick={handleConfirmExport} disabled={exportSummary.rows === 0}>
-                <Download size={15} /> Download CSV
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ExportConfirmModal
+        open={showExportSummary}
+        onClose={() => setShowExportSummary(false)}
+        onConfirm={handleConfirmExport}
+        reportName={exportSummary.report}
+        dateRange={exportSummary.dateRange}
+        filters={exportSummary.filters}
+        rows={exportSummary.rows}
+        total={exportSummary.total}
+        confirmLabel="Download CSV"
+      />
     </>
   )
 }

@@ -138,7 +138,7 @@ export function SectionCard({ title, children, action, className = '' }) {
 /* ─── EmptyState ────────────────────────────────────────────── */
 export function EmptyState({ icon: Icon = Package, title = 'No records', message = '', action }) {
   return (
-    <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--muted)' }}>
+    <div className="dx-empty-state dx-fade-in" style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--muted)' }}>
       <div className="dx-empty-illustration">
         <Icon size={30} />
       </div>
@@ -201,6 +201,17 @@ export function SkeletonBlock({ lines = 3, gap = 10 }) {
       {Array.from({ length: lines }).map((_, i) => (
         <Skeleton key={i} width={i === lines - 1 ? '70%' : '100%'} />
       ))}
+    </div>
+  )
+}
+
+/* ─── FormValidationSummary ─────────────────────────────────── */
+/** Top-of-form error summary — pairs with useFormSubmit. */
+export function FormValidationSummary({ error, id = 'form-error-summary' }) {
+  if (!error) return null
+  return (
+    <div id={id} className="notice error" role="alert" style={{ marginBottom: 14 }}>
+      {error}
     </div>
   )
 }

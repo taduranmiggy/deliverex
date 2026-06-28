@@ -2594,6 +2594,12 @@
   cursor: not-allowed;
 }
 
+.driver-sync-bar__chip {
+  background: rgba(255, 255, 255, 0.55) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: inherit !important;
+}
+
 /* Driver active card */
 .driver-active-card { background: linear-gradient(135deg, var(--slate-800), #1e3a8a); color: #fff; border-radius: 20px; padding: 24px; margin-bottom: 20px; }
 .driver-active-card__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
@@ -5166,7 +5172,8 @@
   .driver-timeline-dot, .dx-bestfit-banner__icon,
   .dx-empty-illustration::before, .dx-skeleton,
   .dx-skeleton-text, .dx-skeleton-avatar,
-  .dx-boot-spinner svg {
+  .dx-boot-spinner svg,
+  .dx-fade-in, .dx-pop-in, .dx-route-fallback {
     animation: none !important;
   }
   .card:hover, .dx-panel:hover, .dx-kpi-card:hover, .dx-chart-card:hover,

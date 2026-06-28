@@ -5,11 +5,13 @@ import AssignmentAuditSection from '../../components/AssignmentAuditSection'
 import DriverPerformanceSection from '../../components/DriverPerformanceSection'
 import { EmptyState, LoadingSpinner, PageHeader, PaginationBar, SectionCard, StatCard } from '../../components/ui'
 import { ArrowDown, ArrowUp, Car, ChevronRight, Code, FileSearch, Users } from 'lucide-react'
+import { normalizeOcrModuleLabel } from '../../utils/displayLabels'
 
 const MODULE_COLORS = {
   Auth: 'var(--color-info)',
   'Job Orders': 'var(--color-primary)',
   Dispatch: 'var(--color-warning)',
+  'OCR Review': 'var(--color-purple)',
   'OCR Validation': 'var(--color-purple)',
   Delivery: 'var(--color-success)',
   Inquiries: 'var(--color-orange)',
@@ -140,7 +142,7 @@ function AdminDashboard() {
                         width: 8,
                         height: 8,
                         borderRadius: '50%',
-                        background: MODULE_COLORS[log.module] ?? MODULE_COLORS.System,
+                        background: MODULE_COLORS[normalizeOcrModuleLabel(log.module)] ?? MODULE_COLORS.System,
                         flexShrink: 0,
                       }}
                     />

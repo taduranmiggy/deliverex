@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchAuditLogs } from '../../api/admin'
+import ExportConfirmModal from '../../components/ExportConfirmModal'
 import { EmptyState, FilterSelect, LoadingRows, PageHeader, SearchInput } from '../../components/ui'
+import { normalizeOcrModuleLabel } from '../../utils/displayLabels'
 import {
   ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ClipboardList,
   ChevronsLeft, ChevronsRight, Download, X,
@@ -13,7 +15,7 @@ const MODULES = [
   { value: 'job_order', label: 'Job Orders' },
   { value: 'dispatch',  label: 'Dispatch' },
   { value: 'delivery',  label: 'Delivery' },
-  { value: 'ocr',       label: 'OCR Validation' },
+  { value: 'ocr',       label: 'OCR Review' },
   { value: 'inquiry',   label: 'Inquiries' },
 ]
 
@@ -22,6 +24,7 @@ const MODULE_COLORS = {
   'Job Orders':   '#2563eb',
   Dispatch:       '#d97706',
   Delivery:       '#16a34a',
+  'OCR Review':     '#7c3aed',
   'OCR Validation': '#7c3aed',
   Inquiries:      '#ea580c',
   System:         '#64748b',
@@ -73,7 +76,7 @@ function LogDetailModal({ log, onClose }) {
     { label: 'Email',      value: log.user_email ?? '—' },
     { label: 'Action',     value: log.action ?? '—' },
     { label: 'Readable',   value: formatAction(log.action) },
-    { label: 'Module',     value: log.module ?? '—' },
+    { label: 'Module',     value: normalizeOcrModuleLabel(log.module ?? '—') },
     { label: 'IP Address', value: log.ip_address ?? '—' },
     { label: 'Details',    value: log.details ?? '—' },
   ]
@@ -92,7 +95,7 @@ function LogDetailModal({ log, onClose }) {
           <div>
             <h2 style={{ margin: 0, fontSize: '1.0625rem', fontWeight: 700 }}>Audit Log Details</h2>
             <p style={{ margin: '3px 0 0', fontSize: '0.8125rem', color: 'var(--muted)', fontFamily: 'monospace' }}>
-              #{log.id ?? '—'} · {log.module}
+              #{log.id ?? '—'} · {normalizeOcrModuleLabel(log.module)}
             </p>
           </div>
           <button type="button" onClick={onClose} className="dx-icon-btn" aria-label="Close">
@@ -193,6 +196,7 @@ function AdminAuditLogsPage() {
   const [page, setPage]         = useState(1)
   const [perPage, setPerPage]   = useState(25)
   const [selected, setSelected] = useState(null)
+  const [showExportSummary, setShowExportSummary] = useState(false)
 
   const load = useCallback(async (params = {}) => {
     setLoading(true)
@@ -244,6 +248,26 @@ function AdminAuditLogsPage() {
   const handlePerPage = (n) => { setPerPage(n); setPage(1) }
   const handleSort = (dir) => { setSort(dir); setPage(1) }
 
+  const exportSummary = useMemo(() => {
+    const moduleLabel = MODULES.find((m) => m.value === module)?.label ?? 'All Modules'
+    const parts = [moduleLabel]
+    if (from) parts.push(`From ${from}`)
+    if (to) parts.push(`To ${to}`)
+    if (search) parts.push(`Search: “${search}”`)
+    return {
+      report: 'Audit Logs',
+      dateRange: from && to ? `${from} – ${to}` : from ? `From ${from}` : to ? `Until ${to}` : 'All records',
+      filters: parts.join(' · '),
+      rows: logs.length,
+      total,
+    }
+  }, [module, from, to, search, logs.length, total])
+
+  const handleConfirmExport = () => {
+    downloadCsv(logs)
+    setShowExportSummary(false)
+  }
+
   /* Input style reuse */
   const inputStyle = {
     padding: '9px 12px', border: '1.5px solid var(--stroke)', borderRadius: 10,
@@ -259,7 +283,7 @@ function AdminAuditLogsPage() {
         <button
           type="button"
           className="btn-dx-secondary"
-          onClick={() => downloadCsv(logs)}
+          onClick={() => setShowExportSummary(true)}
           disabled={logs.length === 0}
         >
           <Download size={15} /> Export CSV
@@ -413,9 +437,9 @@ function AdminAuditLogsPage() {
                       }}>
                         <span style={{
                           width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                          background: MODULE_COLORS[log.module] ?? 'var(--muted)',
+                          background: MODULE_COLORS[normalizeOcrModuleLabel(log.module)] ?? MODULE_COLORS[log.module] ?? 'var(--muted)',
                         }} />
-                        {log.module}
+                        {normalizeOcrModuleLabel(log.module)}
                       </span>
                     </td>
                     <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -450,6 +474,18 @@ function AdminAuditLogsPage() {
       {selected && (
         <LogDetailModal log={selected} onClose={() => setSelected(null)} />
       )}
+
+      <ExportConfirmModal
+        open={showExportSummary}
+        onClose={() => setShowExportSummary(false)}
+        onConfirm={handleConfirmExport}
+        reportName={exportSummary.report}
+        dateRange={exportSummary.dateRange}
+        filters={exportSummary.filters}
+        rows={exportSummary.rows}
+        total={exportSummary.total}
+        confirmLabel="Download CSV"
+      />
     </>
   )
 }

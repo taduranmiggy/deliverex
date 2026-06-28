@@ -1,12 +1,14 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import CustomerActionCard from '../../components/customer/CustomerActionCard'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
+import { FormValidationSummary } from '../../components/ui'
 import { sendInquiry } from '../../api/customer'
 import useAuth from '../../hooks/useAuth'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
-import LoadingOverlay from '../../components/customer/LoadingOverlay'
+import { useToast } from '../../context/ToastContext'
+import useFormSubmit from '../../hooks/useFormSubmit'
 import {
   ChevronDown, Mail, MessageSquare, Phone, HelpCircle,
 } from 'lucide-react'
@@ -60,32 +62,57 @@ function FaqItem({ question, answer }) {
 function CustomerSupportPage() {
   const { user, isAuthenticated, role } = useAuth()
   const { paths } = useCustomerSurface()
+  const toast = useToast()
   const isCustomer = isAuthenticated && role === 'customer'
   const signInPath = paths.signIn
   const [chatOpen, setChatOpen] = useState(false)
-  const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
-  const [error, setError] = useState('')
   const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '' })
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const set = (k) => (e) => {
+    setForm((f) => ({ ...f, [k]: e.target.value }))
+    clearFieldError(k)
+  }
+
+  const submitInquiry = useCallback(async (payload) => {
+    await sendInquiry(payload)
+  }, [])
+
+  const {
+    submit,
+    submitting,
+    error,
+    fieldErrors,
+    clearFieldError,
+    reset,
+  } = useFormSubmit(submitInquiry, {
+    successMessage: 'Inquiry submitted. Our team will respond as soon as possible.',
+    showToast: toast,
+    onSuccess: () => {
+      setSent(true)
+      reset()
+    },
+  })
+
+  useEffect(() => {
+    if (isCustomer && user) {
+      setForm((f) => ({
+        ...f,
+        name: f.name || user.name || '',
+        email: f.email || user.email || '',
+      }))
+    }
+  }, [isCustomer, user])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setSending(true)
-    setError('')
-    try {
-      await sendInquiry({
-        ...form,
-        inquiry_type: 'delivery_inquiry',
-        reference_job_order_id: null,
-      })
-      setSent(true)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSending(false)
-    }
+    await submit({
+      ...form,
+      name: form.name || (isCustomer ? user?.name : ''),
+      email: form.email || (isCustomer ? user?.email : ''),
+      inquiry_type: 'delivery_inquiry',
+      reference_job_order_id: null,
+    })
   }
 
   return (
@@ -132,20 +159,38 @@ function CustomerSupportPage() {
         <section className="pwa-section">
           <h2 className="pwa-section__title">Submit an inquiry</h2>
           {sent ? (
-            <div className="pwa-empty-state pwa-empty-state--success">
+            <div className="pwa-empty-state pwa-empty-state--success dx-fade-in">
               <p className="pwa-empty-state__title">Inquiry submitted</p>
               <p className="pwa-empty-state__message">Our team will respond as soon as possible.</p>
               <button type="button" className="btn-dx-secondary btn-sm" onClick={() => setSent(false)}>Send another</button>
             </div>
           ) : (
-            <form className="pwa-form-card" onSubmit={handleSubmit}>
+            <form className="pwa-form-card" onSubmit={handleSubmit} noValidate>
+              <FormValidationSummary error={error} />
               <label>
                 Name
-                <input required value={form.name || (isCustomer ? user?.name : '')} onChange={set('name')} placeholder="Your name" />
+                <input
+                  required
+                  value={form.name}
+                  onChange={set('name')}
+                  placeholder="Your name"
+                  aria-invalid={Boolean(fieldErrors.name)}
+                  aria-describedby={fieldErrors.name ? 'field-error-name' : undefined}
+                />
+                {fieldErrors.name ? <span id="field-error-name" className="form-error">{fieldErrors.name}</span> : null}
               </label>
               <label>
                 Email
-                <input required type="email" value={form.email || (isCustomer ? user?.email : '')} onChange={set('email')} placeholder="you@example.com" />
+                <input
+                  required
+                  type="email"
+                  value={form.email}
+                  onChange={set('email')}
+                  placeholder="you@example.com"
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  aria-describedby={fieldErrors.email ? 'field-error-email' : undefined}
+                />
+                {fieldErrors.email ? <span id="field-error-email" className="form-error">{fieldErrors.email}</span> : null}
               </label>
               <label>
                 Phone
@@ -153,15 +198,31 @@ function CustomerSupportPage() {
               </label>
               <label>
                 Subject
-                <input required value={form.subject} onChange={set('subject')} placeholder="How can we help?" />
+                <input
+                  required
+                  value={form.subject}
+                  onChange={set('subject')}
+                  placeholder="How can we help?"
+                  aria-invalid={Boolean(fieldErrors.subject)}
+                  aria-describedby={fieldErrors.subject ? 'field-error-subject' : undefined}
+                />
+                {fieldErrors.subject ? <span id="field-error-subject" className="form-error">{fieldErrors.subject}</span> : null}
               </label>
               <label>
                 Message
-                <textarea required rows={4} value={form.message} onChange={set('message')} placeholder="Describe your concern…" />
+                <textarea
+                  required
+                  rows={4}
+                  value={form.message}
+                  onChange={set('message')}
+                  placeholder="Describe your concern…"
+                  aria-invalid={Boolean(fieldErrors.message)}
+                  aria-describedby={fieldErrors.message ? 'field-error-message' : undefined}
+                />
+                {fieldErrors.message ? <span id="field-error-message" className="form-error">{fieldErrors.message}</span> : null}
               </label>
-              {error ? <p className="notice error">{error}</p> : null}
-              <button type="submit" className="btn-dx-primary" disabled={sending}>
-                {sending ? 'Submitting…' : 'Submit inquiry'}
+              <button type="submit" className="btn-dx-primary" disabled={submitting}>
+                {submitting ? 'Submitting…' : 'Submit inquiry'}
               </button>
             </form>
           )}
@@ -175,7 +236,6 @@ function CustomerSupportPage() {
         )}
       </div>
 
-      <LoadingOverlay open={sending} message="Submitting inquiry" submessage="Please wait." />
       <DeliverexAssistantChat open={chatOpen} onOpenChange={setChatOpen} />
     </CustomerPageShell>
   )

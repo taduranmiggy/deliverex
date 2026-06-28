@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { exportOcrReport, fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, validateOcr } from '../../api/admin'
+import ExportConfirmModal from '../../components/ExportConfirmModal'
 import { EmptyState, PageHeader, PaginationBar } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import useAuth from '../../hooks/useAuth'
@@ -67,6 +68,7 @@ function OcrReviewPage() {
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading]       = useState(false)
   const [exporting, setExporting]   = useState(false)
+  const [showExportSummary, setShowExportSummary] = useState(false)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [previewError, setPreviewError] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -228,6 +230,28 @@ function OcrReviewPage() {
     }
   }
 
+  const handleConfirmExport = async () => {
+    await handleExport()
+    setShowExportSummary(false)
+  }
+
+  const ocrExportSummary = useMemo(() => {
+    const tabLabel = FILTER_TABS.find((t) => t.key === tab)?.label ?? tab
+    const statusLabel = statusFilter === 'all' ? 'All statuses' : (REVIEW_STATUS_BADGE[statusFilter]?.label ?? statusFilter)
+    const parts = [`Tab: ${tabLabel}`, `Status: ${statusLabel}`]
+    if (jobOrderIdFilter) parts.push(`Job Order: ${jobOrderIdFilter}`)
+    let dateRange = 'All records'
+    if (dateFrom && dateTo) dateRange = `${dateFrom} – ${dateTo}`
+    else if (dateFrom) dateRange = `From ${dateFrom}`
+    else if (dateTo) dateRange = `Until ${dateTo}`
+    return {
+      report: 'OCR Review Export',
+      dateRange,
+      filters: parts.join(' · '),
+      rows: total,
+    }
+  }, [tab, statusFilter, jobOrderIdFilter, dateFrom, dateTo, total])
+
   const getBadge = (item) => STATUS_MAP[item.processing_status] ?? { cls: 'badge-dx badge-dx--muted', label: item.processing_status ?? '—' }
   const getReviewBadge = (item) => REVIEW_STATUS_BADGE[item.review_status] ?? { cls: 'badge-dx badge-dx--muted', label: item.review_status ?? '—' }
 
@@ -251,7 +275,7 @@ function OcrReviewPage() {
             : 'System-wide OCR validation, oversight, and delivery audit review'}
       >
         {!isDispatcher && !isReadOnly && (
-          <button type="button" className="btn-dx-primary" onClick={handleExport} disabled={exporting}>
+          <button type="button" className="btn-dx-primary" onClick={() => setShowExportSummary(true)} disabled={exporting || total === 0}>
             {exporting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Exporting...</> : 'Export XLSX'}
           </button>
         )}
@@ -331,7 +355,7 @@ function OcrReviewPage() {
               title="Queue empty"
               message={hasActiveFilters
                 ? 'No documents match the current filters. Try Clear filters or switch tabs.'
-                : 'No documents in this category.'}
+                : 'No OCR records in the system yet. Entries appear here after a driver uploads a delivery receipt when the assignment status is Arrived or Completed.'}
               action={hasActiveFilters ? (
                 <button type="button" className="btn-dx-secondary btn-sm" onClick={clearFilters}>Clear filters</button>
               ) : null}
@@ -580,6 +604,19 @@ function OcrReviewPage() {
           )}
         </div>
       </div>
+
+      <ExportConfirmModal
+        open={showExportSummary}
+        onClose={() => setShowExportSummary(false)}
+        onConfirm={handleConfirmExport}
+        reportName={ocrExportSummary.report}
+        dateRange={ocrExportSummary.dateRange}
+        filters={ocrExportSummary.filters}
+        rows={ocrExportSummary.rows}
+        confirmLabel="Download XLSX"
+        confirming={exporting}
+        infoNotice="All records matching the current filters will be exported from the server."
+      />
     </>
   )
 }
