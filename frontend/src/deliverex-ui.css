@@ -1325,27 +1325,44 @@
 }
 
 .dx-ocr-tabs {
-  display: flex;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
   margin-bottom: 14px;
-  flex-wrap: wrap;
 }
 
 .dx-ocr-tab {
-  padding: 6px 12px;
+  padding: 8px 6px;
   border-radius: 8px;
   border: 1px solid var(--stroke);
   background: var(--surface);
   color: var(--muted);
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
+  text-align: center;
+  white-space: nowrap;
+  min-width: 0;
+  min-height: 36px;
 }
 
 .dx-ocr-tab:hover { background: var(--slate-50); color: var(--text); border-color: var(--slate-300); }
 .dx-ocr-tab--active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+
+/* Queue panel is full width when the OCR grid stacks on mobile */
+@media (max-width: 900px) {
+  .dx-ocr-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .dx-ocr-tab {
+    font-size: 0.8125rem;
+    padding: 8px 10px;
+    min-height: 44px;
+  }
+}
 
 .dx-doc-queue-item {
   display: block;
