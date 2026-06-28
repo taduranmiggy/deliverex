@@ -67,6 +67,10 @@ class CompanyController extends Controller
 
         $company->update($data);
 
+        if (($data['status'] ?? null) === Company::STATUS_ACTIVE) {
+            $this->companies->ensureOwnerMembership($company->fresh());
+        }
+
         AuditLogger::record($request->user(), 'company.updated', Company::class, $company->id, $data, $request);
 
         return response()->json($company->fresh());

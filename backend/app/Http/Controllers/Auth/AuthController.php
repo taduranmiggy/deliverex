@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\JobOrder;
+use App\Models\Company;
 use App\Support\AuditLogger;
 use App\Support\DriverAccount;
 use App\Services\Auth\SessionService;
+use App\Services\Company\CompanyService;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,7 +21,10 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function __construct(private readonly SessionService $sessions) {}
+    public function __construct(
+        private readonly SessionService $sessions,
+        private readonly CompanyService $companies,
+    ) {}
 
     /**
      * FR 1.12 — login issues JWT access token + refresh token (role-based TTL).
@@ -89,6 +94,18 @@ class AuthController extends Controller
 
         if ($user->role?->name === 'customer') {
             $membership = $user->companyUser()->with('company')->first();
+
+            if (! $membership) {
+                $company = Company::query()
+                    ->whereRaw('LOWER(company_email) = ?', [strtolower(trim($user->email))])
+                    ->first();
+
+                if ($company?->isActive()) {
+                    $membership = $this->companies->ensureOwnerMembership($company, $user);
+                    $membership?->load('company');
+                }
+            }
+
             if (! $membership || ! $membership->is_active) {
                 return response()->json(['message' => 'Company account is not active. Contact your administrator.'], 403);
             }

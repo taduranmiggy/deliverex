@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\DriverAccount;
+use App\Services\Company\CompanyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
+    public function __construct(private readonly CompanyService $companies) {}
+
     public function index(Request $request)
     {
         $perPage = max(1, min(500, (int) $request->input('per_page', 15)));
@@ -63,6 +66,10 @@ class UserController extends Controller
         }
 
         $user->update($data);
+
+        if (isset($data['status'])) {
+            $this->companies->syncCustomerUserStatus($user->fresh());
+        }
 
         if (isset($data['status']) && $data['status'] === 'inactive') {
             app(\App\Services\Auth\SessionService::class)->revokeAllForUser($user->id);

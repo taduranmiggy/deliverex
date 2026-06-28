@@ -82,6 +82,7 @@ class CompanyService
                 $user->forceFill([
                     'name' => $company->contact_person ?: $company->company_name,
                     'password' => $password,
+                    'role_id' => $role->id,
                     'status' => 'active',
                     'email_verified_at' => now(),
                 ])->save();
@@ -177,6 +178,82 @@ class CompanyService
             ->where('is_active', true)
             ->orderByRaw("CASE role WHEN 'owner' THEN 0 WHEN 'staff' THEN 1 ELSE 2 END")
             ->value('user_id');
+    }
+
+    /**
+     * Ensure the company owner has a company_users row when company + user are active.
+     * Repairs legacy/migrated accounts where users.status is active but membership is missing.
+     */
+    public function ensureOwnerMembership(Company $company, ?User $user = null): ?CompanyUser
+    {
+        if (! $company->isActive()) {
+            return null;
+        }
+
+        $email = strtolower(trim($company->company_email));
+        $customerRole = Role::query()->where('name', 'customer')->first();
+
+        if (! $customerRole) {
+            return null;
+        }
+
+        if (! $user) {
+            $user = User::query()
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->first();
+        }
+
+        if (! $user || strtolower(trim($user->email)) !== $email) {
+            return null;
+        }
+
+        if (($user->status ?? 'active') !== 'active') {
+            return null;
+        }
+
+        if ((int) $user->role_id !== (int) $customerRole->id) {
+            $user->forceFill(['role_id' => $customerRole->id])->save();
+        }
+
+        return CompanyUser::query()->updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'company_id' => $company->id,
+                'role' => CompanyUser::ROLE_OWNER,
+                'is_active' => true,
+            ],
+        );
+    }
+
+    /**
+     * Keep company_users.is_active aligned when admin changes users.status for customers.
+     */
+    public function syncCustomerUserStatus(User $user): void
+    {
+        $user->loadMissing('role', 'companyUser');
+        if ($user->role?->name !== 'customer') {
+            return;
+        }
+
+        $userIsActive = ($user->status ?? 'active') === 'active';
+        $membership = $user->companyUser;
+
+        if (! $userIsActive) {
+            $membership?->forceFill(['is_active' => false])->save();
+
+            return;
+        }
+
+        if (! $membership) {
+            $company = Company::query()
+                ->whereRaw('LOWER(company_email) = ?', [strtolower(trim($user->email))])
+                ->where('status', Company::STATUS_ACTIVE)
+                ->first();
+
+            if ($company) {
+                $this->ensureOwnerMembership($company, $user);
+            }
+        }
     }
 
     private function sendActivationEmail(Company $company, string $token, bool $throwOnFailure = false): void
