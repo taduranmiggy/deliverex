@@ -96,9 +96,9 @@ class NotificationDispatcher
         $emailType = match (true) {
             in_array($normalized, [
                 DeliveryStatus::EN_ROUTE_TO_PICKUP,
-                DeliveryStatus::ARRIVED_AT_PICKUP,
                 DeliveryStatus::EN_ROUTE_TO_DESTINATION,
             ], true) => EmailType::DELIVERY_EN_ROUTE,
+            $normalized === DeliveryStatus::ARRIVED_AT_PICKUP => EmailType::DELIVERY_ARRIVED_AT_PICKUP,
             $normalized === DeliveryStatus::ARRIVED => EmailType::DELIVERY_ARRIVED,
             default => null,
         };

@@ -18,6 +18,8 @@ final class EmailType
 
     public const DELIVERY_EN_ROUTE = 'delivery_en_route';
 
+    public const DELIVERY_ARRIVED_AT_PICKUP = 'delivery_arrived_at_pickup';
+
     public const DELIVERY_ARRIVED = 'delivery_arrived';
 
     public const DELIVERY_COMPLETED = 'delivery_completed';
@@ -47,6 +49,7 @@ final class EmailType
             self::EMAIL_VERIFICATION => 'Email Verification',
             self::DELIVERY_ASSIGNED => 'Delivery Assigned',
             self::DELIVERY_EN_ROUTE => 'Delivery En Route',
+            self::DELIVERY_ARRIVED_AT_PICKUP => 'Delivery Arrived at Pickup',
             self::DELIVERY_ARRIVED => 'Delivery Arrived',
             self::DELIVERY_COMPLETED => 'Delivery Completed',
             self::POD_AVAILABLE => 'POD Available',

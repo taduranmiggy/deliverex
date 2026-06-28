@@ -182,6 +182,7 @@ class EmailService
         $viewMap = [
             EmailType::DELIVERY_ASSIGNED => 'mail.delivery-assigned',
             EmailType::DELIVERY_EN_ROUTE => 'mail.delivery-en-route',
+            EmailType::DELIVERY_ARRIVED_AT_PICKUP => 'mail.delivery-arrived-at-pickup',
             EmailType::DELIVERY_ARRIVED => 'mail.delivery-arrived',
             EmailType::DELIVERY_COMPLETED => 'mail.delivery-completed',
             EmailType::POD_AVAILABLE => 'mail.pod-available',
