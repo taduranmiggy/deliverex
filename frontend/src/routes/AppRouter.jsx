@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import ProtectedRoutes from './ProtectedRoutes'
 import { roleRoutes } from './roleRoutes'
 import ResetPasswordPage from '../pages/Auth/ResetPasswordPage'
@@ -19,6 +19,15 @@ import BrowserCustomerPortalGuard from '../components/BrowserCustomerPortalGuard
 import RootRoute from './RootRoute'
 import NotFoundPage from '../pages/NotFoundPage'
 
+function TrackCodeRedirect() {
+  const { trackingCode } = useParams()
+  const code = (trackingCode ?? '').trim()
+  if (!code) {
+    return <Navigate to="/customer/track" replace />
+  }
+  return <Navigate to={`/customer/track?code=${encodeURIComponent(code)}`} replace />
+}
+
 function AppRouter() {
   return (
     <BrowserRouter>
@@ -26,6 +35,7 @@ function AppRouter() {
         <Routes>
           <Route path="/" element={<RootRoute />} />
           <Route path="/track" element={<Navigate to="/customer/track" replace />} />
+          <Route path="/track/:trackingCode" element={<TrackCodeRedirect />} />
 
           <Route path="/login" element={<LoginPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />

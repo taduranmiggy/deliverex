@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { trackDelivery } from '../../api/customer'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
@@ -65,6 +65,7 @@ function DeliveryProgressBar({ status }) {
 
 function TrackingPage() {
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { paths } = useCustomerSurface()
   const [code, setCode]         = useState('')
   const [result, setResult]     = useState(null)
@@ -76,18 +77,47 @@ function TrackingPage() {
   const lastUpdate = Array.isArray(result?.timeline) && result.timeline.length > 0
     ? result.timeline[result.timeline.length - 1]?.at : null
 
-  useEffect(() => {
-    const prefill = location.state?.prefillTracking
-    if (typeof prefill === 'string' && prefill.trim()) {
-      setCode(prefill.trim())
-    }
-  }, [location.state?.prefillTracking])
-
   const loadTrack = useCallback(async (trackingCode) => {
     const res = await trackDelivery(trackingCode)
     setResult(res)
     return res
   }, [])
+
+  const queryCode = searchParams.get('code') ?? ''
+
+  useEffect(() => {
+    const fromState = location.state?.prefillTracking
+    const resolved = (
+      typeof fromState === 'string' && fromState.trim()
+        ? fromState.trim()
+        : typeof queryCode === 'string' && queryCode.trim()
+          ? queryCode.trim()
+          : ''
+    )
+    if (!resolved) return undefined
+
+    setCode(resolved)
+
+    let cancelled = false
+    ;(async () => {
+      setError('')
+      setResult(null)
+      setLoading(true)
+      try {
+        await loadTrack(resolved)
+        if (!cancelled) setPollKey(resolved)
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message)
+          setPollKey(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [location.state?.prefillTracking, queryCode, loadTrack])
 
   const handleTrack = async (e) => {
     if (e) e.preventDefault()

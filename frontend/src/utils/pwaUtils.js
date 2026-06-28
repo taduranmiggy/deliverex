@@ -9,5 +9,10 @@ export function isStandalonePwa() {
 
 /** Paths that belong to the customer PWA — staff and driver use the mobile browser instead. */
 export function isCustomerPwaPath(pathname) {
-  return pathname === '/customer' || pathname.startsWith('/customer/')
+  return (
+    pathname === '/customer'
+    || pathname.startsWith('/customer/')
+    || pathname === '/track'
+    || pathname.startsWith('/track/')
+  )
 }
