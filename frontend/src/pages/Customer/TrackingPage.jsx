@@ -7,7 +7,6 @@ import CustomerSkeleton from '../../components/customer/CustomerSkeleton'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
-import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { StatusBadge } from '../../components/ui'
 import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, MessageSquare, Package, RefreshCw, Search, Truck } from 'lucide-react'
 
