@@ -1,4 +1,8 @@
-export function roleHome(role) {
+import { isStandalonePwa } from './pwaUtils'
+
+export function roleHome(role, options = {}) {
+  const surface = options.surface ?? (isStandalonePwa() ? 'pwa' : 'web')
+
   switch (role) {
     case 'admin':
       return '/admin'
@@ -9,8 +13,8 @@ export function roleHome(role) {
     case 'manager':
       return '/manager'
     case 'customer':
-      return '/customer'
+      return surface === 'pwa' ? '/customer' : '/customer-web/dashboard'
     default:
-      return '/customer'
+      return surface === 'pwa' ? '/customer' : '/'
   }
 }

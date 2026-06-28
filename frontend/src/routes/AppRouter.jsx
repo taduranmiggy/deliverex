@@ -13,6 +13,7 @@ import DispatcherLayout from '../layouts/DispatcherLayout'
 import DriverLayout from '../layouts/DriverLayout'
 import ManagerLayout from '../layouts/ManagerLayout'
 import CustomerLayout from '../layouts/CustomerLayout'
+import CustomerWebsiteLayout from '../layouts/CustomerWebsiteLayout'
 import PwaCustomerOnlyGuard from '../components/PwaCustomerOnlyGuard'
 import BrowserCustomerPortalGuard from '../components/BrowserCustomerPortalGuard'
 import RootRoute from './RootRoute'
@@ -93,6 +94,17 @@ function AppRouter() {
             }
           >
             {roleRoutes.customer}
+          </Route>
+
+          <Route
+            path="/customer-web/*"
+            element={
+              <ProtectedRoutes roles={['customer']}>
+                <CustomerWebsiteLayout />
+              </ProtectedRoutes>
+            }
+          >
+            {roleRoutes.customerWebsite}
           </Route>
         </Routes>
       </PwaCustomerOnlyGuard>

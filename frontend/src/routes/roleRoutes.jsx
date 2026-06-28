@@ -43,6 +43,9 @@ import CustomerHistoryPage from '../pages/Customer/CustomerHistoryPage'
 import AboutUsPage from '../pages/Customer/AboutUsPage'
 import ServicesPage from '../pages/Customer/ServicesPage'
 import CustomerLegalPage from '../pages/Customer/CustomerLegalPage'
+import CustomerWebsiteDashboardPage from '../pages/CustomerWeb/CustomerWebsiteDashboardPage'
+import CustomerWebsiteHistoryPage from '../pages/CustomerWeb/CustomerWebsiteHistoryPage'
+import CustomerWebsiteProfilePage from '../pages/CustomerWeb/CustomerWebsiteProfilePage'
 import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
 
 export const roleRoutes = {
@@ -104,5 +107,11 @@ export const roleRoutes = {
       <Route key="customer-team" path="team" element={<CustomerCompanyUsersPage />} />
       <Route key="customer-link" path="link-delivery" element={<CustomerLinkDeliveryPage />} />
     </Route>,
+  ],
+  customerWebsite: [
+    <Route key="customer-web-default" index element={<Navigate to="dashboard" replace />} />,
+    <Route key="customer-web-dashboard" path="dashboard" element={<CustomerWebsiteDashboardPage />} />,
+    <Route key="customer-web-history" path="history" element={<CustomerWebsiteHistoryPage />} />,
+    <Route key="customer-web-profile" path="profile" element={<CustomerWebsiteProfilePage />} />,
   ],
 }

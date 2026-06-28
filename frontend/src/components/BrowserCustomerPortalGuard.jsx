@@ -19,8 +19,13 @@ function BrowserCustomerPortalGuard({ children }) {
   }
 
   const isCustomer = isAuthenticated && role === 'customer'
+  const isCustomerPortalRoot = pathname === '/customer' || pathname === '/customer/'
   const isGuestCustomerHome =
-    (pathname === '/customer' || pathname === '/customer/') && !isCustomer
+    isCustomerPortalRoot && !isCustomer
+
+  if (isCustomerPortalRoot && isCustomer) {
+    return <Navigate to="/customer-web/dashboard" replace />
+  }
 
   if (isGuestCustomerHome) {
     return <Navigate to="/" replace />

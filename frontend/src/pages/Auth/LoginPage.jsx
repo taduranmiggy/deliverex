@@ -94,7 +94,7 @@ function LoginPage() {
         session_id: result.session_id,
         refresh_token: result.refresh_token,
       })
-      const target = location.state?.from?.pathname || roleHome(roleName)
+      const target = location.state?.from?.pathname || roleHome(roleName, { surface: 'web' })
       navigate(target, { replace: true })
     } catch (err) {
       setError(err.message)
