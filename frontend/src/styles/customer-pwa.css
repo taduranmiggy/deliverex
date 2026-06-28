@@ -545,6 +545,19 @@
   min-height: 88px;
 }
 
+.customer-support-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--customer-section-gap, 28px);
+  padding-bottom: 24px;
+}
+
+@media (min-width: 720px) {
+  .pwa-action-grid--support {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .pwa-action-card {
   display: flex;
   align-items: stretch;

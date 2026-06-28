@@ -14,6 +14,66 @@
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
 }
 
+.customer-nav--website .customer-nav-inner {
+  height: auto;
+  min-height: var(--customer-nav-height, 64px);
+  padding-block: 10px;
+  gap: 16px;
+}
+
+.customer-nav--website .customer-nav-brand {
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.customer-nav--website .customer-nav-links--website {
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.customer-nav--website .customer-nav-link {
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+
+.customer-nav--website .customer-nav-actions--website {
+  gap: 10px;
+  margin-left: auto;
+  padding-left: 16px;
+  border-left: 1px solid var(--stroke);
+  flex-shrink: 0;
+}
+
+.customer-nav-link--action {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--stroke);
+  background: var(--slate-50);
+}
+
+.customer-nav-link--action:hover {
+  background: var(--surface);
+  color: var(--text);
+  border-color: #cbd5e1;
+}
+
+.customer-nav-link--action.active {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  border-color: rgba(37, 99, 235, 0.25);
+}
+
+.customer-nav--website .customer-nav-user {
+  padding: 6px 12px;
+  max-width: 200px;
+}
+
+.customer-nav--website .customer-nav-user-name {
+  max-width: 110px;
+}
+
 .customer-nav-link--subtle {
   font-size: 0.8125rem;
   font-weight: 600;
@@ -277,10 +337,26 @@
   gap: 12px;
 }
 
+@media (max-width: 1100px) {
+  .customer-nav--website .customer-nav-user-name {
+    display: none;
+  }
+
+  .customer-nav--website .customer-nav-user {
+    padding: 6px;
+    max-width: none;
+  }
+}
+
 @media (max-width: 900px) {
   .customer-nav--website .customer-nav-links--desktop,
-  .customer-nav--website .customer-nav-actions--desktop .customer-nav-link--subtle {
+  .customer-nav--website .customer-nav-actions--website .customer-nav-link--action {
     display: none;
+  }
+
+  .customer-nav--website .customer-nav-actions--website {
+    border-left: 0;
+    padding-left: 0;
   }
 
   .customer-web-nav-signout span {

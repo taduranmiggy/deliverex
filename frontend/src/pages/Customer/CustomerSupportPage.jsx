@@ -96,8 +96,8 @@ function CustomerSupportPage() {
         description="Get assistance with tracking, deliveries, and account questions."
       />
 
-      <div style={{ paddingBottom: 24 }}>
-        <div className="pwa-action-grid pwa-action-grid--compact">
+      <div className="customer-support-stack">
+        <div className="pwa-action-grid pwa-action-grid--compact pwa-action-grid--support">
           <CustomerActionCard
             icon={MessageSquare}
             title="Chat Assistant"

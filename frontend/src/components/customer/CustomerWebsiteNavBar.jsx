@@ -2,10 +2,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import {
-  BriefcaseBusiness,
   History,
-  Home,
-  Info,
   Link2,
   LogOut,
   MapPin,
@@ -41,37 +38,31 @@ function CustomerWebsiteNavBar() {
           <span className="customer-nav-brand-text">Deliverex</span>
         </Link>
 
-        <div className="customer-nav-links customer-nav-links--desktop">
+        <div className="customer-nav-links customer-nav-links--desktop customer-nav-links--website">
           <NavLink to={paths.dashboard} end className={navLinkCls}>
-            <Home size={15} /> Dashboard
+            Dashboard
           </NavLink>
           <NavLink to={paths.track} className={navLinkCls}>
-            <MapPin size={15} /> Track
+            <MapPin size={15} aria-hidden /> Track
           </NavLink>
           <NavLink to={paths.deliveries} className={navLinkCls}>
-            <Package size={15} /> Deliveries
+            <Package size={15} aria-hidden /> Deliveries
           </NavLink>
           <NavLink to={paths.history} className={navLinkCls}>
-            <History size={15} /> History
+            <History size={15} aria-hidden /> History
           </NavLink>
           <NavLink to={paths.support} className={navLinkCls}>
             Support
           </NavLink>
-          <NavLink to={paths.about} className={navLinkCls}>
-            <Info size={15} /> About
-          </NavLink>
-          <NavLink to={paths.services} className={navLinkCls}>
-            <BriefcaseBusiness size={15} /> Services
-          </NavLink>
         </div>
 
-        <div className="customer-nav-actions customer-nav-actions--desktop">
-          <NavLink to={paths.linkDelivery} className="customer-nav-link customer-nav-link--subtle">
-            <Link2 size={15} /> Link delivery
+        <div className="customer-nav-actions customer-nav-actions--desktop customer-nav-actions--website">
+          <NavLink to={paths.linkDelivery} className="customer-nav-link customer-nav-link--action">
+            <Link2 size={15} aria-hidden /> Link
           </NavLink>
           {user?.company_role === 'owner' ? (
-            <NavLink to={paths.team} className="customer-nav-link customer-nav-link--subtle">
-              <Users size={15} /> Team
+            <NavLink to={paths.team} className="customer-nav-link customer-nav-link--action">
+              <Users size={15} aria-hidden /> Team
             </NavLink>
           ) : null}
           <NavLink to={paths.profile} className="customer-nav-user">
@@ -80,7 +71,7 @@ function CustomerWebsiteNavBar() {
           </NavLink>
           <button type="button" className="customer-web-nav-signout" onClick={handleLogout}>
             <LogOut size={15} aria-hidden />
-            Sign out
+            <span>Sign out</span>
           </button>
         </div>
       </div>
