@@ -33,7 +33,7 @@ function VehicleUtilCard({ vehicle, rank }) {
           <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>utilization</div>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, fontSize: '0.75rem' }}>
+      <div className="dx-grid-3" style={{ fontSize: '0.75rem' }}>
         <div>
           <span style={{ color: 'var(--muted)' }}>Trips</span>
           <strong style={{ display: 'block' }}>{vehicle.total_trips}</strong>
@@ -78,7 +78,7 @@ function VehicleUtilizationSection({ limit = 5 }) {
         <StatCard label="Fleet Vehicles" value={summary.total_vehicles ?? '—'} icon={Car} iconVariant="default" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+      <div className="dx-grid-2" style={{ marginBottom: 20 }}>
         <SectionCard title="Most Utilized Vehicles" action={<TrendingUp size={16} color="var(--color-success)" />}>
           {!data ? (
             <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>Loading…</p>

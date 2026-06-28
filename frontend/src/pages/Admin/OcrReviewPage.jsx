@@ -317,7 +317,7 @@ function OcrReviewPage() {
       {error && <p className="notice error">{error}</p>}
 
       <div className="dx-panel" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+        <div className="dx-filter-grid">
           <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
             Date From
             <input type="date" value={dateFrom} onChange={(e) => { setPage(1); setDateFrom(e.target.value) }} />
@@ -457,7 +457,7 @@ function OcrReviewPage() {
             <EmptyState icon={FileSearch} title="No document selected" message="Select a document from the queue to review." />
           ) : (
             <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="dx-grid-2 dx-grid-2--12">
                 <div style={{ border: '1px solid var(--stroke)', borderRadius: 10, padding: 12 }}>
                   <p style={{ margin: '0 0 8px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>OCR Data</p>
                   <div style={{ display: 'grid', gap: 6, fontSize: '0.85rem' }}>
@@ -540,7 +540,7 @@ function OcrReviewPage() {
                       : 'Volume comparison unavailable'}
                   </span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: '0.8125rem' }}>
+                <div className="dx-grid-2 dx-grid-2--8" style={{ fontSize: '0.8125rem' }}>
                   <div><strong>Expected Volume:</strong> {selected.validation_result?.expected_volume ?? '—'}</div>
                   <div><strong>Extracted Volume:</strong> {selected.validation_result?.actual_volume ?? '—'}</div>
                 </div>
@@ -569,7 +569,7 @@ function OcrReviewPage() {
               )}
 
               {!isReadOnly && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="dx-grid-2 dx-grid-2--10">
                 <label>Issue Type
                   <select value={issueType} onChange={(e) => setIssueType(e.target.value)}>
                     {ISSUE_TYPES.map((it) => <option key={it.value} value={it.value}>{it.label}</option>)}
@@ -581,7 +581,7 @@ function OcrReviewPage() {
               </div>
               )}
               {isReadOnly && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: '0.875rem' }}>
+                <div className="dx-grid-2 dx-grid-2--10" style={{ fontSize: '0.875rem' }}>
                   <div><strong>Issue Type:</strong> {formatIssueType(selected.issue_type)}</div>
                   <div><strong>Review Status:</strong> {getReviewBadge(selected).label}</div>
                 </div>

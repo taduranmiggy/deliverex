@@ -83,7 +83,7 @@ function AssignConfirmModal({ job, candidate, recommendedTop, isOverride, overri
             <p style={{ color: 'var(--muted)', margin: 0 }}>{buildDisplayAddress('pickup', job)} → {buildDisplayAddress('dropoff', job)}</p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="dx-grid-2 dx-grid-2--10">
             <div style={{ background: '#eff6ff', borderRadius: 10, padding: '12px 14px', border: '1px solid #bfdbfe' }}>
               <p style={{ margin: '0 0 5px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <User size={11} /> Driver
@@ -145,7 +145,7 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
       )}
 
       {/* Driver + Vehicle */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: isTop ? 4 : 0 }}>
+      <div className="dx-grid-2 dx-grid-2--8" style={{ marginTop: isTop ? 4 : 0 }}>
         <div>
           <p style={{ margin: '0 0 2px', fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
             <User size={10} /> Driver
@@ -372,7 +372,7 @@ function AssignDriverVehiclePage() {
       {error && <p className="notice error" style={{ marginBottom: 14 }}>{error}</p>}
 
       {/* 3-column layout: Jobs | Recommended | Alternatives */}
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 340px', gap: 16, alignItems: 'flex-start' }}>
+      <div className="dx-dispatch-grid">
 
         {/* ── Column 1: Job Queue ── */}
         <div>

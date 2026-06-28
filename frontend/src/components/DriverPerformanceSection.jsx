@@ -40,7 +40,7 @@ function DriverScoreCard({ driver, rank }) {
           <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>/ 100</div>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, fontSize: '0.75rem' }}>
+      <div className="dx-grid-3" style={{ fontSize: '0.75rem' }}>
         <div>
           <span style={{ color: 'var(--muted)' }}>On-Time</span>
           <strong style={{ display: 'block' }}>{b.on_time_pct != null ? `${b.on_time_pct}%` : '—'}</strong>

@@ -110,7 +110,7 @@ function DispatcherDashboard() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'flex-start' }}>
+      <div className="dx-grid-sidebar">
         <SectionCard title="Active Deliveries"
           action={<Link to="/dispatcher/live-tracking" className="btn-dx-secondary btn-sm">View map →</Link>}
         >

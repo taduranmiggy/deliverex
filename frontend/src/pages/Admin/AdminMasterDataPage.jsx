@@ -601,7 +601,7 @@ function AdminMasterDataPage() {
 
       <div className="dx-panel">
         {/* ── Tab strip + search ── */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="dx-master-data-toolbar" style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
           <div className="dx-tabs-underline" style={{ flex: 1, borderBottom: 'none', margin: 0, flexWrap: 'wrap' }}>
             {UI_TABS.map((key) => (
               <button

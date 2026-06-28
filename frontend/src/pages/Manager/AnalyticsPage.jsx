@@ -78,7 +78,7 @@ function AnalyticsPage() {
       {error && <p className="notice error">{error}</p>}
 
       {/* Filters */}
-      <div className="dx-panel" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-end', marginBottom: 20 }}>
+      <div className="dx-panel dx-panel-filters" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-end', marginBottom: 20 }}>
         <label style={{ display: 'grid', gap: 5, fontWeight: 600, fontSize: '0.8125rem' }}>
           From <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: '9px 12px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
         </label>
@@ -104,7 +104,7 @@ function AnalyticsPage() {
         <StatCard label="Fleet Util."   value={fleet.utilization_pct != null ? `${fleet.utilization_pct}%` : '—'} icon={Car} iconVariant="orange" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, marginBottom: 20 }}>
+      <div className="dx-grid-sidebar" style={{ marginBottom: 20 }}>
         <SectionCard title="Daily Completed Deliveries">
           <BarChart data={data?.daily_stats} />
         </SectionCard>
@@ -127,7 +127,7 @@ function AnalyticsPage() {
         <StatCard label="Delay Reports" value={delays.total_reports ?? '—'} icon={AlertTriangle} iconVariant={delays.total_reports > 0 ? 'red' : 'green'} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+      <div className="dx-grid-2" style={{ marginBottom: 20 }}>
         <SectionCard title="Most Common Delay Reasons">
           <ReasonList items={delays.common_reasons} />
         </SectionCard>
@@ -144,7 +144,7 @@ function AnalyticsPage() {
         </SectionCard>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+      <div className="dx-grid-2" style={{ marginBottom: 20 }}>
         <SectionCard title="Delay Rate per Driver">
           <DataTable
             headers={['Driver', 'Assignments', 'Delay Reports', 'Delay Rate']}
