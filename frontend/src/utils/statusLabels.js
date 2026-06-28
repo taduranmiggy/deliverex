@@ -2,7 +2,9 @@ export function formatJobStatus(status) {
   const s = String(status || '').toLowerCase().replace(/ /g, '_')
   if (s === 'pending') return 'Pending'
   if (s === 'assigned' || s === 'dispatched') return 'Dispatched'
-  if (s === 'in_progress' || s === 'en_route') return 'En Route'
+  if (s === 'in_progress' || s === 'en_route' || s === 'en_route_to_pickup') return 'En Route to Pickup'
+  if (s === 'arrived_at_pickup') return 'Arrived at Pickup'
+  if (s === 'en_route_to_destination') return 'En Route to Destination'
   if (s === 'arrived') return 'Arrived'
   if (s === 'completed' || s === 'completed_with_pod') return 'Completed'
   if (s === 'cancelled') return 'Cancelled'
@@ -12,7 +14,8 @@ export function formatJobStatus(status) {
 
 export function jobStatusBadgeClass(status) {
   const s = String(status || '').toLowerCase().replace(/ /g, '_')
-  if (s === 'in_progress' || s === 'en_route') return 'badge-dx badge-dx--enroute'
+  if (s === 'in_progress' || s === 'en_route' || s === 'en_route_to_pickup' || s === 'en_route_to_destination') return 'badge-dx badge-dx--enroute'
+  if (s === 'arrived_at_pickup') return 'badge-dx badge-dx--arrived'
   if (s === 'pending')     return 'badge-dx badge-dx--pending'
   if (s === 'assigned' || s === 'dispatched')    return 'badge-dx badge-dx--dispatched'
   if (s === 'arrived')     return 'badge-dx badge-dx--arrived'

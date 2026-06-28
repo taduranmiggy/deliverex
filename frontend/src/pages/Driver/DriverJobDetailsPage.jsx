@@ -41,13 +41,23 @@ import {
 } from 'lucide-react'
 
 const STATUS_META = {
-  in_progress: {
-    label: 'Start Delivery / En Route',
+  en_route_to_pickup: {
+    label: 'Start Pickup',
     confirmTitle: 'Start trip?',
-    confirmSub: 'Capture your GPS location to start the trip. A departure photo is optional.',
+    confirmSub: 'Capture your GPS location to start the trip toward pickup. A departure photo is optional.',
+  },
+  arrived_at_pickup: {
+    label: 'Mark Pickup Arrived',
+    confirmTitle: 'Confirm pickup arrival?',
+    confirmSub: 'Confirm you have arrived at the pickup point.',
+  },
+  en_route_to_destination: {
+    label: 'Start Delivery',
+    confirmTitle: 'Start delivery?',
+    confirmSub: 'Proceed from pickup to the delivery destination.',
   },
   arrived: {
-    label: 'Mark Arrived',
+    label: 'Mark Arrived at Destination',
     confirmTitle: 'Confirm arrival?',
     confirmSub: 'Capture your GPS location to verify you are at the delivery destination (within 300 m).',
   },
@@ -132,8 +142,8 @@ function DriverJobDetailsPage() {
   const primaryNext = nextStatuses[0]
 
   // Start Trip / Arrival Verification: GPS proof required for these transitions.
-  const isStartTrip = pendingStatus === 'in_progress' && assignment?.status === 'assigned'
-  const isArrivalVerify = pendingStatus === 'arrived' && assignment?.status === 'in_progress'
+  const isStartTrip = pendingStatus === 'en_route_to_pickup' && assignment?.status === 'assigned'
+  const isArrivalVerify = pendingStatus === 'arrived' && assignment?.status === 'en_route_to_destination'
   const isCompleteProof = pendingStatus === 'completed' && assignment?.status === 'arrived'
   const needsGpsProof = isStartTrip || isArrivalVerify
   const hasExistingProof = Boolean(assignment?.completion_proof)
@@ -590,7 +600,19 @@ function DriverJobDetailsPage() {
                   disabled={statusSubmitting || (needsGpsProof && !gpsCoords) || (isCompleteProof && !hasExistingProof && !proofFile)}
                   onClick={confirmStatus}
                 >
-                  {statusSubmitting ? 'Saving…' : isStartTrip ? 'Start Trip' : isArrivalVerify ? 'Confirm Arrival' : isCompleteProof ? 'Submit Proof & Complete' : 'Confirm'}
+                  {statusSubmitting
+                    ? 'Saving…'
+                    : isStartTrip
+                      ? 'Start Trip'
+                      : pendingStatus === 'arrived_at_pickup'
+                        ? 'Confirm Pickup Arrival'
+                        : pendingStatus === 'en_route_to_destination'
+                          ? 'Start Delivery'
+                          : isArrivalVerify
+                            ? 'Confirm Arrival'
+                            : isCompleteProof
+                              ? 'Submit Proof & Complete'
+                              : 'Confirm'}
                 </button>
                 <button
                   type="button"

@@ -3,12 +3,23 @@ import { CheckCircle2, Circle, Truck } from 'lucide-react'
 
 const STEPS = [
   { key: 'assigned', label: 'Assigned' },
-  { key: 'in_progress', label: 'En Route' },
+  { key: 'en_route_to_pickup', label: 'En Route to Pickup' },
+  { key: 'arrived_at_pickup', label: 'Arrived at Pickup' },
+  { key: 'en_route_to_destination', label: 'En Route to Destination' },
   { key: 'arrived', label: 'Arrived' },
   { key: 'completed', label: 'Completed' },
 ]
 
-const RANK = { assigned: 1, in_progress: 2, arrived: 3, completed: 4, cancelled: 0 }
+const RANK = {
+  assigned: 1,
+  in_progress: 4, // legacy alias
+  en_route_to_pickup: 2,
+  arrived_at_pickup: 3,
+  en_route_to_destination: 4,
+  arrived: 5,
+  completed: 6,
+  cancelled: 0,
+}
 
 function stepState(currentStatus, stepKey) {
   if (currentStatus === 'cancelled') return 'cancelled'

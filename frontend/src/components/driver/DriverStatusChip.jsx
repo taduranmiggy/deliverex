@@ -3,6 +3,9 @@ import { formatJobStatus } from '../../utils/statusLabels'
 const CHIP_CLASS = {
   assigned: 'da-chip--assigned',
   in_progress: 'da-chip--in_progress',
+  en_route_to_pickup: 'da-chip--in_progress',
+  arrived_at_pickup: 'da-chip--arrived',
+  en_route_to_destination: 'da-chip--in_progress',
   arrived: 'da-chip--arrived',
   completed: 'da-chip--completed',
   cancelled: 'da-chip--cancelled',

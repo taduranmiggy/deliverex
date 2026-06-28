@@ -97,6 +97,10 @@ function DocumentUploadPage() {
       return
     }
 
+    const selectedAssignment = assignments.find((a) => String(a.id) === String(selectedId))
+    const currentStatus = String(selectedAssignment?.status || '').toLowerCase().trim()
+    const canUploadNow = ['arrived', 'completed'].includes(currentStatus)
+
     const file = fileRef.current?.files?.[0] ?? cameraRef.current?.files?.[0]
     const fileError = validateFile(file)
     if (fileError) {
@@ -108,6 +112,12 @@ function DocumentUploadPage() {
     setUploadProgress(0)
 
     try {
+      if (isOnline && !canUploadNow) {
+        setError(`Upload is available only after destination arrival. Current status: ${currentStatus || 'unknown'}. If you just updated status, wait for sync then retry.`)
+        showToast('Delivery status is not yet Arrived/Completed', 'error')
+        return
+      }
+
       if (!isOnline) {
         const base64 = await new Promise((resolve, reject) => {
           const reader = new FileReader()
@@ -167,7 +177,13 @@ function DocumentUploadPage() {
       }
       clearFile()
     } catch (err) {
-      setError(err.message || 'Document upload failed. Please try again.')
+      const msg = err.message || 'Document upload failed. Please try again.'
+      if (msg.toLowerCase().includes('ocr uploads are only allowed when delivery status')) {
+        const fallbackStatus = currentStatus || 'unknown'
+        setError(`Backend rejected upload: current delivery status is "${fallbackStatus}". OCR upload is allowed only at Arrived or Completed. If arrival was just submitted, retry after sync.`)
+      } else {
+        setError(msg)
+      }
       showToast('Upload failed', 'error')
     } finally {
       setUploading(false)

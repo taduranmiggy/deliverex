@@ -47,16 +47,28 @@ export function formatJobSchedule(job) {
 
 export const DRIVER_STATUS_STEPS = [
   {
-    value: 'in_progress',
-    label: 'En Route',
-    description: 'Heading to pickup or drop-off location',
+    value: 'en_route_to_pickup',
+    label: 'Start Pickup',
+    description: 'Heading to pickup point',
     allowedFrom: ['assigned'],
   },
   {
+    value: 'arrived_at_pickup',
+    label: 'Arrived at Pickup',
+    description: 'Confirm pickup-site arrival',
+    allowedFrom: ['en_route_to_pickup'],
+  },
+  {
+    value: 'en_route_to_destination',
+    label: 'Start Delivery',
+    description: 'Heading to delivery destination',
+    allowedFrom: ['arrived_at_pickup'],
+  },
+  {
     value: 'arrived',
-    label: 'Arrived',
+    label: 'Arrived at Destination',
     description: 'Arrived at destination',
-    allowedFrom: ['in_progress'],
+    allowedFrom: ['en_route_to_destination'],
   },
   {
     value: 'completed',
@@ -67,7 +79,9 @@ export const DRIVER_STATUS_STEPS = [
 ]
 
 export function getNextStatusOptions(currentStatus) {
-  return DRIVER_STATUS_STEPS.filter((step) => step.allowedFrom.includes(currentStatus))
+  const normalized = String(currentStatus || '').toLowerCase().trim()
+  const canonical = normalized === 'in_progress' ? 'en_route_to_destination' : normalized
+  return DRIVER_STATUS_STEPS.filter((step) => step.allowedFrom.includes(canonical))
 }
 
 export const ISSUE_TYPES = [
