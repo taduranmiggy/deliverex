@@ -42,6 +42,8 @@ return [
         'processor_id' => env('DOCUMENT_AI_PROCESSOR_ID'),
         'timeout' => (int) env('DOCUMENT_AI_TIMEOUT', 30),
         'retries' => (int) env('DOCUMENT_AI_RETRIES', 1),
+        // Use REST on shared hosting (Hostinger etc.) — gRPC often hangs without ext-grpc.
+        'transport' => env('DOCUMENT_AI_TRANSPORT', 'rest'),
     ],
 
 ];

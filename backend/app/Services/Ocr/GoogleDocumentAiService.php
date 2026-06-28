@@ -55,10 +55,7 @@ class GoogleDocumentAiService
 
         $client = null;
         try {
-            $client = new DocumentProcessorServiceClient([
-                'apiEndpoint' => sprintf('%s-documentai.googleapis.com', $location),
-                'credentials' => $credentialsPath,
-            ]);
+            $client = new DocumentProcessorServiceClient($this->clientOptions($location, $credentialsPath));
 
             $request = new ProcessRequest([
                 'name' => $processorName,
@@ -90,6 +87,7 @@ class GoogleDocumentAiService
                     'provider' => 'document_ai',
                     'processor_name' => $processorName,
                     'mime_type' => $mimeType,
+                    'transport' => $this->configuredTransport(),
                     'entities_count' => count($document->getEntities()),
                     'pages_count' => count($document->getPages()),
                 ],
@@ -125,6 +123,25 @@ class GoogleDocumentAiService
             'bmp' => 'image/bmp',
             default => 'application/octet-stream',
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function clientOptions(string $location, string $credentialsPath): array
+    {
+        return [
+            'apiEndpoint' => sprintf('%s-documentai.googleapis.com', $location),
+            'credentials' => $credentialsPath,
+            'transport' => $this->configuredTransport(),
+        ];
+    }
+
+    private function configuredTransport(): string
+    {
+        $transport = strtolower(trim((string) config('services.document_ai.transport', 'rest')));
+
+        return in_array($transport, ['rest', 'grpc', 'grpc-fallback'], true) ? $transport : 'rest';
     }
 
     private function resolveCredentialsPath(string $configuredPath): string

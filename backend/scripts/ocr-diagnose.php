@@ -63,8 +63,25 @@ foreach ($args as $arg) {
 }
 
 ocr_diag_line('OCR_ENGINE='.config('ocr.engine'));
+ocr_diag_line('OCR_PROVIDER='.config('ocr.provider'));
 ocr_diag_line('OCR_SYNC_MODE='.(config('ocr.sync_mode') ? 'true' : 'false'));
 ocr_diag_line('OCR_DEBUG_MODE='.(config('ocr.debug_mode') ? 'true' : 'false'));
+
+$googleProject = trim((string) config('services.document_ai.project', ''));
+$googleProcessor = trim((string) config('services.document_ai.processor_id', ''));
+$googleLocation = trim((string) config('services.document_ai.location', 'us'));
+$googleCredentials = trim((string) config('services.document_ai.credentials', ''));
+$googleCredentialsPath = $googleCredentials !== ''
+    ? (str_starts_with(str_replace('\\', '/', $googleCredentials), '/')
+        || preg_match('/^[A-Za-z]:\//', str_replace('\\', '/', $googleCredentials)) === 1
+        ? $googleCredentials
+        : base_path($googleCredentials))
+    : '';
+ocr_diag_line('GOOGLE_PROJECT='.($googleProject !== '' ? $googleProject : 'unset'));
+ocr_diag_line('GOOGLE_PROCESSOR='.($googleProcessor !== '' ? $googleProcessor : 'unset'));
+ocr_diag_line('GOOGLE_LOCATION='.$googleLocation);
+ocr_diag_line('GOOGLE_CREDENTIALS_PATH='.($googleCredentialsPath !== '' ? $googleCredentialsPath : 'unset'));
+ocr_diag_line('GOOGLE_CREDENTIALS_READABLE='.($googleCredentialsPath !== '' && is_readable($googleCredentialsPath) ? 'yes' : 'no'));
 $remoteUrl = trim((string) config('ocr.remote_url'));
 ocr_diag_line('REMOTE_HOST='.(parse_url($remoteUrl, PHP_URL_HOST) ?: 'unset'));
 ocr_diag_line('REMOTE_TIMEOUT='.max(10, (int) config('ocr.remote_timeout', 180)).'s');
@@ -96,6 +113,21 @@ if (! $doc) {
 ocr_diag_line('DOC_ID='.$doc->id);
 ocr_diag_line('FILE='.($doc->file_path ?? 'null'));
 ocr_diag_line('FILE_EXISTS='.(Illuminate\Support\Facades\Storage::disk('public')->exists($doc->file_path) ? 'yes' : 'no'));
+
+$diskPath = Illuminate\Support\Facades\Storage::disk('public')->path($doc->file_path);
+if (strtolower((string) config('ocr.provider')) === 'document_ai' && is_readable($diskPath)) {
+    ocr_diag_line('--- google document ai probe ---');
+    $googleStarted = microtime(true);
+    try {
+        $googlePayload = app(App\Services\Ocr\GoogleDocumentAiService::class)->extractFromImage($diskPath);
+        ocr_diag_line('GOOGLE_PROBE=ok ELAPSED='.round(microtime(true) - $googleStarted, 2).'s');
+        ocr_diag_line('GOOGLE_TEXT_LEN='.strlen(trim((string) ($googlePayload['text'] ?? ''))));
+        ocr_diag_line('GOOGLE_ENGINE='.($googlePayload['engine'] ?? 'null'));
+    } catch (Throwable $e) {
+        ocr_diag_line('GOOGLE_PROBE=fail ELAPSED='.round(microtime(true) - $googleStarted, 2).'s');
+        ocr_diag_line('GOOGLE_ERROR='.$e->getMessage());
+    }
+}
 
 $svc = app(App\Services\Ocr\OcrService::class);
 $svc->createPending($doc);

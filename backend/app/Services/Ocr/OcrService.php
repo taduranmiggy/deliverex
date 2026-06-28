@@ -186,6 +186,7 @@ class OcrService
         try {
             $payload = $this->googleDocumentAiService->extractFromImage($diskPath);
         } catch (Throwable $e) {
+            $debugContext['google_document_ai_error'] = $e->getMessage();
             Log::warning('Google Document AI failed, falling back to legacy OCR.', [
                 'document_id' => $document->id,
                 'error' => $e->getMessage(),
@@ -195,6 +196,7 @@ class OcrService
         }
 
         if (! is_array($payload)) {
+            $debugContext['google_document_ai_error'] = 'Google Document AI returned a malformed payload.';
             Log::warning('Google Document AI returned malformed payload, falling back to legacy OCR.', [
                 'document_id' => $document->id,
             ]);
@@ -280,12 +282,30 @@ class OcrService
             ? (float) $payload['confidence']
             : null;
         $engine = trim((string) ($payload['engine'] ?? 'render-tesseract')) ?: 'render-tesseract';
-        $diagnostics = is_array($payload['diagnostics'] ?? null) ? $payload['diagnostics'] : [];
+        $diagnostics = $this->mergeGoogleFallbackDiagnostics(
+            is_array($payload['diagnostics'] ?? null) ? $payload['diagnostics'] : [],
+            $debugContext
+        );
 
         $debugContext['tesseract_command'] = (string) ($payload['command'] ?? 'remote:multipass');
         $debugContext['preprocessed_path'] = (string) ($payload['preprocessed_image_path'] ?? '');
 
         return $this->persistExtraction($result, $document, $text, $confidence, $engine, $diagnostics, $debugContext);
+    }
+
+    /**
+     * @param  array<string, mixed>  $diagnostics
+     * @param  array<string, mixed>  $debugContext
+     * @return array<string, mixed>
+     */
+    private function mergeGoogleFallbackDiagnostics(array $diagnostics, array $debugContext): array
+    {
+        $googleError = trim((string) ($debugContext['google_document_ai_error'] ?? ''));
+        if ($googleError !== '') {
+            $diagnostics['google_document_ai_fallback'] = $googleError;
+        }
+
+        return $diagnostics;
     }
 
     private function persistExtraction(
