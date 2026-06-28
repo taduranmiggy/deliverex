@@ -832,6 +832,7 @@ class OcrService
             '/(?:delivery\s*receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*(dr[-\s]?\d{5,8})/i',
             '/(?:delivery\s*receipt(?:\s*(?:no|number))?|receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*(dr[-\/]?[0-9]{5,8})/i',
             '/(?:delivery\s*receipt(?:\s*(?:no|number))?|receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*([a-z]{1,4}[-\/]?[0-9]{4,})/i',
+            '/(?:delivery\s*receipt[\s\S]{0,120})\bno\.?\s*[:#.\-]?\s*(\d{5,8})\b/i',
         ];
 
         foreach ($patterns as $pattern) {
@@ -864,7 +865,10 @@ class OcrService
             return preg_replace('/^DR[-]?(\d+)$/i', 'DR-$1', $value) ?? $value;
         }
 
-        if (preg_match('/^\d{5,8}$/', $value) && preg_match('/\bdr\b/i', $fullMatch)) {
+        if (
+            preg_match('/^\d{5,8}$/', $value)
+            && preg_match('/\b(dr|delivery\s*receipt|receipt)\b/i', $fullMatch)
+        ) {
             return 'DR-'.$value;
         }
 

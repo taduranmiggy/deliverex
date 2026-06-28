@@ -93,6 +93,20 @@ class OcrServiceParsingTest extends TestCase
         $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
     }
 
+    public function test_extracts_delivery_receipt_no_without_dr_prefix(): void
+    {
+        $text = <<<TXT
+        DELIVERY RECEIPT
+        NO: 2936806
+        Item Qty Description L (cm) W (cm) H (cm) V (m3)
+        1 1 Crushed Aggregate 730 230 215 36.09
+        TXT;
+
+        $parsed = $this->parse($text);
+
+        $this->assertSame('DR-2936806', $parsed['delivery_receipt_number']);
+    }
+
     public function test_rejects_random_numbers_that_only_multiply_to_volume(): void
     {
         $text = <<<TXT
