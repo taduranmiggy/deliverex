@@ -40,3 +40,25 @@ export function getCustomerSurfaceFromPath(pathname = '') {
 export function getCustomerPaths(surface) {
   return CUSTOMER_SURFACES[surface] ?? CUSTOMER_SURFACES.pwa
 }
+
+/** Nav targets for customer shell — logged-in browser users use the website portal. */
+export function getCustomerNavPaths({ isCustomer, isPwa }) {
+  if (isCustomer && !isPwa) {
+    return getCustomerPaths('web')
+  }
+  if (isPwa) {
+    return getCustomerPaths('pwa')
+  }
+  return {
+    home: '/',
+    dashboard: '/',
+    track: '/customer/track',
+    about: '/customer/about',
+    services: '/customer/services',
+    support: '/customer/support',
+    deliveries: '/customer/deliveries',
+    account: '/customer/account',
+    profile: '/customer/account',
+    signIn: '/login',
+  }
+}
