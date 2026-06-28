@@ -158,4 +158,42 @@ class OcrServiceParsingTest extends TestCase
 
         $this->assertSame('DR-2936806', $parsed['delivery_receipt_number']);
     }
+
+    public function test_extracts_dimensions_from_l_w_h_shorthand_labels(): void
+    {
+        $text = <<<TXT
+        Vendor: North Aggregates
+        Invoice Date: 2026-06-27
+        L : 730
+        W : 230
+        H : 215
+        Receipt No: 2936807
+        TXT;
+
+        $parsed = $this->parse($text);
+
+        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(36.119, (float) $parsed['volume'], 0.01);
+        $this->assertSame('DR-2936807', $parsed['delivery_receipt_number']);
+    }
+
+    public function test_extracts_dimensions_from_inline_dimension_heading_with_multiplication_symbol(): void
+    {
+        $text = <<<TXT
+        Supplier: Providential
+        Dimensions
+        730 × 230 × 215
+        Delivery No: DR-2936808
+        TXT;
+
+        $parsed = $this->parse($text);
+
+        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
+        $this->assertSame('DR-2936808', $parsed['delivery_receipt_number']);
+    }
 }

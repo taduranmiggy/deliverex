@@ -50,6 +50,12 @@ function formatIssueType(issueType) {
   return issueType.replaceAll('_', ' ').replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
+function formatSuggestionValue(value) {
+  if (value == null) return ''
+  if (typeof value === 'number') return Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 })
+  return String(value)
+}
+
 function OcrReviewPage() {
   const toast = useToast()
   const { user } = useAuth()
@@ -263,6 +269,28 @@ function OcrReviewPage() {
   const showsNoText = parserStatus === 'no_text' || String(selected?.extracted_text || '').startsWith('(No text detected')
   const parserMiss = parserStatus === 'parser_miss'
   const parserPartial = parserStatus === 'partial'
+  const reviewSuggestions = diagnostics?.review_suggestions ?? {}
+  const structuredHits = diagnostics?.structured_hits ?? {}
+  const dimensionConfidence = Number(diagnostics?.confidence_breakdown?.dimension ?? 0)
+  const receiptConfidence = Number(diagnostics?.confidence_breakdown?.delivery_receipt_number ?? 0)
+
+  const appendSuggestionToCorrection = (label, value) => {
+    const line = `${label}: ${value}`
+    setCorrected((prev) => {
+      const current = String(prev || '').trim()
+      if (!current) return line
+      if (current.includes(line)) return current
+      return `${current}\n${line}`
+    })
+  }
+
+  const ocrRows = selected ? [
+    { key: 'length', label: 'Length', value: selected.extracted_length },
+    { key: 'width', label: 'Width', value: selected.extracted_width },
+    { key: 'height', label: 'Height', value: selected.extracted_height },
+    { key: 'volume', label: 'Volume', value: selected.extracted_volume },
+    { key: 'delivery_receipt_number', label: 'Delivery Receipt No', value: selected.delivery_receipt_number },
+  ] : []
 
   return (
     <>
@@ -433,11 +461,48 @@ function OcrReviewPage() {
                 <div style={{ border: '1px solid var(--stroke)', borderRadius: 10, padding: 12 }}>
                   <p style={{ margin: '0 0 8px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>OCR Data</p>
                   <div style={{ display: 'grid', gap: 6, fontSize: '0.85rem' }}>
-                    <div><strong>Length:</strong> {selected.extracted_length ?? '—'}</div>
-                    <div><strong>Width:</strong> {selected.extracted_width ?? '—'}</div>
-                    <div><strong>Height:</strong> {selected.extracted_height ?? '—'}</div>
-                    <div><strong>Volume:</strong> {selected.extracted_volume ?? '—'}</div>
-                    <div><strong>Delivery Receipt No:</strong> {selected.delivery_receipt_number || '—'}</div>
+                    {ocrRows.map((row) => {
+                      const missing = row.value == null || row.value === ''
+                      const lowConfidence = row.key === 'delivery_receipt_number'
+                        ? receiptConfidence > 0 && receiptConfidence < 0.65
+                        : dimensionConfidence > 0 && dimensionConfidence < 0.6
+                      const noHit = structuredHits[row.key] === false
+                      const showNoMatch = missing || lowConfidence || noHit
+                      const suggestions = Array.isArray(reviewSuggestions[row.key]) ? reviewSuggestions[row.key] : []
+                      return (
+                        <div key={row.key}>
+                          <div>
+                            <strong>{row.label}:</strong> {missing ? '—' : row.value}
+                            {showNoMatch && (
+                              <span style={{ marginLeft: 8, color: 'var(--muted)', fontSize: '0.75rem' }}>
+                                No confident match found.
+                              </span>
+                            )}
+                          </div>
+                          {suggestions.length > 0 && (
+                            <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>Suggested Values:</span>
+                              {suggestions.map((entry, idx) => {
+                                const shownValue = formatSuggestionValue(entry.value)
+                                return (
+                                  <button
+                                    key={`${row.key}-${idx}-${shownValue}`}
+                                    type="button"
+                                    className="btn-dx-secondary btn-sm"
+                                    disabled={isReadOnly || !shownValue}
+                                    title={isReadOnly ? shownValue : `Use ${shownValue}`}
+                                    onClick={() => appendSuggestionToCorrection(row.label, shownValue)}
+                                    style={{ padding: '2px 8px', fontSize: '0.72rem' }}
+                                  >
+                                    {shownValue}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
                 <div style={{ border: '1px solid var(--stroke)', borderRadius: 10, padding: 12 }}>
@@ -480,6 +545,22 @@ function OcrReviewPage() {
                   <div><strong>Extracted Volume:</strong> {selected.validation_result?.actual_volume ?? '—'}</div>
                 </div>
               </div>
+
+              <details style={{ border: '1px solid var(--stroke)', borderRadius: 10, padding: 12 }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Raw OCR Text</summary>
+                <pre style={{
+                  marginTop: 10,
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontSize: '0.76rem',
+                  color: 'var(--muted)',
+                  maxHeight: 180,
+                  overflow: 'auto',
+                }}
+                >
+                  {selected.extracted_text || '(No OCR text available)'}
+                </pre>
+              </details>
 
               {!isDispatcher && !isReadOnly && (
                 <label>Reviewed OCR text (optional)

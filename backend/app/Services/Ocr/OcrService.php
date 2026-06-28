@@ -333,7 +333,14 @@ class OcrService
             $status = self::STATUS_NEEDS_REVIEW;
         }
 
-        $diagnostics = $this->buildDiagnostics($diagnostics, $text, $confidence, $structured, $parsed['matches']);
+        $diagnostics = $this->buildDiagnostics(
+            $diagnostics,
+            $text,
+            $confidence,
+            $structured,
+            $parsed['matches'],
+            $parsed['meta'] ?? []
+        );
 
         $result->forceFill([
             'processing_status'  => $status,
@@ -540,7 +547,14 @@ class OcrService
         return $result->fresh();
     }
 
-    private function buildDiagnostics(array $upstream, string $text, ?float $confidence, array $structured, array $regexMatches): array
+    private function buildDiagnostics(
+        array $upstream,
+        string $text,
+        ?float $confidence,
+        array $structured,
+        array $regexMatches,
+        array $parserMeta = []
+    ): array
     {
         $parserStatus = 'parsed';
         if ($text === '') {
@@ -574,7 +588,7 @@ class OcrService
                 'delivery_receipt_number' => $structured['delivery_receipt_number'] !== null,
             ],
             'confidence' => $confidence,
-        ]);
+        ], $parserMeta);
     }
 
     private function extractStructuredFields(string $text): array
@@ -585,27 +599,12 @@ class OcrService
     private function extractStructuredFieldsWithDebug(string $text): array
     {
         $normalized = $this->normalizeOcrText($text);
+        $dimensionCandidates = $this->extractDimensionCandidates($normalized);
+        $dimensionPick = $this->pickBestDimensionCandidate($dimensionCandidates);
+        $best = $dimensionPick['candidate'];
+        $bestScore = $dimensionPick['score'];
+        $matchSource = $dimensionPick['source'];
 
-        $candidates = [
-            'tabular' => $this->extractTabularDimensions($normalized),
-            'column' => $this->extractColumnLabeledDimensions($normalized),
-            'labeled' => $this->extractLabeledDimensions($normalized),
-            'inline' => array_merge($this->extractInlineDimensions($normalized), ['volume' => null]),
-        ];
-
-        $bestKey = null;
-        $bestScore = -1.0;
-        $best = ['length' => null, 'width' => null, 'height' => null, 'volume' => null];
-        foreach ($candidates as $key => $candidate) {
-            $score = $this->scoreDimensionCandidate($candidate);
-            if ($score > $bestScore) {
-                $bestScore = $score;
-                $bestKey = $key;
-                $best = $candidate;
-            }
-        }
-
-        $best = $this->normalizeDimensionUnits($best);
         $length = $best['length'];
         $width = $best['width'];
         $height = $best['height'];
@@ -615,8 +614,9 @@ class OcrService
             $volume = round($length * $width * $height, 4);
         }
 
-        $drParsed = $this->extractReceiptNumber($text, $best);
-        $matchSource = $bestKey ?? 'none';
+        $drCandidates = $this->extractReceiptCandidates($normalized, $best);
+        $drParsed = $this->pickBestReceiptCandidate($drCandidates);
+        $reviewSuggestions = $this->buildReviewSuggestions($normalized, $dimensionCandidates, $drCandidates);
 
         return [
             'values' => [
@@ -635,7 +635,239 @@ class OcrService
                 'parser_source' => $matchSource,
                 'parser_score' => $bestScore >= 0 ? round($bestScore, 4) : null,
             ],
+            'meta' => [
+                'parser_version' => 'adaptive-v1',
+                'parser_candidates' => $this->summarizeParserCandidates($dimensionCandidates),
+                'review_suggestions' => $reviewSuggestions,
+                'confidence_breakdown' => [
+                    'dimension' => $bestScore >= 0 ? round($bestScore, 4) : null,
+                    'delivery_receipt_number' => $drParsed['confidence'],
+                ],
+            ],
         ];
+    }
+
+    /**
+     * @return list<array{
+     *   source:string,
+     *   stage:string,
+     *   score:float,
+     *   confidence:float,
+     *   candidate:array{length:?float,width:?float,height:?float,volume:?float}
+     * }>
+     */
+    private function extractDimensionCandidates(string $text): array
+    {
+        $base = [
+            ['source' => 'structured_column', 'stage' => 'structured', 'candidate' => $this->extractColumnLabeledDimensions($text)],
+            ['source' => 'structured_tabular', 'stage' => 'structured', 'candidate' => $this->extractTabularDimensions($text)],
+            ['source' => 'keyword_labeled', 'stage' => 'keyword', 'candidate' => $this->extractLabeledDimensions($text)],
+            ['source' => 'regex_inline', 'stage' => 'regex', 'candidate' => array_merge($this->extractInlineDimensions($text), ['volume' => null])],
+            ['source' => 'context_window', 'stage' => 'context', 'candidate' => $this->extractContextDimensions($text)],
+        ];
+
+        $candidates = [];
+        foreach ($base as $entry) {
+            $candidate = $this->normalizeDimensionUnits($entry['candidate']);
+            $score = $this->scoreDimensionCandidate($candidate);
+            if ($score < 0) {
+                continue;
+            }
+
+            $stageBonus = match ($entry['stage']) {
+                'structured' => 0.75,
+                'keyword' => 0.45,
+                'regex' => 0.35,
+                'context' => 0.25,
+                default => 0.0,
+            };
+            $finalScore = $score + $stageBonus;
+            $confidence = max(0.05, min(0.99, $finalScore / 8.0));
+
+            $candidates[] = [
+                'source' => $entry['source'],
+                'stage' => $entry['stage'],
+                'score' => $finalScore,
+                'confidence' => $confidence,
+                'candidate' => $candidate,
+            ];
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * @param  list<array{source:string,stage:string,score:float,confidence:float,candidate:array{length:?float,width:?float,height:?float,volume:?float}}>  $candidates
+     * @return array{candidate:array{length:?float,width:?float,height:?float,volume:?float},score:float,source:string}
+     */
+    private function pickBestDimensionCandidate(array $candidates): array
+    {
+        if ($candidates === []) {
+            return [
+                'candidate' => ['length' => null, 'width' => null, 'height' => null, 'volume' => null],
+                'score' => -1.0,
+                'source' => 'none',
+            ];
+        }
+
+        usort($candidates, static fn ($a, $b) => $b['score'] <=> $a['score']);
+        $best = $candidates[0];
+
+        return [
+            'candidate' => $best['candidate'],
+            'score' => $best['score'],
+            'source' => $best['source'],
+        ];
+    }
+
+    /**
+     * @param  list<array{source:string,stage:string,score:float,confidence:float,candidate:array{length:?float,width:?float,height:?float,volume:?float}}>  $candidates
+     * @return list<array{source:string,stage:string,score:float,confidence:float,values:array{length:?float,width:?float,height:?float,volume:?float}}>
+     */
+    private function summarizeParserCandidates(array $candidates): array
+    {
+        usort($candidates, static fn ($a, $b) => $b['score'] <=> $a['score']);
+        $top = array_slice($candidates, 0, 5);
+
+        return array_map(static fn ($entry) => [
+            'source' => $entry['source'],
+            'stage' => $entry['stage'],
+            'score' => round($entry['score'], 4),
+            'confidence' => round($entry['confidence'], 4),
+            'values' => $entry['candidate'],
+        ], $top);
+    }
+
+    /**
+     * @param  list<array{source:string,stage:string,score:float,confidence:float,candidate:array{length:?float,width:?float,height:?float,volume:?float}}>  $dimensionCandidates
+     * @param  list<array{value:string,match:string,source:string,confidence:float}>  $drCandidates
+     */
+    private function buildReviewSuggestions(string $text, array $dimensionCandidates, array $drCandidates): array
+    {
+        $suggestions = [
+            'length' => [],
+            'width' => [],
+            'height' => [],
+            'volume' => [],
+            'delivery_receipt_number' => [],
+            'supplier' => [],
+            'customer' => [],
+            'date' => [],
+            'quantity' => [],
+            'total' => [],
+            'reference_no' => [],
+            'invoice_no' => [],
+            'job_order' => [],
+            'delivery_no' => [],
+        ];
+
+        foreach ($dimensionCandidates as $candidate) {
+            foreach (['length', 'width', 'height', 'volume'] as $field) {
+                $value = $candidate['candidate'][$field] ?? null;
+                if ($value === null) {
+                    continue;
+                }
+
+                $suggestions[$field][] = [
+                    'value' => $value,
+                    'source' => $candidate['source'],
+                    'confidence' => round($candidate['confidence'], 4),
+                ];
+            }
+        }
+
+        foreach ($drCandidates as $entry) {
+            $suggestions['delivery_receipt_number'][] = [
+                'value' => $entry['value'],
+                'source' => $entry['source'],
+                'confidence' => round($entry['confidence'], 4),
+            ];
+        }
+
+        $this->appendLabelSuggestion($suggestions['supplier'], $text, ['supplier', 'vendor', 'company'], 'supplier');
+        $this->appendLabelSuggestion($suggestions['customer'], $text, ['customer', 'client', 'sold to'], 'customer');
+        $this->appendLabelSuggestion($suggestions['date'], $text, ['delivery date', 'invoice date', 'receipt date', 'date'], 'date');
+        $this->appendLabelSuggestion($suggestions['quantity'], $text, ['qty', 'quantity'], 'quantity');
+        $this->appendLabelSuggestion($suggestions['total'], $text, ['grand total', 'net total', 'total', 'amount'], 'total');
+        $this->appendLabelSuggestion($suggestions['reference_no'], $text, ['reference no', 'ref no'], 'reference_no');
+        $this->appendLabelSuggestion($suggestions['invoice_no'], $text, ['invoice no'], 'invoice_no');
+        $this->appendLabelSuggestion($suggestions['job_order'], $text, ['job order', 'jo'], 'job_order');
+        $this->appendLabelSuggestion($suggestions['delivery_no'], $text, ['delivery no'], 'delivery_no');
+
+        foreach ($suggestions as $field => $entries) {
+            $unique = [];
+            foreach ($entries as $entry) {
+                $key = strtolower((string) ($entry['value'] ?? ''));
+                if ($key === '' || isset($unique[$key])) {
+                    continue;
+                }
+                $unique[$key] = $entry;
+            }
+
+            $sorted = array_values($unique);
+            usort($sorted, static fn ($a, $b) => ($b['confidence'] ?? 0) <=> ($a['confidence'] ?? 0));
+            $suggestions[$field] = array_slice($sorted, 0, 3);
+        }
+
+        return $suggestions;
+    }
+
+    /**
+     * @param  list<array{value:mixed,source:string,confidence:float}>  $bucket
+     * @param  list<string>  $labels
+     */
+    private function appendLabelSuggestion(array &$bucket, string $text, array $labels, string $source): void
+    {
+        foreach ($labels as $label) {
+            $pattern = '/(?:^|\n)\s*'.preg_quote($label, '/').'\s*[:#.-]?\s*([^\n]{2,80})/i';
+            if (! preg_match($pattern, $text, $m)) {
+                continue;
+            }
+
+            $value = trim((string) ($m[1] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $bucket[] = [
+                'value' => $value,
+                'source' => $source,
+                'confidence' => 0.55,
+            ];
+        }
+    }
+
+    /**
+     * @return array{length:?float,width:?float,height:?float,volume:?float}
+     */
+    private function extractContextDimensions(string $text): array
+    {
+        $length = $this->extractContextMeasurement($text, ['length', 'len', 'dimension length', 'l']);
+        $width = $this->extractContextMeasurement($text, ['width', 'wid', 'w']);
+        $height = $this->extractContextMeasurement($text, ['height', 'hgt', 'h']);
+        $volume = $this->extractContextMeasurement($text, ['volume', 'cbm', 'cubic meter', 'm3', 'm³', 'v']);
+
+        return [
+            'length' => $length,
+            'width' => $width,
+            'height' => $height,
+            'volume' => $volume,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $labels
+     */
+    private function extractContextMeasurement(string $text, array $labels): ?float
+    {
+        foreach ($labels as $label) {
+            $pattern = '/\b'.preg_quote($label, '/').'\b[^\n\r]{0,36}?([0-9]+(?:[.,][0-9]+)?)/i';
+            if (preg_match($pattern, $text, $m)) {
+                return $this->toFloat($m[1] ?? null);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -644,16 +876,16 @@ class OcrService
     private function extractLabeledDimensions(string $text): array
     {
         $lengthParsed = $this->extractMeasurement($text, [
-            'length', 'len', 'lngth', 'lengt', '1ength', 'iength',
+            'length', 'len', 'lngth', 'lengt', '1ength', 'iength', 'dimension length',
         ]);
         $widthParsed = $this->extractMeasurement($text, [
-            'width', 'wid', 'wdth', 'w1dth',
+            'width', 'wid', 'wdth', 'w1dth', 'dimension width',
         ]);
         $heightParsed = $this->extractMeasurement($text, [
-            'height', 'hgt', 'he1ght', 'hieght',
+            'height', 'hgt', 'he1ght', 'hieght', 'dimension height',
         ]);
         $volumeParsed = $this->extractMeasurement($text, [
-            'volume', 'vol', 'cbm', 'cu m', 'cubic',
+            'volume', 'vol', 'cbm', 'cu m', 'cubic', 'cubic meter', 'm3', 'm³',
         ]);
 
         return [
@@ -835,29 +1067,44 @@ class OcrService
      */
     private function extractReceiptNumber(string $text, array $dimensions = []): array
     {
+        return $this->pickBestReceiptCandidate(
+            $this->extractReceiptCandidates($text, $dimensions)
+        );
+    }
+
+    /**
+     * @param  array{length:?float,width:?float,height:?float,volume:?float}  $dimensions
+     * @return list<array{value:string,match:string,source:string,confidence:float}>
+     */
+    private function extractReceiptCandidates(string $text, array $dimensions = []): array
+    {
         $patterns = [
-            '/\bdr\s*(?:no|number|#)?\s*[:.\-]?\s*(?:dr\s*[-:\s]?)?(\d{5,8})\b/i',
-            '/\b(dr[-\s]?\d{5,8})\b/i',
-            '/(?:delivery\s*receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*(dr[-\s]?\d{5,8})/i',
-            '/(?:delivery\s*receipt(?:\s*(?:no|number))?|receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*(dr[-\/]?[0-9]{5,8})/i',
-            '/(?:delivery\s*receipt(?:\s*(?:no|number))?|receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*([a-z]{1,4}[-\/]?[0-9]{4,})/i',
-            '/(?:delivery\s*receipt[\s\S]{0,120})\bno\.?\s*[:#.\-]?\s*(\d{5,8})\b/i',
-            // Handwritten / Providential slips: red "NO: 2936806" without a delivery-receipt header.
-            '/\bn[o0]\s*[:#.\-]\s*(\d{5,8})\b/i',
-            '/\bno\s*[:#.\-]\s*(\d{5,8})\b/i',
+            ['regex' => '/\bdr\s*(?:no|number|#)?\s*[:.\-]?\s*(?:dr\s*[-:\s]?)?(\d{5,10})\b/i', 'source' => 'dr_label', 'confidence' => 0.95],
+            ['regex' => '/\b(dr[-\s]?\d{5,10})\b/i', 'source' => 'dr_token', 'confidence' => 0.9],
+            ['regex' => '/(?:delivery\s*receipt|receipt|invoice|reference|ref|delivery)\s*(?:no|number|#)?\s*[:#.\-]?\s*(dr[-\/]?[0-9]{5,10}|[a-z]{1,4}[-\/]?[0-9]{4,})/i', 'source' => 'reference_label', 'confidence' => 0.8],
+            ['regex' => '/(?:delivery\s*receipt[\s\S]{0,120})\bno\.?\s*[:#.\-]?\s*(\d{5,10})\b/i', 'source' => 'header_no', 'confidence' => 0.78],
+            ['regex' => '/\bn[o0]\s*[:#.\-]\s*(\d{5,10})\b/i', 'source' => 'no_label', 'confidence' => 0.7],
+            ['regex' => '/\b(?:invoice|reference|ref|delivery)\s*(?:no|number|#)\s*[:#.\-]?\s*([a-z0-9\-\/]{4,20})\b/i', 'source' => 'generic_ref', 'confidence' => 0.66],
         ];
 
-        foreach ($patterns as $pattern) {
-            if (preg_match($pattern, $text, $m)) {
+        $candidates = [];
+        foreach ($patterns as $entry) {
+            if (! preg_match_all($entry['regex'], $text, $matches, PREG_SET_ORDER)) {
+                continue;
+            }
+
+            foreach ($matches as $m) {
                 $rawMatch = trim((string) ($m[0] ?? ''));
                 $value = $this->normalizeReceiptNumber((string) ($m[1] ?? ''), $rawMatch);
                 if ($value === '' || $value === 'DR' || $value === 'DR-') {
                     continue;
                 }
 
-                return [
+                $candidates[] = [
                     'value' => $value,
                     'match' => $rawMatch,
+                    'source' => $entry['source'],
+                    'confidence' => $entry['confidence'],
                 ];
             }
         }
@@ -865,11 +1112,36 @@ class OcrService
         if ($this->hasDimensionContext($dimensions)) {
             $fallback = $this->extractReceiptSerialFallback($text, $dimensions);
             if ($fallback !== null) {
-                return $fallback;
+                $candidates[] = [
+                    'value' => $fallback['value'],
+                    'match' => $fallback['match'],
+                    'source' => 'serial_fallback',
+                    'confidence' => 0.6,
+                ];
             }
         }
 
-        return ['value' => null, 'match' => null];
+        return $candidates;
+    }
+
+    /**
+     * @param  list<array{value:string,match:string,source:string,confidence:float}>  $candidates
+     * @return array{value:?string,match:?string,confidence:?float}
+     */
+    private function pickBestReceiptCandidate(array $candidates): array
+    {
+        if ($candidates === []) {
+            return ['value' => null, 'match' => null, 'confidence' => null];
+        }
+
+        usort($candidates, static fn ($a, $b) => $b['confidence'] <=> $a['confidence']);
+        $best = $candidates[0];
+
+        return [
+            'value' => $best['value'],
+            'match' => $best['match'],
+            'confidence' => $best['confidence'],
+        ];
     }
 
     /**
@@ -999,12 +1271,22 @@ class OcrService
     {
         $normalized = strtolower($text);
         $normalized = str_replace(["\r\n", "\r"], "\n", $normalized);
-        $normalized = str_replace(['|', '¦', '—', '_'], ['1', '1', '-', '-'], $normalized);
+        $normalized = str_replace(['|', '¦', '—', '_', '×'], ['1', '1', '-', '-', 'x'], $normalized);
 
         // Common OCR substitutions for labels.
         $normalized = preg_replace('/\b1ength\b/u', 'length', $normalized) ?? $normalized;
         $normalized = preg_replace('/\bw1dth\b/u', 'width', $normalized) ?? $normalized;
         $normalized = preg_replace('/\bhe1ght\b/u', 'height', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\blen\b/u', 'length', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bqty\b/u', 'quantity', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bcbm\b/u', 'volume', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bcubic\s*meter(?:s)?\b/u', 'volume', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bm3\b/u', 'volume', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bm³\b/u', 'volume', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bl\s*:\s*/u', 'length: ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bw\s*:\s*/u', 'width: ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bh\s*:\s*/u', 'height: ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bv\s*:\s*/u', 'volume: ', $normalized) ?? $normalized;
         $normalized = preg_replace('/\brn\b/u', 'm', $normalized) ?? $normalized;
 
         return $normalized;
