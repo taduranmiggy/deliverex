@@ -13,6 +13,7 @@ LOG_DIR="$SHARED_STATE/deploy-logs"
 LOG_FILE="$LOG_DIR/cron-deploy.log"
 VARS_TMP="/tmp/deliverex-deploy-vars.$$"
 LAST_QUEUED_RUN_FILE="$SHARED_STATE/last-queued-run-id"
+LAST_DEPLOYED_SHA_FILE="$SHARED_STATE/last-deployed-sha"
 
 mkdir -p "$LOG_DIR" "$SHARED_STATE" 2>/dev/null || true
 
@@ -43,23 +44,26 @@ read_secret() {
 queue_latest_from_github_if_needed() {
   [ -f "$PENDING" ] && return 0
 
-  local github_token repo app_url
+  local github_token repo app_url last_deployed last_queued
   github_token="$(read_secret GITHUB_DEPLOY_TOKEN)"
   repo="$(read_secret GITHUB_REPO taduranmiggy/deliverex)"
   app_url="$(read_secret APP_URL https://deliverexapp.com)"
+  last_deployed="$(cat "$LAST_DEPLOYED_SHA_FILE" 2>/dev/null || true)"
+  last_queued="$(cat "$LAST_QUEUED_RUN_FILE" 2>/dev/null || true)"
 
   if [ -z "$github_token" ]; then
     log "WARN: GITHUB_DEPLOY_TOKEN missing; cannot poll GitHub artifacts."
     return 0
   fi
 
-  local runs_json run_id sha last_queued
+  # Include in-progress runs — artifact upload finishes long before the workflow ends.
+  local runs_json run_id sha
   runs_json="$(curl -fsS \
     -H "Authorization: Bearer $github_token" \
     -H "Accept: application/vnd.github+json" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     -H "User-Agent: Deliverex-Deploy-Cron" \
-    "https://api.github.com/repos/$repo/actions/workflows/deploy.yml/runs?branch=main&status=completed&per_page=5" \
+    "https://api.github.com/repos/$repo/actions/workflows/deploy.yml/runs?branch=main&per_page=10" \
     2>>"$LOG_FILE" || true)"
 
   if [ -z "$runs_json" ]; then
@@ -67,54 +71,58 @@ queue_latest_from_github_if_needed() {
     return 0
   fi
 
-  run_id="$(printf '%s' "$runs_json" | php -r '
+  run_id=""
+  sha=""
+  while IFS=$'\t' read -r candidate_run candidate_sha; do
+    [ -z "$candidate_run" ] && continue
+    local candidate_short="${candidate_sha:0:7}"
+    if [ -n "$last_deployed" ] && [ "$candidate_short" = "$last_deployed" ]; then
+      continue
+    fi
+    if [ "$candidate_run" = "$last_queued" ]; then
+      continue
+    fi
+
+    local artifacts_json artifact_id
+    artifacts_json="$(curl -fsS \
+      -H "Authorization: Bearer $github_token" \
+      -H "Accept: application/vnd.github+json" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      -H "User-Agent: Deliverex-Deploy-Cron" \
+      "https://api.github.com/repos/$repo/actions/runs/$candidate_run/artifacts?per_page=100" \
+      2>>"$LOG_FILE" || true)"
+
+    artifact_id="$(printf '%s' "$artifacts_json" | php -r '
+      $j=json_decode(stream_get_contents(STDIN),true);
+      if (!is_array($j) || !isset($j["artifacts"])) exit(0);
+      foreach ($j["artifacts"] as $a) {
+        $name = (string)($a["name"] ?? "");
+        if ($name === "deliverex-deploy" || str_starts_with($name, "deliverex-deploy-")) {
+          echo (string)($a["id"] ?? "");
+          exit(0);
+        }
+      }
+    ' 2>>"$LOG_FILE" || true)"
+
+    if [ -n "$artifact_id" ]; then
+      run_id="$candidate_run"
+      sha="$candidate_sha"
+      break
+    fi
+  done < <(printf '%s' "$runs_json" | php -r '
     $j = json_decode(stream_get_contents(STDIN), true);
     if (!is_array($j) || empty($j["workflow_runs"])) { exit(0); }
     foreach ($j["workflow_runs"] as $run) {
-      if (!empty($run["id"])) { echo (string) $run["id"]; exit(0); }
-    }
-  ' 2>>"$LOG_FILE" || true)"
-  sha="$(printf '%s' "$runs_json" | php -r '
-    $j = json_decode(stream_get_contents(STDIN), true);
-    if (!is_array($j) || empty($j["workflow_runs"])) { exit(0); }
-    foreach ($j["workflow_runs"] as $run) {
-      if (!empty($run["head_sha"])) { echo (string) $run["head_sha"]; exit(0); }
-    }
-  ' 2>>"$LOG_FILE" || true)"
-
-  if [ -z "$run_id" ]; then
-    log "WARN: No completed deploy workflow run found yet."
-    return 0
-  fi
-
-  last_queued="$(cat "$LAST_QUEUED_RUN_FILE" 2>/dev/null || true)"
-  if [ "$run_id" = "$last_queued" ]; then
-    return 0
-  fi
-
-  local artifacts_json artifact_id
-  artifacts_json="$(curl -fsS \
-    -H "Authorization: Bearer $github_token" \
-    -H "Accept: application/vnd.github+json" \
-    -H "X-GitHub-Api-Version: 2022-11-28" \
-    -H "User-Agent: Deliverex-Deploy-Cron" \
-    "https://api.github.com/repos/$repo/actions/runs/$run_id/artifacts?per_page=100" \
-    2>>"$LOG_FILE" || true)"
-
-  artifact_id="$(printf '%s' "$artifacts_json" | php -r '
-    $j=json_decode(stream_get_contents(STDIN),true);
-    if (!is_array($j) || !isset($j["artifacts"])) exit(0);
-    foreach ($j["artifacts"] as $a) {
-      $name = (string)($a["name"] ?? "");
-      if ($name === "deliverex-deploy" || str_starts_with($name, "deliverex-deploy-")) {
-        echo (string)($a["id"] ?? "");
-        exit(0);
+      $id = (string)($run["id"] ?? "");
+      $head = (string)($run["head_sha"] ?? "");
+      if ($id !== "" && $head !== "") {
+        echo $id . "\t" . $head . "\n";
       }
     }
-  ' 2>>"$LOG_FILE" || true)"
+  ' 2>>"$LOG_FILE" || true)
 
-  if [ -z "$artifact_id" ]; then
-    log "WARN: No deliverex-deploy artifact found for run $run_id."
+  if [ -z "$run_id" ]; then
+    log "WARN: No deploy artifact ready on GitHub yet."
     return 0
   fi
 
@@ -230,8 +238,12 @@ log "Applying deploy sha=${DEPLOY_SHA:0:7} bundle=$DEPLOY_BUNDLE"
 
 if bash "$SCRIPT_DIR/deploy-from-ci.sh" >>"$LOG_FILE" 2>&1; then
   rm -f "$PENDING"
+  if [ -n "$DEPLOY_SHA" ] && [ "$DEPLOY_SHA" != "unknown" ]; then
+    echo "${DEPLOY_SHA:0:7}" >"$LAST_DEPLOYED_SHA_FILE"
+  fi
   log "Deploy complete sha=${DEPLOY_SHA:0:7}"
 else
+  rm -f "$LAST_QUEUED_RUN_FILE"
   log "ERROR: deploy-from-ci.sh failed — pending file kept for retry"
   exit 1
 fi

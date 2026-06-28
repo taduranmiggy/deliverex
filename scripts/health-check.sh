@@ -23,7 +23,7 @@ check_body() {
     fi
   done
 
-  if [ -n "$EXPECTED_DEPLOY_SHA" ]; then
+  if [ -n "$EXPECTED_DEPLOY_SHA" ] && [ "${SKIP_DEPLOY_SHA_CHECK:-0}" != "1" ]; then
     local expected_short="${EXPECTED_DEPLOY_SHA:0:7}"
     local live_deploy
     live_deploy="$(echo "$body" | grep -E '^deploy=' | head -1 | cut -d= -f2 || true)"
@@ -35,6 +35,12 @@ check_body() {
       failed=1
     else
       log "PASS: deploy=${live_deploy} matches expected commit"
+    fi
+  elif [ -n "$EXPECTED_DEPLOY_SHA" ] && [ "${SKIP_DEPLOY_SHA_CHECK:-0}" = "1" ]; then
+    local live_deploy
+    live_deploy="$(echo "$body" | grep -E '^deploy=' | head -1 | cut -d= -f2 || true)"
+    if [ -n "$live_deploy" ]; then
+      log "INFO: deploy=${live_deploy} (sha gate skipped — cron may still be applying)"
     fi
   fi
 
