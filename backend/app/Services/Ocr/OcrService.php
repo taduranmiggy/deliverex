@@ -615,7 +615,7 @@ class OcrService
             $volume = round($length * $width * $height, 4);
         }
 
-        $drParsed = $this->extractReceiptNumber($text);
+        $drParsed = $this->extractReceiptNumber($text, $best);
         $matchSource = $bestKey ?? 'none';
 
         return [
@@ -698,6 +698,11 @@ class OcrService
             }
 
             $pattern = '/\b'.preg_quote($label, '/').'\s*[:=]\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:cm|mm|m|meter|meters|cbm|m3|m³)\b/i';
+            if (preg_match($pattern, $text, $m)) {
+                return $this->toFloat($m[1] ?? null);
+            }
+
+            $pattern = '/\b'.preg_quote($label, '/').'\s*[:=]\s*([0-9]+(?:[.,][0-9]+)?)\b/i';
             if (preg_match($pattern, $text, $m)) {
                 return $this->toFloat($m[1] ?? null);
             }
@@ -824,7 +829,11 @@ class OcrService
         return ['value' => null, 'match' => null];
     }
 
-    private function extractReceiptNumber(string $text): array
+    /**
+     * @param  array{length:?float,width:?float,height:?float,volume:?float}  $dimensions
+     * @return array{value:?string,match:?string}
+     */
+    private function extractReceiptNumber(string $text, array $dimensions = []): array
     {
         $patterns = [
             '/\bdr\s*(?:no|number|#)?\s*[:.\-]?\s*(?:dr\s*[-:\s]?)?(\d{5,8})\b/i',
@@ -833,6 +842,9 @@ class OcrService
             '/(?:delivery\s*receipt(?:\s*(?:no|number))?|receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*(dr[-\/]?[0-9]{5,8})/i',
             '/(?:delivery\s*receipt(?:\s*(?:no|number))?|receipt(?:\s*(?:no|number))?)\s*[:#.\-]?\s*([a-z]{1,4}[-\/]?[0-9]{4,})/i',
             '/(?:delivery\s*receipt[\s\S]{0,120})\bno\.?\s*[:#.\-]?\s*(\d{5,8})\b/i',
+            // Handwritten / Providential slips: red "NO: 2936806" without a delivery-receipt header.
+            '/\bn[o0]\s*[:#.\-]\s*(\d{5,8})\b/i',
+            '/\bno\s*[:#.\-]\s*(\d{5,8})\b/i',
         ];
 
         foreach ($patterns as $pattern) {
@@ -850,7 +862,59 @@ class OcrService
             }
         }
 
+        if ($this->hasDimensionContext($dimensions)) {
+            $fallback = $this->extractReceiptSerialFallback($text, $dimensions);
+            if ($fallback !== null) {
+                return $fallback;
+            }
+        }
+
         return ['value' => null, 'match' => null];
+    }
+
+    /**
+     * @param  array{length:?float,width:?float,height:?float,volume:?float}  $dimensions
+     */
+    private function hasDimensionContext(array $dimensions): bool
+    {
+        return ($dimensions['length'] ?? null) !== null
+            && ($dimensions['width'] ?? null) !== null
+            && ($dimensions['height'] ?? null) !== null;
+    }
+
+    /**
+     * @param  array{length:?float,width:?float,height:?float,volume:?float}  $dimensions
+     * @return array{value:string,match:string}|null
+     */
+    private function extractReceiptSerialFallback(string $text, array $dimensions): ?array
+    {
+        $exclude = [];
+        foreach (['length', 'width', 'height', 'volume'] as $key) {
+            $value = $dimensions[$key] ?? null;
+            if ($value === null) {
+                continue;
+            }
+            $exclude[] = (string) (int) round($value);
+            $exclude[] = (string) (int) round($value * 100);
+            $exclude[] = str_replace('.', '', number_format($value, 2, '.', ''));
+        }
+
+        if (! preg_match_all('/\b(\d{6,8})\b/', $text, $matches)) {
+            return null;
+        }
+
+        foreach (array_reverse($matches[1]) as $candidate) {
+            if (in_array($candidate, $exclude, true)) {
+                continue;
+            }
+
+            return [
+                'value' => 'DR-'.$candidate,
+                'match' => 'serial:'.$candidate,
+            ];
+        }
+
+        return null;
     }
 
     private function normalizeReceiptNumber(string $value, string $fullMatch): string
@@ -867,7 +931,7 @@ class OcrService
 
         if (
             preg_match('/^\d{5,8}$/', $value)
-            && preg_match('/\b(dr|delivery\s*receipt|receipt)\b/i', $fullMatch)
+            && preg_match('/\b(dr|delivery\s*receipt|receipt|\bno\b|\bserial:)/i', $fullMatch)
         ) {
             return 'DR-'.$value;
         }

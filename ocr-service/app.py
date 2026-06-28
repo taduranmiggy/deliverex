@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -199,6 +200,69 @@ def parse_oem(raw: str | None, fallback: list[str]) -> list[str]:
     return values or fallback
 
 
+def crop_footer_band(image: np.ndarray, start_ratio: float = 0.68) -> np.ndarray:
+    height = image.shape[0]
+    start = max(0, int(height * start_ratio))
+    return with_border(image[start:, :])
+
+
+def extract_red_ink_mask(image: np.ndarray) -> np.ndarray | None:
+    if image.ndim < 3 or image.shape[2] < 3:
+        return None
+
+    bgr = image[:, :, :3]
+    red = bgr[:, :, 2].astype(np.int16)
+    green = bgr[:, :, 1].astype(np.int16)
+    blue = bgr[:, :, 0].astype(np.int16)
+    mask = ((red - green) > 35) & ((red - blue) > 35) & (red > 90)
+    if not np.any(mask):
+        return None
+
+    channel = np.full(bgr.shape[:2], 255, dtype=np.uint8)
+    channel[mask] = 0
+    return with_border(channel)
+
+
+def supplement_serial_text(raw: np.ndarray, base_text: str) -> tuple[str, list[str]]:
+    extras: list[str] = []
+    gray = remove_alpha(raw)
+    regions: dict[str, np.ndarray] = {
+        "footer": crop_footer_band(gray),
+    }
+    red_mask = extract_red_ink_mask(raw)
+    if red_mask is not None:
+        regions["red_footer"] = crop_footer_band(red_mask)
+
+    for region_name, region in regions.items():
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+            temp_path = tmp.name
+        try:
+            if not cv2.imwrite(temp_path, region):
+                continue
+            for psm in ("7", "8", "6"):
+                try:
+                    result = run_tesseract(temp_path, "3", psm, include_tsv=False)
+                except (subprocess.TimeoutExpired, RuntimeError):
+                    continue
+                snippet = str(result.get("text", "")).strip()
+                if snippet and snippet not in base_text and snippet not in extras:
+                    extras.append(snippet)
+        finally:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
+
+    if not extras:
+        return base_text, []
+
+    merged = base_text
+    for snippet in extras:
+        if snippet not in merged:
+            merged = f"{merged}\n{snippet}".strip()
+    return merged, extras
+
+
 def score_text(text: str) -> float:
     if not text:
         return 0.0
@@ -206,8 +270,11 @@ def score_text(text: str) -> float:
     length_score = min(len(text), 500) / 500.0
     digit_ratio = (sum(ch.isdigit() for ch in text) / max(1, len(text)))
     keyword_hits = sum(1 for kw in ("receipt", "delivery", "length", "width", "height", "volume", "dr", "no") if kw in lower)
+    serial_bonus = 0.0
+    if re.search(r"\bno\s*[:#.\-]?\s*\d{5,8}\b", lower) or re.search(r"\b\d{7}\b", text):
+        serial_bonus = 0.15
     alpha_num = sum(ch.isalnum() for ch in text) / max(1, len(text))
-    return (0.45 * length_score) + (0.2 * min(digit_ratio * 4.0, 1.0)) + (0.2 * min(keyword_hits / 5.0, 1.0)) + (0.15 * alpha_num)
+    return (0.45 * length_score) + (0.2 * min(digit_ratio * 4.0, 1.0)) + (0.2 * min(keyword_hits / 5.0, 1.0)) + (0.15 * alpha_num) + serial_bonus
 
 
 def parse_tsv(tsv_text: str) -> dict[str, Any]:
@@ -440,6 +507,9 @@ async def ocr(
             except (subprocess.TimeoutExpired, RuntimeError):
                 pass
         text = best["text"].strip()
+        text, footer_snippets = supplement_serial_text(raw, text)
+        if footer_snippets:
+            best["score"] = round(score_text(text), 4)
 
         return {
             "text": text,
@@ -451,6 +521,7 @@ async def ocr(
                 "chosen_variant": best["variant"],
                 "chosen_oem": best.get("oem"),
                 "chosen_psm": best["psm"],
+                "footer_snippets": footer_snippets,
                 "candidate_scores": [
                     {
                         "variant": item["variant"],

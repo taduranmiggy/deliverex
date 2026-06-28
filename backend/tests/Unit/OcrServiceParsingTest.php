@@ -123,4 +123,39 @@ class OcrServiceParsingTest extends TestCase
         $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
         $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
     }
+
+    public function test_extracts_no_serial_on_handwritten_slip_without_delivery_receipt_header(): void
+    {
+        $text = <<<TXT
+        SOLD TO CRBC
+        ADDRESS
+        DATE
+        L = 730
+        W = 230
+        H = 215
+        V = 36.09
+        NO: 2936806
+        TXT;
+
+        $parsed = $this->parse($text);
+
+        $this->assertSame('DR-2936806', $parsed['delivery_receipt_number']);
+        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
+    }
+
+    public function test_extracts_trailing_serial_when_no_label_present(): void
+    {
+        $text = <<<TXT
+        SOLD TO CRBC
+        730 230 215 36.09
+        2936806
+        TXT;
+
+        $parsed = $this->parse($text);
+
+        $this->assertSame('DR-2936806', $parsed['delivery_receipt_number']);
+    }
 }
