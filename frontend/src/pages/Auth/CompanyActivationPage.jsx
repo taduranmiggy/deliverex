@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { activateCompany, fetchCompanyActivation } from '../../api/auth'
 import useAuth from '../../hooks/useAuth'
 import { roleHome } from '../../utils/roleUtils'
@@ -108,7 +108,9 @@ function CompanyActivationPage() {
         <div className="auth-card auth-card--dx">
           <h1>Activation unavailable</h1>
           <p className="notice error">{error}</p>
-          <p><Link to="/login">Return to sign in</Link></p>
+          <p className="auth-alt-link" style={{ marginTop: 16 }}>
+            Need help? Contact your administrator to request a new activation link.
+          </p>
         </div>
       </div>
     )
@@ -198,7 +200,7 @@ function CompanyActivationPage() {
           </button>
         </form>
         <p className="auth-alt-link">
-          Need help? <Link to="/login">Return to sign in</Link>.
+          Need help? Use at least 8 characters with uppercase, lowercase, a number, and a special character. Enter the same password in both fields, then tap Activate & sign in.
         </p>
       </div>
     </div>
