@@ -16,6 +16,8 @@ const DOC_TYPES = [
   { value: 'other', label: 'Other' },
 ]
 
+const OCR_GATED_TYPES = new Set(['receipt', 'invoice', 'pod', 'job_order'])
+
 function DocumentUploadPage() {
   const location = useLocation()
   const { showToast } = useDriverUi()
@@ -99,6 +101,7 @@ function DocumentUploadPage() {
 
     const selectedAssignment = assignments.find((a) => String(a.id) === String(selectedId))
     const currentStatus = String(selectedAssignment?.status || '').toLowerCase().trim()
+    const requiresOcrGate = OCR_GATED_TYPES.has(docType)
     const canUploadNow = ['arrived', 'completed'].includes(currentStatus)
 
     const file = fileRef.current?.files?.[0] ?? cameraRef.current?.files?.[0]
@@ -112,7 +115,7 @@ function DocumentUploadPage() {
     setUploadProgress(0)
 
     try {
-      if (isOnline && !canUploadNow) {
+      if (isOnline && requiresOcrGate && !canUploadNow) {
         setError(`Upload is available only after destination arrival. Current status: ${currentStatus || 'unknown'}. If you just updated status, wait for sync then retry.`)
         showToast('Delivery status is not yet Arrived/Completed', 'error')
         return

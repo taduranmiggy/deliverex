@@ -18,6 +18,17 @@ use Illuminate\Support\Facades\Log;
 
 class DocumentController extends Controller
 {
+    /** @var list<string> */
+    private const OCR_GATED_TYPES = [
+        'pod',
+        'receipt',
+        'gate_pass',
+        'weighbridge',
+        'signed_doc',
+        'invoice',
+        'job_order',
+    ];
+
     public function __construct(
         private OcrService $ocrService,
         private NotificationDispatcher $notificationDispatcher
@@ -36,8 +47,9 @@ class DocumentController extends Controller
         }
 
         $type = $data['type'] ?? 'other';
+        $requiresOcrGate = in_array($type, self::OCR_GATED_TYPES, true);
         $status = DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
-        if ($type !== 'departure' && ! in_array($status, [DeliveryStatus::ARRIVED, DeliveryStatus::COMPLETED], true)) {
+        if ($requiresOcrGate && ! in_array($status, [DeliveryStatus::ARRIVED, DeliveryStatus::COMPLETED], true)) {
             return response()->json([
                 'message' => 'OCR uploads are only allowed when delivery status is Arrived or Completed.',
             ], 422);
@@ -72,9 +84,8 @@ class DocumentController extends Controller
             ]);
         }
 
-        // Departure photo is "Start Trip Verification" proof only — store it without
-        // running the OCR pipeline so OCR review and reports remain unaffected.
-        if ($type === 'departure') {
+        // Store-only document types (non-OCR) should not enter the OCR pipeline.
+        if (! $requiresOcrGate) {
             return response()->json([
                 'document'     => $document,
                 'ocr_result'   => null,

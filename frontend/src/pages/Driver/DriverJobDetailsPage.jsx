@@ -129,11 +129,14 @@ function DriverJobDetailsPage() {
     (a, b) => new Date(b.captured_at) - new Date(a.captured_at),
   )[0]
   const dropoff = buildDisplayAddress('dropoff', job) || job?.dropoff_location || ''
-  const navUrl = latestGps
-    ? `https://www.google.com/maps/dir/?api=1&destination=${latestGps.latitude},${latestGps.longitude}`
+  const dropoffLat = Number(job?.dropoff_latitude)
+  const dropoffLng = Number(job?.dropoff_longitude)
+  const hasDropoffCoords = Number.isFinite(dropoffLat) && Number.isFinite(dropoffLng)
+  const navUrl = hasDropoffCoords
+    ? `https://www.google.com/maps/dir/?api=1&destination=${dropoffLat},${dropoffLng}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dropoff)}`
-  const wazeUrl = latestGps
-    ? `https://waze.com/ul?ll=${latestGps.latitude},${latestGps.longitude}&navigate=yes`
+  const wazeUrl = hasDropoffCoords
+    ? `https://waze.com/ul?ll=${dropoffLat},${dropoffLng}&navigate=yes`
     : `https://waze.com/ul?q=${encodeURIComponent(dropoff)}&navigate=yes`
 
   const lastUpdated = formatLastUpdated(assignment)
