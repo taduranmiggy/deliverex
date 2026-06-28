@@ -10,6 +10,7 @@ use App\Models\DispatchAssignment;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Ocr\OcrService;
 use App\Support\AuditLogger;
+use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -52,9 +53,10 @@ class CompletionProofController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        if ($assignment->status !== 'arrived') {
+        $status = DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
+        if (! in_array($status, [DeliveryStatus::ARRIVED, DeliveryStatus::COMPLETED], true)) {
             return response()->json([
-                'message' => 'Completion proof can only be submitted when the delivery status is Arrived.',
+                'message' => 'Completion proof can only be submitted when the delivery status is Arrived or Completed.',
             ], 422);
         }
 

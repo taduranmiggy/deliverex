@@ -8,6 +8,7 @@ use App\Models\DispatchAssignment;
 use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Vehicle;
+use App\Support\DeliveryStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +33,14 @@ class AnalyticsController extends Controller
         $totalJobs     = (clone $baseJobs)->count();
         $completed     = (clone $baseJobs)->where('status', 'completed')->count();
         $pending       = (clone $baseJobs)->where('status', 'pending')->count();
-        $inProgress    = (clone $baseJobs)->whereIn('status', ['assigned', 'in_progress', 'arrived'])->count();
+        $inProgress    = (clone $baseJobs)->whereIn('status', [
+            DeliveryStatus::ASSIGNED,
+            'in_progress',
+            DeliveryStatus::EN_ROUTE_TO_PICKUP,
+            DeliveryStatus::ARRIVED_AT_PICKUP,
+            DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+            DeliveryStatus::ARRIVED,
+        ])->count();
         $cancelled     = (clone $baseJobs)->where('status', 'cancelled')->count();
 
         // Delayed: active jobs that are past their scheduled_end

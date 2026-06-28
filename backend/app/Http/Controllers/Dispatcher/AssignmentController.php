@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Dispatcher;
 
 use App\Http\Controllers\Controller;
 use App\Models\AssignmentAuditTrail;
+use App\Models\DeliveryStatusHistory;
 use App\Models\DeliveryStatusLog;
 use App\Models\DispatchAssignment;
 use App\Models\Driver;
@@ -13,6 +14,7 @@ use App\Services\Assignment\BestFitAssignmentService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Support\AssignmentScheduleConflict;
 use App\Support\AuditLogger;
+use App\Support\DeliveryStatus;
 use App\Support\JobOrderScheduleValidator;
 use Illuminate\Http\Request;
 
@@ -123,20 +125,30 @@ class AssignmentController extends Controller
             'driver_id'    => $driver->id,
             'vehicle_id'   => $vehicle->id,
             'assigned_by'  => $request->user()?->id,
-            'status'       => 'assigned',
+            'status'       => DeliveryStatus::ASSIGNED,
             'assigned_at'  => now(),
         ]);
 
         DeliveryStatusLog::create([
             'assignment_id' => $assignment->id,
-            'status'        => 'assigned',
+            'status'        => DeliveryStatus::ASSIGNED,
             'notes'         => 'Dispatched via Best-Fit assignment',
             'created_at'    => now(),
         ]);
 
+        DeliveryStatusHistory::create([
+            'job_order_id' => $assignment->job_order_id,
+            'assignment_id' => $assignment->id,
+            'status' => DeliveryStatus::ASSIGNED,
+            'updated_by' => $request->user()?->id,
+            'updated_at' => now(),
+            'remarks' => 'Dispatched via Best-Fit assignment',
+            'created_at' => now(),
+        ]);
+
         $this->applyResourceLocks($driver, $vehicle, $assignment, $jobOrder);
 
-        $jobOrder->update(['status' => 'assigned']);
+        $jobOrder->update(['status' => DeliveryStatus::toJobOrderStatus(DeliveryStatus::ASSIGNED)]);
 
         $assignment = $assignment->load('jobOrder', 'driver.user', 'vehicle.vehicleType');
 

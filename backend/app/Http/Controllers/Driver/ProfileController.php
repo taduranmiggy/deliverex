@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
 use App\Models\DispatchAssignment;
+use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 
@@ -43,7 +44,13 @@ class ProfileController extends Controller
         $stats = [
             'total_deliveries'     => (clone $baseQuery)->count(),
             'completed_deliveries' => (clone $baseQuery)->where('status', 'completed')->count(),
-            'pending_deliveries'   => (clone $baseQuery)->whereIn('status', ['assigned', 'in_progress', 'arrived'])->count(),
+            'pending_deliveries'   => (clone $baseQuery)->whereIn('status', [
+                DeliveryStatus::ASSIGNED,
+                DeliveryStatus::EN_ROUTE_TO_PICKUP,
+                DeliveryStatus::ARRIVED_AT_PICKUP,
+                DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+                DeliveryStatus::ARRIVED,
+            ])->count(),
         ];
 
         return response()->json([
@@ -104,7 +111,13 @@ class ProfileController extends Controller
 
     private function resolveCurrentAssignment($driver): ?DispatchAssignment
     {
-        $activeStatuses = ['assigned', 'in_progress', 'arrived'];
+        $activeStatuses = [
+            DeliveryStatus::ASSIGNED,
+            DeliveryStatus::EN_ROUTE_TO_PICKUP,
+            DeliveryStatus::ARRIVED_AT_PICKUP,
+            DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+            DeliveryStatus::ARRIVED,
+        ];
 
         if ($driver->current_assignment_id) {
             $linked = DispatchAssignment::query()

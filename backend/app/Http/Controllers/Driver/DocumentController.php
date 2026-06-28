@@ -8,6 +8,7 @@ use App\Models\DeliveryDocument;
 use App\Models\DispatchAssignment;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Ocr\OcrService;
+use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -45,6 +46,14 @@ class DocumentController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        $type = $data['type'] ?? 'other';
+        $status = DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
+        if ($type !== 'departure' && ! in_array($status, [DeliveryStatus::ARRIVED, DeliveryStatus::COMPLETED], true)) {
+            return response()->json([
+                'message' => 'OCR uploads are only allowed when delivery status is Arrived or Completed.',
+            ], 422);
+        }
+
         $path = $request->file('file')->store('delivery_documents', 'public');
 
         if (! $path) {
@@ -54,12 +63,12 @@ class DocumentController extends Controller
         $document = DeliveryDocument::create([
             'assignment_id' => $assignment->id,
             'file_path'     => $path,
-            'type'          => $data['type'] ?? 'other',
+            'type'          => $type,
             'uploaded_by'   => $request->user()?->id,
             'notes'         => $data['notes'] ?? null,
         ]);
 
-        if (($data['type'] ?? 'other') === 'pod') {
+        if ($type === 'pod') {
             $assignment->update([
                 'pod_verified_at' => now(),
                 'pod_verified_by' => $request->user()?->id,
@@ -68,7 +77,7 @@ class DocumentController extends Controller
 
         // Departure photo is "Start Trip Verification" proof only — store it without
         // running the OCR pipeline so OCR review and reports remain unaffected.
-        if (($data['type'] ?? 'other') === 'departure') {
+        if ($type === 'departure') {
             return response()->json([
                 'document'     => $document,
                 'ocr_result'   => null,

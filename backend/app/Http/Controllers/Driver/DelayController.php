@@ -7,6 +7,7 @@ use App\Models\DeliveryDelayReport;
 use App\Models\DispatchAssignment;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Support\AuditLogger;
+use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -34,7 +35,8 @@ class DelayController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        if (in_array($assignment->status, ['completed', 'cancelled'], true)) {
+        $status = DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
+        if (in_array($status, [DeliveryStatus::COMPLETED, DeliveryStatus::CANCELLED], true)) {
             return response()->json(['message' => 'Cannot report delay on a completed or cancelled assignment.'], 422);
         }
 

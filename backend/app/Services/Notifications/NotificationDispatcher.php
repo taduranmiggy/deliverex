@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\JobOrder;
 use App\Services\Email\EmailService;
 use App\Services\Email\EmailType;
+use App\Support\DeliveryStatus;
 
 class NotificationDispatcher
 {
@@ -69,7 +70,8 @@ class NotificationDispatcher
         $assignment->loadMissing('assignedBy', 'jobOrder', 'driver.user');
         $job  = $assignment->jobOrder;
         $code = $job?->tracking_code ?? (string) $job?->id;
-        $label = str_replace('_', ' ', $status);
+        $normalized = DeliveryStatus::canonicalize($status) ?? $status;
+        $label = DeliveryStatus::label($normalized);
 
         $this->notifyUser(
             $assignment->assignedBy,
@@ -92,8 +94,12 @@ class NotificationDispatcher
         );
 
         $emailType = match (true) {
-            in_array($status, ['in_progress', 'en_route'], true) => EmailType::DELIVERY_EN_ROUTE,
-            $status === 'arrived' => EmailType::DELIVERY_ARRIVED,
+            in_array($normalized, [
+                DeliveryStatus::EN_ROUTE_TO_PICKUP,
+                DeliveryStatus::ARRIVED_AT_PICKUP,
+                DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+            ], true) => EmailType::DELIVERY_EN_ROUTE,
+            $normalized === DeliveryStatus::ARRIVED => EmailType::DELIVERY_ARRIVED,
             default => null,
         };
 

@@ -4,6 +4,7 @@ namespace App\Services\Delivery;
 
 use App\Models\JobOrder;
 use App\Models\TrackingLog;
+use App\Support\DeliveryStatus;
 
 class EtaEstimationService
 {
@@ -16,11 +17,13 @@ class EtaEstimationService
      */
     public function estimate(JobOrder $job, ?TrackingLog $latestTracking, string $status): ?array
     {
-        if (in_array($status, ['completed', 'cancelled'], true)) {
+        $normalized = DeliveryStatus::canonicalize($status) ?? $status;
+
+        if (in_array($normalized, [DeliveryStatus::COMPLETED, DeliveryStatus::CANCELLED], true)) {
             return null;
         }
 
-        if ($status === 'arrived') {
+        if ($normalized === DeliveryStatus::ARRIVED) {
             return [
                 'available'               => true,
                 'estimated_arrival'       => null,
@@ -36,7 +39,13 @@ class EtaEstimationService
             return null;
         }
 
-        if (! in_array($status, ['assigned', 'in_progress', 'arrived'], true)) {
+        if (! in_array($normalized, [
+            DeliveryStatus::ASSIGNED,
+            DeliveryStatus::EN_ROUTE_TO_PICKUP,
+            DeliveryStatus::ARRIVED_AT_PICKUP,
+            DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+            DeliveryStatus::ARRIVED,
+        ], true)) {
             return null;
         }
 

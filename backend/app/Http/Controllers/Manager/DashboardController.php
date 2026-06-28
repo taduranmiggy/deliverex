@@ -8,6 +8,7 @@ use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Vehicle;
 use App\Services\Performance\ManagerDashboardMetricsService;
+use App\Support\DeliveryStatus;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -48,7 +49,13 @@ class DashboardController extends Controller
             'job_orders'          => JobOrder::count(),
             'jobs_completed'      => JobOrder::where('status', 'completed')->count(),
             'jobs_pending'        => JobOrder::where('status', 'pending')->count(),
-            'assignments_active'  => DispatchAssignment::whereIn('status', ['assigned', 'in_progress', 'arrived'])->count(),
+            'assignments_active'  => DispatchAssignment::whereIn('status', [
+                DeliveryStatus::ASSIGNED,
+                DeliveryStatus::EN_ROUTE_TO_PICKUP,
+                DeliveryStatus::ARRIVED_AT_PICKUP,
+                DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+                DeliveryStatus::ARRIVED,
+            ])->count(),
             'drivers_available'   => Driver::where('availability', 'available')->count(),
             'vehicles_available'  => Vehicle::where('status', 'available')->count(),
             'delayed_today'       => $delayed,

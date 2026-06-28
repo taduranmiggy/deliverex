@@ -8,6 +8,7 @@ use App\Models\DispatchAssignment;
 use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Vehicle;
+use App\Support\DeliveryStatus;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -150,8 +151,20 @@ class CalendarController extends Controller
 
         $assignedToday = DispatchAssignment::query()
             ->whereIn('job_order_id', $todayJobIds)
-            ->whereIn('status', ['assigned', 'in_progress', 'arrived'])
+            ->whereIn('status', [
+                DeliveryStatus::ASSIGNED,
+                DeliveryStatus::EN_ROUTE_TO_PICKUP,
+                DeliveryStatus::ARRIVED_AT_PICKUP,
+                DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+                DeliveryStatus::ARRIVED,
+            ])
             ->count();
+
+        $statusBreakdown = DispatchAssignment::query()
+            ->whereIn('job_order_id', $todayJobIds)
+            ->selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status');
 
         $completedToday = DispatchAssignment::query()
             ->whereIn('job_order_id', $todayJobIds)
@@ -188,6 +201,11 @@ class CalendarController extends Controller
             'today_deliveries'   => $todayJobs->count(),
             'assigned_deliveries'=> $assignedToday,
             'completed_deliveries'=> $completedToday,
+            'assigned'           => (int) ($statusBreakdown[DeliveryStatus::ASSIGNED] ?? 0),
+            'in_pickup'          => (int) (($statusBreakdown[DeliveryStatus::EN_ROUTE_TO_PICKUP] ?? 0) + ($statusBreakdown[DeliveryStatus::ARRIVED_AT_PICKUP] ?? 0)),
+            'in_transit'         => (int) ($statusBreakdown[DeliveryStatus::EN_ROUTE_TO_DESTINATION] ?? 0),
+            'arrived'            => (int) ($statusBreakdown[DeliveryStatus::ARRIVED] ?? 0),
+            'completed'          => (int) ($statusBreakdown[DeliveryStatus::COMPLETED] ?? 0),
             'delayed_deliveries' => $delayed,
             'issue_reports'      => $issueReports,
             'unassigned_jobs'    => $unassigned,
@@ -261,10 +279,13 @@ class CalendarController extends Controller
                 ->map(fn ($v) => ['id' => $v->id, 'label' => trim(($v->type ?? 'Vehicle') . ' · ' . $v->plate_no)]),
             'statuses' => [
                 ['value' => 'pending', 'label' => 'Pending'],
-                ['value' => 'assigned', 'label' => 'Assigned'],
-                ['value' => 'in_progress', 'label' => 'En Route'],
-                ['value' => 'arrived', 'label' => 'Arrived'],
-                ['value' => 'completed', 'label' => 'Completed'],
+                ['value' => DeliveryStatus::ASSIGNED, 'label' => 'Assigned'],
+                ['value' => DeliveryStatus::EN_ROUTE_TO_PICKUP, 'label' => 'En Route to Pickup'],
+                ['value' => DeliveryStatus::ARRIVED_AT_PICKUP, 'label' => 'Arrived at Pickup'],
+                ['value' => DeliveryStatus::EN_ROUTE_TO_DESTINATION, 'label' => 'En Route to Destination'],
+                ['value' => 'in_progress', 'label' => 'En Route (Legacy)'],
+                ['value' => DeliveryStatus::ARRIVED, 'label' => 'Arrived'],
+                ['value' => DeliveryStatus::COMPLETED, 'label' => 'Completed'],
                 ['value' => 'cancelled', 'label' => 'Cancelled'],
                 ['value' => 'delayed', 'label' => 'Delayed'],
                 ['value' => 'issue_reported', 'label' => 'Issue Reported'],
@@ -323,7 +344,7 @@ class CalendarController extends Controller
     private function resolveDisplayStatus(JobOrder $job, ?DispatchAssignment $assignment): string
     {
         if ($assignment && ! in_array($assignment->status, ['cancelled'], true)) {
-            return $assignment->status;
+            return DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
         }
 
         return $job->status;
@@ -347,10 +368,13 @@ class CalendarController extends Controller
 
         return match ($status) {
             'pending'     => 'pending',
-            'assigned'    => 'assigned',
-            'in_progress' => 'in_progress',
-            'arrived'     => 'arrived',
-            'completed'   => 'completed',
+            DeliveryStatus::ASSIGNED => 'assigned',
+            DeliveryStatus::EN_ROUTE_TO_PICKUP,
+            DeliveryStatus::ARRIVED_AT_PICKUP => 'in_pickup',
+            DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+            'in_progress' => 'in_transit',
+            DeliveryStatus::ARRIVED => 'arrived',
+            DeliveryStatus::COMPLETED => 'completed',
             'cancelled'   => 'cancelled',
             default       => 'assigned',
         };

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DeliveryCompletionProof;
 use App\Models\JobOrder;
 use App\Services\Delivery\EtaEstimationService;
+use App\Support\DeliveryStatus;
 use Illuminate\Support\Facades\Storage;
 
 class TrackingController extends Controller
@@ -51,7 +52,7 @@ class TrackingController extends Controller
                 ->orderBy('created_at')
                 ->get(['status', 'notes', 'created_at', 'latitude', 'longitude', 'arrival_verified'])
                 ->map(fn ($row) => [
-                    'status'            => $row->status,
+                    'status'            => DeliveryStatus::canonicalize((string) $row->status) ?? $row->status,
                     'notes'             => $row->notes,
                     'at'                => $row->created_at?->toIso8601String(),
                     'arrival_verified'  => (bool) $row->arrival_verified,
@@ -63,7 +64,8 @@ class TrackingController extends Controller
                 ->all();
         }
 
-        $currentStatus = $latestStatus?->status ?? $jobOrder->status;
+        $rawCurrentStatus = $latestStatus?->status ?? $jobOrder->status;
+        $currentStatus = DeliveryStatus::canonicalize($rawCurrentStatus) ?? $rawCurrentStatus;
         $completionProof = $latestAssignment?->completionProof;
         $proofDocuments  = [];
         $proofAvailable  = $currentStatus === 'completed' && $completionProof !== null;
@@ -96,8 +98,36 @@ class TrackingController extends Controller
 
         $eta = $this->etaEstimation->estimate($jobOrder, $latestTracking, $currentStatus);
 
+        $orderedTimeline = collect(DeliveryStatus::lifecycle())
+            ->map(fn (string $stage) => [
+                'status' => $stage,
+                'label' => DeliveryStatus::label($stage),
+                'timestamp' => null,
+            ])
+            ->values()
+            ->all();
+        if ($latestAssignment) {
+            $timelineMap = $latestAssignment->deliveryStatusLogs()
+                ->orderBy('created_at')
+                ->get(['status', 'created_at'])
+                ->mapWithKeys(function ($row) {
+                    $normalized = DeliveryStatus::canonicalize((string) $row->status);
+                    if (! $normalized) {
+                        return [];
+                    }
+
+                    return [$normalized => $row->created_at?->toIso8601String()];
+                });
+
+            foreach ($orderedTimeline as $index => $item) {
+                $stage = $item['status'];
+                $orderedTimeline[$index]['timestamp'] = $timelineMap[$stage] ?? null;
+            }
+        }
+
         return response()->json([
             'tracking_code'       => $jobOrder->tracking_code,
+            'current_status'      => $currentStatus,
             'status'              => $currentStatus,
             'eta_window'          => $this->etaLabel($jobOrder),
             'eta'                 => $eta,
@@ -107,7 +137,8 @@ class TrackingController extends Controller
                     'lng' => round((float) $latestTracking->longitude, 2),
                 ]
                 : null,
-            'timeline'            => $timeline,
+            'timeline'            => $orderedTimeline,
+            'status_events'       => $timeline,
             'proof_of_delivery_available' => $proofAvailable,
             'completion_proof'    => $completionProof ? [
                 'proof_type'       => $completionProof->proof_type,
@@ -138,7 +169,8 @@ class TrackingController extends Controller
         if (! $jobOrder->scheduled_end || ! $assignment) {
             return false;
         }
-        $terminal = in_array($latestStatus?->status ?? $assignment->status, ['completed', 'cancelled'], true);
+        $status = DeliveryStatus::canonicalize($latestStatus?->status ?? $assignment->status) ?? ($latestStatus?->status ?? $assignment->status);
+        $terminal = in_array($status, [DeliveryStatus::COMPLETED, DeliveryStatus::CANCELLED], true);
         if ($terminal) {
             return false;
         }

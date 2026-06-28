@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
 use App\Models\DeliveryCompletionProof;
+use App\Models\DeliveryStatusHistory;
 use App\Models\DeliveryStatusLog;
 use App\Models\DispatchAssignment;
 use App\Models\Driver;
@@ -12,6 +13,7 @@ use App\Models\Vehicle;
 use App\Services\Delivery\ArrivalVerificationService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Support\AuditLogger;
+use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 
@@ -40,15 +42,16 @@ class StatusController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $status = $this->normalizeStatus($data['status']);
+        $currentStatus = DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
+        $status = $this->normalizeStatus($data['status'], $currentStatus);
         if (! $status) {
             return response()->json(['message' => 'Invalid status stage'], 422);
         }
 
         // Prevent backwards transitions
-        if (! $this->isValidTransition($assignment->status, $status)) {
+        if (! $this->isValidTransition($currentStatus, $status)) {
             return response()->json([
-                'message' => "Cannot transition from '{$assignment->status}' to '{$status}'.",
+                'message' => "Cannot transition from '{$currentStatus}' to '{$status}'.",
             ], 422);
         }
 
@@ -57,7 +60,7 @@ class StatusController extends Controller
 
         // Start Trip Verification: require GPS proof when leaving "assigned" for "en route".
         // Accept a prior tracking log (e.g. dashboard GPS ping) as already-captured proof.
-        $isStartTrip = $status === 'in_progress' && $assignment->status === 'assigned';
+        $isStartTrip = $status === DeliveryStatus::EN_ROUTE_TO_PICKUP && $currentStatus === DeliveryStatus::ASSIGNED;
         if ($isStartTrip && ($latitude === null || $longitude === null)
             && ! $assignment->trackingLogs()->exists()) {
             return response()->json([
@@ -66,7 +69,7 @@ class StatusController extends Controller
         }
 
         // Arrival Verification: require GPS within radius of drop-off destination.
-        $isArrivalVerify = $status === 'arrived' && $assignment->status === 'in_progress';
+        $isArrivalVerify = $status === DeliveryStatus::ARRIVED && $currentStatus === DeliveryStatus::EN_ROUTE_TO_DESTINATION;
         $arrivalVerified = null;
 
         if ($isArrivalVerify) {
@@ -95,7 +98,7 @@ class StatusController extends Controller
         }
 
         // Completion proof required before marking delivery as completed.
-        $isComplete = $status === 'completed' && $assignment->status === 'arrived';
+        $isComplete = $status === DeliveryStatus::COMPLETED && $currentStatus === DeliveryStatus::ARRIVED;
         if ($isComplete && ! DeliveryCompletionProof::where('assignment_id', $assignment->id)->exists()) {
             return response()->json([
                 'message' => 'Delivery completion proof is required. Upload a receipt photo or OCR document before completing.',
@@ -112,6 +115,15 @@ class StatusController extends Controller
             'created_at'       => now(),
         ]);
 
+        $this->logStatusHistory(
+            assignment: $assignment,
+            status: $status,
+            updatedBy: $request->user()?->id,
+            latitude: $latitude,
+            longitude: $longitude,
+            remarks: $data['notes'] ?? null,
+        );
+
         $assignment->update(['status' => $status]);
         $this->notificationDispatcher->statusUpdated($assignment, $status);
 
@@ -124,9 +136,9 @@ class StatusController extends Controller
             ]);
         }
 
-        if ($status === 'in_progress') {
+        if ($status === DeliveryStatus::EN_ROUTE_TO_PICKUP) {
             $assignment->update(['started_at' => now()]);
-            $assignment->jobOrder?->update(['status' => 'in_progress']);
+            $assignment->jobOrder?->update(['status' => DeliveryStatus::toJobOrderStatus($status)]);
             $driver = Driver::find($assignment->driver_id);
             $vehicle = Vehicle::find($assignment->vehicle_id);
             $driver?->update([
@@ -137,12 +149,16 @@ class StatusController extends Controller
         }
 
         // Propagate arrived to job order
-        if ($status === 'arrived') {
-            $assignment->jobOrder?->update(['status' => 'arrived']);
+        if ($status === DeliveryStatus::ARRIVED) {
+            $assignment->jobOrder?->update(['status' => DeliveryStatus::toJobOrderStatus($status)]);
         }
 
-        if (in_array($status, ['completed', 'cancelled'], true)) {
-            if ($status === 'completed') {
+        if (in_array($status, [DeliveryStatus::ARRIVED_AT_PICKUP, DeliveryStatus::EN_ROUTE_TO_DESTINATION], true)) {
+            $assignment->jobOrder?->update(['status' => DeliveryStatus::toJobOrderStatus($status)]);
+        }
+
+        if (in_array($status, [DeliveryStatus::COMPLETED, DeliveryStatus::CANCELLED], true)) {
+            if ($status === DeliveryStatus::COMPLETED) {
                 $assignment->update(['completed_at' => now()]);
             }
             $driver  = Driver::find($assignment->driver_id);
@@ -154,12 +170,12 @@ class StatusController extends Controller
             $vehicle?->update(['status' => 'available']);
             $assignment->jobOrder?->update(['status' => $status]);
 
-            if ($status === 'completed') {
+            if ($status === DeliveryStatus::COMPLETED) {
                 $this->notificationDispatcher->deliveryCompleted($assignment);
             }
         }
 
-        if ($this->isDelay($assignment) && ! in_array($status, ['completed', 'cancelled'], true)) {
+        if ($this->isDelay($assignment) && ! in_array($status, [DeliveryStatus::COMPLETED, DeliveryStatus::CANCELLED], true)) {
             $assignment->loadMissing('assignedBy', 'jobOrder');
             $code = $assignment->jobOrder?->tracking_code ?? (string) $assignment->job_order_id;
             $this->notificationDispatcher->notifyUser(
@@ -173,47 +189,47 @@ class StatusController extends Controller
             ], $request);
         }
 
+        $nextAction = DeliveryStatus::nextAction($status);
+
         return response()->json([
             'message'          => 'Status updated',
             'status'           => $status,
             'arrival_verified' => $arrivalVerified,
+            'next_status'      => $nextAction['next_status'],
+            'allowed_action'   => $nextAction['label'],
         ]);
     }
 
-    private function normalizeStatus(string $status): ?string
+    private function normalizeStatus(string $status, string $currentStatus): ?string
     {
-        $value = strtolower(trim($status));
-        $map   = [
-            'assigned'    => 'assigned',
-            'dispatched'  => 'assigned',
-            'en_route'    => 'in_progress',
-            'en route'    => 'in_progress',
-            'in_progress' => 'in_progress',
-            'arrived'     => 'arrived',
-            'delivered'   => 'completed',
-            'completed'   => 'completed',
-            'cancelled'   => 'cancelled',
-        ];
+        $normalized = DeliveryStatus::canonicalize($status);
+        if (! $normalized) {
+            return null;
+        }
 
-        return $map[$value] ?? null;
+        // Backward compatibility for legacy frontend actions.
+        $value = strtolower(trim($status));
+        if (in_array($value, ['in_progress', 'en_route', 'en route'], true)) {
+            if ($currentStatus === DeliveryStatus::ASSIGNED) {
+                return DeliveryStatus::EN_ROUTE_TO_PICKUP;
+            }
+
+            if (in_array($currentStatus, [DeliveryStatus::EN_ROUTE_TO_PICKUP, DeliveryStatus::ARRIVED_AT_PICKUP], true)) {
+                return DeliveryStatus::EN_ROUTE_TO_DESTINATION;
+            }
+        }
+
+        if ($value === 'arrived' && $currentStatus === DeliveryStatus::EN_ROUTE_TO_PICKUP) {
+            return DeliveryStatus::ARRIVED_AT_PICKUP;
+        }
+
+        return $normalized;
     }
 
     /** Prevent nonsensical backward transitions. */
     private function isValidTransition(string $current, string $next): bool
     {
-        $order = [
-            'assigned'   => 1,
-            'in_progress'=> 2,
-            'arrived'    => 3,
-            'completed'  => 4,
-            'cancelled'  => 4,
-        ];
-
-        $currentRank = $order[$current] ?? 0;
-        $nextRank    = $order[$next]    ?? 0;
-
-        // Allow re-sending the same status (idempotent), or advancing forward, or cancelling at any stage.
-        return $next === 'cancelled' || $nextRank >= $currentRank;
+        return DeliveryStatus::canTransition($current, $next);
     }
 
     private function isDelay(DispatchAssignment $assignment): bool
@@ -225,5 +241,26 @@ class StatusController extends Controller
         }
 
         return now()->isAfter($job->scheduled_end);
+    }
+
+    private function logStatusHistory(
+        DispatchAssignment $assignment,
+        string $status,
+        ?int $updatedBy = null,
+        ?float $latitude = null,
+        ?float $longitude = null,
+        ?string $remarks = null,
+    ): void {
+        DeliveryStatusHistory::create([
+            'job_order_id' => $assignment->job_order_id,
+            'assignment_id' => $assignment->id,
+            'status' => $status,
+            'updated_by' => $updatedBy,
+            'updated_at' => now(),
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'remarks' => $remarks,
+            'created_at' => now(),
+        ]);
     }
 }

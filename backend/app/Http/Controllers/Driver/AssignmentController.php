@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
 use App\Models\DispatchAssignment;
+use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 
@@ -18,6 +19,7 @@ class AssignmentController extends Controller
                 ->where('driver_id', $driver->id)
                 ->latest()
                 ->paginate(20)
+                ->through(fn (DispatchAssignment $assignment) => $this->withNextAction($assignment))
         );
     }
 
@@ -29,7 +31,7 @@ class AssignmentController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        return response()->json(
+        return response()->json($this->withNextAction(
             $assignment->load(
                 'jobOrder',
                 'vehicle',
@@ -38,6 +40,18 @@ class AssignmentController extends Controller
                 'deliveryDocuments.ocrResult',
                 'completionProof.deliveryDocument.ocrResult',
             )
-        );
+        ));
+    }
+
+    private function withNextAction(DispatchAssignment $assignment): DispatchAssignment
+    {
+        $canonical = DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
+        $action = DeliveryStatus::nextAction($canonical);
+
+        $assignment->setAttribute('status', $canonical);
+        $assignment->setAttribute('next_status', $action['next_status']);
+        $assignment->setAttribute('allowed_action', $action['next_status'] ? $action['label'] : null);
+
+        return $assignment;
     }
 }

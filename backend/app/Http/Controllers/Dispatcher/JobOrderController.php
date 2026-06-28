@@ -18,6 +18,7 @@ use App\Models\Vehicle;
 use App\Services\Delivery\DropoffGeocoder;
 use App\Services\MasterData\MaterialMasterDataService;
 use App\Support\AuditLogger;
+use App\Support\DeliveryStatus;
 use App\Support\JobOrderScheduleValidator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -290,7 +291,7 @@ class JobOrderController extends Controller
             'scheduled_start'            => 'nullable|date',
             'scheduled_end'              => 'nullable|date|after_or_equal:scheduled_start',
             'priority'                   => 'nullable|in:low,normal,high,urgent',
-            'status'                     => 'nullable|in:pending,assigned,in_progress,arrived,completed,cancelled',
+            'status'                     => 'nullable|in:pending,assigned,en_route_to_pickup,arrived_at_pickup,en_route_to_destination,in_progress,arrived,completed,delivered,cancelled',
         ]);
 
         JobOrderScheduleValidator::validatePayload($data);
@@ -375,12 +376,24 @@ class JobOrderController extends Controller
     public function destroy(Request $request, JobOrder $jobOrder)
     {
         // Only allow deleting jobs that aren't actively in progress
-        if (in_array($jobOrder->status, ['in_progress', 'arrived'], true)) {
+        if (in_array($jobOrder->status, [
+            'in_progress',
+            DeliveryStatus::EN_ROUTE_TO_PICKUP,
+            DeliveryStatus::ARRIVED_AT_PICKUP,
+            DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+            DeliveryStatus::ARRIVED,
+        ], true)) {
             return response()->json(['message' => 'Cannot delete a job that is currently in progress.'], 422);
         }
 
         // Free any driver/vehicle that was assigned to this job order
-        foreach ($jobOrder->assignments()->whereIn('status', ['assigned', 'in_progress', 'arrived'])->get() as $assignment) {
+        foreach ($jobOrder->assignments()->whereIn('status', [
+            DeliveryStatus::ASSIGNED,
+            DeliveryStatus::EN_ROUTE_TO_PICKUP,
+            DeliveryStatus::ARRIVED_AT_PICKUP,
+            DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+            DeliveryStatus::ARRIVED,
+        ])->get() as $assignment) {
             Driver::where('id', $assignment->driver_id)
                 ->update(['availability' => 'available', 'current_assignment_id' => null]);
             Vehicle::where('id', $assignment->vehicle_id)
