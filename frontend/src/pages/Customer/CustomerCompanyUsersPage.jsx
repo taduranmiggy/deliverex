@@ -5,12 +5,14 @@ import {
 } from '../../api/customerPortal'
 import useAuth from '../../hooks/useAuth'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
+import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { Users } from 'lucide-react'
 
 const BLANK = { name: '', email: '', phone: '', password: '', role: 'staff' }
 
 function CustomerCompanyUsersPage() {
   const { user } = useAuth()
+  const { paths } = useCustomerSurface()
   const isOwner = user?.company_role === 'owner'
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -75,7 +77,7 @@ function CustomerCompanyUsersPage() {
     return (
       <CustomerPageShell className="pwa-page">
         <CustomerPageHeader title="Team" description="Only company owners can manage team members." />
-        <p><Link to="/customer/account">Back to account</Link></p>
+        <p><Link to={paths.profile}>Back to account</Link></p>
       </CustomerPageShell>
     )
   }
@@ -132,7 +134,7 @@ function CustomerCompanyUsersPage() {
         )}
       </section>
 
-      <p><Link to="/customer/account">Back to account</Link></p>
+      <p><Link to={paths.profile}>Back to account</Link></p>
     </CustomerPageShell>
   )
 }

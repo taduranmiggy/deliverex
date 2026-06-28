@@ -5,7 +5,7 @@ import CustomerActionCard from '../../components/customer/CustomerActionCard'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
 import { sendInquiry } from '../../api/customer'
 import useAuth from '../../hooks/useAuth'
-import { isStandalonePwa } from '../../utils/pwaUtils'
+import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import {
   ChevronDown, Mail, MessageSquare, Phone, HelpCircle,
@@ -59,8 +59,9 @@ function FaqItem({ question, answer }) {
 
 function CustomerSupportPage() {
   const { user, isAuthenticated, role } = useAuth()
+  const { paths } = useCustomerSurface()
   const isCustomer = isAuthenticated && role === 'customer'
-  const signInPath = isStandalonePwa() ? '/customer/login' : '/login'
+  const signInPath = paths.signIn
   const [chatOpen, setChatOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)

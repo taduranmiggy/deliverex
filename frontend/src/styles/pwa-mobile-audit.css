@@ -448,8 +448,8 @@
 }
 
 .auth-form-dx input,
-.auth-form-dx button,
-.auth-form-dx textarea {
+.auth-form-dx textarea,
+.auth-form-dx button:not(.auth-toggle-pw) {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;

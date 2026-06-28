@@ -834,6 +834,11 @@
   position: relative;
 }
 
+.auth-password-field {
+  position: relative;
+}
+
+.auth-password-field input,
 .auth-password-row input {
   padding-right: 44px;
 }
@@ -841,7 +846,10 @@
 .auth-toggle-pw {
   position: absolute;
   right: 10px;
-  top: 38px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: auto;
+  max-width: none;
   background: none;
   border: none;
   padding: 6px;
@@ -940,17 +948,9 @@
   gap: 14px;
 }
 
-.auth-password-row--activation {
-  position: relative;
-}
-
 .auth-password-row--activation > span {
   font-weight: 600;
   font-size: 0.9rem;
-}
-
-.auth-password-row--activation input {
-  padding-right: 44px;
 }
 
 .activation-strength {

@@ -3,10 +3,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import { linkCustomerDelivery } from '../../api/customer'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
+import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { SectionCard } from '../../components/ui'
 import { Link2, Package } from 'lucide-react'
 
 function CustomerLinkDeliveryPage() {
+  const { paths } = useCustomerSurface()
   const [trackingCode, setTrackingCode] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -24,7 +26,7 @@ function CustomerLinkDeliveryPage() {
       const res = await linkCustomerDelivery(code)
       setMessage(res.message || `Linked ${res.linked_count ?? 1} delivery record(s).`)
       setTrackingCode('')
-      setTimeout(() => navigate('/customer/deliveries'), 1500)
+      setTimeout(() => navigate(paths.deliveries), 1500)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -59,7 +61,7 @@ function CustomerLinkDeliveryPage() {
             <button type="submit" className="btn-dx-primary" disabled={submitting}>
               <Link2 size={16} /> {submitting ? 'Linking…' : 'Link delivery'}
             </button>
-            <Link to="/customer/deliveries" className="btn-dx-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Link to={paths.deliveries} className="btn-dx-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <Package size={16} /> My deliveries
             </Link>
           </div>

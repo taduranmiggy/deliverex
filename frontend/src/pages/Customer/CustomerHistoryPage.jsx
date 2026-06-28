@@ -4,7 +4,7 @@ import { fetchCustomerOrders } from '../../api/customer'
 import useAuth from '../../hooks/useAuth'
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
-import { isStandalonePwa } from '../../utils/pwaUtils'
+import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { StatusBadge } from '../../components/ui'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 import { History, Package } from 'lucide-react'
@@ -14,8 +14,9 @@ const ACTIVE = ['pending', 'assigned', 'in_progress', 'arrived']
 function CustomerHistoryPage() {
   const { isAuthenticated, role } = useAuth()
   const navigate = useNavigate()
+  const { paths } = useCustomerSurface()
   const isCustomer = isAuthenticated && role === 'customer'
-  const signInPath = isStandalonePwa() ? '/customer/login' : '/login'
+  const signInPath = paths.signIn
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(false)
 
@@ -47,7 +48,7 @@ function CustomerHistoryPage() {
             Create an account or sign in to access your delivery history. You can still track any shipment using a Tracking ID.
           </p>
           <div className="pwa-empty-state__actions">
-            <Link to="/customer/track" className="btn-dx-primary">Track Delivery</Link>
+            <Link to={paths.track} className="btn-dx-primary">Track Delivery</Link>
             <Link to={signInPath} className="btn-dx-secondary">Sign In</Link>
           </div>
         </div>
@@ -76,8 +77,8 @@ function CustomerHistoryPage() {
           <p className="pwa-empty-state__title">No deliveries yet</p>
           <p className="pwa-empty-state__message">Link a tracking ID or wait for new shipments assigned to your email.</p>
           <div className="pwa-empty-state__actions">
-            <Link to="/customer/link-delivery" className="btn-dx-primary">Link Delivery</Link>
-            <Link to="/customer/track" className="btn-dx-secondary">Track by ID</Link>
+            <Link to={paths.linkDelivery} className="btn-dx-primary">Link Delivery</Link>
+            <Link to={paths.track} className="btn-dx-secondary">Track by ID</Link>
           </div>
         </div>
       ) : (
@@ -91,7 +92,7 @@ function CustomerHistoryPage() {
                     key={order.id}
                     type="button"
                     className="pwa-delivery-card"
-                    onClick={() => navigate('/customer/deliveries', { state: { openOrderId: order.id } })}
+                    onClick={() => navigate(paths.deliveries, { state: { openOrderId: order.id } })}
                   >
                     <div className="pwa-delivery-card__top">
                       <span className="pwa-delivery-card__code">{order.tracking_code}</span>
@@ -114,7 +115,7 @@ function CustomerHistoryPage() {
                     key={order.id}
                     type="button"
                     className="pwa-delivery-card"
-                    onClick={() => navigate('/customer/deliveries', { state: { openOrderId: order.id } })}
+                    onClick={() => navigate(paths.deliveries, { state: { openOrderId: order.id } })}
                   >
                     <div className="pwa-delivery-card__top">
                       <span className="pwa-delivery-card__code">{order.tracking_code}</span>
@@ -127,7 +128,7 @@ function CustomerHistoryPage() {
                 ))}
               </div>
               {completed.length > 8 && (
-                <Link to="/customer/deliveries" className="btn-dx-secondary btn-sm" style={{ marginTop: 12 }}>
+                <Link to={paths.deliveries} className="btn-dx-secondary btn-sm" style={{ marginTop: 12 }}>
                   View all deliveries
                 </Link>
               )}

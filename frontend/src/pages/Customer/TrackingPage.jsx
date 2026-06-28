@@ -6,7 +6,8 @@ import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
-import { isStandalonePwa } from '../../utils/pwaUtils'
+import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
+import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { StatusBadge } from '../../components/ui'
 import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, MessageSquare, Package, RefreshCw, Search, Truck } from 'lucide-react'
 
@@ -65,6 +66,7 @@ function DeliveryProgressBar({ status }) {
 
 function TrackingPage() {
   const location = useLocation()
+  const { paths } = useCustomerSurface()
   const [code, setCode]         = useState('')
   const [result, setResult]     = useState(null)
   const [error, setError]       = useState('')
@@ -111,7 +113,7 @@ function TrackingPage() {
     return () => clearInterval(iv)
   }, [pollKey, loadTrack])
 
-  const homePath = isStandalonePwa() ? '/customer' : '/'
+  const homePath = paths.dashboard
 
   return (
     <CustomerPageShell>

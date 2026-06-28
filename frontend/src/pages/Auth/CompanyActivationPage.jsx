@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { activateCompany, fetchCompanyActivation } from '../../api/auth'
 import useAuth from '../../hooks/useAuth'
+import { roleHome } from '../../utils/roleUtils'
 import { Eye, EyeOff } from 'lucide-react'
 import './LoginPage.css'
 
@@ -85,7 +86,7 @@ function CompanyActivationPage() {
         session_id: res.session_id,
         refresh_token: res.refresh_token,
       })
-      navigate('/customer', { replace: true })
+      navigate(roleHome('customer', { surface: 'web' }), { replace: true })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -123,24 +124,26 @@ function CompanyActivationPage() {
         <form onSubmit={handleSubmit} className="auth-form-dx auth-activation-form" noValidate>
           <label className="auth-password-row auth-password-row--activation">
             <span>Password</span>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              autoComplete="new-password"
-              aria-describedby="activation-password-rules activation-password-strength"
-            />
-            <button
-              type="button"
-              className="auth-toggle-pw"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              aria-pressed={showPassword}
-              onClick={() => setShowPassword((prev) => !prev)}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
+            <div className="auth-password-field">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                aria-describedby="activation-password-rules activation-password-strength"
+              />
+              <button
+                type="button"
+                className="auth-toggle-pw"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword((prev) => !prev)}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </label>
 
           <div id="activation-password-strength" className="activation-strength">
@@ -163,24 +166,26 @@ function CompanyActivationPage() {
 
           <label className="auth-password-row auth-password-row--activation">
             <span>Confirm password</span>
-            <input
-              type={showPasswordConfirmation ? 'text' : 'password'}
-              value={passwordConfirmation}
-              onChange={(e) => setPasswordConfirmation(e.target.value)}
-              required
-              minLength={8}
-              autoComplete="new-password"
-              aria-describedby="activation-password-match"
-            />
-            <button
-              type="button"
-              className="auth-toggle-pw"
-              aria-label={showPasswordConfirmation ? 'Hide confirm password' : 'Show confirm password'}
-              aria-pressed={showPasswordConfirmation}
-              onClick={() => setShowPasswordConfirmation((prev) => !prev)}
-            >
-              {showPasswordConfirmation ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
+            <div className="auth-password-field">
+              <input
+                type={showPasswordConfirmation ? 'text' : 'password'}
+                value={passwordConfirmation}
+                onChange={(e) => setPasswordConfirmation(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                aria-describedby="activation-password-match"
+              />
+              <button
+                type="button"
+                className="auth-toggle-pw"
+                aria-label={showPasswordConfirmation ? 'Hide confirm password' : 'Show confirm password'}
+                aria-pressed={showPasswordConfirmation}
+                onClick={() => setShowPasswordConfirmation((prev) => !prev)}
+              >
+                {showPasswordConfirmation ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </label>
 
           <p id="activation-password-match" className={`activation-match ${passwordsMatch ? 'is-match' : passwordsMismatch ? 'is-mismatch' : ''}`} aria-live="polite">

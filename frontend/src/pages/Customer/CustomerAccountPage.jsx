@@ -4,14 +4,15 @@ import { changePassword } from '../../api/auth'
 import useAuth from '../../hooks/useAuth'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
-import { isStandalonePwa } from '../../utils/pwaUtils'
+import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { Link2, Lock, LogOut, Package, Settings, User, Users } from 'lucide-react'
 
 function CustomerAccountPage() {
   const { user, isAuthenticated, role, logout, updateUser } = useAuth()
   const navigate = useNavigate()
+  const { paths } = useCustomerSurface()
   const isCustomer = isAuthenticated && role === 'customer'
-  const signInPath = isStandalonePwa() ? '/customer/login' : '/login'
+  const signInPath = paths.signIn
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
@@ -49,7 +50,7 @@ function CustomerAccountPage() {
 
   const handleLogout = async () => {
     await logout()
-    navigate('/customer', { replace: true })
+    navigate(paths.signIn, { replace: true })
   }
 
   if (!isCustomer) {
@@ -88,18 +89,18 @@ function CustomerAccountPage() {
       />
 
       <div className="pwa-account-links">
-        <Link to="/customer/deliveries" className="pwa-account-link">
+        <Link to={paths.deliveries} className="pwa-account-link">
           <Package size={18} /> My Deliveries
         </Link>
         {user?.company_role === 'owner' && (
-          <Link to="/customer/team" className="pwa-account-link">
+          <Link to={paths.team} className="pwa-account-link">
             <Users size={18} /> Team
           </Link>
         )}
-        <Link to="/customer/link-delivery" className="pwa-account-link">
+        <Link to={paths.linkDelivery} className="pwa-account-link">
           <Link2 size={18} /> Link Delivery
         </Link>
-        <Link to="/customer/account" className="pwa-account-link pwa-account-link--active">
+        <Link to={paths.profile} className="pwa-account-link pwa-account-link--active">
           <Settings size={18} /> Account Settings
         </Link>
       </div>

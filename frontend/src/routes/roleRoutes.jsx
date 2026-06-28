@@ -44,8 +44,6 @@ import AboutUsPage from '../pages/Customer/AboutUsPage'
 import ServicesPage from '../pages/Customer/ServicesPage'
 import CustomerLegalPage from '../pages/Customer/CustomerLegalPage'
 import CustomerWebsiteDashboardPage from '../pages/CustomerWeb/CustomerWebsiteDashboardPage'
-import CustomerWebsiteHistoryPage from '../pages/CustomerWeb/CustomerWebsiteHistoryPage'
-import CustomerWebsiteProfilePage from '../pages/CustomerWeb/CustomerWebsiteProfilePage'
 import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
 
 export const roleRoutes = {
@@ -111,7 +109,12 @@ export const roleRoutes = {
   customerWebsite: [
     <Route key="customer-web-default" index element={<Navigate to="dashboard" replace />} />,
     <Route key="customer-web-dashboard" path="dashboard" element={<CustomerWebsiteDashboardPage />} />,
-    <Route key="customer-web-history" path="history" element={<CustomerWebsiteHistoryPage />} />,
-    <Route key="customer-web-profile" path="profile" element={<CustomerWebsiteProfilePage />} />,
+    <Route key="customer-web-track" path="track" element={<TrackingPage />} />,
+    <Route key="customer-web-deliveries" path="deliveries" element={<CustomerDeliveriesPage />} />,
+    <Route key="customer-web-history" path="history" element={<CustomerHistoryPage />} />,
+    <Route key="customer-web-support" path="support" element={<CustomerSupportPage />} />,
+    <Route key="customer-web-link" path="link-delivery" element={<CustomerLinkDeliveryPage />} />,
+    <Route key="customer-web-team" path="team" element={<CustomerCompanyUsersPage />} />,
+    <Route key="customer-web-profile" path="profile" element={<CustomerAccountPage />} />,
   ],
 }

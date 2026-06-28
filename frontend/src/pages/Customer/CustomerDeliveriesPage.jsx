@@ -4,6 +4,7 @@ import { fetchCustomerOrders } from '../../api/customer'
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell from '../../components/customer/CustomerPageShell'
+import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from '../../components/ui'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 import { CheckCircle2, ExternalLink, FileText, Link2, MapPin, Package, Truck, X } from 'lucide-react'
@@ -76,6 +77,7 @@ function DeliveryTimeline({ status }) {
 
 /* ── Delivery Detail Modal ─────────────────────────────────── */
 function DeliveryDetailModal({ order, onClose }) {
+  const { paths } = useCustomerSurface()
   if (!order) return null
 
   const pickup  = buildDisplayAddress('pickup', order)
@@ -216,7 +218,7 @@ function DeliveryDetailModal({ order, onClose }) {
         {/* Footer actions */}
         <div style={{ padding: '14px 22px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 10 }}>
           <Link
-            to="/customer/track"
+            to={paths.track}
             state={{ prefillTracking: order.tracking_code }}
             className="btn-dx-primary btn-sm"
             style={{ flexShrink: 0 }}
@@ -233,6 +235,7 @@ function DeliveryDetailModal({ order, onClose }) {
 
 /* ── Page ──────────────────────────────────────────────────── */
 function CustomerDeliveriesPage() {
+  const { paths } = useCustomerSurface()
   const [rows, setRows]           = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState('')
@@ -296,10 +299,10 @@ function CustomerDeliveriesPage() {
     <CustomerPageShell>
       <PageHeader title="My Deliveries" subtitle="Review all shipments and delivery records associated with your account.">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Link to="/customer/link-delivery" className="btn-dx-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Link to={paths.linkDelivery} className="btn-dx-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <Link2 size={15} /> Link a delivery
           </Link>
-          <Link to="/customer/track" className="btn-dx-secondary btn-sm">Track by code</Link>
+          <Link to={paths.track} className="btn-dx-secondary btn-sm">Track by code</Link>
         </div>
       </PageHeader>
 
@@ -315,8 +318,8 @@ function CustomerDeliveriesPage() {
             message="Deliveries linked to your account will appear here. Link a shipment with your tracking ID, or look up any delivery by code."
             action={(
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <Link to="/customer/link-delivery" className="btn-dx-primary">Link a delivery</Link>
-                <Link to="/customer/track" className="btn-dx-secondary">Track by code</Link>
+                <Link to={paths.linkDelivery} className="btn-dx-primary">Link a delivery</Link>
+                <Link to={paths.track} className="btn-dx-secondary">Track by code</Link>
               </div>
             )}
           />
