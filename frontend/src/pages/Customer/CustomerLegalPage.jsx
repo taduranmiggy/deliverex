@@ -1,24 +1,9 @@
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
+import LegalDocument from '../../components/customer/LegalDocument'
+import { DATA_PRIVACY_POLICY } from '../../content/legal/dataPrivacyPolicy'
+import { TERMS_AND_CONDITIONS } from '../../content/legal/termsAndConditions'
 
 const LEGAL_CONTENT = {
-  'privacy-policy': {
-    title: 'Privacy Policy',
-    description: 'How Deliverex handles account, delivery, contact, and proof-of-delivery information.',
-    sections: [
-      ['Information we collect', 'Deliverex stores company account details, delivery records, tracking identifiers, support inquiries, and proof-of-delivery documents needed to operate the logistics workflow.'],
-      ['How it is used', 'Information is used for dispatch coordination, delivery status updates, customer support, account administration, audit review, and proof-of-delivery validation.'],
-      ['Access and controls', 'Role-based access limits information to authorized administrators, dispatchers, managers, drivers, and linked company users.'],
-    ],
-  },
-  'terms-and-conditions': {
-    title: 'Terms and Conditions',
-    description: 'Operational terms for using Deliverex delivery tracking and customer account services.',
-    sections: [
-      ['Authorized use', 'Deliverex is intended for company delivery tracking, dispatch coordination, support requests, and account workflows approved by the service provider.'],
-      ['Tracking information', 'Status and ETA information are operational estimates based on dispatch and delivery updates. Proof-of-delivery records are shown when available.'],
-      ['Account responsibility', 'Company users are responsible for keeping account access secure and reporting unauthorized access or incorrect delivery records.'],
-    ],
-  },
   'data-privacy-notice': {
     title: 'Data Privacy Notice',
     description: 'A customer-facing notice about logistics data handling and retention.',
@@ -30,24 +15,55 @@ const LEGAL_CONTENT = {
   },
 }
 
+const FULL_LEGAL_DOCUMENTS = {
+  'terms-and-conditions': TERMS_AND_CONDITIONS,
+  'privacy-policy': DATA_PRIVACY_POLICY,
+}
+
+function SimpleLegalSections({ sections }) {
+  return (
+    <div className="dx-panel legal-document legal-document--simple">
+      {sections.map(([heading, body]) => (
+        <section key={heading} className="legal-document__section">
+          <h2 className="legal-document__section-title">{heading}</h2>
+          <p className="legal-document__paragraph">{body}</p>
+        </section>
+      ))}
+    </div>
+  )
+}
+
 function CustomerLegalPage({ type }) {
-  const content = LEGAL_CONTENT[type] || LEGAL_CONTENT['privacy-policy']
+  const fullDocument = FULL_LEGAL_DOCUMENTS[type]
+  const simpleContent = LEGAL_CONTENT[type] || LEGAL_CONTENT['data-privacy-notice']
+
+  if (fullDocument) {
+    const description = [
+      fullDocument.preamble,
+      fullDocument.subtitle,
+      fullDocument.effectiveDate ? `Effective Date: ${fullDocument.effectiveDate}` : null,
+    ].filter(Boolean).join(' ')
+
+    return (
+      <CustomerPageShell className="customer-page-shell--legal">
+        <CustomerPageHeader
+          eyebrow="Legal"
+          title={fullDocument.title}
+          description={description}
+        />
+        <LegalDocument document={fullDocument} />
+      </CustomerPageShell>
+    )
+  }
 
   return (
     <CustomerPageShell className="customer-page-shell--narrow">
       <CustomerPageHeader
         eyebrow="Legal"
-        title={content.title}
-        description={content.description}
+        title={simpleContent.title}
+        description={simpleContent.description}
       />
-      <div className="dx-panel" style={{ display: 'grid', gap: 18 }}>
-        {content.sections.map(([heading, body]) => (
-          <section key={heading}>
-            <h2 style={{ fontSize: '1rem', margin: '0 0 6px' }}>{heading}</h2>
-            <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.65 }}>{body}</p>
-          </section>
-        ))}
-      </div>
+      <SimpleLegalSections sections={simpleContent.sections} />
     </CustomerPageShell>
   )
 }
