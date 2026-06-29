@@ -1042,7 +1042,6 @@ function OcrReviewPage() {
           )}
         </div>
 
-        <div className="dx-ocr-workspace">
         <div className="dx-panel dx-ocr-preview-panel" style={{ marginBottom: 0 }}>
           <h3 className="dx-panel-title">Document Preview</h3>
           <div className="dx-preview-pane ocr-preview-pane">
@@ -1067,7 +1066,7 @@ function OcrReviewPage() {
 
         <div className="dx-panel ocr-dataset-panel" style={{ marginBottom: 0 }}>
           <div className="ocr-dataset-panel__header">
-            <h3 className="dx-panel-title" style={{ margin: 0 }}>Final OCR Dataset</h3>
+            <h3 className="dx-panel-title" style={{ margin: 0 }}>Validation Panel</h3>
             {canEditDataset && !isDatasetEditMode && (
               <button
                 type="button"
@@ -1086,7 +1085,7 @@ function OcrReviewPage() {
             <div className="form-grid ocr-review-detail" style={{ gridTemplateColumns: '1fr' }}>
               <div className="ocr-review-top-grid">
                 <div className="ocr-dataset-card ocr-dataset-card--ocr">
-                  <p className="ocr-dataset-card__label">Extracted OCR Data</p>
+                  <p className="ocr-dataset-card__label">OCR DATA</p>
                   <OcrFieldSections
                     groups={OCR_FIELD_GROUPS}
                     getFieldProps={getOcrFieldProps}
@@ -1142,7 +1141,7 @@ function OcrReviewPage() {
                   )}
                 </div>
                 <div className="ocr-dataset-card ocr-dataset-card--system">
-                  <p className="ocr-dataset-card__label">System Data</p>
+                  <p className="ocr-dataset-card__label">SYSTEM DATA</p>
                   <OcrSystemDataCompact selected={selected} />
                 </div>
               </div>
@@ -1312,7 +1311,6 @@ function OcrReviewPage() {
               </div>
             </div>
           )}
-        </div>
         </div>
       </div>
 

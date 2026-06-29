@@ -12,7 +12,7 @@ use App\Support\VehicleCapacity;
 
 class BestFitAssignmentService
 {
-    private const SCORE_MAX = 90;
+    private const SCORE_MAX = 100;
     private const DIVERSITY_WINDOW_DAYS = 7;
 
     /**
@@ -358,8 +358,8 @@ class BestFitAssignmentService
             $efficiencyDetail,
         );
 
-        // 4. Vehicle Type Match (max 10) — binary pass/fail on exact required type
-        $typeMax = 10;
+        // 4. Vehicle Type Match (max 20) — binary pass/fail on exact required type
+        $typeMax = 20;
         $typeContribution = 0;
         $typeMatched = false;
         $requiredTypeName = $jobOrder->preferredVehicleType?->name ?? $jobOrder->vehicle_type_required;

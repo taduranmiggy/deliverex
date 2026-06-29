@@ -2,7 +2,7 @@ import { CheckCircle2, XCircle } from 'lucide-react'
 
 function formatScore(candidate) {
   const score = candidate?.score
-  const max = candidate?.score_max ?? 90
+  const max = candidate?.score_max ?? 100
   if (score == null) return null
   return `${Math.round(score)}/${max}`
 }
