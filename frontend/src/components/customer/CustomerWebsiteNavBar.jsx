@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
+import CustomerBrandMark from './CustomerBrandMark'
 import {
   ChevronDown,
   HeadphonesIcon,
@@ -11,7 +12,6 @@ import {
   LogOut,
   MapPin,
   Package,
-  Truck,
   User,
   Users,
 } from 'lucide-react'
@@ -71,9 +71,7 @@ function CustomerWebsiteNavBar() {
     <nav className="customer-nav customer-nav--website" role="navigation" aria-label="Customer website navigation">
       <div className="customer-nav-inner">
         <Link to={paths.dashboard} className="customer-nav-brand">
-          <div className="customer-nav-brand-icon" aria-hidden>
-            <Truck size={18} color="#fff" />
-          </div>
+          <CustomerBrandMark />
           <span className="customer-nav-brand-text">Deliverex</span>
         </Link>
 

@@ -1,4 +1,4 @@
-const CACHE = 'deliverex-customer-v14'
+const CACHE = 'deliverex-customer-v15'
 const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.ico', '/favicon-16x16.png', '/favicon-32x32.png', '/apple-touch-icon.png', '/favicon-192x192.png', '/favicon-512x512.png', '/lottie/deliverex-splash.json', '/customer', '/customer/login', '/customer/track', '/customer/support', '/customer/history', '/customer/about', '/customer/services', '/customer/privacy-policy', '/customer/terms-and-conditions', '/customer/data-privacy-notice']
 
 // ─── Install: pre-cache app shell ────────────────────────────────

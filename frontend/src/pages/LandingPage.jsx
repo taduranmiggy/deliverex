@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { sendInquiry } from '../api/customer'
 import DeliverexAssistantChat from '../components/DeliverexAssistantChat'
+import CustomerBrandMark from '../components/customer/CustomerBrandMark'
 import CustomerLegalFooter from '../components/customer/CustomerLegalFooter'
-import { ArrowRight, CheckCircle2, FileCheck2, HeadphonesIcon, History, MessageSquare, Package, Search, Truck, X } from 'lucide-react'
+import { ArrowRight, CheckCircle2, FileCheck2, HeadphonesIcon, History, MessageSquare, Package, Search, X } from 'lucide-react'
 
 function LandingPage() {
   const navigate = useNavigate()
@@ -42,9 +43,7 @@ function LandingPage() {
       <nav className="customer-nav">
         <div className="customer-nav-inner">
           <Link to="/" className="customer-nav-brand">
-            <div className="customer-nav-brand-icon" aria-hidden>
-              <Truck size={18} color="#fff" />
-            </div>
+            <CustomerBrandMark />
             <span className="customer-nav-brand-text">Deliverex</span>
           </Link>
           <div className="customer-nav-links customer-nav-links--desktop">

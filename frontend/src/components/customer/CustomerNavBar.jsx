@@ -2,7 +2,8 @@ import { Link, NavLink } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 import { getCustomerNavPaths } from '../../utils/customerSurfacePaths'
 import { isStandalonePwa } from '../../utils/pwaUtils'
-import { BriefcaseBusiness, Home, Info, MapPin, Package, Truck } from 'lucide-react'
+import CustomerBrandMark from './CustomerBrandMark'
+import { BriefcaseBusiness, Home, Info, MapPin, Package } from 'lucide-react'
 
 function CustomerNavBar() {
   const { user, isAuthenticated, role } = useAuth()
@@ -22,9 +23,7 @@ function CustomerNavBar() {
     <nav className={`customer-nav${pwaMode ? ' customer-nav--pwa' : ''}`} role="navigation" aria-label="Customer navigation">
       <div className="customer-nav-inner">
         <Link to={homePath} className="customer-nav-brand">
-          <div className="customer-nav-brand-icon" aria-hidden>
-            <Truck size={18} color="#fff" />
-          </div>
+          <CustomerBrandMark />
           <span className="customer-nav-brand-text">Deliverex</span>
         </Link>
 

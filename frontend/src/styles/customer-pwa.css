@@ -20,6 +20,13 @@
   display: grid;
   place-items: center;
   background: linear-gradient(160deg, #0f172a 0%, #1e3a8a 55%, #1d4ed8 100%);
+  pointer-events: auto;
+}
+
+.customer-layout--pwa .dx-page-enter {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
 }
 
 .pwa-splash__content {
@@ -1159,8 +1166,14 @@
   padding: 0 max(12px, env(safe-area-inset-left, 0px)) 0 max(12px, env(safe-area-inset-right, 0px));
 }
 
+.customer-layout--pwa .customer-nav--pwa .customer-nav-brand-icon {
+  width: 34px;
+  height: 34px;
+}
+
 .customer-layout--pwa .customer-nav--pwa .customer-nav-brand-text {
   font-size: 1rem;
+  line-height: 1;
 }
 
 .customer-layout--pwa .customer-legal-footer--compact {
