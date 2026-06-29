@@ -168,6 +168,37 @@ function fieldSuggestionAttention(fieldKey, ctx) {
   return tone !== 'high' || missing || showNoMatch
 }
 
+function gridFieldLabel(field) {
+  const short = {
+    length: 'Length',
+    width: 'Width',
+    height: 'Height',
+    volume: 'Volume',
+  }
+  return short[field.key] ?? field.label
+}
+
+function gridFieldUnit(field) {
+  const units = {
+    length: 'cm',
+    width: 'cm',
+    height: 'cm',
+    volume: 'm³',
+  }
+  return units[field.key] ?? null
+}
+
+function OcrFieldLabel({ field, layout }) {
+  const unit = layout === 'grid' ? gridFieldUnit(field) : null
+  const text = layout === 'grid' ? gridFieldLabel(field) : field.label
+  return (
+    <span className="ocr-field-compact__label">
+      <span className="ocr-field-compact__label-text">{text}</span>
+      {unit ? <span className="ocr-field-compact__unit">{unit}</span> : null}
+    </span>
+  )
+}
+
 function OcrCompactField({
   field,
   value,
@@ -187,7 +218,7 @@ function OcrCompactField({
   if (isDatasetEditMode) {
     return (
       <label className={`ocr-field-compact ocr-field-compact--edit${layout === 'grid' ? ' ocr-field-compact--grid' : ''}`}>
-        <span className="ocr-field-compact__label">{field.label}</span>
+        <OcrFieldLabel field={field} layout={layout} />
         <input
           type={field.type === 'number' ? 'number' : 'text'}
           className="ocr-field-compact__input"
@@ -206,7 +237,7 @@ function OcrCompactField({
   return (
     <div className={`ocr-field-compact${layout === 'grid' ? ' ocr-field-compact--grid' : ''}`}>
       <div className="ocr-field-compact__body">
-        <span className="ocr-field-compact__label">{field.label}</span>
+        <OcrFieldLabel field={field} layout={layout} />
         <div className="ocr-field-compact__value-row">
           <span className="ocr-field-compact__value">
             {missing ? '—' : formatSuggestionValue(value)}

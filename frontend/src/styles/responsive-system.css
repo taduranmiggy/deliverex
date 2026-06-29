@@ -269,8 +269,9 @@ body.dx-nav-locked {
 
 .dx-grid-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 20px;
+  min-width: 0;
 }
 
 .dx-grid-2--12 { gap: 12px; }
@@ -631,6 +632,10 @@ body.dx-nav-locked {
 }
 
 /* ── OCR Review: Final dataset panel ───────────────────────── */
+.ocr-dataset-panel {
+  min-width: 0;
+}
+
 .ocr-dataset-panel__header {
   display: flex;
   align-items: center;
@@ -646,7 +651,7 @@ body.dx-nav-locked {
 
 .ocr-review-top-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.85fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -656,6 +661,12 @@ body.dx-nav-locked {
   border-radius: 12px;
   padding: 14px 16px;
   background: var(--surface);
+  min-width: 0;
+}
+
+.ocr-dataset-card--ocr {
+  container-type: inline-size;
+  container-name: ocr-dataset;
 }
 
 .ocr-dataset-card--system {
@@ -700,8 +711,20 @@ body.dx-nav-locked {
 
 .ocr-dimensions-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr));
   gap: 8px;
+}
+
+@container ocr-dataset (max-width: 520px) {
+  .ocr-dimensions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container ocr-dataset (max-width: 280px) {
+  .ocr-dimensions-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ocr-field-compact {
@@ -719,6 +742,7 @@ body.dx-nav-locked {
   flex-direction: column;
   align-items: stretch;
   min-height: 100%;
+  min-width: 0;
 }
 
 .ocr-field-compact__body {
@@ -729,11 +753,30 @@ body.dx-nav-locked {
 }
 
 .ocr-field-compact__label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--muted);
   text-transform: uppercase;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.ocr-field-compact__label-text {
+  display: block;
+}
+
+.ocr-field-compact__unit {
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--subtle, #94a3b8);
 }
 
 .ocr-field-compact__value-row {
@@ -741,6 +784,19 @@ body.dx-nav-locked {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 10px;
+}
+
+.ocr-field-compact--grid .ocr-field-compact__value-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.ocr-field-compact--grid .ocr-field-compact__confidence {
+  max-width: 100%;
+  white-space: normal;
+  flex-wrap: wrap;
+  row-gap: 2px;
 }
 
 .ocr-field-compact__value {
@@ -1156,21 +1212,19 @@ body.dx-nav-locked {
   border-top: 1px solid var(--stroke);
 }
 
-@media (max-width: 1100px) {
+@media (min-width: 960px) {
   .ocr-review-top-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1.25fr) minmax(180px, 0.75fr);
   }
+}
 
-  .ocr-dimensions-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 1100px) {
+  .ocr-dataset-panel {
+    min-width: 0;
   }
 }
 
 @media (max-width: 640px) {
-  .ocr-dimensions-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .ocr-suggestions-panel__row {
     grid-template-columns: 1fr;
     gap: 4px;
@@ -1185,13 +1239,30 @@ body.dx-nav-locked {
   }
 }
 
+@container ocr-dataset (max-width: 360px) {
+  .ocr-field-compact__confidence-hint {
+    display: none;
+  }
+}
+
 /* ── Prevent clipping ──────────────────────────────────────── */
 .page-content,
 .customer-layout-main,
 .tracking-page,
 .pwa-page,
-.auth-page {
+.auth-page,
+.dx-panel,
+.dx-ocr-grid,
+.form-grid {
   max-width: 100%;
+  min-width: 0;
+}
+
+.page-content,
+.customer-layout-main,
+.tracking-page,
+.pwa-page,
+.auth-page {
   overflow-x: clip;
 }
 
