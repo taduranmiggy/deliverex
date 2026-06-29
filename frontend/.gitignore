@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Generated Lottie splash (run npm run generate-splash-lottie)
+src/assets/deliverex-splash.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

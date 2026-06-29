@@ -1,4 +1,4 @@
-const CACHE = 'deliverex-customer-v13'
+const CACHE = 'deliverex-customer-v14'
 const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.ico', '/favicon-16x16.png', '/favicon-32x32.png', '/apple-touch-icon.png', '/favicon-192x192.png', '/favicon-512x512.png', '/lottie/deliverex-splash.json', '/customer', '/customer/login', '/customer/track', '/customer/support', '/customer/history', '/customer/about', '/customer/services', '/customer/privacy-policy', '/customer/terms-and-conditions', '/customer/data-privacy-notice']
 
 // ─── Install: pre-cache app shell ────────────────────────────────
@@ -46,7 +46,7 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cached) => {
       const network = fetch(event.request)
         .then((response) => {
-          if (response.ok && /\.(js|css|svg|png|woff2?)$/i.test(url.pathname)) {
+          if (response.ok && /\.(js|css|svg|png|json|woff2?)$/i.test(url.pathname)) {
             caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()))
           }
           return response

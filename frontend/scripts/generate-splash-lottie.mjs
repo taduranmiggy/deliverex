@@ -13,6 +13,8 @@ const publicDir = path.resolve(__dirname, '../public')
 const faviconPath = path.join(publicDir, 'favicon-512x512.png')
 const outDir = path.join(publicDir, 'lottie')
 const outPath = path.join(outDir, 'deliverex-splash.json')
+const assetsDir = path.resolve(__dirname, '../src/assets')
+const assetsPath = path.join(assetsDir, 'deliverex-splash.json')
 
 if (!fs.existsSync(faviconPath)) {
   console.error('Missing favicon. Run: npm run generate-favicons')
@@ -21,7 +23,7 @@ if (!fs.existsSync(faviconPath)) {
 
 const b64 = fs.readFileSync(faviconPath).toString('base64')
 const dataUri = `data:image/png;base64,${b64}`
-const USE_EMBEDDED_IMAGE = process.env.LOTTIE_EMBED === '1'
+const USE_EMBEDDED_IMAGE = process.env.LOTTIE_EMBED !== '0'
 
 const W = 512
 const H = 512
@@ -53,7 +55,7 @@ const animation = {
       w: 512,
       h: 512,
       u: USE_EMBEDDED_IMAGE ? '' : '/',
-      p: USE_EMBEDDED_IMAGE ? dataUri : 'favicon-512x512.png?v=2',
+      p: USE_EMBEDDED_IMAGE ? dataUri : 'favicon-512x512.png',
       e: USE_EMBEDDED_IMAGE ? 1 : 0,
     },
   ],
@@ -182,10 +184,14 @@ const animation = {
 }
 
 fs.mkdirSync(outDir, { recursive: true })
-fs.writeFileSync(outPath, JSON.stringify(animation))
+fs.mkdirSync(assetsDir, { recursive: true })
+const json = JSON.stringify(animation)
+fs.writeFileSync(outPath, json)
+fs.writeFileSync(assetsPath, json)
 
-const sizeKb = (fs.statSync(outPath).size / 1024).toFixed(1)
+const sizeKb = (Buffer.byteLength(json) / 1024).toFixed(1)
 console.log(`Wrote ${outPath} (${sizeKb} KB)`)
+console.log(`Wrote ${assetsPath} (${sizeKb} KB)`)
 
 if (fs.statSync(outPath).size > 120 * 1024) {
   console.warn('Warning: Lottie file exceeds 120KB target — consider external image reference')

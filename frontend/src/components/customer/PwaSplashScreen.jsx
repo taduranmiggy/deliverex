@@ -4,10 +4,9 @@ import Lottie from 'lottie-react'
 import { isStandalonePwa } from '../../utils/pwaUtils'
 
 const SPLASH_KEY = 'deliverex_pwa_splash_shown'
-const MIN_SPLASH_MS = 1200
-const REDUCED_MOTION_SPLASH_MS = 600
+const MIN_SPLASH_MS = 1400
+const MAX_SPLASH_MS = 3200
 const FAVICON_SRC = '/favicon-192x192.png?v=2'
-const LOTTIE_SRC = '/lottie/deliverex-splash.json'
 
 function prefersReducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -23,11 +22,13 @@ function PwaSplashScreen({ children }) {
     }
   })
   const [animationData, setAnimationData] = useState(null)
-  const [reducedMotion, setReducedMotion] = useState(false)
+  const [useFallback, setUseFallback] = useState(false)
   const shownAtRef = useRef(0)
-  const dismissTimerRef = useRef(null)
+  const finishedRef = useRef(false)
 
   const finishSplash = useCallback(() => {
+    if (finishedRef.current) return
+    finishedRef.current = true
     try {
       sessionStorage.setItem(SPLASH_KEY, '1')
     } catch {
@@ -38,94 +39,86 @@ function PwaSplashScreen({ children }) {
 
   const scheduleDismiss = useCallback(() => {
     const elapsed = Date.now() - shownAtRef.current
-    const minMs = reducedMotion ? REDUCED_MOTION_SPLASH_MS : MIN_SPLASH_MS
-    const wait = Math.max(0, minMs - elapsed)
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-    dismissTimerRef.current = setTimeout(finishSplash, wait)
-  }, [finishSplash, reducedMotion])
+    const wait = Math.max(0, MIN_SPLASH_MS - elapsed)
+    window.setTimeout(finishSplash, wait)
+  }, [finishSplash])
 
   useEffect(() => {
     if (!showSplash) return undefined
-    shownAtRef.current = Date.now()
-    const reduced = prefersReducedMotion()
-    setReducedMotion(reduced)
 
-    if (reduced) {
+    shownAtRef.current = Date.now()
+    finishedRef.current = false
+
+    const hardCap = window.setTimeout(finishSplash, MAX_SPLASH_MS)
+
+    if (prefersReducedMotion()) {
+      setUseFallback(true)
       scheduleDismiss()
-      return () => {
-        if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-      }
+      return () => window.clearTimeout(hardCap)
     }
 
     let cancelled = false
-    fetch(LOTTIE_SRC)
-      .then((res) => {
-        if (!res.ok) throw new Error('Lottie load failed')
-        return res.json()
-      })
-      .then((data) => {
-        if (!cancelled) setAnimationData(data)
+    import('../../assets/deliverex-splash.json')
+      .then((mod) => {
+        if (!cancelled) setAnimationData(mod.default ?? mod)
       })
       .catch(() => {
-        if (!cancelled) scheduleDismiss()
+        if (!cancelled) {
+          setUseFallback(true)
+          scheduleDismiss()
+        }
       })
-
-    const safetyTimer = setTimeout(() => {
-      if (!cancelled) scheduleDismiss()
-    }, 2800)
 
     return () => {
       cancelled = true
-      clearTimeout(safetyTimer)
-      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+      window.clearTimeout(hardCap)
     }
-  }, [showSplash, scheduleDismiss])
+  }, [showSplash, finishSplash, scheduleDismiss])
 
   const handleLottieComplete = useCallback(() => {
     scheduleDismiss()
   }, [scheduleDismiss])
 
+  const handleLottieDataFailed = useCallback(() => {
+    setUseFallback(true)
+    scheduleDismiss()
+  }, [scheduleDismiss])
+
   return (
     <>
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={() => {}}>
         {showSplash ? (
           <motion.div
             className="pwa-splash"
-            initial={{ opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.28 }}
-            aria-hidden={!showSplash}
+            transition={{ duration: 0.22 }}
             role="presentation"
+            aria-busy="true"
+            aria-label="Loading Deliverex"
           >
             <div className="pwa-splash__content">
-              {reducedMotion || !animationData ? (
-                <motion.img
+              <div className="pwa-splash__logo-stage">
+                <img
                   src={FAVICON_SRC}
                   alt=""
-                  className="pwa-splash__logo-fallback"
-                  initial={{ opacity: 0, scale: 0.92 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                />
-              ) : (
-                <Lottie
-                  animationData={animationData}
-                  loop={false}
-                  autoplay
-                  onComplete={handleLottieComplete}
-                  className="pwa-splash__lottie"
+                  className={`pwa-splash__logo-fallback${useFallback || !animationData ? ' pwa-splash__logo-fallback--visible' : ''}`}
                   aria-hidden
                 />
-              )}
-              <motion.p
-                className="pwa-splash__title"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: reducedMotion ? 0.1 : 0.35 }}
-              >
-                Deliverex
-              </motion.p>
+                {animationData && !useFallback ? (
+                  <Lottie
+                    animationData={animationData}
+                    loop={false}
+                    autoplay
+                    onComplete={handleLottieComplete}
+                    onDataFailed={handleLottieDataFailed}
+                    className="pwa-splash__lottie"
+                    aria-hidden
+                  />
+                ) : null}
+              </div>
+              <p className="pwa-splash__title">Deliverex</p>
             </div>
           </motion.div>
         ) : null}

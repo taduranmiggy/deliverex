@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/generate-splash-lottie.mjs",
     "build": "vite build",
     "generate-favicons": "node scripts/generate-favicons.mjs",
     "generate-splash-lottie": "node scripts/generate-splash-lottie.mjs",
