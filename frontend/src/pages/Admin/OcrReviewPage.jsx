@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { exportOcrReport, fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, saveOcrCorrections, validateOcr } from '../../api/admin'
 import ExportConfirmModal from '../../components/ExportConfirmModal'
+import OcrCorrectionModal from '../../components/OcrCorrectionModal'
 import { EmptyState, PageHeader, PaginationBar } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import useAuth from '../../hooks/useAuth'
@@ -118,6 +119,283 @@ function validateEditDrafts(drafts) {
   return errors
 }
 
+const FIELD_DEF_BY_KEY = Object.fromEntries(OCR_FIELD_DEFS.map((f) => [f.key, f]))
+
+const OCR_FIELD_GROUPS = [
+  {
+    id: 'document',
+    title: 'Document Information',
+    layout: 'stack',
+    keys: ['delivery_receipt_number', 'supplier', 'date'],
+  },
+  {
+    id: 'dimensions',
+    title: 'Dimensions',
+    layout: 'grid',
+    keys: ['length', 'width', 'height', 'volume'],
+  },
+  {
+    id: 'material',
+    title: 'Material Information',
+    layout: 'stack',
+    keys: ['quantity', 'total'],
+  },
+]
+
+function fieldSuggestionAttention(fieldKey, ctx) {
+  const suggestions = Array.isArray(ctx.reviewSuggestions[fieldKey]) ? ctx.reviewSuggestions[fieldKey] : []
+  if (!suggestions.length) return false
+
+  const tone = confidenceTone(ctx.fieldScores[fieldKey])
+  const value = ctx.getEffectiveFieldValue(fieldKey)
+  const missing = value == null || value === ''
+  const noHit = ctx.structuredHits[fieldKey] === false
+  const showNoMatch = missing && (STRUCTURED_COLUMN_MAP[fieldKey] ? noHit : !ctx.getSuggestionValue(fieldKey))
+
+  return tone !== 'high' || missing || showNoMatch
+}
+
+function OcrCompactField({
+  field,
+  value,
+  original,
+  missing,
+  corrected,
+  showNoMatch,
+  layout,
+  isDatasetEditMode,
+  editDrafts,
+  setEditDrafts,
+  setEditValidationError,
+  canEditDataset,
+  onStartEdit,
+}) {
+  if (isDatasetEditMode) {
+    return (
+      <label className={`ocr-field-compact ocr-field-compact--edit${layout === 'grid' ? ' ocr-field-compact--grid' : ''}`}>
+        <span className="ocr-field-compact__label">{field.label}</span>
+        <input
+          type={field.type === 'number' ? 'number' : 'text'}
+          className="ocr-field-compact__input"
+          value={editDrafts[field.key] ?? ''}
+          onChange={(e) => {
+            setEditDrafts((prev) => ({ ...prev, [field.key]: e.target.value }))
+            setEditValidationError('')
+          }}
+          step={field.type === 'number' ? 'any' : undefined}
+        />
+      </label>
+    )
+  }
+
+  return (
+    <div className={`ocr-field-compact${layout === 'grid' ? ' ocr-field-compact--grid' : ''}`}>
+      <div className="ocr-field-compact__body">
+        <span className="ocr-field-compact__label">{field.label}</span>
+        <div className="ocr-field-compact__value-row">
+          <span className="ocr-field-compact__value">
+            {missing ? '—' : formatSuggestionValue(value)}
+          </span>
+          {corrected && (
+            <span className="badge-dx badge-dx--reviewing ocr-field-compact__badge">Corrected</span>
+          )}
+          {showNoMatch && (
+            <span className="ocr-field-compact__hint">Low confidence</span>
+          )}
+        </div>
+        {corrected && original != null && String(original) !== String(value) && (
+          <div className="ocr-field-compact__audit">
+            <span className="ocr-field-compact__audit-original">{formatSuggestionValue(original)}</span>
+            <span aria-hidden>→</span>
+            <span className="ocr-field-compact__audit-final">{formatSuggestionValue(value)}</span>
+          </div>
+        )}
+      </div>
+      {canEditDataset && (
+        <button
+          type="button"
+          className="ocr-field-compact__edit"
+          onClick={() => onStartEdit(field.key)}
+          title={`Edit ${field.label}`}
+          aria-label={`Edit ${field.label}`}
+        >
+          <Pencil size={13} aria-hidden />
+        </button>
+      )}
+    </div>
+  )
+}
+
+function OcrFieldSections({
+  groups,
+  getFieldProps,
+  isDatasetEditMode,
+  editDrafts,
+  setEditDrafts,
+  setEditValidationError,
+  canEditDataset,
+  onStartEdit,
+}) {
+  return (
+    <div className="ocr-field-sections">
+      {groups.map((group) => (
+        <section key={group.id} className="ocr-field-section">
+          <h4 className="ocr-field-section__title">{group.title}</h4>
+          <div className={group.layout === 'grid' ? 'ocr-dimensions-grid' : 'ocr-field-section__stack'}>
+            {group.keys.map((key) => {
+              const props = getFieldProps(key)
+              if (!props?.field) return null
+              return (
+                <OcrCompactField
+                  key={key}
+                  layout={group.layout === 'grid' ? 'grid' : 'row'}
+                  isDatasetEditMode={isDatasetEditMode}
+                  editDrafts={editDrafts}
+                  setEditDrafts={setEditDrafts}
+                  setEditValidationError={setEditValidationError}
+                  canEditDataset={canEditDataset}
+                  onStartEdit={onStartEdit}
+                  {...props}
+                />
+              )
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
+
+function OcrSuggestionsPanel({
+  attentionEntries,
+  alternativeEntries,
+  isReadOnly,
+  isDatasetEditMode,
+  isAdmin,
+  isValidated,
+  onApplySuggestion,
+  onAppendSuggestion,
+}) {
+  const totalCount = attentionEntries.length + alternativeEntries.length
+  if (!totalCount || isDatasetEditMode) return null
+
+  return (
+    <details className="ocr-suggestions-panel">
+      <summary className="ocr-suggestions-panel__summary">
+        <span>Suggested OCR Values</span>
+        {attentionEntries.length > 0 && (
+          <span className="badge-dx badge-dx--reviewing ocr-suggestions-panel__count">
+            {attentionEntries.length} need review
+          </span>
+        )}
+      </summary>
+      <div className="ocr-suggestions-panel__body">
+        {attentionEntries.length > 0 && (
+          <div className="ocr-suggestions-panel__group">
+            {attentionEntries.map(({ field, suggestions }) => (
+              <div key={field.key} className="ocr-suggestions-panel__row">
+                <span className="ocr-suggestions-panel__field">{field.label}</span>
+                <div className="ocr-suggestions-panel__chips">
+                  {suggestions.map((entry, idx) => {
+                    const shownValue = formatSuggestionValue(entry.value)
+                    return (
+                      <button
+                        key={`${field.key}-${idx}-${shownValue}`}
+                        type="button"
+                        className="btn-dx-secondary btn-sm"
+                        disabled={isReadOnly || !shownValue}
+                        title={isReadOnly ? shownValue : `Use ${shownValue}`}
+                        onClick={() => onApplySuggestion(field, shownValue, entry.value)}
+                      >
+                        {shownValue}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {alternativeEntries.length > 0 && (
+          <div className="ocr-suggestions-panel__group ocr-suggestions-panel__group--alt">
+            <p className="ocr-suggestions-panel__group-label">Additional alternatives</p>
+            {alternativeEntries.map(({ field, suggestions }) => (
+              <div key={field.key} className="ocr-suggestions-panel__row">
+                <span className="ocr-suggestions-panel__field">{field.label}</span>
+                <div className="ocr-suggestions-panel__chips">
+                  {suggestions.map((entry, idx) => {
+                    const shownValue = formatSuggestionValue(entry.value)
+                    return (
+                      <button
+                        key={`${field.key}-alt-${idx}-${shownValue}`}
+                        type="button"
+                        className="btn-dx-secondary btn-sm"
+                        disabled={isReadOnly || !shownValue}
+                        title={isReadOnly ? shownValue : `Use ${shownValue}`}
+                        onClick={() => {
+                          if (isAdmin && !isValidated) {
+                            onApplySuggestion(field, shownValue, entry.value)
+                          } else {
+                            onAppendSuggestion(field.label, shownValue)
+                          }
+                        }}
+                      >
+                        {shownValue}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </details>
+  )
+}
+
+function OcrSystemDataCompact({ selected }) {
+  const deliveryDate = selected.delivery_date ? new Date(selected.delivery_date) : null
+
+  return (
+    <div className="ocr-system-data">
+      <div className="ocr-system-data__row">
+        <span className="ocr-system-data__label">Job Order</span>
+        <span className="ocr-system-data__value">
+          {selected.job_order_id ? formatJobPublicId(selected.job_order_id) : '—'}
+        </span>
+      </div>
+      <div className="ocr-system-data__row">
+        <span className="ocr-system-data__label">Assignment</span>
+        <span className="ocr-system-data__value">
+          {selected.assignment_id ? `#${selected.assignment_id}` : '—'}
+        </span>
+      </div>
+      <div className="ocr-system-data__row">
+        <span className="ocr-system-data__label">Vehicle</span>
+        <span className="ocr-system-data__value">{selected.vehicle_plate_no || '—'}</span>
+      </div>
+      <div className="ocr-system-data__row">
+        <span className="ocr-system-data__label">Driver</span>
+        <span className="ocr-system-data__value">{selected.driver_name || '—'}</span>
+      </div>
+      <div className="ocr-system-data__row">
+        <span className="ocr-system-data__label">Delivery</span>
+        {deliveryDate ? (
+          <span className="ocr-system-data__value ocr-system-data__value--stacked">
+            <span>{deliveryDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+            <span className="ocr-system-data__sub">
+              {deliveryDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+            </span>
+          </span>
+        ) : (
+          <span className="ocr-system-data__value">—</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function OcrReviewPage() {
   const toast = useToast()
   const { user } = useAuth()
@@ -146,12 +424,15 @@ function OcrReviewPage() {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
   const [total, setTotal] = useState(0)
-  const [expandedAlternatives, setExpandedAlternatives] = useState({})
   const [isDatasetEditMode, setIsDatasetEditMode] = useState(false)
   const [editDrafts, setEditDrafts] = useState(buildEmptyDrafts)
   const [editValidationError, setEditValidationError] = useState('')
-  const [correctionReason, setCorrectionReason] = useState('')
   const [savingCorrections, setSavingCorrections] = useState(false)
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false)
+  const [pendingCorrectionFields, setPendingCorrectionFields] = useState(null)
+  const [correctionModalIssueType, setCorrectionModalIssueType] = useState('')
+  const [correctionModalReason, setCorrectionModalReason] = useState('')
+  const [correctionModalErrors, setCorrectionModalErrors] = useState({})
   const loadRequestId = useRef(0)
 
   const load = useCallback(async (filter = 'all', pageNum = page) => {
@@ -204,11 +485,14 @@ function OcrReviewPage() {
       setRejectReason(selected.error_message ?? '')
       setReviewNotes(selected.review_notes ?? '')
       setIssueType('')
-      setExpandedAlternatives({})
       setIsDatasetEditMode(false)
       setEditDrafts(buildEmptyDrafts())
       setEditValidationError('')
-      setCorrectionReason('')
+      setShowCorrectionModal(false)
+      setPendingCorrectionFields(null)
+      setCorrectionModalIssueType('')
+      setCorrectionModalReason('')
+      setCorrectionModalErrors({})
     }
   }, [selected])
 
@@ -406,6 +690,11 @@ function OcrReviewPage() {
     setIsDatasetEditMode(false)
     setEditDrafts(buildEmptyDrafts())
     setEditValidationError('')
+    setShowCorrectionModal(false)
+    setPendingCorrectionFields(null)
+    setCorrectionModalIssueType('')
+    setCorrectionModalReason('')
+    setCorrectionModalErrors({})
   }
 
   const normalizeDraftValue = (field, raw) => {
@@ -418,16 +707,7 @@ function OcrReviewPage() {
     return trimmed
   }
 
-  const handleSaveCorrections = async () => {
-    if (!selected || !isDatasetEditMode) return
-
-    const validationErrors = validateEditDrafts(editDrafts)
-    if (validationErrors.length > 0) {
-      setEditValidationError(validationErrors[0])
-      toast(validationErrors[0], 'error')
-      return
-    }
-
+  const buildChangedFieldsFromDrafts = () => {
     const changedFields = {}
     OCR_FIELD_DEFS.forEach((field) => {
       const next = normalizeDraftValue(field, editDrafts[field.key])
@@ -437,6 +717,29 @@ function OcrReviewPage() {
         changedFields[field.key] = next
       }
     })
+    return changedFields
+  }
+
+  const closeCorrectionModal = () => {
+    if (savingCorrections) return
+    setShowCorrectionModal(false)
+    setPendingCorrectionFields(null)
+    setCorrectionModalIssueType('')
+    setCorrectionModalReason('')
+    setCorrectionModalErrors({})
+  }
+
+  const handleSaveCorrections = () => {
+    if (!selected || !isDatasetEditMode) return
+
+    const validationErrors = validateEditDrafts(editDrafts)
+    if (validationErrors.length > 0) {
+      setEditValidationError(validationErrors[0])
+      toast(validationErrors[0], 'error')
+      return
+    }
+
+    const changedFields = buildChangedFieldsFromDrafts()
 
     if (Object.keys(changedFields).length === 0) {
       setIsDatasetEditMode(false)
@@ -445,19 +748,47 @@ function OcrReviewPage() {
       return
     }
 
-    setSavingCorrections(true)
     setEditValidationError('')
+    setPendingCorrectionFields(changedFields)
+    setCorrectionModalIssueType('')
+    setCorrectionModalReason('')
+    setCorrectionModalErrors({})
+    setShowCorrectionModal(true)
+  }
+
+  const confirmCorrectionSave = async () => {
+    if (!selected || !pendingCorrectionFields) return
+
+    const errors = {}
+    if (!correctionModalIssueType) {
+      errors.issue_type = 'Issue type is required.'
+    }
+    const reason = correctionModalReason.trim()
+    if (!reason) {
+      errors.reason = 'Reason is required.'
+    } else if (reason.length > 500) {
+      errors.reason = 'Reason must be 500 characters or fewer.'
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setCorrectionModalErrors(errors)
+      return
+    }
+
+    setSavingCorrections(true)
+    setCorrectionModalErrors({})
     setError('')
     try {
       const updated = await saveOcrCorrections(selected.id, {
-        fields: changedFields,
-        reason: correctionReason.trim() || undefined,
+        fields: pendingCorrectionFields,
+        issue_type: correctionModalIssueType,
+        reason,
       })
       setSelected(updated)
       setQueue((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)))
-      setCorrectionReason('')
       setIsDatasetEditMode(false)
       setEditDrafts(buildEmptyDrafts())
+      closeCorrectionModal()
       toast('OCR field corrections saved.', 'success')
     } catch (err) {
       toast(err.message || 'Could not save corrections.', 'error')
@@ -482,6 +813,46 @@ function OcrReviewPage() {
       [fieldKey]: value == null ? '' : String(value),
     }))
     setEditValidationError('')
+  }
+
+  const { attentionEntries, alternativeEntries } = useMemo(() => {
+    const attention = []
+    const alternatives = []
+    const ctx = {
+      fieldScores,
+      reviewSuggestions,
+      structuredHits,
+      getEffectiveFieldValue,
+      getSuggestionValue,
+    }
+
+    OCR_FIELD_DEFS.forEach((field) => {
+      const suggestions = Array.isArray(reviewSuggestions[field.key]) ? reviewSuggestions[field.key] : []
+      if (!suggestions.length) return
+
+      const entry = { field, suggestions }
+      if (fieldSuggestionAttention(field.key, ctx)) {
+        attention.push(entry)
+      } else {
+        alternatives.push(entry)
+      }
+    })
+
+    return { attentionEntries: attention, alternativeEntries: alternatives }
+  }, [fieldScores, reviewSuggestions, structuredHits, fieldCorrections, effectiveValues, selected?.id])
+
+  const getOcrFieldProps = (key) => {
+    const field = FIELD_DEF_BY_KEY[key]
+    if (!field) return null
+
+    const value = getEffectiveFieldValue(key)
+    const original = getOriginalFieldValue(key)
+    const missing = value == null || value === ''
+    const noHit = structuredHits[key] === false
+    const showNoMatch = missing && (STRUCTURED_COLUMN_MAP[key] ? noHit : !getSuggestionValue(key))
+    const corrected = isFieldCorrected(key)
+
+    return { field, value, original, missing, corrected, showNoMatch }
   }
 
   return (
@@ -623,7 +994,7 @@ function OcrReviewPage() {
 
         <div className="dx-panel" style={{ marginBottom: 0 }}>
           <h3 className="dx-panel-title">Document Preview</h3>
-          <div className="dx-preview-pane" style={{ minHeight: 280 }}>
+          <div className="dx-preview-pane ocr-preview-pane">
             {previewUrl ? (
               <img
                 src={previewUrl}
@@ -661,125 +1032,41 @@ function OcrReviewPage() {
           {!selected ? (
             <EmptyState icon={FileSearch} title="No document selected" message="Select a document from the queue to review." />
           ) : (
-            <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
-              <div className="dx-grid-2 dx-grid-2--12">
-                <div className="ocr-dataset-card">
-                  <p className="ocr-dataset-card__label">OCR Data</p>
-                  <div className="ocr-dataset-fields">
-                    {OCR_FIELD_DEFS.map((field) => {
-                      const value = getEffectiveFieldValue(field.key)
-                      const original = getOriginalFieldValue(field.key)
-                      const missing = value == null || value === ''
-                      const fieldScore = fieldScores[field.key]
-                      const tone = confidenceTone(fieldScore)
-                      const noHit = structuredHits[field.key] === false
-                      const showNoMatch = missing && (STRUCTURED_COLUMN_MAP[field.key] ? noHit : !getSuggestionValue(field.key))
-                      const suggestions = Array.isArray(reviewSuggestions[field.key]) ? reviewSuggestions[field.key] : []
-                      const showSuggestions = !isDatasetEditMode && suggestions.length > 0 && (tone !== 'high' || expandedAlternatives[field.key])
-                      const corrected = isFieldCorrected(field.key)
-
-                      return (
-                        <div key={field.key} className="ocr-dataset-field">
-                          {isDatasetEditMode ? (
-                            <label className="ocr-dataset-field__edit">
-                              <span className="ocr-dataset-field__name">{field.label}</span>
-                              <input
-                                type={field.type === 'number' ? 'number' : 'text'}
-                                className="ocr-dataset-field__input"
-                                value={editDrafts[field.key] ?? ''}
-                                onChange={(e) => {
-                                  setEditDrafts((prev) => ({ ...prev, [field.key]: e.target.value }))
-                                  setEditValidationError('')
-                                }}
-                                step={field.type === 'number' ? 'any' : undefined}
-                              />
-                            </label>
-                          ) : (
-                            <>
-                              <div className="ocr-dataset-field__row">
-                                <div className="ocr-dataset-field__content">
-                                  <span className="ocr-dataset-field__name">{field.label}</span>
-                                  <span className="ocr-dataset-field__value">
-                                    {missing ? '—' : formatSuggestionValue(value)}
-                                  </span>
-                                  {corrected && (
-                                    <span className="badge-dx badge-dx--reviewing ocr-dataset-field__badge">
-                                      Corrected
-                                    </span>
-                                  )}
-                                  {showNoMatch && (
-                                    <span className="ocr-dataset-field__hint">
-                                      No confident match found.
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              {corrected && original != null && String(original) !== String(value) && (
-                                <div className="ocr-dataset-field__audit">
-                                  Original OCR: <span className="ocr-dataset-field__audit-original">{formatSuggestionValue(original)}</span>
-                                  {' → '}
-                                  <span className="ocr-dataset-field__audit-final">{formatSuggestionValue(value)}</span>
-                                </div>
-                              )}
-                            </>
-                          )}
-                          {suggestions.length > 0 && tone === 'high' && !expandedAlternatives[field.key] && !isDatasetEditMode && (
-                            <button
-                              type="button"
-                              className="btn-dx-secondary btn-sm ocr-dataset-field__alt-btn"
-                              onClick={() => setExpandedAlternatives((prev) => ({ ...prev, [field.key]: true }))}
-                            >
-                              Show alternatives
-                            </button>
-                          )}
-                          {showSuggestions && (
-                            <div className="ocr-dataset-field__suggestions">
-                              <span className="ocr-dataset-field__suggestions-label">Suggested values</span>
-                              <div className="ocr-dataset-field__suggestion-chips">
-                                {suggestions.map((entry, idx) => {
-                                  const shownValue = formatSuggestionValue(entry.value)
-                                  return (
-                                    <button
-                                      key={`${field.key}-${idx}-${shownValue}`}
-                                      type="button"
-                                      className="btn-dx-secondary btn-sm"
-                                      disabled={isReadOnly || !shownValue}
-                                      title={isReadOnly ? shownValue : `Use ${shownValue}`}
-                                      onClick={() => {
-                                        if (isDatasetEditMode) {
-                                          applySuggestionToDraft(field.key, entry.value)
-                                        } else if (isAdmin && !selected.is_validated) {
-                                          startDatasetEdit(field.key, entry.value)
-                                        } else {
-                                          appendSuggestionToCorrection(field.label, shownValue)
-                                        }
-                                      }}
-                                    >
-                                      {shownValue}
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+            <div className="form-grid ocr-review-detail" style={{ gridTemplateColumns: '1fr' }}>
+              <div className="ocr-review-top-grid">
+                <div className="ocr-dataset-card ocr-dataset-card--ocr">
+                  <p className="ocr-dataset-card__label">Extracted OCR Data</p>
+                  <OcrFieldSections
+                    groups={OCR_FIELD_GROUPS}
+                    getFieldProps={getOcrFieldProps}
+                    isDatasetEditMode={isDatasetEditMode}
+                    editDrafts={editDrafts}
+                    setEditDrafts={setEditDrafts}
+                    setEditValidationError={setEditValidationError}
+                    canEditDataset={canEditDataset && !isDatasetEditMode}
+                    onStartEdit={startDatasetEdit}
+                  />
+                  <OcrSuggestionsPanel
+                    attentionEntries={attentionEntries}
+                    alternativeEntries={alternativeEntries}
+                    isReadOnly={isReadOnly}
+                    isDatasetEditMode={isDatasetEditMode}
+                    isAdmin={isAdmin}
+                    isValidated={selected.is_validated}
+                    onApplySuggestion={(field, _shown, raw) => {
+                      if (isDatasetEditMode) {
+                        applySuggestionToDraft(field.key, raw)
+                      } else if (isAdmin && !selected.is_validated) {
+                        startDatasetEdit(field.key, raw)
+                      }
+                    }}
+                    onAppendSuggestion={appendSuggestionToCorrection}
+                  />
                   {isDatasetEditMode && (
                     <div className="ocr-dataset-edit-actions">
                       {editValidationError && (
                         <p className="notice error" style={{ margin: 0, fontSize: '0.8125rem' }}>{editValidationError}</p>
                       )}
-                      <label className="ocr-dataset-edit-actions__reason">
-                        Correction reason (optional)
-                        <input
-                          type="text"
-                          value={correctionReason}
-                          onChange={(e) => setCorrectionReason(e.target.value)}
-                          placeholder="e.g. Handwriting misread"
-                        />
-                      </label>
                       <div className="ocr-dataset-edit-actions__buttons">
                         <button
                           type="button"
@@ -803,22 +1090,15 @@ function OcrReviewPage() {
                     </div>
                   )}
                 </div>
-                <div className="ocr-dataset-card">
+                <div className="ocr-dataset-card ocr-dataset-card--system">
                   <p className="ocr-dataset-card__label">System Data</p>
-                  <div style={{ display: 'grid', gap: 8, fontSize: '0.875rem', lineHeight: 1.45 }}>
-                    <div><strong>Job Order:</strong> {selected.job_order_id ? formatJobPublicId(selected.job_order_id) : '—'}</div>
-                    <div><strong>Assignment ID:</strong> {selected.assignment_id || '—'}</div>
-                    <div><strong>Driver:</strong> {selected.driver_name || '—'}</div>
-                    <div><strong>Driver ID:</strong> {selected.driver_id || '—'}</div>
-                    <div><strong>Vehicle:</strong> {selected.vehicle_plate_no || '—'}</div>
-                    <div><strong>Delivery Date:</strong> {selected.delivery_date ? new Date(selected.delivery_date).toLocaleString() : '—'}</div>
-                  </div>
+                  <OcrSystemDataCompact selected={selected} />
                 </div>
               </div>
 
-              <div style={{ border: '1px solid var(--stroke)', borderRadius: 10, padding: 12, display: 'grid', gap: 6 }}>
-                <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>Validation Result</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="ocr-validation-card">
+                <p className="ocr-validation-card__label">Validation Result</p>
+                <div className="ocr-validation-card__summary">
                   <span className={
                     selected.validation_result?.match_status === 'matched'
                       ? 'badge-dx badge-dx--completed'
@@ -838,9 +1118,9 @@ function OcrReviewPage() {
                       : 'Volume comparison unavailable'}
                   </span>
                 </div>
-                <div className="dx-grid-2 dx-grid-2--8" style={{ fontSize: '0.8125rem' }}>
-                  <div><strong>Expected Volume:</strong> {selected.validation_result?.expected_volume ?? '—'}</div>
-                  <div><strong>Extracted Volume:</strong> {selected.validation_result?.actual_volume ?? '—'}</div>
+                <div className="ocr-validation-card__metrics">
+                  <div><span>Expected Volume</span><strong>{selected.validation_result?.expected_volume ?? '—'}</strong></div>
+                  <div><span>Extracted Volume</span><strong>{selected.validation_result?.actual_volume ?? '—'}</strong></div>
                 </div>
               </div>
 
@@ -983,6 +1263,33 @@ function OcrReviewPage() {
           )}
         </div>
       </div>
+
+      <OcrCorrectionModal
+        open={showCorrectionModal}
+        onClose={closeCorrectionModal}
+        onConfirm={confirmCorrectionSave}
+        issueType={correctionModalIssueType}
+        onIssueTypeChange={(value) => {
+          setCorrectionModalIssueType(value)
+          setCorrectionModalErrors((prev) => {
+            const next = { ...prev }
+            delete next.issue_type
+            return next
+          })
+        }}
+        reason={correctionModalReason}
+        onReasonChange={(value) => {
+          setCorrectionModalReason(value)
+          setCorrectionModalErrors((prev) => {
+            const next = { ...prev }
+            delete next.reason
+            return next
+          })
+        }}
+        errors={correctionModalErrors}
+        saving={savingCorrections}
+        changedFieldCount={pendingCorrectionFields ? Object.keys(pendingCorrectionFields).length : 0}
+      />
 
       <ExportConfirmModal
         open={showExportSummary}

@@ -27,12 +27,15 @@ class OcrFieldCorrectionsTest extends TestCase
                 'length' => 735,
                 'delivery_receipt_number' => 'DR-2936806',
             ],
+            'issue_type' => 'ocr_misread',
             'reason' => 'Handwriting misread',
         ]);
 
         $response->assertOk()
             ->assertJsonPath('field_corrections.length.corrected', 735)
             ->assertJsonPath('field_corrections.length.original', 730)
+            ->assertJsonPath('field_corrections.length.issue_type', 'ocr_misread')
+            ->assertJsonPath('field_corrections.length.reason', 'Handwriting misread')
             ->assertJsonPath('effective_values.length', 735);
 
         $ocr->refresh();
@@ -58,7 +61,23 @@ class OcrFieldCorrectionsTest extends TestCase
 
         $this->actingAs($manager, 'sanctum')->putJson("/api/ocr/{$ocr->id}/corrections", [
             'fields' => ['length' => 735],
+            'issue_type' => 'ocr_misread',
+            'reason' => 'Test',
         ])->assertForbidden();
+    }
+
+    public function test_save_corrections_requires_issue_type_and_reason(): void
+    {
+        [$admin, $ocr] = $this->seedOcrPair('admin');
+
+        $this->actingAs($admin, 'sanctum')->putJson("/api/ocr/{$ocr->id}/corrections", [
+            'fields' => ['length' => 735],
+        ])->assertUnprocessable();
+
+        $this->actingAs($admin, 'sanctum')->putJson("/api/ocr/{$ocr->id}/corrections", [
+            'fields' => ['length' => 735],
+            'issue_type' => 'ocr_misread',
+        ])->assertUnprocessable();
     }
 
     public function test_save_corrections_rejects_non_positive_dimensions(): void
@@ -80,6 +99,8 @@ class OcrFieldCorrectionsTest extends TestCase
 
         $this->actingAs($admin, 'sanctum')->putJson("/api/ocr/{$ocr->id}/corrections", [
             'fields' => ['length' => 735],
+            'issue_type' => 'wrong_unit',
+            'reason' => 'Dimensions were stored in meters instead of centimeters.',
         ])->assertOk();
 
         $this->actingAs($admin, 'sanctum')->putJson("/api/ocr/{$ocr->id}/validate", [

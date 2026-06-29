@@ -115,8 +115,9 @@ class OcrReviewController extends Controller
      * Save admin field corrections without approving (admin only).
      *
      * Expected payload:
-     *   fields : { length?: number, width?: number, ... }  (partial)
-     *   reason : string (optional, applied to changed fields)
+     *   fields     : { length?: number, width?: number, ... }  (partial)
+     *   issue_type : string (required)
+     *   reason     : string (required, max 500)
      */
     public function saveCorrections(Request $request, OcrResult $ocrResult)
     {
@@ -143,7 +144,8 @@ class OcrReviewController extends Controller
             'fields.supplier' => 'nullable|string|max:200',
             'fields.date' => 'nullable|string|max:120',
             'fields.total' => 'nullable|string|max:120',
-            'reason' => 'nullable|string|max:500',
+            'issue_type' => 'required|in:ocr_misread,wrong_unit,missing_value,incorrect_format,low_ocr_accuracy,supplier_layout_difference,other',
+            'reason' => 'required|string|min:1|max:500',
         ]);
 
         $incoming = array_intersect_key(
@@ -159,7 +161,8 @@ class OcrReviewController extends Controller
 
         $corrections = $ocrResult->correctionsMap();
         $userId = $request->user()?->id;
-        $reason = trim((string) ($data['reason'] ?? ''));
+        $reason = trim($data['reason']);
+        $issueType = $data['issue_type'];
         $auditChanges = [];
 
         foreach ($incoming as $field => $value) {
@@ -173,19 +176,25 @@ class OcrReviewController extends Controller
                 continue;
             }
 
+            $correctedAt = now()->toIso8601String();
+
             $corrections[$field] = [
                 'original' => $original,
                 'corrected' => $normalized,
                 'corrected_by' => $userId,
-                'corrected_at' => now()->toIso8601String(),
-                'reason' => $reason !== '' ? $reason : ($corrections[$field]['reason'] ?? null),
+                'corrected_at' => $correctedAt,
+                'issue_type' => $issueType,
+                'reason' => $reason,
             ];
 
             $auditChanges[] = [
                 'field' => $field,
                 'original' => $original,
                 'corrected' => $normalized,
-                'reason' => $corrections[$field]['reason'],
+                'issue_type' => $issueType,
+                'reason' => $reason,
+                'corrected_by' => $userId,
+                'corrected_at' => $correctedAt,
             ];
         }
 
@@ -196,6 +205,9 @@ class OcrReviewController extends Controller
         if ($auditChanges !== []) {
             AuditLogger::record($request->user(), 'ocr.corrections.save', OcrResult::class, $ocrResult->id, [
                 'document_id' => $ocrResult->document_id,
+                'ocr_record_id' => $ocrResult->id,
+                'issue_type' => $issueType,
+                'reason' => $reason,
                 'changes' => $auditChanges,
             ], $request);
         }

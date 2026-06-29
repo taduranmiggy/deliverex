@@ -383,40 +383,35 @@ class BestFitAssignmentService
             $distanceDetail,
         );
 
-        // 5. Vehicle Type Match (max 10)
-        $typeMax = 10;
-        $typeContribution = 7;
-        $typeMatched = true;
-        $typeDetail = 'General fleet vehicle accepted for this material';
+        // 5. Vehicle Type Match (max 25) — binary pass/fail against configured CBM range
+        $typeMax = 25;
+        $typeContribution = 0;
+        $typeMatched = false;
+        $vehicleType = $vehicle->vehicleType;
 
-        $materialType = strtolower((string) ($jobOrder->material_type ?? ''));
-        if ($materialType !== '') {
-            $vehicleType = strtolower((string) ($vehicle->vehicleType?->name ?? $vehicle->type ?? ''));
-            $keywords = [];
-            if (str_contains($materialType, 'rock') || str_contains($materialType, 'aggregate') || str_contains($materialType, 'sand') || str_contains($materialType, 'gravel') || str_contains($materialType, 'soil')) {
-                $keywords = ['dump', 'tipper'];
-            } elseif (str_contains($materialType, 'cement') || str_contains($materialType, 'concrete')) {
-                $keywords = ['mixer', 'bulk', 'silo'];
-            }
+        if ($requiredVolumeM3 === null || $requiredVolumeM3 <= 0) {
+            $typeDetail = 'Job volume is required to evaluate vehicle type CBM range match.';
+        } elseif (! $vehicleType) {
+            $typeDetail = 'Vehicle type is not configured for this fleet unit.';
+        } elseif ($vehicleType->min_cbm === null || $vehicleType->max_cbm === null) {
+            $typeDetail = 'Vehicle type CBM range is not configured in master data.';
+        } else {
+            $minCbm = (float) $vehicleType->min_cbm;
+            $maxCbm = (float) $vehicleType->max_cbm;
+            $typeName = $vehicleType->name ?? 'vehicle type';
+            $rangeLabel = rtrim(rtrim(number_format($minCbm, 1, '.', ''), '0'), '.')
+                .'–'
+                .rtrim(rtrim(number_format($maxCbm, 1, '.', ''), '0'), '.')
+                .' m³';
 
-            $keywordHit = false;
-            if ($keywords) {
-                foreach ($keywords as $kw) {
-                    if (str_contains($vehicleType, $kw)) {
-                        $keywordHit = true;
-                        break;
-                    }
-                }
-            }
-
-            if ($keywordHit) {
-                $typeContribution = 10;
+            if ($requiredVolumeM3 >= $minCbm && $requiredVolumeM3 <= $maxCbm) {
+                $typeContribution = $typeMax;
                 $typeMatched = true;
-                $typeDetail = 'Vehicle type suits material ('.$jobOrder->material_type.')';
+                $typeDetail = "Job volume falls within the configured CBM range for this vehicle type ({$rangeLabel}).";
+            } elseif ($requiredVolumeM3 > $maxCbm) {
+                $typeDetail = "Job volume exceeds the configured CBM range for this vehicle type ({$rangeLabel}).";
             } else {
-                $typeContribution = 3;
-                $typeMatched = false;
-                $typeDetail = 'Vehicle type is not ideal for material ('.$jobOrder->material_type.')';
+                $typeDetail = "Job volume is below the configured CBM range for this vehicle type ({$rangeLabel}).";
             }
         }
 
