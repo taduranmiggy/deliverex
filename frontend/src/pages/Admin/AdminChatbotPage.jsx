@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { IconEyeOutline, IconPencil, IconTrash } from '../../components/DxIcons'
+import AdminChatbotIntentsPanel from '../../components/admin/AdminChatbotIntentsPanel'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -18,61 +19,6 @@ const TOP_INTENTS = [
   { intent: 'Update Status', volume: 90, rate: 91, confidence: 88, updated: '2024-02-22' },
   { intent: 'OCR Tips', volume: 45, rate: 82, confidence: 78, updated: '2024-02-21' },
 ]
-
-const INTENT_ROWS = [
-  {
-    slug: 'track_delivery',
-    name: 'Track Delivery',
-    description: 'User wants to track delivery status',
-    hits: 320,
-    rate: 94,
-    owner: 'Maria Santos',
-  },
-  {
-    slug: 'job_status',
-    name: 'Job Status',
-    description: 'Dispatcher checks job order status',
-    hits: 180,
-    rate: 85,
-    owner: 'Juan Dela Cruz',
-  },
-  {
-    slug: 'navigation_help',
-    name: 'Navigation Help',
-    description: 'Directions and UI help inside the portal',
-    hits: 150,
-    rate: 86,
-    owner: 'Maria Santos',
-  },
-  {
-    slug: 'update_status',
-    name: 'Update Status',
-    description: 'Prompts for courier status wording',
-    hits: 95,
-    rate: 91,
-    owner: 'Juan Dela Cruz',
-  },
-  {
-    slug: 'ocr_tips',
-    name: 'OCR Tips',
-    description: 'How to validate delivery documents',
-    hits: 60,
-    rate: 82,
-    owner: 'Maria Santos',
-  },
-]
-
-const TRAINING_BY_SLUG = {
-  track_delivery: [
-    '"Saan yung delivery ko?"',
-    '"I-track ko yung package"',
-    '"Where is my delivery?"',
-  ],
-  job_status: ['Job status?', 'San ang trabaho?', 'Update sa dispatch'],
-  navigation_help: ['Paano mag-login?', 'Saan ang live map?'],
-  update_status: ['Mark as delivered', 'En route na po'],
-  ocr_tips: ['OCR flagged', 'How to approve document'],
-}
 
 const CONVERSATIONS = [
   {
@@ -181,7 +127,7 @@ const ROUTING_RULES = [
   {
     id: 1,
     condition: '2 failed detections',
-    action: 'Escalate to deliverex.support@gmail.com',
+    action: 'Escalate to deliverexapp@gmail.com',
     priority: 'High',
     active: true,
   },
@@ -335,23 +281,12 @@ function ResolvedBarChart() {
 
 function AdminChatbotPage() {
   const [tab, setTab] = useState('dashboard')
-  const [intentSearch, setIntentSearch] = useState('')
-  const [selectedSlug, setSelectedSlug] = useState('track_delivery')
   const [faqSearch, setFaqSearch] = useState('')
   const [redactPhone, setRedactPhone] = useState(true)
   const [redactEmail, setRedactEmail] = useState(true)
   const [redactTracking, setRedactTracking] = useState(false)
   const [retentionDays, setRetentionDays] = useState('90')
   const [webhookSecretVisible, setWebhookSecretVisible] = useState(false)
-
-  const filteredIntents = useMemo(() => {
-    const q = intentSearch.trim().toLowerCase()
-    if (!q) return INTENT_ROWS
-    return INTENT_ROWS.filter(
-      (row) =>
-        row.name.toLowerCase().includes(q) || row.description.toLowerCase().includes(q),
-    )
-  }, [intentSearch])
 
   const filteredFaq = useMemo(() => {
     const q = faqSearch.trim().toLowerCase()
@@ -362,10 +297,6 @@ function AdminChatbotPage() {
     )
   }, [faqSearch])
 
-  const selectedIntent =
-    INTENT_ROWS.find((row) => row.slug === selectedSlug) || INTENT_ROWS[0]
-  const training = TRAINING_BY_SLUG[selectedIntent.slug] || []
-
   return (
     <section>
       <header className="page-header">
@@ -375,11 +306,10 @@ function AdminChatbotPage() {
         </div>
       </header>
 
-      <div className="notice" style={{ marginBottom: 20, borderLeft: '4px solid var(--color-warning)' }}>
-        <strong>Preview / configuration UI.</strong> Metrics, intent volumes, and charts on this page are sample data for layout demonstration only.
-        Live customer tracking and FAQs run in the public assistant (<code>DeliverexAssistantChat</code>) and use real API data.
+      <div className="notice" style={{ marginBottom: 20, borderLeft: '4px solid var(--color-primary)' }}>
+        <strong>Live assistant.</strong> Customer chat uses <code>/api/chatbot</code>. Manage intents below — changes apply to the live assistant after save.
+        Dashboard charts and other tabs still use sample layout data.
       </div>
-
       <div className="dx-chat-tabs">
         {TABS.map((item) => (
           <button
@@ -553,75 +483,7 @@ function AdminChatbotPage() {
         </div>
       )}
 
-      {tab === 'intents' && (
-        <div className="dx-panel">
-          <div className="dx-intents-toolbar">
-            <input
-              type="search"
-              placeholder="Search Intents..."
-              value={intentSearch}
-              onChange={(e) => setIntentSearch(e.target.value)}
-              aria-label="Search intents"
-            />
-            <button type="button" className="btn-dx-primary">
-              + New Intent
-            </button>
-          </div>
-          <div className="dx-data-table-wrap">
-            <table className="dx-data-table">
-              <thead>
-                <tr>
-                  <th>Intent Name</th>
-                  <th>Description</th>
-                  <th>Hits (7 days)</th>
-                  <th>Resolution Rate</th>
-                  <th>Owner</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredIntents.map((row) => (
-                  <tr
-                    key={row.slug}
-                    onClick={() => setSelectedSlug(row.slug)}
-                    style={{
-                      cursor: 'pointer',
-                      outline:
-                        selectedSlug === row.slug ? '2px solid rgba(45,84,183,0.35)' : 'none',
-                      outlineOffset: -2,
-                    }}
-                  >
-                    <td>{row.name}</td>
-                    <td style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                      {row.description}
-                    </td>
-                    <td>{row.hits}</td>
-                    <td>{row.rate}%</td>
-                    <td>{row.owner}</td>
-                    <td>
-                      <button type="button" className="dx-icon-btn" aria-label="Edit intent" title="Edit">
-                        <IconPencil />
-                      </button>
-                      <button type="button" className="dx-icon-btn" aria-label="Delete intent" title="Delete">
-                        <IconTrash />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="dx-train-phrases">
-            <h4>Training phrases — {selectedIntent.name}</h4>
-            <ul>
-              {training.map((phrase) => (
-                <li key={phrase}>{phrase}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
+      {tab === 'intents' && <AdminChatbotIntentsPanel />}
 
       {tab === 'faq' && (
         <>

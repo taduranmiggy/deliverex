@@ -4,6 +4,7 @@ import { sendInquiry } from '../api/customer'
 import DeliverexAssistantChat from '../components/DeliverexAssistantChat'
 import DeliverexSiteFooter from '../components/customer/DeliverexSiteFooter'
 import InquiryForm from '../components/customer/InquiryForm'
+import PublicFaqSection from '../components/customer/PublicFaqSection'
 import PublicSiteNavBar from '../components/customer/PublicSiteNavBar'
 import { ArrowRight, CheckCircle2, FileCheck2, HeadphonesIcon, History, MessageSquare, Package, Search, X } from 'lucide-react'
 
@@ -91,6 +92,11 @@ function LandingPage() {
           <Link to="/login" className="btn-dx-primary btn-lg">Sign in <ArrowRight size={16} /></Link>
         </div>
       </section>
+
+      <PublicFaqSection
+        variant="landing"
+        description="Browse by topic or search — answers for tracking, accounts, concerns, and how Deliverex works."
+      />
 
       <DeliverexSiteFooter />
 

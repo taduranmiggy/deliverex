@@ -22,6 +22,8 @@
   border-radius: 14px;
   box-shadow: 0 12px 40px rgba(29, 53, 87, 0.28), 0 0 0 1px rgba(0, 0, 0, 0.06);
   overflow: hidden;
+  min-width: 0;
+  box-sizing: border-box;
   transition:
     width 0.2s ease,
     max-height 0.2s ease,
@@ -93,11 +95,13 @@
 .dx-assistant-chat__msgs {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 14px;
   background: #f8f9fb;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
 }
 
 .dx-msg-row {
@@ -154,22 +158,34 @@
 }
 
 .dx-msg-quick-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 4px;
-  margin-left: 34px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .dx-msg-quick {
-  padding: 6px 12px;
-  border-radius: 999px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
   border: 1px solid var(--primary);
   background: #fff;
   color: var(--primary);
   font-size: 0.8125rem;
   font-weight: 600;
+  line-height: 1.35;
   cursor: pointer;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  box-sizing: border-box;
+  min-height: 40px;
+  height: auto;
 }
 
 .dx-msg-quick:hover {
@@ -195,8 +211,11 @@
 }
 
 .dx-chat-options-wrap {
-  margin-left: 34px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-top: 4px;
+  box-sizing: border-box;
 }
 
 .dx-chat-options-label {
@@ -206,6 +225,10 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
+}
+
+.dx-chat-options-wrap .dx-msg-quick-row {
+  margin-left: 0;
 }
 
 .dx-msg-bubble--panel {
@@ -641,6 +664,18 @@
   color: #fff;
   font-weight: 600;
   cursor: pointer;
+}
+
+.dx-assistant-input button.send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Narrow chat: stack quick actions in one column */
+@media (max-width: 360px) {
+  .dx-msg-quick-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .dx-assistant-input button.send:hover {

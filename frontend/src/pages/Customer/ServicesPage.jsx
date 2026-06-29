@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Mail, MapPin, Phone, Truck, Workflow, Wrench } from 'lucide-react'
-
-const SUPPORT_EMAIL = 'deliverex.support@gmail.com'
-const SUPPORT_PHONE = '(+63) 995-582-0222'
+import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_HREF } from '../../config/support'
 
 const SERVICES = [
   {
@@ -84,7 +82,7 @@ function ServicesPage() {
                 <strong>{SUPPORT_EMAIL}</strong>
               </span>
             </a>
-            <a href="tel:+639955820222" className="customer-contact-channel">
+            <a href={SUPPORT_PHONE_HREF} className="customer-contact-channel">
               <span className="customer-contact-channel__icon"><Phone size={18} /></span>
               <span>
                 <small>Phone</small>

@@ -349,7 +349,7 @@ export const DATA_PRIVACY_POLICY = {
     organization: 'Providential 628 Site Preparation Services',
     system: 'Deliverex',
     contact: 'Joeylyn Mercado',
-    email: 'deliverex.support@gmail.com',
+    email: 'deliverexapp@gmail.com',
     address: '7353 CASA ZARAGOZA CLUSTER 3 COMMONWEALTH AVENUE EXTENSION SAN BENISSA GARDEN VILLAS KALIGAYAHAN DISTRICT 5, QUEZON CITY 1124',
   },
   contactExtra: {

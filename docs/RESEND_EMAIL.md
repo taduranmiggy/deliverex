@@ -13,7 +13,7 @@ MAIL_MAILER=resend
 MAIL_FROM_ADDRESS=noreply@deliverexapp.com
 MAIL_FROM_NAME=Deliverex
 MAIL_ACCOUNTS_ADDRESS=accounts@deliverexapp.com
-MAIL_SUPPORT_ADDRESS=support@deliverexapp.com
+MAIL_SUPPORT_ADDRESS=deliverexapp@gmail.com
 RESEND_API_KEY=re_xxxxxxxx
 FRONTEND_URL=https://deliverexapp.com
 MAIL_QUEUE=false
@@ -33,7 +33,7 @@ Verify `deliverexapp.com` and configure sender addresses:
 
 - `noreply@deliverexapp.com` — transactional (password reset, delivery updates)
 - `accounts@deliverexapp.com` — company activation, driver credentials
-- `support@deliverexapp.com` — customer inquiries
+- `deliverexapp@gmail.com` — customer inquiries and feedback
 
 ## Architecture
 

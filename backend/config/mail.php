@@ -120,7 +120,7 @@ return [
     'addresses' => [
         'noreply' => env('MAIL_FROM_ADDRESS', 'noreply@deliverexapp.com'),
         'accounts' => env('MAIL_ACCOUNTS_ADDRESS', 'accounts@deliverexapp.com'),
-        'support' => env('MAIL_SUPPORT_ADDRESS', 'support@deliverexapp.com'),
+        'support' => env('MAIL_SUPPORT_ADDRESS', 'deliverexapp@gmail.com'),
     ],
 
 ];

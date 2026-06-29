@@ -448,7 +448,7 @@ export const TERMS_AND_CONDITIONS = {
     organization: 'Providential 628 Site Preparation Services',
     system: 'Deliverex',
     contact: 'System Administrator',
-    email: 'deliverex.support@gmail.com',
+    email: 'deliverexapp@gmail.com',
     address: '7353 CASA ZARAGOZA CLUSTER 3 COMMONWEALTH AVENUE EXTENSION SAN BENISSA GARDEN VILLAS KALIGAYAHAN DISTRICT 5, QUEZON CITY 1124',
   },
   closing: 'By accessing or using the Deliverex system, you confirm that you have read, understood, and agree to be bound by these Terms and Conditions of Use.',

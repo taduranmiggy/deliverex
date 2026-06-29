@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\ChatbotController;
+use App\Http\Controllers\Admin\ChatbotIntentController;
 use App\Http\Controllers\Admin\EmailLogController;
 use App\Http\Controllers\Admin\CompanyController as AdminCompanyController;
 use App\Http\Controllers\Admin\AuditLogsController;
@@ -70,6 +72,12 @@ Route::get('/customer/track/{trackingCode}', [CustomerTrackingController::class,
 
 // Public: submit inquiry (no auth required)
 Route::post('/customer/inquiry', [InquiryController::class, 'store']);
+
+// Public: intelligent chatbot (optional auth for personalized replies)
+Route::middleware(['auth.api.optional', 'throttle:30,1'])->prefix('chatbot')->group(function () {
+    Route::get('/welcome', [ChatbotController::class, 'welcome']);
+    Route::post('/message', [ChatbotController::class, 'message']);
+});
 
 // ─── Authenticated ────────────────────────────────────────────────────────────
 Route::middleware('auth.api')->group(function () {
@@ -143,6 +151,13 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/ocr/review/export',                [OcrReviewController::class, 'export']);
         Route::put('/ocr/{ocrResult}/corrections',     [OcrReviewController::class, 'saveCorrections']);
         Route::put('/ocr/{ocrResult}/validate',         [OcrReviewController::class, 'validateResult']);
+
+        Route::get('/chatbot/stats',                    [ChatbotIntentController::class, 'stats']);
+        Route::get('/chatbot/intents',                  [ChatbotIntentController::class, 'index']);
+        Route::post('/chatbot/intents',                 [ChatbotIntentController::class, 'store']);
+        Route::get('/chatbot/intents/{chatbotIntent}',  [ChatbotIntentController::class, 'show']);
+        Route::put('/chatbot/intents/{chatbotIntent}',  [ChatbotIntentController::class, 'update']);
+        Route::delete('/chatbot/intents/{chatbotIntent}', [ChatbotIntentController::class, 'destroy']);
     });
 
     // ─── Admin: inquiries ────────────────────────────────────────────────────

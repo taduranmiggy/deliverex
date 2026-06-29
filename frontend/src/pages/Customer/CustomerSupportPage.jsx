@@ -4,59 +4,15 @@ import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import CustomerActionCard from '../../components/customer/CustomerActionCard'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
 import InquiryForm from '../../components/customer/InquiryForm'
+import PublicFaqSection from '../../components/customer/PublicFaqSection'
 import { sendInquiry } from '../../api/customer'
+import { SUPPORT_EMAIL, SUPPORT_PHONE_HREF } from '../../config/support'
 import useAuth from '../../hooks/useAuth'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { useToast } from '../../context/ToastContext'
 import {
-  ChevronDown, Mail, MessageSquare, MessageSquarePlus, Phone, HelpCircle,
+  Mail, MessageSquare, MessageSquarePlus, Phone,
 } from 'lucide-react'
-
-const FAQS = [
-  {
-    q: 'How do I track my delivery?',
-    a: 'Enter your Tracking ID on the Track page. No account is required for basic tracking.',
-  },
-  {
-    q: 'Where can I find my Tracking ID?',
-    a: 'Your Tracking ID is provided by your dispatcher or logistics provider when the shipment is created.',
-  },
-  {
-    q: 'Can I view proof of delivery?',
-    a: 'Yes. Once a delivery is completed, proof-of-delivery records appear in the tracking results and in your delivery history when signed in.',
-  },
-  {
-    q: 'How do I get a customer account?',
-    a: 'Accounts are created by your administrator or linked automatically when a dispatcher creates a delivery using your email.',
-  },
-  {
-    q: 'How do I reset my password?',
-    a: 'On the customer login page, choose Forgot Password and enter your account email. A reset link will be sent if the account exists.',
-  },
-  {
-    q: 'How do I link a delivery to my account?',
-    a: 'Sign in, go to Link Delivery, and enter your Tracking ID. The email on the shipment must match your account email.',
-  },
-  {
-    q: 'Who do I contact for delivery issues?',
-    a: 'Use the contact form below or reach our support team by phone or email.',
-  },
-]
-
-function FaqItem({ question, answer }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className={`pwa-faq-item${open ? ' pwa-faq-item--open' : ''}`}>
-      <button type="button" className="pwa-faq-item__trigger" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <span>{question}</span>
-        <ChevronDown size={18} className="pwa-faq-item__chevron" />
-      </button>
-      <div className="pwa-faq-item__panel">
-        <p>{answer}</p>
-      </div>
-    </div>
-  )
-}
 
 function CustomerSupportPage() {
   const { user, isAuthenticated, role } = useAuth()
@@ -106,21 +62,18 @@ function CustomerSupportPage() {
             layout="inline"
             icon={Mail}
             title="Email Support"
-            description="deliverex.support@gmail.com"
-            onClick={() => { window.location.href = 'mailto:deliverex.support@gmail.com' }}
+            description={SUPPORT_EMAIL}
+            onClick={() => { window.location.href = `mailto:${SUPPORT_EMAIL}` }}
           />
         </div>
 
         <div className="customer-support-faq-inquiry">
           <section className="pwa-section customer-support-faq-inquiry__col">
-            <h2 className="pwa-section__title">
-              <HelpCircle size={18} /> Frequently Asked Questions
-            </h2>
-            <div className="pwa-faq-list">
-              {FAQS.map((item) => (
-                <FaqItem key={item.q} question={item.q} answer={item.a} />
-              ))}
-            </div>
+            <PublicFaqSection
+              variant="support"
+              title="Frequently Asked Questions"
+              description="Filter by topic or search for quick answers before submitting an inquiry."
+            />
           </section>
 
           <section className="pwa-section customer-support-faq-inquiry__col">

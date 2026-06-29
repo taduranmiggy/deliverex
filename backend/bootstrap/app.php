@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'auth.api' => \App\Http\Middleware\AuthenticateApi::class,
+            'auth.api.optional' => \App\Http\Middleware\OptionalAuthenticateApi::class,
             'company.role' => \App\Http\Middleware\CompanyRoleMiddleware::class,
         ]);
     })

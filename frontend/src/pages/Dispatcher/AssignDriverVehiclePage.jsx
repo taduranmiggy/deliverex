@@ -376,13 +376,14 @@ function AssignDriverVehiclePage() {
       <div className="dx-dispatch-grid">
 
         {/* ── Column 1: Job Queue ── */}
-        <div>
-          <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="dx-dispatch-grid__col">
+          <div className="dx-dispatch-grid__col-header" style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>
               <strong style={{ color: 'var(--navy)' }}>{jobOrders.length}</strong> pending
             </span>
             <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Select job ↓</span>
           </div>
+          <div className="dx-dispatch-grid__scroll">
           {jobOrders.length === 0 && (
             <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '24px 16px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.875rem' }}>
               No unassigned jobs.
@@ -428,10 +429,12 @@ function AssignDriverVehiclePage() {
               )
             })}
           </div>
+          </div>
         </div>
 
         {/* ── Column 2: Recommended ── */}
-        <div>
+        <div className="dx-dispatch-grid__col">
+          <div className="dx-dispatch-grid__scroll">
           {!selected ? (
             <div style={{ background: '#fff', border: '1px dashed var(--stroke)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: 'var(--muted)' }}>
               <Zap size={28} style={{ marginBottom: 10, opacity: 0.3 }} />
@@ -494,11 +497,12 @@ function AssignDriverVehiclePage() {
               </a>
             </div>
           )}
+          </div>
         </div>
 
         {/* ── Column 3: Alternative Matches ── */}
-        <div>
-          <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '10px 14px', marginBottom: 10 }}>
+        <div className="dx-dispatch-grid__col">
+          <div className="dx-dispatch-grid__col-header" style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '10px 14px', marginBottom: 10 }}>
             <p style={{ margin: 0, fontSize: '0.8125rem', fontWeight: 700 }}>
               {alternatives.length > 0 ? `${alternatives.length} alternative ${alternatives.length === 1 ? 'match' : 'matches'}` : 'Alternative Matches'}
             </p>
@@ -507,7 +511,7 @@ function AssignDriverVehiclePage() {
             )}
           </div>
 
-          <div className="dx-filter-tabs" role="tablist" aria-label="Override options" style={{ marginBottom: 10 }}>
+          <div className="dx-dispatch-grid__col-header dx-filter-tabs" role="tablist" aria-label="Override options" style={{ marginBottom: 10 }}>
             <button
               type="button"
               role="tab"
@@ -530,6 +534,7 @@ function AssignDriverVehiclePage() {
             </button>
           </div>
 
+          <div className="dx-dispatch-grid__scroll">
           {/* Safe manual override selector (uses same assignment endpoint) */}
           {!!selected && !loading && overrideTab === 'all' && (
             <div style={{ background: '#fff', border: '1px solid #fde68a', borderRadius: 12, padding: '12px 14px', marginBottom: 10 }}>
@@ -597,15 +602,18 @@ function AssignDriverVehiclePage() {
                   />
                 ))}
               </div>
-              {alternatives.length > 0 && (
-                <PaginationBar
-                  page={safeAltPage}
-                  perPage={altPerPage}
-                  total={alternatives.length}
-                  onPage={setAltPage}
-                />
-              )}
             </>
+          )}
+          </div>
+          {overrideTab === 'suggested' && alternatives.length > 0 && (
+            <div className="dx-dispatch-grid__col-footer">
+              <PaginationBar
+                page={safeAltPage}
+                perPage={altPerPage}
+                total={alternatives.length}
+                onPage={setAltPage}
+              />
+            </div>
           )}
         </div>
       </div>

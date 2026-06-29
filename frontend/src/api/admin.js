@@ -134,3 +134,24 @@ export function fetchInquiries(page = 1, status = 'all') {
 export function markInquiryRead(id)        { return apiRequest(`/inquiries/${id}/read`, { method: 'PUT' }) }
 export function convertInquiry(id)         { return apiRequest(`/inquiries/${id}/convert`, { method: 'POST' }) }
 export function deleteInquiry(id)          { return apiRequest(`/inquiries/${id}`, { method: 'DELETE' }) }
+
+// ─── Chatbot intents ──────────────────────────────────────────────────────────
+export function fetchChatbotIntents(search = '') {
+  const qs = search ? `?search=${encodeURIComponent(search)}` : ''
+  return apiRequest(`/admin/chatbot/intents${qs}`)
+}
+export function fetchChatbotIntent(id) {
+  return apiRequest(`/admin/chatbot/intents/${id}`)
+}
+export function fetchChatbotStats() {
+  return apiRequest('/admin/chatbot/stats')
+}
+export function createChatbotIntent(payload) {
+  return apiRequest('/admin/chatbot/intents', { method: 'POST', body: JSON.stringify(payload) })
+}
+export function updateChatbotIntent(id, payload) {
+  return apiRequest(`/admin/chatbot/intents/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+export function deleteChatbotIntent(id) {
+  return apiRequest(`/admin/chatbot/intents/${id}`, { method: 'DELETE' })
+}

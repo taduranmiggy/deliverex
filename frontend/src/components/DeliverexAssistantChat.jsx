@@ -2,106 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import './DeliverexAssistantChat.css'
-import { trackDelivery } from '../api/customer'
+import { fetchChatbotWelcome, sendChatbotMessage } from '../api/chatbot'
+import { CHAT_FAQ_ITEMS } from '../data/publicFaqs'
+import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_HREF } from '../config/support'
 import { IconMail, IconPhone } from './DxIcons'
 
-const SUPPORT_EMAIL = 'deliverex.support@gmail.com'
-const SUPPORT_PHONE = '(+63) 995-582-0222'
-
-const MAIN_OPTIONS = [
-  'Track My Delivery',
-  'What is a Tracking ID?',
-  'Account Help',
-  'Contact Support',
-  'FAQs',
-]
-
-const QUICK_AFTER_TRACK = ['Track Another Delivery', 'Contact Support', 'Return to Menu']
-const QUICK_AFTER_FAQ = ['Track My Delivery', 'Account Help', 'Contact Support', 'Return to Menu']
-const ACCOUNT_OPTIONS = ['Login', 'Link Delivery', 'Forgot Password']
-
-const WELCOME_MESSAGE = `Hello! I can help you with:
-
-• Tracking your delivery
-• Understanding Tracking IDs
-• Delivery status updates
-• Account assistance
-• Contacting support
-
-Choose an option below to begin.`
-
-const TRACKING_ID_PROMPT = `Please enter your Tracking ID.
-
-Example:
-TRK-ABC123
-or
-DLX-2026-001`
-
-const TRACKING_ID_FAQ = `A Tracking ID is a unique reference number assigned to your delivery.
-
-You can find it in:
-• SMS notifications
-• Email notifications
-• Delivery confirmation messages
-• Information provided by the dispatcher
-
-Example: TRK-ABC123
-
-Use this Tracking ID to view:
-• Delivery status
-• Estimated arrival time
-• Delivery timeline
-• Proof of Delivery (POD)`
-
-let msgIdSeq = 0
-function nid() {
-  msgIdSeq += 1
-  return `m-${msgIdSeq}`
-}
-
-function toStatusLabel(statusRaw) {
-  const status = String(statusRaw ?? '').toLowerCase().replace(/\s+/g, '_')
-  if (status.includes('assigned')) return 'Assigned'
-  if (status.includes('in_progress') || status.includes('in_transit') || status.includes('en_route')) return 'En Route'
-  if (status.includes('arrived')) return 'Arrived'
-  if (status.includes('complete') || status.includes('deliver')) return 'Completed'
-  if (status.includes('pending')) return 'Pending'
-  return statusRaw || 'Unknown'
-}
-
-function statusBadgeClass(label) {
-  const map = {
-    Assigned: 'badge-dx--dispatched',
-    'En Route': 'badge-dx--enroute',
-    Arrived: 'badge-dx--arrived',
-    Completed: 'badge-dx--completed',
-    Pending: 'badge-dx--pending',
-  }
-  return map[label] || 'badge-dx--muted'
-}
-
-const FAQ_ITEMS = [
-  {
-    q: 'What does Deliverex do?',
-    a: 'Deliverex manages dispatching, tracking, POD capture, and delivery records.',
-  },
-  {
-    q: 'How do I track my delivery?',
-    a: 'Enter your Tracking ID on the tracking page or use Track My Delivery here.',
-  },
-  {
-    q: 'How do I link a delivery to my account?',
-    a: 'Deliveries for your company are linked automatically when a dispatcher creates them. You can also sign in and use Link Delivery if needed.',
-  },
-  {
-    q: 'How do I get a customer account?',
-    a: 'Accounts are created by a Deliverex administrator or linked when a dispatcher creates a delivery using your email.',
-  },
-  {
-    q: 'What do delivery statuses mean?',
-    a: 'See the delivery status guide for Pending, Dispatched, pickup and destination legs, Arrived, and Completed.',
-  },
-]
+const FAQ_ITEMS = CHAT_FAQ_ITEMS
 
 const STATUS_GUIDE = [
   { label: 'Pending', desc: 'Order received; awaiting dispatch.', tone: '#64748b' },
@@ -113,18 +19,49 @@ const STATUS_GUIDE = [
   { label: 'Completed', desc: 'Delivery finished successfully.', tone: '#059669' },
 ]
 
-function optionButtonClass(option) {
-  if (QUICK_AFTER_TRACK.includes(option)) return 'dx-msg-quick dx-msg-quick--secondary'
-  if (ACCOUNT_OPTIONS.includes(option)) return 'dx-msg-quick dx-msg-quick--account'
-  if (MAIN_OPTIONS.includes(option)) return 'dx-msg-quick'
-  return 'dx-msg-quick dx-msg-quick--secondary'
+let msgIdSeq = 0
+function nid() {
+  msgIdSeq += 1
+  return `m-${msgIdSeq}`
 }
 
-function optionsGroupLabel(options) {
-  if (options.every((o) => QUICK_AFTER_TRACK.includes(o))) return 'Quick actions'
-  if (options.some((o) => ACCOUNT_OPTIONS.includes(o))) return 'Account options'
-  if (options.every((o) => MAIN_OPTIONS.includes(o))) return 'Choose an option'
+function statusBadgeClass(label) {
+  const map = {
+    Assigned: 'badge-dx--dispatched',
+    Dispatched: 'badge-dx--dispatched',
+    'En Route': 'badge-dx--enroute',
+    Arrived: 'badge-dx--arrived',
+    Completed: 'badge-dx--completed',
+    Pending: 'badge-dx--pending',
+  }
+  return map[label] || 'badge-dx--muted'
+}
+
+function optionsGroupLabel(options, chatState) {
+  if (chatState?.mode === 'tracking') return 'Enter Tracking ID or choose'
+  if (chatState?.mode === 'inquiry') return 'Reply in chat'
+  if (options?.length <= 4) return 'Suggested actions'
   return 'Quick replies'
+}
+
+function mapApiMessages(apiMessages) {
+  return (apiMessages ?? []).map((item) => ({
+    id: nid(),
+    role: 'assistant',
+    content: [item.type, item.body],
+  }))
+}
+
+function buildHistory(messages) {
+  return messages
+    .filter((m) => typeof m.content === 'string' || Array.isArray(m.content))
+    .slice(-12)
+    .map((m) => ({
+      role: m.role,
+      content: typeof m.content === 'string'
+        ? m.content
+        : (m.content[0] === 'text' ? m.content[1] : `[${m.content[0]}]`),
+    }))
 }
 
 export default function DeliverexAssistantChat({ open: openProp, onOpenChange }) {
@@ -133,11 +70,11 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
   const [assistantExpanded, setAssistantExpanded] = useState(false)
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState([])
-  const [awaitTrackInput, setAwaitTrackInput] = useState(false)
   const [typing, setTyping] = useState(false)
-  const [typingLabel, setTypingLabel] = useState('Checking delivery details...')
-  const [activeOptions, setActiveOptions] = useState(MAIN_OPTIONS)
-  const [loadingTrack, setLoadingTrack] = useState(false)
+  const [typingLabel, setTypingLabel] = useState('Thinking...')
+  const [activeOptions, setActiveOptions] = useState([])
+  const [chatState, setChatState] = useState({ mode: null })
+  const [loading, setLoading] = useState(false)
 
   const scrollRef = useRef(null)
   const isControlled = openProp !== undefined
@@ -148,28 +85,72 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     onOpenChange?.(v)
   }, [isControlled, onOpenChange])
 
-  const pushAssistant = useCallback((content) => {
-    setMessages((prev) => [...prev, { id: nid(), role: 'assistant', content }])
-  }, [])
-
   const pushUser = useCallback((content) => {
     setMessages((prev) => [...prev, { id: nid(), role: 'user', content }])
   }, [])
 
-  const openMainMenu = useCallback(() => {
-    setAwaitTrackInput(false)
-    setActiveOptions(MAIN_OPTIONS)
+  const applyApiResponse = useCallback((res) => {
+    const assistantRows = mapApiMessages(res?.messages)
+    setMessages((prev) => [...prev, ...assistantRows])
+    setActiveOptions(res?.suggestions ?? [])
+    setChatState(res?.state ?? { mode: null })
+    if (res?.typing_label) setTypingLabel(res.typing_label)
   }, [])
 
-  const seedWelcome = useCallback(() => {
-    setMessages([
-      { id: nid(), role: 'assistant', content: ['text', WELCOME_MESSAGE] },
-    ])
-    setAwaitTrackInput(false)
-    setTyping(false)
-    setTypingLabel('Checking delivery details...')
-    setActiveOptions(MAIN_OPTIONS)
+  const seedWelcome = useCallback(async () => {
+    setTypingLabel('Thinking...')
+    setTyping(true)
+    try {
+      const res = await fetchChatbotWelcome()
+      setMessages(mapApiMessages(res?.messages))
+      setActiveOptions(res?.suggestions ?? [])
+      setChatState(res?.state ?? { mode: null })
+      if (res?.typing_label) setTypingLabel(res.typing_label)
+    } catch {
+      setMessages([{
+        id: nid(),
+        role: 'assistant',
+        content: ['text', 'Hello! Ask me about tracking, concerns, accounts, or how Deliverex works.'],
+      }])
+      setActiveOptions(['Track Delivery', 'Submit Concern', 'Contact Support'])
+    } finally {
+      setTyping(false)
+    }
   }, [])
+
+  const dispatchMessage = useCallback(async (text, { skipUserBubble = false } = {}) => {
+    const trimmed = text.trim()
+    if (!trimmed || loading) return
+
+    if (!skipUserBubble) pushUser(trimmed)
+    setInput('')
+    setLoading(true)
+    setTyping(true)
+
+    const history = buildHistory(messages)
+    if (!skipUserBubble) {
+      history.push({ role: 'user', content: trimmed })
+    }
+
+    try {
+      const res = await sendChatbotMessage({
+        message: trimmed,
+        history,
+        state: chatState,
+      })
+      applyApiResponse(res)
+    } catch (err) {
+      setMessages((prev) => [...prev, {
+        id: nid(),
+        role: 'assistant',
+        content: ['text', err?.message || 'Something went wrong. Please try again or use Contact Support.'],
+      }])
+      setActiveOptions(['Track Delivery', 'Contact Support', 'Menu'])
+    } finally {
+      setTyping(false)
+      setLoading(false)
+    }
+  }, [applyApiResponse, chatState, loading, messages, pushUser])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -184,13 +165,13 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     if (!open) {
       setMessages([])
       setInput('')
-      setAwaitTrackInput(false)
       setTyping(false)
-      setTypingLabel('Checking delivery details...')
-      setActiveOptions(MAIN_OPTIONS)
+      setTypingLabel('Thinking...')
+      setActiveOptions([])
+      setChatState({ mode: null })
       setMinimized(false)
       setAssistantExpanded(false)
-      setLoadingTrack(false)
+      setLoading(false)
     }
   }, [open])
 
@@ -200,206 +181,15 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     setOpen(false)
   }, [setOpen])
 
-  const handleTrackingLookup = useCallback(async (raw) => {
-    const code = raw.trim()
-    if (!code) {
-      pushAssistant(['text', TRACKING_ID_PROMPT])
-      setActiveOptions(QUICK_AFTER_TRACK)
-      return
-    }
-
-    setTypingLabel('Checking delivery details...')
-    setTyping(true)
-    setLoadingTrack(true)
-    await new Promise((resolve) => setTimeout(resolve, 1200))
-
-    try {
-      const res = await trackDelivery(code)
-      const statusLabel = toStatusLabel(res?.status)
-      const lastUpdated = Array.isArray(res?.timeline) && res.timeline.length > 0
-        ? res.timeline[res.timeline.length - 1]?.at
-        : null
-
-      pushAssistant([
-        'tracking',
-        {
-          code: res?.tracking_code ?? code,
-          status: statusLabel,
-          lastUpdated: lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Not yet available',
-          trackingLink: '/customer/track',
-        },
-      ])
-    } catch (err) {
-      pushAssistant(['text', err?.message || 'Unable to check this Tracking ID right now. Please try again.'])
-    } finally {
-      setTyping(false)
-      setLoadingTrack(false)
-      setAwaitTrackInput(false)
-      setActiveOptions(QUICK_AFTER_TRACK)
-    }
-  }, [pushAssistant])
-
-  const handleMainOption = useCallback(async (option) => {
-    pushUser(option)
-
-    if (option === 'Track My Delivery') {
-      setAwaitTrackInput(true)
-      pushAssistant(['text', TRACKING_ID_PROMPT])
-      setActiveOptions(QUICK_AFTER_TRACK)
-      return
-    }
-
-    if (option === 'What is a Tracking ID?') {
-      pushAssistant(['text', TRACKING_ID_FAQ])
-      setActiveOptions(QUICK_AFTER_FAQ)
-      return
-    }
-
-    if (option === 'Account Help') {
-      pushAssistant(['text', 'Choose an account topic: Login, Link Delivery, or Forgot Password.'])
-      setActiveOptions([...ACCOUNT_OPTIONS, ...QUICK_AFTER_FAQ])
-      return
-    }
-
-    if (option === 'Contact Support') {
-      pushAssistant(['text', 'You can contact support through these channels:'])
-      pushAssistant(['contact'])
-      setActiveOptions(QUICK_AFTER_FAQ)
-      return
-    }
-
-    if (option === 'FAQs') {
-      pushAssistant(['faq'])
-      pushAssistant(['status_guide'])
-      setActiveOptions(QUICK_AFTER_FAQ)
-    }
-  }, [pushAssistant, pushUser])
-
-  const handleQuickAction = useCallback((option) => {
-    pushUser(option)
-
-    if (option === 'Track Another Delivery' || option === 'Track My Delivery' || option === 'Track Delivery') {
-      setAwaitTrackInput(true)
-      pushAssistant(['text', TRACKING_ID_PROMPT])
-      setActiveOptions(QUICK_AFTER_TRACK)
-      return
-    }
-
-    if (option === 'Account Help') {
-      pushAssistant(['text', 'Choose an account topic: Login, Link Delivery, or Forgot Password.'])
-      setActiveOptions([...ACCOUNT_OPTIONS, ...QUICK_AFTER_FAQ])
-      return
-    }
-
-    if (option === 'Contact Support') {
-      pushAssistant(['contact'])
-      setActiveOptions(QUICK_AFTER_FAQ)
-      return
-    }
-
-    if (option === 'Return to Menu') {
-      pushAssistant(['text', WELCOME_MESSAGE])
-      openMainMenu()
-    }
-  }, [openMainMenu, pushAssistant, pushUser])
-
-  const handleAccountOption = useCallback((option) => {
-    pushUser(option)
-
-    if (option === 'Login') {
-      pushAssistant(['text', 'Use your registered email and password to sign in.'])
-      pushAssistant(['link', { text: 'Customer Login', href: '/customer/login' }])
-      setActiveOptions(QUICK_AFTER_FAQ)
-      return
-    }
-
-    if (option === 'Link Delivery') {
-      pushAssistant([
-        'text',
-        'Deliveries assigned to your company appear automatically after sign-in. You can also open Link Delivery and enter a Tracking ID if a shipment is not yet visible.',
-      ])
-      pushAssistant(['link', { text: 'Link Delivery', href: '/customer/link-delivery' }])
-      setActiveOptions(QUICK_AFTER_FAQ)
-      return
-    }
-
-    if (option === 'Forgot Password') {
-      pushAssistant(['text', 'Enter your account email on the forgot password page. We will send a reset link if the account exists.'])
-      pushAssistant(['link', { text: 'Forgot Password', href: '/customer/forgot-password' }])
-      setActiveOptions(QUICK_AFTER_FAQ)
-    }
-  }, [pushAssistant, pushUser])
-
   const handleOptionClick = useCallback((option) => {
-    if (MAIN_OPTIONS.includes(option)) {
-      handleMainOption(option)
-      return
-    }
-    if (QUICK_AFTER_TRACK.includes(option) || QUICK_AFTER_FAQ.includes(option)) {
-      handleQuickAction(option)
-      return
-    }
-    if (ACCOUNT_OPTIONS.includes(option)) {
-      handleAccountOption(option)
-      return
-    }
-    pushAssistant([
-      'text',
-      'I can assist with delivery tracking, Tracking IDs, account guidance, and general delivery questions. Please select one of the available options.',
-    ])
-    openMainMenu()
-  }, [handleAccountOption, handleMainOption, handleQuickAction, openMainMenu, pushAssistant])
+    dispatchMessage(option)
+  }, [dispatchMessage])
 
-  const processUserSend = useCallback(async (raw) => {
-    const text = raw.trim()
-    if (!text || loadingTrack) return
-
-    pushUser(text)
-    setInput('')
-
-    if (awaitTrackInput) {
-      await handleTrackingLookup(text)
-      return
-    }
-
-    const lower = text.toLowerCase()
-    if (lower.includes('track')) {
-      setAwaitTrackInput(true)
-      pushAssistant(['text', TRACKING_ID_PROMPT])
-      setActiveOptions(QUICK_AFTER_TRACK)
-      return
-    }
-    if (lower.includes('tracking id') || lower.includes('tracking code') || lower.includes('what is a tracking')) {
-      pushAssistant(['text', TRACKING_ID_FAQ])
-      setActiveOptions(QUICK_AFTER_FAQ)
-      return
-    }
-    if (lower.includes('link') && (lower.includes('delivery') || lower.includes('account'))) {
-      pushAssistant([
-        'text',
-        'Sign in, open Link Delivery, and enter your Tracking ID. The shipment email must match your account email.',
-      ])
-      pushAssistant(['link', { text: 'Link Delivery', href: '/customer/link-delivery' }])
-      setActiveOptions(QUICK_AFTER_FAQ)
-      return
-    }
-    if (lower.includes('support') || lower.includes('contact')) {
-      pushAssistant(['contact'])
-      setActiveOptions(QUICK_AFTER_FAQ)
-      return
-    }
-    if (lower.includes('account') || lower.includes('login') || lower.includes('password')) {
-      pushAssistant(['text', 'For account help, choose Login, Link Delivery, or Forgot Password from the options below.'])
-      setActiveOptions([...ACCOUNT_OPTIONS, ...QUICK_AFTER_FAQ])
-      return
-    }
-
-    pushAssistant([
-      'text',
-      'I can assist with delivery tracking, Tracking IDs, account guidance, and general delivery questions. Please select one of the available options.',
-    ])
-    openMainMenu()
-  }, [awaitTrackInput, handleTrackingLookup, loadingTrack, openMainMenu, pushAssistant, pushUser])
+  const inputPlaceholder = chatState?.mode === 'tracking'
+    ? 'Enter Tracking ID...'
+    : chatState?.mode === 'inquiry'
+      ? 'Type your reply...'
+      : 'Ask anything about Deliverex...'
 
   const renderAssistantBody = (kind, body) => {
     if (kind === 'text') {
@@ -415,17 +205,19 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     }
 
     if (kind === 'contact') {
+      const email = body?.email || SUPPORT_EMAIL
+      const phone = body?.phone || SUPPORT_PHONE
       return (
         <div className="dx-msg-bubble dx-msg-bubble--panel">
           <p className="dx-chat-panel-title">Contact Support</p>
           <div className="dx-contact-rows">
             <span className="dx-contact-rows__item">
               <span className="dx-contact-rows__glyph" aria-hidden="true"><IconMail /></span>
-              <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+              <a href={`mailto:${email}`}>{email}</a>
             </span>
             <span className="dx-contact-rows__item">
               <span className="dx-contact-rows__glyph" aria-hidden="true"><IconPhone /></span>
-              <a href="tel:+639955820222">{SUPPORT_PHONE}</a>
+              <a href={SUPPORT_PHONE_HREF}>{phone}</a>
             </span>
             <Link to="/customer/support" className="dx-chat-inline-link">Open Contact Form</Link>
           </div>
@@ -448,8 +240,14 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
               </div>
               <div className="dx-chat-kv">
                 <span>Last Updated</span>
-                <strong>{body.lastUpdated}</strong>
+                <strong>{body.last_updated || body.lastUpdated || 'Not yet available'}</strong>
               </div>
+              {body.eta ? (
+                <div className="dx-chat-kv">
+                  <span>ETA</span>
+                  <strong>{body.eta}</strong>
+                </div>
+              ) : null}
             </div>
             <Link
               to="/customer/track"
@@ -459,6 +257,19 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
               Open Tracking Page →
             </Link>
           </div>
+        </div>
+      )
+    }
+
+    if (kind === 'inquiry_submitted') {
+      return (
+        <div className="dx-msg-bubble dx-msg-bubble--panel">
+          <p className="dx-chat-panel-title">Concern Submitted</p>
+          <p className="dx-msg-bubble--pre">{body?.message}</p>
+          {body?.reference_no ? (
+            <p style={{ marginTop: '0.5rem', fontWeight: 600 }}>Ref: {body.reference_no}</p>
+          ) : null}
+          <Link to="/customer/support" className="dx-chat-inline-link">View Support</Link>
         </div>
       )
     }
@@ -499,8 +310,8 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
     }
 
     return (
-      <div className="dx-msg-bubble">
-        I can assist with delivery tracking, Tracking IDs, account guidance, and general delivery questions. Please select one of the available options.
+      <div className="dx-msg-bubble dx-msg-bubble--pre">
+        {typeof body === 'string' ? body : 'How can I help you today?'}
       </div>
     )
   }
@@ -558,7 +369,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
             <div className="dx-assistant-chat__avatar" aria-hidden>D</div>
             <div style={{ flex: 1 }}>
               <div id="dx-assistant-title" style={{ fontWeight: 700, fontSize: '0.9375rem' }}>Deliverex Assistant</div>
-              <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>Online</div>
+              <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>AI-powered · Online</div>
             </div>
             <div className="dx-assistant-chat__hdr-controls">
               <button
@@ -622,13 +433,14 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
                 ) : null}
                 {activeOptions?.length ? (
                   <div className="dx-chat-options-wrap">
-                    <p className="dx-chat-options-label">{optionsGroupLabel(activeOptions)}</p>
+                    <p className="dx-chat-options-label">{optionsGroupLabel(activeOptions, chatState)}</p>
                     <div className="dx-msg-quick-row">
                       {activeOptions.map((option) => (
                         <button
                           key={option}
                           type="button"
-                          className={optionButtonClass(option)}
+                          className="dx-msg-quick"
+                          disabled={loading}
                           onClick={() => handleOptionClick(option)}
                         >
                           {option}
@@ -639,16 +451,17 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
                 ) : null}
               </div>
 
-              <form className="dx-assistant-input" onSubmit={(e) => { e.preventDefault(); processUserSend(input) }}>
+              <form className="dx-assistant-input" onSubmit={(e) => { e.preventDefault(); dispatchMessage(input) }}>
                 <label htmlFor="dx-ass-input" className="visually-hidden">Message Deliverex Assistant</label>
                 <input
                   id="dx-ass-input"
                   autoComplete="off"
-                  placeholder={awaitTrackInput ? 'Enter Tracking ID...' : 'Type your message...'}
+                  placeholder={inputPlaceholder}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
+                  disabled={loading}
                 />
-                <button type="submit" className="send" disabled={loadingTrack}>Send</button>
+                <button type="submit" className="send" disabled={loading}>Send</button>
               </form>
             </>
           ) : null}
