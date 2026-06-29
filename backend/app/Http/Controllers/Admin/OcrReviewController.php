@@ -27,10 +27,12 @@ class OcrReviewController extends Controller
         return response()->json(
             $query->paginate($perPage)->through(function (OcrResult $ocr) {
                 $expectedVolume = (float) ($ocr->document?->assignment?->jobOrder?->load_volume_m3 ?? $ocr->document?->assignment?->jobOrder?->volume_m3 ?? 0);
-                $actualVolume = (float) ($ocr->extracted_volume ?? 0);
+                $actualVolume = (float) ($ocr->getEffectiveValue('volume') ?? $ocr->extracted_volume ?? 0);
                 $volumeDelta = $expectedVolume > 0 ? abs($expectedVolume - $actualVolume) / $expectedVolume : null;
-                $hasReceipt = ! empty($ocr->delivery_receipt_number);
-                $hasDims = $ocr->extracted_length !== null && $ocr->extracted_width !== null && $ocr->extracted_height !== null;
+                $hasReceipt = ! empty($ocr->getEffectiveValue('delivery_receipt_number') ?? $ocr->delivery_receipt_number);
+                $hasDims = $ocr->getEffectiveValue('length') !== null
+                    && $ocr->getEffectiveValue('width') !== null
+                    && $ocr->getEffectiveValue('height') !== null;
 
                 $matchStatus = 'partial_match';
                 if ($hasReceipt && $hasDims && ($volumeDelta === null || $volumeDelta <= 0.1)) {
@@ -43,10 +45,11 @@ class OcrReviewController extends Controller
                     'match_status' => $matchStatus,
                     'volume_delta_ratio' => $volumeDelta,
                     'expected_volume' => $expectedVolume > 0 ? $expectedVolume : null,
-                    'actual_volume' => $ocr->extracted_volume,
+                    'actual_volume' => $ocr->getEffectiveValue('volume') ?? $ocr->extracted_volume,
                     'has_delivery_receipt_number' => $hasReceipt,
                     'has_dimensions' => $hasDims,
                 ]);
+                $ocr->setAttribute('effective_values', $ocr->buildEffectiveValues());
 
                 return $ocr;
             })
@@ -109,6 +112,101 @@ class OcrReviewController extends Controller
     }
 
     /**
+     * Save admin field corrections without approving (admin only).
+     *
+     * Expected payload:
+     *   fields : { length?: number, width?: number, ... }  (partial)
+     *   reason : string (optional, applied to changed fields)
+     */
+    public function saveCorrections(Request $request, OcrResult $ocrResult)
+    {
+        if (! $this->isAdmin($request)) {
+            return response()->json([
+                'message' => 'Only Admin can edit OCR review fields.',
+            ], 403);
+        }
+
+        if ($ocrResult->is_validated) {
+            return response()->json([
+                'message' => 'Validated OCR records cannot be edited.',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'fields' => 'required|array',
+            'fields.length' => 'nullable|numeric|min:0',
+            'fields.width' => 'nullable|numeric|min:0',
+            'fields.height' => 'nullable|numeric|min:0',
+            'fields.volume' => 'nullable|numeric|min:0',
+            'fields.quantity' => 'nullable|numeric|min:0',
+            'fields.delivery_receipt_number' => 'nullable|string|max:120',
+            'fields.supplier' => 'nullable|string|max:200',
+            'fields.date' => 'nullable|string|max:120',
+            'fields.total' => 'nullable|string|max:120',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $incoming = array_intersect_key(
+            $data['fields'],
+            array_flip(OcrResult::CORRECTABLE_FIELDS)
+        );
+
+        if ($incoming === []) {
+            return response()->json([
+                'message' => 'No valid fields were provided.',
+            ], 422);
+        }
+
+        $corrections = $ocrResult->correctionsMap();
+        $userId = $request->user()?->id;
+        $reason = trim((string) ($data['reason'] ?? ''));
+        $auditChanges = [];
+
+        foreach ($incoming as $field => $value) {
+            $normalized = $this->normalizeIncomingFieldValue($field, $value);
+            $original = $ocrResult->getOriginalValue($field);
+
+            if ($this->valuesEquivalent($field, $original, $normalized)) {
+                if (isset($corrections[$field])) {
+                    unset($corrections[$field]);
+                }
+                continue;
+            }
+
+            $corrections[$field] = [
+                'original' => $original,
+                'corrected' => $normalized,
+                'corrected_by' => $userId,
+                'corrected_at' => now()->toIso8601String(),
+                'reason' => $reason !== '' ? $reason : ($corrections[$field]['reason'] ?? null),
+            ];
+
+            $auditChanges[] = [
+                'field' => $field,
+                'original' => $original,
+                'corrected' => $normalized,
+                'reason' => $corrections[$field]['reason'],
+            ];
+        }
+
+        $ocrResult->forceFill([
+            'field_corrections' => $corrections === [] ? null : $corrections,
+        ])->save();
+
+        if ($auditChanges !== []) {
+            AuditLogger::record($request->user(), 'ocr.corrections.save', OcrResult::class, $ocrResult->id, [
+                'document_id' => $ocrResult->document_id,
+                'changes' => $auditChanges,
+            ], $request);
+        }
+
+        $fresh = $ocrResult->fresh()->load('document');
+        $fresh->setAttribute('effective_values', $fresh->buildEffectiveValues());
+
+        return response()->json($fresh);
+    }
+
+    /**
      * Approve, reject, or flag an OCR result.
      * Expected payload:
      *   action          : approve | reject | flag   (required)
@@ -117,8 +215,7 @@ class OcrReviewController extends Controller
      */
     public function validateResult(Request $request, OcrResult $ocrResult)
     {
-        $role = strtolower((string) $request->user()?->role?->name);
-        if ($role !== 'admin') {
+        if (! $this->isAdmin($request)) {
             return response()->json([
                 'message' => 'Only Admin can validate or modify OCR review results.',
             ], 403);
@@ -137,17 +234,20 @@ class OcrReviewController extends Controller
             : ($data['issue_type'] ?? null);
 
         match ($data['action']) {
-            'approve' => $ocrResult->forceFill([
-                'processing_status' => 'validated',
-                'review_status'     => 'verified',
-                'is_validated'      => true,
-                'validated_by'      => $request->user()?->id,
-                'corrected_text'    => $data['corrected_text'] ?? $ocrResult->corrected_text,
-                'confidence_score'  => $data['confidence_score'] ?? $ocrResult->confidence_score,
-                'review_notes'      => $data['notes'] ?? null,
-                'reviewed_at'       => now(),
-                'error_message'     => null,
-            ])->save(),
+            'approve' => tap($ocrResult, function (OcrResult $ocr) use ($data, $request): void {
+                $ocr->applyEffectiveStructuredFieldsToRecord();
+                $ocr->forceFill([
+                    'processing_status' => 'validated',
+                    'review_status'     => 'verified',
+                    'is_validated'      => true,
+                    'validated_by'      => $request->user()?->id,
+                    'corrected_text'    => $data['corrected_text'] ?? $ocr->corrected_text,
+                    'confidence_score'  => $data['confidence_score'] ?? $ocr->confidence_score,
+                    'review_notes'      => $data['notes'] ?? null,
+                    'reviewed_at'       => now(),
+                    'error_message'     => null,
+                ])->save();
+            }),
             'reject' => $ocrResult->forceFill([
                 'processing_status' => 'failed',
                 'review_status'     => 'rejected',
@@ -176,11 +276,51 @@ class OcrReviewController extends Controller
 
         AuditLogger::record($request->user(), 'ocr.' . $data['action'], OcrResult::class, $ocrResult->id, [
             'document_id' => $ocrResult->document_id,
+            'field_corrections' => $ocrResult->field_corrections,
+            'effective_values' => $ocrResult->buildEffectiveValues(),
         ], $request);
 
         $this->notificationDispatcher->ocrValidated($ocrResult->fresh(), $data['action']);
 
-        return response()->json($ocrResult->fresh()->load('document'));
+        $response = $ocrResult->fresh()->load('document');
+        $response->setAttribute('effective_values', $response->buildEffectiveValues());
+
+        return response()->json($response);
+    }
+
+    private function isAdmin(Request $request): bool
+    {
+        return strtolower((string) $request->user()?->role?->name) === 'admin';
+    }
+
+    private function normalizeIncomingFieldValue(string $field, mixed $value): mixed
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (in_array($field, ['length', 'width', 'height', 'volume', 'quantity'], true)) {
+            return is_numeric($value) ? (float) $value : null;
+        }
+
+        return trim((string) $value);
+    }
+
+    private function valuesEquivalent(string $field, mixed $original, mixed $corrected): bool
+    {
+        if ($original === null && $corrected === null) {
+            return true;
+        }
+
+        if (in_array($field, ['length', 'width', 'height', 'volume', 'quantity'], true)) {
+            if (! is_numeric($original) || ! is_numeric($corrected)) {
+                return (string) $original === (string) $corrected;
+            }
+
+            return abs((float) $original - (float) $corrected) < 0.0001;
+        }
+
+        return (string) $original === (string) $corrected;
     }
 
     private function applyFilters($query, Request $request): void

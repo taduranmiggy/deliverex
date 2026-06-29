@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { exportOcrReport, fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, validateOcr } from '../../api/admin'
+import { exportOcrReport, fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, saveOcrCorrections, validateOcr } from '../../api/admin'
 import ExportConfirmModal from '../../components/ExportConfirmModal'
 import { EmptyState, PageHeader, PaginationBar } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import useAuth from '../../hooks/useAuth'
-import { Check, FileSearch, Flag, Info, Loader2, RefreshCw, X } from 'lucide-react'
+import { Check, FileSearch, Flag, Info, Loader2, Pencil, RefreshCw, X } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 
 const FILTER_TABS = [
@@ -69,6 +69,26 @@ function confidenceTone(score) {
   return 'low'
 }
 
+const OCR_FIELD_DEFS = [
+  { key: 'delivery_receipt_number', label: 'Delivery Receipt No', type: 'text' },
+  { key: 'supplier', label: 'Supplier', type: 'text' },
+  { key: 'date', label: 'Delivery Date', type: 'text' },
+  { key: 'length', label: 'Length (cm)', type: 'number' },
+  { key: 'width', label: 'Width (cm)', type: 'number' },
+  { key: 'height', label: 'Height (cm)', type: 'number' },
+  { key: 'volume', label: 'Volume (m³)', type: 'number' },
+  { key: 'quantity', label: 'Quantity', type: 'number' },
+  { key: 'total', label: 'Amount', type: 'text' },
+]
+
+const STRUCTURED_COLUMN_MAP = {
+  length: 'extracted_length',
+  width: 'extracted_width',
+  height: 'extracted_height',
+  volume: 'extracted_volume',
+  delivery_receipt_number: 'delivery_receipt_number',
+}
+
 function OcrReviewPage() {
   const toast = useToast()
   const { user } = useAuth()
@@ -98,6 +118,11 @@ function OcrReviewPage() {
   const [perPage, setPerPage] = useState(10)
   const [total, setTotal] = useState(0)
   const [expandedAlternatives, setExpandedAlternatives] = useState({})
+  const [editingField, setEditingField] = useState(null)
+  const [editDraft, setEditDraft] = useState('')
+  const [pendingFields, setPendingFields] = useState({})
+  const [correctionReason, setCorrectionReason] = useState('')
+  const [savingCorrections, setSavingCorrections] = useState(false)
   const loadRequestId = useRef(0)
 
   const load = useCallback(async (filter = 'all', pageNum = page) => {
@@ -151,6 +176,10 @@ function OcrReviewPage() {
       setReviewNotes(selected.review_notes ?? '')
       setIssueType('')
       setExpandedAlternatives({})
+      setEditingField(null)
+      setEditDraft('')
+      setPendingFields({})
+      setCorrectionReason('')
     }
   }, [selected])
 
@@ -291,6 +320,89 @@ function OcrReviewPage() {
   const overallConfidence = selected?.confidence_score
   const overallConfidenceLabel = formatConfidencePct(overallConfidence)
 
+  const fieldCorrections = selected?.field_corrections ?? {}
+  const effectiveValues = selected?.effective_values ?? {}
+
+  const getStructuredValue = (key) => {
+    if (!selected) return null
+    const column = STRUCTURED_COLUMN_MAP[key]
+    return column ? selected[column] : null
+  }
+
+  const getSuggestionValue = (key) => {
+    const entries = reviewSuggestions[key]
+    if (!Array.isArray(entries) || entries.length === 0) return null
+    return entries[0]?.value ?? null
+  }
+
+  const getOriginalFieldValue = (key) => {
+    if (fieldCorrections[key]?.original != null && fieldCorrections[key]?.original !== '') {
+      return fieldCorrections[key].original
+    }
+    const structured = getStructuredValue(key)
+    if (structured != null && structured !== '') return structured
+    return getSuggestionValue(key)
+  }
+
+  const getEffectiveFieldValue = (key) => {
+    if (pendingFields[key] !== undefined) return pendingFields[key]
+    if (fieldCorrections[key]?.corrected != null && fieldCorrections[key]?.corrected !== '') {
+      return fieldCorrections[key].corrected
+    }
+    if (effectiveValues[key] != null && effectiveValues[key] !== '') return effectiveValues[key]
+    const structured = getStructuredValue(key)
+    if (structured != null && structured !== '') return structured
+    return getSuggestionValue(key)
+  }
+
+  const isFieldCorrected = (key) => {
+    if (pendingFields[key] !== undefined) return true
+    if (fieldCorrections[key]?.corrected == null) return false
+    const original = getOriginalFieldValue(key)
+    const corrected = fieldCorrections[key].corrected
+    return String(original ?? '') !== String(corrected ?? '')
+  }
+
+  const startFieldEdit = (key) => {
+    const current = getEffectiveFieldValue(key)
+    setEditingField(key)
+    setEditDraft(current == null ? '' : String(current))
+  }
+
+  const cancelFieldEdit = () => {
+    setEditingField(null)
+    setEditDraft('')
+  }
+
+  const commitFieldEdit = (key) => {
+    const trimmed = editDraft.trim()
+    const normalized = trimmed === '' ? null : (OCR_FIELD_DEFS.find((f) => f.key === key)?.type === 'number' ? Number(trimmed) : trimmed)
+    setPendingFields((prev) => ({ ...prev, [key]: normalized }))
+    setEditingField(null)
+    setEditDraft('')
+  }
+
+  const handleSaveCorrections = async () => {
+    if (!selected || Object.keys(pendingFields).length === 0) return
+    setSavingCorrections(true)
+    setError('')
+    try {
+      const updated = await saveOcrCorrections(selected.id, {
+        fields: pendingFields,
+        reason: correctionReason.trim() || undefined,
+      })
+      setSelected(updated)
+      setQueue((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)))
+      setPendingFields({})
+      setCorrectionReason('')
+      toast('OCR field corrections saved.', 'success')
+    } catch (err) {
+      toast(err.message || 'Could not save corrections.', 'error')
+    } finally {
+      setSavingCorrections(false)
+    }
+  }
+
   const appendSuggestionToCorrection = (label, value) => {
     const line = `${label}: ${value}`
     setCorrected((prev) => {
@@ -301,13 +413,7 @@ function OcrReviewPage() {
     })
   }
 
-  const ocrRows = selected ? [
-    { key: 'length', label: 'Length (cm)', value: selected.extracted_length },
-    { key: 'width', label: 'Width (cm)', value: selected.extracted_width },
-    { key: 'height', label: 'Height (cm)', value: selected.extracted_height },
-    { key: 'volume', label: 'Volume (m³)', value: selected.extracted_volume },
-    { key: 'delivery_receipt_number', label: 'Delivery Receipt No', value: selected.delivery_receipt_number },
-  ] : []
+  const hasPendingCorrections = Object.keys(pendingFields).length > 0
 
   return (
     <>
@@ -484,43 +590,95 @@ function OcrReviewPage() {
                       </span>
                     )}
                   </div>
-                  <div style={{ display: 'grid', gap: 6, fontSize: '0.85rem' }}>
-                    {ocrRows.map((row) => {
-                      const missing = row.value == null || row.value === ''
-                      const fieldScore = fieldScores[row.key]
+                  <div style={{ display: 'grid', gap: 8, fontSize: '0.85rem' }}>
+                    {OCR_FIELD_DEFS.map((field) => {
+                      const value = getEffectiveFieldValue(field.key)
+                      const original = getOriginalFieldValue(field.key)
+                      const missing = value == null || value === ''
+                      const fieldScore = fieldScores[field.key]
                       const tone = confidenceTone(fieldScore)
                       const mediumConfidence = tone === 'medium' && !missing
-                      const noHit = structuredHits[row.key] === false
-                      const showNoMatch = missing || noHit
-                      const suggestions = Array.isArray(reviewSuggestions[row.key]) ? reviewSuggestions[row.key] : []
-                      const showSuggestions = suggestions.length > 0 && (tone !== 'high' || expandedAlternatives[row.key])
+                      const noHit = structuredHits[field.key] === false
+                      const showNoMatch = missing && (STRUCTURED_COLUMN_MAP[field.key] ? noHit : !getSuggestionValue(field.key))
+                      const suggestions = Array.isArray(reviewSuggestions[field.key]) ? reviewSuggestions[field.key] : []
+                      const showSuggestions = suggestions.length > 0 && (tone !== 'high' || expandedAlternatives[field.key])
                       const fieldPct = formatConfidencePct(fieldScore)
+                      const corrected = isFieldCorrected(field.key)
+                      const isEditing = editingField === field.key
+                      const canEdit = isAdmin && !selected.is_validated && selected.review_status !== 'verified'
+
                       return (
-                        <div key={row.key}>
-                          <div>
-                            <strong>{row.label}:</strong> {missing ? '—' : row.value}
-                            {fieldPct && !missing && (
-                              <span style={{
-                                marginLeft: 8,
-                                fontSize: '0.72rem',
-                                color: tone === 'high' ? 'var(--success)' : tone === 'medium' ? 'var(--warning, #b45309)' : 'var(--danger)',
-                              }}>
-                                {fieldPct}
-                                {mediumConfidence && ' · review suggested'}
-                              </span>
-                            )}
-                            {showNoMatch && (
-                              <span style={{ marginLeft: 8, color: 'var(--muted)', fontSize: '0.75rem' }}>
-                                No confident match found.
-                              </span>
+                        <div key={field.key} style={{ paddingBottom: 6, borderBottom: '1px solid var(--stroke)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                            <div style={{ flex: 1 }}>
+                              <strong>{field.label}:</strong>
+                              {isEditing ? (
+                                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                                  <input
+                                    type={field.type === 'number' ? 'number' : 'text'}
+                                    value={editDraft}
+                                    onChange={(e) => setEditDraft(e.target.value)}
+                                    style={{ minWidth: 120, flex: '1 1 120px' }}
+                                    autoFocus
+                                  />
+                                  <button type="button" className="btn-dx-secondary btn-sm" onClick={() => commitFieldEdit(field.key)} title="Save field">
+                                    <Check size={14} />
+                                  </button>
+                                  <button type="button" className="btn-dx-secondary btn-sm" onClick={cancelFieldEdit} title="Cancel">
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <span style={{ marginLeft: 6 }}>
+                                  {missing ? '—' : formatSuggestionValue(value)}
+                                </span>
+                              )}
+                              {corrected && !isEditing && (
+                                <span className="badge-dx badge-dx--reviewing" style={{ marginLeft: 8, fontSize: '0.68rem' }}>
+                                  Corrected
+                                </span>
+                              )}
+                              {fieldPct && !missing && (
+                                <span style={{
+                                  marginLeft: 8,
+                                  fontSize: '0.72rem',
+                                  color: tone === 'high' ? 'var(--success)' : tone === 'medium' ? 'var(--warning, #b45309)' : 'var(--danger)',
+                                }}>
+                                  {fieldPct}
+                                  {mediumConfidence && ' · review suggested'}
+                                </span>
+                              )}
+                              {showNoMatch && (
+                                <span style={{ marginLeft: 8, color: 'var(--muted)', fontSize: '0.75rem' }}>
+                                  No confident match found.
+                                </span>
+                              )}
+                            </div>
+                            {canEdit && !isEditing && (
+                              <button
+                                type="button"
+                                className="btn-dx-secondary btn-sm"
+                                onClick={() => startFieldEdit(field.key)}
+                                title={`Edit ${field.label}`}
+                                style={{ padding: '4px 8px', flexShrink: 0 }}
+                              >
+                                <Pencil size={14} />
+                              </button>
                             )}
                           </div>
-                          {suggestions.length > 0 && tone === 'high' && !expandedAlternatives[row.key] && (
+                          {corrected && original != null && String(original) !== String(value) && (
+                            <div style={{ marginTop: 4, fontSize: '0.72rem', color: 'var(--muted)' }}>
+                              Original OCR: <span style={{ textDecoration: 'line-through' }}>{formatSuggestionValue(original)}</span>
+                              {' → '}
+                              <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{formatSuggestionValue(value)}</span>
+                            </div>
+                          )}
+                          {suggestions.length > 0 && tone === 'high' && !expandedAlternatives[field.key] && (
                             <button
                               type="button"
                               className="btn-dx-secondary btn-sm"
                               style={{ marginTop: 4, padding: '2px 8px', fontSize: '0.72rem' }}
-                              onClick={() => setExpandedAlternatives((prev) => ({ ...prev, [row.key]: true }))}
+                              onClick={() => setExpandedAlternatives((prev) => ({ ...prev, [field.key]: true }))}
                             >
                               Show alternatives
                             </button>
@@ -532,12 +690,18 @@ function OcrReviewPage() {
                                 const shownValue = formatSuggestionValue(entry.value)
                                 return (
                                   <button
-                                    key={`${row.key}-${idx}-${shownValue}`}
+                                    key={`${field.key}-${idx}-${shownValue}`}
                                     type="button"
                                     className="btn-dx-secondary btn-sm"
                                     disabled={isReadOnly || !shownValue}
                                     title={isReadOnly ? shownValue : `Use ${shownValue}`}
-                                    onClick={() => appendSuggestionToCorrection(row.label, shownValue)}
+                                    onClick={() => {
+                                      if (isAdmin && !selected.is_validated) {
+                                        setPendingFields((prev) => ({ ...prev, [field.key]: entry.value }))
+                                      } else {
+                                        appendSuggestionToCorrection(field.label, shownValue)
+                                      }
+                                    }}
                                     style={{ padding: '2px 8px', fontSize: '0.72rem' }}
                                   >
                                     {shownValue}
@@ -550,6 +714,30 @@ function OcrReviewPage() {
                       )
                     })}
                   </div>
+                  {isAdmin && hasPendingCorrections && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--stroke)', display: 'grid', gap: 8 }}>
+                      <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+                        Correction reason (optional)
+                        <input
+                          type="text"
+                          value={correctionReason}
+                          onChange={(e) => setCorrectionReason(e.target.value)}
+                          placeholder="e.g. Handwriting misread"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn-dx-primary btn-sm"
+                        disabled={savingCorrections}
+                        onClick={handleSaveCorrections}
+                        style={{ justifySelf: 'start' }}
+                      >
+                        {savingCorrections
+                          ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving…</>
+                          : 'Save Changes'}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div style={{ border: '1px solid var(--stroke)', borderRadius: 10, padding: 12 }}>
                   <p style={{ margin: '0 0 8px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>System Data</p>

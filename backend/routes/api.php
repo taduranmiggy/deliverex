@@ -135,6 +135,7 @@ Route::middleware('auth.api')->group(function () {
 
         Route::get('/ocr/review',                       [OcrReviewController::class, 'index']);
         Route::get('/ocr/review/export',                [OcrReviewController::class, 'export']);
+        Route::put('/ocr/{ocrResult}/corrections',     [OcrReviewController::class, 'saveCorrections']);
         Route::put('/ocr/{ocrResult}/validate',         [OcrReviewController::class, 'validateResult']);
     });
 
@@ -224,7 +225,8 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/review', [OcrReviewController::class, 'index']);
     });
 
-    Route::middleware('role:admin|dispatcher')->prefix('ocr')->group(function () {
+    Route::middleware('role:admin')->prefix('ocr')->group(function () {
+        Route::put('/{ocrResult}/corrections', [OcrReviewController::class, 'saveCorrections']);
         Route::put('/{ocrResult}/validate', [OcrReviewController::class, 'validateResult']);
     });
 

@@ -119,6 +119,9 @@ export function generateAllDriverAccounts() {
 export function validateOcr(id, payload)   {
   return apiRequest(`/ocr/${id}/validate`, { method: 'PUT', body: JSON.stringify(payload) })
 }
+export function saveOcrCorrections(id, payload) {
+  return apiRequest(`/ocr/${id}/corrections`, { method: 'PUT', body: JSON.stringify(payload) })
+}
 export function reprocessOcr(documentId)  {
   return apiRequest(`/ocr/process/${documentId}`, { method: 'POST' })
 }
