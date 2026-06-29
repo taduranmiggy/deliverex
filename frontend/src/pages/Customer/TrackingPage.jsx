@@ -359,6 +359,16 @@ function TrackingPage() {
                               {p.ocr_ready ? 'Verified' : 'Processing'}
                             </span>
                           )}
+                          {p.url && (
+                            <a
+                              href={p.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.8125rem', color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none' }}
+                            >
+                              View <ExternalLink size={11} />
+                            </a>
+                          )}
                         </li>
                       ))}
                     </ul>

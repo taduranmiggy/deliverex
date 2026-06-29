@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DeliveryDelayReport;
 use App\Models\DispatchAssignment;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Support\ActionTimestamp;
 use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
@@ -21,9 +22,11 @@ class DelayController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'assignment_id' => 'required|exists:dispatch_assignments,id',
-            'delay_reason'  => ['required', Rule::in(array_keys(DeliveryDelayReport::REASONS))],
-            'delay_notes'   => 'nullable|string|max:2000|required_if:delay_reason,other',
+            'assignment_id'    => 'required|exists:dispatch_assignments,id',
+            'delay_reason'     => ['required', Rule::in(array_keys(DeliveryDelayReport::REASONS))],
+            'delay_notes'      => 'nullable|string|max:2000|required_if:delay_reason,other',
+            'action_timestamp' => 'nullable|date',
+            'action_taken_at'  => 'nullable|date',
         ], [
             'delay_notes.required_if' => 'Please provide notes when selecting Other as the delay reason.',
         ]);
@@ -40,7 +43,9 @@ class DelayController extends Controller
             return response()->json(['message' => 'Cannot report delay on a completed or cancelled assignment.'], 422);
         }
 
-        $report = DeliveryDelayReport::create([
+        $actionAt = ActionTimestamp::resolveFromRequest($request);
+
+        $report = new DeliveryDelayReport([
             'job_order_id'  => $assignment->job_order_id,
             'assignment_id' => $assignment->id,
             'driver_id'     => $driver->id,
@@ -48,6 +53,9 @@ class DelayController extends Controller
             'delay_reason'  => $data['delay_reason'],
             'delay_notes'   => $data['delay_notes'] ?? null,
         ]);
+        $report->created_at = $actionAt;
+        $report->updated_at = $actionAt;
+        $report->save();
 
         $this->notificationDispatcher->delayReported($report);
 

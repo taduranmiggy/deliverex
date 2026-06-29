@@ -12,9 +12,11 @@ use App\Models\TrackingLog;
 use App\Models\Vehicle;
 use App\Services\Delivery\ArrivalVerificationService;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Support\ActionTimestamp;
 use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -30,12 +32,16 @@ class StatusController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'assignment_id' => 'required|exists:dispatch_assignments,id',
-            'status'        => 'required|string|max:80',
-            'notes'         => 'nullable|string',
-            'latitude'      => 'nullable|numeric',
-            'longitude'     => 'nullable|numeric',
+            'assignment_id'     => 'required|exists:dispatch_assignments,id',
+            'status'            => 'required|string|max:80',
+            'notes'             => 'nullable|string',
+            'latitude'          => 'nullable|numeric',
+            'longitude'         => 'nullable|numeric',
+            'action_timestamp'  => 'nullable|date',
+            'action_taken_at'   => 'nullable|date',
         ]);
+
+        $actionAt = ActionTimestamp::resolveFromRequest($request);
 
         $assignment = DispatchAssignment::findOrFail($data['assignment_id']);
         $driver     = DriverAccount::require($request->user());
@@ -107,7 +113,7 @@ class StatusController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($assignment, $status, $data, $latitude, $longitude, $arrivalVerified, $request) {
+        DB::transaction(function () use ($assignment, $status, $data, $latitude, $longitude, $arrivalVerified, $request, $actionAt) {
             DeliveryStatusLog::create([
                 'assignment_id'    => $assignment->id,
                 'status'           => $status,
@@ -115,7 +121,7 @@ class StatusController extends Controller
                 'latitude'         => $latitude,
                 'longitude'        => $longitude,
                 'arrival_verified' => $arrivalVerified,
-                'created_at'       => now(),
+                'created_at'       => $actionAt,
             ]);
 
             $this->logStatusHistory(
@@ -125,6 +131,7 @@ class StatusController extends Controller
                 latitude: $latitude,
                 longitude: $longitude,
                 remarks: $data['notes'] ?? null,
+                actionAt: $actionAt,
             );
 
             $assignment->update(['status' => $status]);
@@ -138,12 +145,12 @@ class StatusController extends Controller
                 'assignment_id' => $assignment->id,
                 'latitude'      => $latitude,
                 'longitude'     => $longitude,
-                'captured_at'   => now(),
+                'captured_at'   => $actionAt,
             ]);
         }
 
         if ($status === DeliveryStatus::EN_ROUTE_TO_PICKUP) {
-            $assignment->update(['started_at' => now()]);
+            $assignment->update(['started_at' => $actionAt]);
             $assignment->jobOrder?->update(['status' => DeliveryStatus::toJobOrderStatus($status)]);
             $driver = Driver::find($assignment->driver_id);
             $vehicle = Vehicle::find($assignment->vehicle_id);
@@ -165,7 +172,7 @@ class StatusController extends Controller
 
         if (in_array($status, [DeliveryStatus::COMPLETED, DeliveryStatus::CANCELLED], true)) {
             if ($status === DeliveryStatus::COMPLETED) {
-                $assignment->update(['completed_at' => now()]);
+                $assignment->update(['completed_at' => $actionAt]);
             }
             $driver  = Driver::find($assignment->driver_id);
             $vehicle = Vehicle::find($assignment->vehicle_id);
@@ -256,18 +263,21 @@ class StatusController extends Controller
         ?float $latitude = null,
         ?float $longitude = null,
         ?string $remarks = null,
+        ?Carbon $actionAt = null,
     ): void {
+        $actionAt ??= now();
+
         try {
             DeliveryStatusHistory::create([
                 'job_order_id' => $assignment->job_order_id,
                 'assignment_id' => $assignment->id,
                 'status' => $status,
                 'updated_by' => $updatedBy,
-                'updated_at' => now(),
+                'updated_at' => $actionAt,
                 'latitude' => $latitude,
                 'longitude' => $longitude,
                 'remarks' => $remarks,
-                'created_at' => now(),
+                'created_at' => $actionAt,
             ]);
         } catch (\Throwable $e) {
             // Status history is supplementary; never block a driver's status update.

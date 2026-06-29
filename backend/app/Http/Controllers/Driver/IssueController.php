@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DeliveryIssueReport;
 use App\Models\DispatchAssignment;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Support\ActionTimestamp;
 use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
@@ -22,10 +23,12 @@ class IssueController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'assignment_id' => 'required|exists:dispatch_assignments,id',
-            'issue_type'    => ['required', Rule::in(array_keys(DeliveryIssueReport::TYPES))],
-            'notes'         => 'nullable|string|max:2000',
-            'photo'         => [
+            'assignment_id'    => 'required|exists:dispatch_assignments,id',
+            'issue_type'       => ['required', Rule::in(array_keys(DeliveryIssueReport::TYPES))],
+            'notes'            => 'nullable|string|max:2000',
+            'action_timestamp' => 'nullable|date',
+            'action_taken_at'  => 'nullable|date',
+            'photo'            => [
                 'nullable',
                 File::types(['jpg', 'jpeg', 'png'])->max(10240),
             ],
@@ -43,12 +46,14 @@ class IssueController extends Controller
             return response()->json(['message' => 'Cannot report issues on a completed or cancelled assignment.'], 422);
         }
 
+        $actionAt = ActionTimestamp::resolveFromRequest($request);
+
         $photoPath = null;
         if ($request->hasFile('photo')) {
             $photoPath = $request->file('photo')->store('issue_photos', 'public');
         }
 
-        $report = DeliveryIssueReport::create([
+        $report = new DeliveryIssueReport([
             'assignment_id' => $assignment->id,
             'driver_id'     => $driver->id,
             'reported_by'   => $request->user()->id,
@@ -56,6 +61,9 @@ class IssueController extends Controller
             'notes'         => $data['notes'] ?? null,
             'photo_path'    => $photoPath,
         ]);
+        $report->created_at = $actionAt;
+        $report->updated_at = $actionAt;
+        $report->save();
 
         $this->notificationDispatcher->issueReported($report);
 

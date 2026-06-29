@@ -29,11 +29,13 @@ class StoreDeliveryDocumentRequest extends FormRequest
             'assignment_id' => 'required|exists:dispatch_assignments,id',
             'type'          => 'nullable|in:pod,receipt,gate_pass,weighbridge,signed_doc,invoice,job_order,departure,other',
             'notes'         => 'nullable|string|max:2000',
-            'file'          => [
+            'file'             => [
                 'required',
                 File::types(['jpg', 'jpeg', 'png'])
                     ->max(10240),
             ],
+            'action_timestamp' => 'nullable|date',
+            'action_taken_at'  => 'nullable|date',
         ];
     }
 

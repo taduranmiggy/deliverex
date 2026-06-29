@@ -5274,3 +5274,84 @@
 }
 .dx-fade-in { animation: dxFadeIn 0.24s ease-out both; }
 .dx-pop-in  { animation: dxPopIn 0.18s ease-out both; }
+
+/* ── Philippine phone input (+63 fixed prefix) ───────────────────────── */
+.dx-phone-ph {
+  display: flex;
+  align-items: stretch;
+  border: 1.5px solid var(--stroke);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+  min-height: 42px;
+}
+.dx-phone-ph__prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--slate-700);
+  background: var(--slate-50);
+  border-right: 1px solid var(--stroke);
+  flex-shrink: 0;
+  user-select: none;
+}
+.dx-phone-ph__sep {
+  display: none;
+}
+.dx-phone-ph__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 0.875rem;
+}
+.dx-phone-ph__input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+.dx-phone-ph:has(.dx-phone-ph__input--error),
+.dx-phone-ph:has(.dx-phone-ph__input--error):focus-within {
+  border-color: var(--color-error);
+}
+.dx-phone-ph__input--error:focus {
+  box-shadow: inset 0 0 0 2px rgba(220, 38, 38, 0.12);
+}
+
+/* ── Structured user name fields ─────────────────────────────────────── */
+.dx-name-fields {
+  display: grid;
+  grid-template-columns: 1fr minmax(72px, 0.45fr) 1fr;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+.dx-name-fields__field {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--slate-700);
+}
+.dx-name-fields__field input {
+  font-weight: 400;
+}
+.dx-name-fields__field--mi input {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dx-required {
+  color: var(--color-error);
+}
+@media (max-width: 560px) {
+  .dx-name-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dx-name-fields__field--mi {
+    grid-column: 1 / -1;
+    max-width: 120px;
+  }
+}

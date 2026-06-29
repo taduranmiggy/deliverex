@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createUser, deleteUser, fetchRoles, fetchUsers, updateUser } from '../../api/admin'
+import PhonePhInput from '../../components/PhonePhInput'
+import UserNameFields from '../../components/UserNameFields'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
+import { composeFullName, splitFullName, validateNameParts } from '../../utils/nameParts'
+import { generateInitialPassword, validateGeneratedPassword } from '../../utils/generateInitialPassword'
+import { parsePhoneForInput, validatePhPhone } from '../../utils/phonePh'
 import { Plus, Users } from 'lucide-react'
-
-const BLANK = { name: '', email: '', password: '', phone: '', role_id: '', status: 'active' }
 
 const INTERNAL_ROLE_NAMES = ['admin', 'dispatcher', 'manager', 'driver']
 
-// Role tabs config — values match role.name (lowercase) from the backend
 const ROLE_TABS = [
   { value: 'all',        label: 'All' },
   { value: 'admin',      label: 'Admin' },
@@ -23,7 +25,6 @@ const STATUS_OPTS = [
   { value: 'inactive', label: 'Inactive' },
 ]
 
-// Role badge colour map
 const ROLE_COLORS = {
   admin:      { bg: '#fef3c7', color: '#92400e' },
   dispatcher: { bg: '#dbeafe', color: '#1d4ed8' },
@@ -32,72 +33,223 @@ const ROLE_COLORS = {
   customer:   { bg: '#fee2e2', color: '#b91c1c' },
 }
 
-function UserModal({ user, roles, onClose, onSaved }) {
+function buildEditForm(user) {
+  const parts = splitFullName(user?.name)
+  return {
+    ...parts,
+    email: user?.email ?? '',
+    phone: user?.phone ?? '',
+    password: '',
+    role_id: user?.role_id ?? user?.role?.id ?? '',
+    status: user?.status ?? 'active',
+  }
+}
+
+function buildCreateForm() {
+  return {
+    first_name: '',
+    middle_initial: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    role_id: '',
+  }
+}
+
+function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
   const isEdit = Boolean(user?.id)
   const assignableRoles = roles.filter((r) => INTERNAL_ROLE_NAMES.includes(r.name?.toLowerCase()))
-  const [form, setForm] = useState(isEdit
-    ? { ...user, password: '', role_id: user.role_id ?? user.role?.id ?? '' }
-    : BLANK)
+  const [form, setForm] = useState(isEdit ? buildEditForm(user) : buildCreateForm())
+  const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  const passwordTouchedRef = useRef(false)
+
+  useEffect(() => {
+    document.body.classList.add('dx-nav-locked')
+    const onKey = (e) => { if (e.key === 'Escape' && !saving) onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.classList.remove('dx-nav-locked')
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [onClose, saving])
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
-  const handlePasswordChange = (e) => {
-    passwordTouchedRef.current = true
-    set('password')(e)
-  }
+  const validate = useCallback(() => {
+    const errors = {
+      ...validateNameParts(form),
+    }
 
-  const handleRoleChange = (e) => {
-    setForm((f) => ({ ...f, role_id: e.target.value }))
-  }
+    const email = String(form.email ?? '').trim()
+    if (!email) errors.email = 'Email is required.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Enter a valid email address.'
+
+    const phoneErr = validatePhPhone(form.phone, { required: !isEdit })
+    if (phoneErr) errors.phone = phoneErr
+
+    if (!form.role_id) errors.role_id = 'Role is required.'
+
+    if (!isEdit) {
+      const pwd = generateInitialPassword(form.last_name, parsePhoneForInput(form.phone))
+      const pwdErr = validateGeneratedPassword(pwd)
+      if (pwdErr) errors._password = pwdErr
+    } else if (form.password && form.password.length < 8) {
+      errors.password = 'Password must be at least 8 characters.'
+    }
+
+    const phoneDigits = parsePhoneForInput(form.phone)
+    if (phoneDigits && existingUsers?.length) {
+      const duplicate = existingUsers.find((u) => {
+        if (isEdit && u.id === user.id) return false
+        return parsePhoneForInput(u.phone) === phoneDigits
+      })
+      if (duplicate) errors.phone = 'This phone number is already assigned to another user.'
+    }
+
+    return errors
+  }, [form, isEdit, existingUsers, user?.id])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const errors = validate()
+    setFieldErrors(errors)
+    if (Object.keys(errors).length > 0) return
+
     setSaving(true)
     setError('')
-    const payload = { ...form }
-    if (!payload.password) delete payload.password
+
+    const payload = {
+      name: composeFullName(form),
+      email: String(form.email).trim(),
+      phone: form.phone || null,
+      role_id: form.role_id,
+    }
+
+    if (isEdit) {
+      payload.status = form.status
+      if (form.password) payload.password = form.password
+    } else {
+      payload.password = generateInitialPassword(form.last_name, parsePhoneForInput(form.phone))
+    }
+
     try {
       onSaved(isEdit ? await updateUser(user.id, payload) : await createUser(payload), isEdit)
-    } catch (err) { setError(err.message) }
-    finally { setSaving(false) }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
+  const nameValues = useMemo(() => ({
+    first_name: form.first_name,
+    middle_initial: form.middle_initial,
+    last_name: form.last_name,
+  }), [form.first_name, form.middle_initial, form.last_name])
+
   return (
-    <div className="dx-modal-backdrop" onClick={onClose}>
-      <div className="dx-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal>
+    <div className="dx-modal-backdrop" onClick={() => !saving && onClose()}>
+      <div className="dx-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal aria-labelledby="user-modal-title">
         <div className="dx-modal-header">
-          <h2>{isEdit ? 'Edit User' : 'Add User'}</h2>
-          <button type="button" className="dx-modal-close" onClick={onClose}>×</button>
+          <h2 id="user-modal-title">{isEdit ? 'Edit User' : 'Add User'}</h2>
+          <button type="button" className="dx-modal-close" onClick={onClose} disabled={saving} aria-label="Close">×</button>
         </div>
-        <form className="form-grid" style={{ padding: '20px 28px 28px', gridTemplateColumns: '1fr 1fr' }} onSubmit={handleSubmit}>
-          <label style={{ gridColumn: '1/-1' }}>Full name <input required value={form.name} onChange={set('name')} placeholder="Maria Santos" /></label>
-          <label style={{ gridColumn: '1/-1' }}>Email <input required type="email" value={form.email} onChange={set('email')} /></label>
-          <label style={{ gridColumn: '1/-1' }}>{isEdit ? 'New password (blank = keep)' : 'Password'}
-            <input type="password" minLength={isEdit ? 0 : 8} required={!isEdit} value={form.password} onChange={handlePasswordChange} placeholder="Min 8 characters" />
+        <form className="form-grid" style={{ padding: '20px 28px 28px', gridTemplateColumns: '1fr 1fr' }} onSubmit={handleSubmit} noValidate>
+          <UserNameFields
+            values={nameValues}
+            onChange={(next) => setForm((f) => ({ ...f, ...next }))}
+            errors={fieldErrors}
+            disabled={saving}
+            idPrefix="admin-user"
+          />
+
+          <label style={{ gridColumn: '1/-1' }}>
+            Email <span className="dx-required">*</span>
+            <input
+              required
+              type="email"
+              value={form.email}
+              onChange={set('email')}
+              disabled={saving}
+              aria-invalid={fieldErrors.email ? 'true' : undefined}
+            />
+            {fieldErrors.email && <span className="form-error">{fieldErrors.email}</span>}
           </label>
-          <p style={{ gridColumn: '1/-1', margin: '-8px 0 0', fontSize: '0.8125rem', color: 'var(--muted)' }}>
+
+          <label style={{ gridColumn: '1/-1' }}>
+            Phone {!isEdit && <span className="dx-required">*</span>}
+            <PhonePhInput
+              value={form.phone}
+              onChange={(phone) => setForm((f) => ({ ...f, phone }))}
+              required={!isEdit}
+              disabled={saving}
+              error={fieldErrors.phone}
+            />
+            {fieldErrors.phone && <span className="form-error">{fieldErrors.phone}</span>}
+          </label>
+
+          {isEdit && (
+            <label style={{ gridColumn: '1/-1' }}>
+              New password
+              <input
+                type="password"
+                minLength={8}
+                value={form.password}
+                onChange={set('password')}
+                placeholder="Leave blank to keep current password"
+                disabled={saving}
+                aria-invalid={fieldErrors.password ? 'true' : undefined}
+              />
+              {fieldErrors.password && <span className="form-error">{fieldErrors.password}</span>}
+            </label>
+          )}
+
+          {!isEdit && (
+            <p style={{ gridColumn: '1/-1', margin: 0, fontSize: '0.8125rem', color: 'var(--muted)', lineHeight: 1.5 }}>
+              Initial password is generated automatically as <strong>LastName_last4</strong> of the phone number (e.g. Cruz_4567). New accounts default to <strong>Active</strong>.
+            </p>
+          )}
+
+          <p style={{ gridColumn: '1/-1', margin: 0, fontSize: '0.8125rem', color: 'var(--muted)' }}>
             B2B customer accounts are created in <strong>Company Management</strong>. Fleet drivers from Master Data can also use <strong>Generate Account</strong> for auto-linked logins.
           </p>
-          <label>Phone <input value={form.phone ?? ''} onChange={set('phone')} placeholder="+63 9XX" /></label>
-          <label>Role
-            <select required value={form.role_id} onChange={handleRoleChange}>
+
+          <label>
+            Role <span className="dx-required">*</span>
+            <select
+              required
+              value={form.role_id}
+              onChange={set('role_id')}
+              disabled={saving}
+              aria-invalid={fieldErrors.role_id ? 'true' : undefined}
+            >
               <option value="">— Select —</option>
               {assignableRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
+            {fieldErrors.role_id && <span className="form-error">{fieldErrors.role_id}</span>}
           </label>
-          <label>Status
-            <select value={form.status} onChange={set('status')}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </label>
+
+          {isEdit && (
+            <label>
+              Status
+              <select value={form.status} onChange={set('status')} disabled={saving}>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </label>
+          )}
+
+          {fieldErrors._password && (
+            <p className="notice error" style={{ margin: 0, gridColumn: '1/-1' }}>{fieldErrors._password}</p>
+          )}
           {error && <p className="notice error" style={{ margin: 0, gridColumn: '1/-1' }}>{error}</p>}
-          <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10 }}>
-            <button type="submit" className="btn-dx-primary" disabled={saving}>{saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create user'}</button>
-            <button type="button" className="btn-dx-secondary" onClick={onClose}>Cancel</button>
+
+          <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button type="submit" className="btn-dx-primary" disabled={saving}>
+              {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create user'}
+            </button>
+            <button type="button" className="btn-dx-secondary" onClick={onClose} disabled={saving}>Cancel</button>
           </div>
         </form>
       </div>
@@ -112,15 +264,12 @@ function UserManagementPage() {
   const [msg, setMsg]           = useState('')
   const [modal, setModal]       = useState(null)
   const [loading, setLoading]   = useState(false)
-  // Filters
   const [search, setSearch]     = useState('')
   const [roleTab, setRoleTab]   = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
-  // Pagination
   const [page, setPage]         = useState(1)
   const [perPage, setPerPage]   = useState(15)
 
-  // Load all users once (high per_page) so counts + filters work client-side
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
@@ -133,8 +282,6 @@ function UserManagementPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
-
-  // Reset to page 1 when any filter changes
   useEffect(() => { setPage(1) }, [search, roleTab, statusFilter, perPage])
 
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3500) }
@@ -159,7 +306,6 @@ function UserManagementPage() {
     catch (err) { setError(err.message) }
   }
 
-  // Role counts from the full unfiltered list (for tab badges)
   const roleCounts = useMemo(() => {
     const counts = {}
     users.forEach((u) => {
@@ -169,7 +315,6 @@ function UserManagementPage() {
     return counts
   }, [users])
 
-  // Apply all filters
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return users.filter((u) => {
@@ -181,7 +326,6 @@ function UserManagementPage() {
     })
   }, [users, roleTab, statusFilter, search])
 
-  // Paginate
   const pagedUsers = useMemo(
     () => filtered.slice((page - 1) * perPage, page * perPage),
     [filtered, page, perPage],
@@ -203,7 +347,6 @@ function UserManagementPage() {
       {msg   && <p className="notice">{msg}</p>}
 
       <div className="dx-panel">
-        {/* ── Role tabs ── */}
         <div className="dx-filter-tabs" style={{ marginBottom: 14 }}>
           {ROLE_TABS.map(({ value, label }) => {
             const count = value === 'all' ? users.length : (roleCounts[value] ?? 0)
@@ -223,7 +366,6 @@ function UserManagementPage() {
           })}
         </div>
 
-        {/* ── Search + status filter bar ── */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <SearchInput
             value={search}
@@ -259,7 +401,6 @@ function UserManagementPage() {
           </span>
         </div>
 
-        {/* ── Table ── */}
         <DataTable
           headers={['Name', 'Email', 'Role', 'Status', 'Actions']}
           loading={loading}
@@ -330,6 +471,7 @@ function UserManagementPage() {
         <UserModal
           user={modal.user}
           roles={roles}
+          existingUsers={users}
           onClose={() => setModal(null)}
           onSaved={handleSaved}
         />

@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Models\JobOrder;
+use App\Support\CustomerProofDocuments;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class PortalController extends Controller
 {
@@ -30,6 +30,7 @@ class PortalController extends Controller
                 },
                 'assignments.deliveryStatusLogs' => fn ($q) => $q->latest('created_at'),
                 'assignments.deliveryDocuments.ocrResult',
+                'assignments.completionProof.deliveryDocument.ocrResult',
             ])
             ->orderByDesc('updated_at')
             ->get();
@@ -42,19 +43,9 @@ class PortalController extends Controller
             $status = $latestStatus?->status ?? $job->status;
             $statusAt = $latestStatus?->created_at?->toIso8601String();
 
-            $documents = [];
-            $isCompleted = strtolower((string) $status) === 'completed';
-            if ($assignment && $isCompleted) {
-                foreach ($assignment->deliveryDocuments->where('type', 'pod') as $doc) {
-                    $documents[] = [
-                        'id' => $doc->id,
-                        'type' => $doc->type,
-                        'url' => Storage::disk('public')->url($doc->file_path),
-                        'uploaded_at' => $doc->created_at?->toIso8601String(),
-                        'ocr_status' => $doc->ocrResult?->processing_status,
-                    ];
-                }
-            }
+            $documents = $assignment
+                ? CustomerProofDocuments::forAssignment($assignment, (string) $status)
+                : [];
 
             return [
                 'id' => $job->id,

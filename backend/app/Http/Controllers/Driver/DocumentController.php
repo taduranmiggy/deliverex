@@ -9,6 +9,7 @@ use App\Models\DeliveryDocument;
 use App\Models\DispatchAssignment;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Ocr\OcrService;
+use App\Support\ActionTimestamp;
 use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
@@ -73,19 +74,24 @@ class DocumentController extends Controller
             return response()->json(['message' => 'Failed to store uploaded file. Check storage permissions.'], 500);
         }
 
-        $document = DeliveryDocument::create([
+        $actionAt = ActionTimestamp::resolveFromRequest($request);
+
+        $document = new DeliveryDocument([
             'assignment_id' => $assignment->id,
             'file_path'     => $path,
             'type'          => $type,
             'uploaded_by'   => $request->user()?->id,
             'notes'         => $data['notes'] ?? null,
         ]);
+        $document->created_at = $actionAt;
+        $document->updated_at = $actionAt;
+        $document->save();
 
         $this->recordUploadAudit($request, $document, $assignment, $uploadMeta);
 
         if ($type === 'pod') {
             $assignment->update([
-                'pod_verified_at' => now(),
+                'pod_verified_at' => $actionAt,
                 'pod_verified_by' => $request->user()?->id,
             ]);
         }

@@ -9,6 +9,7 @@ use App\Models\DeliveryDocument;
 use App\Models\DispatchAssignment;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Ocr\OcrService;
+use App\Support\ActionTimestamp;
 use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
@@ -42,6 +43,8 @@ class CompletionProofController extends Controller
                 'nullable',
                 File::types(['jpg', 'jpeg', 'png'])->max(5120),
             ],
+            'action_timestamp' => 'nullable|date',
+            'action_taken_at'  => 'nullable|date',
         ], [
             'file.required' => 'Please upload delivery proof (receipt photo or document image).',
         ]);
@@ -66,6 +69,8 @@ class CompletionProofController extends Controller
             ], 422);
         }
 
+        $actionAt = ActionTimestamp::resolveFromRequest($request);
+
         $docType = $data['proof_type'] === DeliveryCompletionProof::TYPE_RECEIPT_PHOTO
             ? 'receipt'
             : ($data['document_type'] ?? 'receipt');
@@ -75,13 +80,16 @@ class CompletionProofController extends Controller
             return response()->json(['message' => 'Failed to store uploaded file.'], 500);
         }
 
-        $document = DeliveryDocument::create([
+        $document = new DeliveryDocument([
             'assignment_id' => $assignment->id,
             'file_path'     => $path,
             'type'          => $docType,
             'uploaded_by'   => $request->user()?->id,
             'notes'         => $data['delivery_notes'] ?? null,
         ]);
+        $document->created_at = $actionAt;
+        $document->updated_at = $actionAt;
+        $document->save();
 
         $signaturePath = null;
         if ($request->hasFile('signature')) {
@@ -96,7 +104,7 @@ class CompletionProofController extends Controller
             $this->notificationDispatcher->documentUploaded($document);
         }
 
-        $proof = DeliveryCompletionProof::create([
+        $proof = new DeliveryCompletionProof([
             'job_order_id'           => $assignment->job_order_id,
             'assignment_id'          => $assignment->id,
             'driver_id'              => $driver->id,
@@ -108,6 +116,9 @@ class CompletionProofController extends Controller
             'receiver_signature_path'=> $signaturePath,
             'delivery_notes'         => $data['delivery_notes'] ?? null,
         ]);
+        $proof->created_at = $actionAt;
+        $proof->updated_at = $actionAt;
+        $proof->save();
 
         AuditLogger::record($request->user(), 'delivery.completion_proof', DeliveryCompletionProof::class, $proof->id, [
             'assignment_id' => $assignment->id,

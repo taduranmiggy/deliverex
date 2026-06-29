@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\DeliveryCompletionProof;
 use App\Models\JobOrder;
 use App\Services\Delivery\EtaEstimationService;
+use App\Support\CustomerProofDocuments;
 use App\Support\DeliveryStatus;
-use Illuminate\Support\Facades\Storage;
 
 class TrackingController extends Controller
 {
@@ -67,34 +67,9 @@ class TrackingController extends Controller
         $rawCurrentStatus = $latestStatus?->status ?? $jobOrder->status;
         $currentStatus = DeliveryStatus::canonicalize($rawCurrentStatus) ?? $rawCurrentStatus;
         $completionProof = $latestAssignment?->completionProof;
-        $proofDocuments  = [];
-        $proofAvailable  = $currentStatus === 'completed' && $completionProof !== null;
-
-        if ($proofAvailable) {
-            $doc = $completionProof->deliveryDocument;
-            if ($doc) {
-                $proofDocuments[] = [
-                    'id'          => $doc->id,
-                    'type'        => $doc->type,
-                    'proof_type'  => $completionProof->proof_type,
-                    'label'       => DeliveryCompletionProof::TYPES[$completionProof->proof_type] ?? $doc->type,
-                    'url'         => Storage::disk('public')->url($doc->file_path),
-                    'uploaded_at' => $completionProof->created_at?->toIso8601String(),
-                    'ocr_ready'   => $doc->ocrResult?->is_validated ?? false,
-                ];
-            }
-            if ($completionProof->receiver_signature_path) {
-                $proofDocuments[] = [
-                    'id'          => null,
-                    'type'        => 'signature',
-                    'proof_type'  => 'receiver_signature',
-                    'label'       => 'Receiver Signature',
-                    'url'         => Storage::disk('public')->url($completionProof->receiver_signature_path),
-                    'uploaded_at' => $completionProof->created_at?->toIso8601String(),
-                    'ocr_ready'   => false,
-                ];
-            }
-        }
+        $proofDocuments  = CustomerProofDocuments::forAssignment($latestAssignment, (string) $currentStatus);
+        $proofAvailable  = strtolower((string) $currentStatus) === DeliveryStatus::COMPLETED
+            && count($proofDocuments) > 0;
 
         $eta = $this->etaEstimation->estimate($jobOrder, $latestTracking, $currentStatus);
 
