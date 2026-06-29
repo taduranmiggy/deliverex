@@ -45,3 +45,33 @@ case "$RESULT" in
     echo "==> Skipping seed: users table already has $RESULT user(s)"
     ;;
 esac
+
+seed_chatbot_intents_if_needed() {
+  if [ ! -f vendor/autoload.php ]; then
+    return 0
+  fi
+
+  local intent_result
+  intent_result="$(php artisan tinker --execute='try {
+    if (! Schema::hasTable("chatbot_intents")) { echo "missing"; }
+    else { echo App\Models\ChatbotIntent::count(); }
+  } catch (Throwable $e) { echo "error:".$e->getMessage(); }' 2>&1 | tail -1)"
+
+  case "$intent_result" in
+    0|missing)
+      echo "==> Seeding chatbot intents (php artisan db:seed --class=ChatbotIntentSeeder --force)"
+      php artisan db:seed --class=ChatbotIntentSeeder --force
+      ;;
+    error:*)
+      echo "WARN: Could not check chatbot_intents: ${intent_result#error:}" >&2
+      ;;
+    ''|*[!0-9]*)
+      echo "WARN: Unexpected chatbot intent check: $intent_result" >&2
+      ;;
+    *)
+      echo "==> chatbot_intents already has $intent_result row(s) — skipping ChatbotIntentSeeder"
+      ;;
+  esac
+}
+
+seed_chatbot_intents_if_needed
