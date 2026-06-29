@@ -1319,9 +1319,26 @@
 /* ── OCR GRID ────────────────────────────────────────────── */
 .dx-ocr-grid {
   display: grid;
-  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
   gap: 20px;
-  align-items: flex-start;
+  align-items: start;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: ocr-page;
+}
+
+.dx-ocr-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: ocr-workspace;
+}
+
+.dx-ocr-queue-panel,
+.dx-ocr-preview-panel,
+.dx-ocr-workspace .ocr-dataset-panel {
   min-width: 0;
 }
 
@@ -2864,16 +2881,6 @@
 .page { padding: 0; }
 
 /* ── RESPONSIVE ──────────────────────────────────────────── */
-@media (max-width: 1400px) {
-  .dx-ocr-grid {
-    grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
-  }
-
-  .dx-ocr-grid > .ocr-dataset-panel {
-    grid-column: 1 / -1;
-  }
-}
-
 @media (max-width: 1200px) and (min-width: 1025px) {
   .dx-split-bestfit { grid-template-columns: 1fr; }
   .app-shell { grid-template-columns: minmax(200px, 220px) minmax(0, 1fr); }

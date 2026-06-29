@@ -979,7 +979,7 @@ function OcrReviewPage() {
       )}
 
       <div className="dx-ocr-grid">
-        <div className="dx-panel" style={{ marginBottom: 0 }}>
+        <div className="dx-panel dx-ocr-queue-panel" style={{ marginBottom: 0 }}>
           <div className="dx-ocr-tabs">
             {FILTER_TABS.map((t) => (
               <button key={t.key} type="button" className={`dx-ocr-tab${tab === t.key ? ' dx-ocr-tab--active' : ''}`} onClick={() => { setPage(1); setTab(t.key) }}>
@@ -1044,7 +1044,8 @@ function OcrReviewPage() {
           )}
         </div>
 
-        <div className="dx-panel" style={{ marginBottom: 0 }}>
+        <div className="dx-ocr-workspace">
+        <div className="dx-panel dx-ocr-preview-panel" style={{ marginBottom: 0 }}>
           <h3 className="dx-panel-title">Document Preview</h3>
           <div className="dx-preview-pane ocr-preview-pane">
             {previewUrl ? (
@@ -1313,6 +1314,7 @@ function OcrReviewPage() {
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
 
