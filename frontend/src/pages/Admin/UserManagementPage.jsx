@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createUser, deleteUser, fetchCompanies, fetchRoles, fetchUsers, sendUserInvite, updateUser } from '../../api/admin'
-import CompanyCombobox from '../../components/CompanyCombobox'
 import PhonePhInput from '../../components/PhonePhInput'
 import UserNameFields from '../../components/UserNameFields'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
@@ -44,8 +43,15 @@ function buildEditForm(user) {
     role_id: user?.role_id ?? user?.role?.id ?? '',
     status: user?.status ?? 'active',
     company_id: user?.company_id ?? '',
-    company_role: user?.company_role ?? 'owner',
   }
+}
+
+const BLANK_NEW_COMPANY = {
+  company_name: '',
+  company_email: '',
+  contact_person: '',
+  contact_number: '',
+  address: '',
 }
 
 function buildCreateForm() {
@@ -56,12 +62,11 @@ function buildCreateForm() {
     email: '',
     phone: '',
     role_id: '',
-    company_id: '',
-    company_role: 'owner',
+    new_company: { ...BLANK_NEW_COMPANY },
   }
 }
 
-function UserModal({ user, roles, companies, existingUsers, onClose, onSaved }) {
+function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
   const isEdit = Boolean(user?.id)
   const roleNameById = useMemo(
     () => Object.fromEntries((roles || []).map((r) => [String(r.id), r.name?.toLowerCase()])),
@@ -77,14 +82,6 @@ function UserModal({ user, roles, companies, existingUsers, onClose, onSaved }) 
   const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [companyValue, setCompanyValue] = useState(() => {
-    if (!isEdit || !user?.company_id) return null
-    return {
-      type: 'existing',
-      companyId: user.company_id,
-      label: user.company_name || 'Not Assigned',
-    }
-  })
 
   const selectedRoleName = roleNameById[String(form.role_id)] ?? ''
   const isCustomerRole = selectedRoleName === 'customer'
@@ -101,6 +98,21 @@ function UserModal({ user, roles, companies, existingUsers, onClose, onSaved }) 
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
+  const setNewCompany = (k) => (e) => {
+    const value = e.target.value
+    setForm((f) => ({
+      ...f,
+      new_company: { ...f.new_company, [k]: value },
+    }))
+    if (fieldErrors[`new_company.${k}`]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev }
+        delete next[`new_company.${k}`]
+        return next
+      })
+    }
+  }
+
   const validate = () => {
     const errors = {
       ...validateNameParts(form),
@@ -114,7 +126,17 @@ function UserModal({ user, roles, companies, existingUsers, onClose, onSaved }) 
     if (phoneErr) errors.phone = phoneErr
 
     if (!form.role_id) errors.role_id = 'Role is required.'
-    if (isCustomerRole && !form.company_id) errors.company_id = 'Company is required for Customer accounts.'
+
+    if (isCustomerRole && !isEdit) {
+      const nc = form.new_company ?? BLANK_NEW_COMPANY
+      if (!nc.company_name?.trim()) errors['new_company.company_name'] = 'Company name is required.'
+      const companyEmail = String(nc.company_email ?? '').trim()
+      if (!companyEmail) errors['new_company.company_email'] = 'Company email is required.'
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyEmail)) {
+        errors['new_company.company_email'] = 'Enter a valid company email address.'
+      }
+    }
+
     if (isEdit && form.password && form.password.length < 8) {
       errors.password = 'Password must be at least 8 characters.'
     }
@@ -147,9 +169,15 @@ function UserModal({ user, roles, companies, existingUsers, onClose, onSaved }) 
       role_id: form.role_id,
     }
 
-    if (isCustomerRole) {
-      payload.company_id = form.company_id
-      payload.company_role = form.company_role
+    if (isCustomerRole && !isEdit) {
+      const nc = form.new_company ?? BLANK_NEW_COMPANY
+      payload.new_company = {
+        company_name: nc.company_name.trim(),
+        company_email: String(nc.company_email).trim(),
+        contact_person: nc.contact_person?.trim() || composeFullName(form) || null,
+        contact_number: nc.contact_number?.trim() || form.phone || null,
+        address: nc.address?.trim() || null,
+      }
     }
 
     if (isEdit) {
@@ -254,35 +282,75 @@ function UserModal({ user, roles, companies, existingUsers, onClose, onSaved }) 
             {fieldErrors.role_id && <span className="form-error">{fieldErrors.role_id}</span>}
           </label>
 
-          {isCustomerRole && (
+          {isCustomerRole && !isEdit && (
             <>
+              <p style={{ gridColumn: '1/-1', margin: '4px 0 0', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text)' }}>
+                New company
+              </p>
               <label style={{ gridColumn: '1/-1' }}>
-                Company <span className="dx-required">*</span>
-                <CompanyCombobox
-                  companies={companies}
-                  value={companyValue}
-                  onChange={(next) => {
-                    setCompanyValue(next)
-                    setForm((f) => ({ ...f, company_id: next?.companyId ?? '' }))
-                  }}
+                Company name <span className="dx-required">*</span>
+                <input
+                  required
+                  value={form.new_company?.company_name ?? ''}
+                  onChange={setNewCompany('company_name')}
                   disabled={saving}
-                  error={fieldErrors.company_id}
+                  aria-invalid={fieldErrors['new_company.company_name'] ? 'true' : undefined}
                 />
-                {fieldErrors.company_id && <span className="form-error">{fieldErrors.company_id}</span>}
+                {fieldErrors['new_company.company_name'] && (
+                  <span className="form-error">{fieldErrors['new_company.company_name']}</span>
+                )}
+              </label>
+              <label style={{ gridColumn: '1/-1' }}>
+                Company email <span className="dx-required">*</span>
+                <input
+                  required
+                  type="email"
+                  value={form.new_company?.company_email ?? ''}
+                  onChange={setNewCompany('company_email')}
+                  placeholder={form.email ? `Defaults can match user email (${form.email})` : 'billing@company.com'}
+                  disabled={saving}
+                  aria-invalid={fieldErrors['new_company.company_email'] ? 'true' : undefined}
+                />
+                {fieldErrors['new_company.company_email'] && (
+                  <span className="form-error">{fieldErrors['new_company.company_email']}</span>
+                )}
               </label>
               <label>
-                Customer role in company
-                <select
-                  value={form.company_role}
-                  onChange={set('company_role')}
+                Contact person
+                <input
+                  value={form.new_company?.contact_person ?? ''}
+                  onChange={setNewCompany('contact_person')}
+                  placeholder={composeFullName(form) || 'Optional — uses user name if blank'}
                   disabled={saving}
-                >
-                  <option value="owner">Owner</option>
-                  <option value="staff">Staff</option>
-                  <option value="viewer">Viewer</option>
-                </select>
+                />
+              </label>
+              <label>
+                Contact number
+                <input
+                  value={form.new_company?.contact_number ?? ''}
+                  onChange={setNewCompany('contact_number')}
+                  placeholder={form.phone || 'Optional — uses user phone if blank'}
+                  disabled={saving}
+                />
+              </label>
+              <label style={{ gridColumn: '1/-1' }}>
+                Company address
+                <textarea
+                  rows={2}
+                  value={form.new_company?.address ?? ''}
+                  onChange={setNewCompany('address')}
+                  placeholder="Optional"
+                  disabled={saving}
+                />
               </label>
             </>
+          )}
+
+          {isCustomerRole && isEdit && (
+            <label style={{ gridColumn: '1/-1' }}>
+              Company
+              <input value={user?.company_name || 'Not assigned'} disabled readOnly />
+            </label>
           )}
 
           {isEdit && (
@@ -562,7 +630,6 @@ function UserManagementPage() {
         <UserModal
           user={modal.user}
           roles={roles}
-          companies={companies}
           existingUsers={users}
           onClose={() => setModal(null)}
           onSaved={handleSaved}

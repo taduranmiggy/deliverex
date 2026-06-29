@@ -19,6 +19,7 @@ use App\Services\Delivery\DropoffGeocoder;
 use App\Services\MasterData\MaterialMasterDataService;
 use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
+use App\Support\JobOrderAddressValidator;
 use App\Support\JobOrderScheduleValidator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -166,6 +167,8 @@ class JobOrderController extends Controller
 
         // Resolve combined address strings from structured parts
         $data = $this->resolveAddresses($data);
+
+        JobOrderAddressValidator::validatePayload($data);
 
         // For quarry-sourced jobs with no explicit pickup address, use the quarry
         // name as the legacy pickup source so routes/reports still read sensibly.
@@ -329,6 +332,10 @@ class JobOrderController extends Controller
         if (count(array_intersect(array_keys($data), $addrFields)) > 0) {
             $merged = array_merge($jobOrder->only($addrFields), $data);
             $data = array_merge($data, $this->resolveAddresses($merged));
+            JobOrderAddressValidator::validatePayload(array_merge(
+                $jobOrder->only(array_merge($addrFields, ['quarry_id'])),
+                $data,
+            ));
         }
 
         if (array_key_exists('customer_email', $data) && $data['customer_email']) {

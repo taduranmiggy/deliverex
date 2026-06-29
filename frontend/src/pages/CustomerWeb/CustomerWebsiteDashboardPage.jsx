@@ -13,6 +13,7 @@ import {
   ClipboardList,
   FileText,
   Link2,
+  MessageSquarePlus,
   Package,
   Phone,
   Search,
@@ -119,6 +120,14 @@ function CustomerWebsiteDashboardPage() {
       to: paths.linkDelivery,
       badge: 'Quick Link',
       badgeVariant: 'yellow',
+    },
+    {
+      icon: MessageSquarePlus,
+      title: 'Feedback & Concerns',
+      description: 'Submit complaints or suggestions and track status.',
+      to: paths.feedback,
+      badge: 'Share feedback',
+      badgeVariant: 'green',
     },
     {
       icon: Phone,

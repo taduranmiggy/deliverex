@@ -2,6 +2,7 @@ import { Link, NavLink } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 import { getCustomerNavPaths } from '../../utils/customerSurfacePaths'
 import { isStandalonePwa } from '../../utils/pwaUtils'
+import PublicSiteNavBar from './PublicSiteNavBar'
 import CustomerBrandMark from './CustomerBrandMark'
 import { BriefcaseBusiness, Home, Info, MapPin, Package } from 'lucide-react'
 
@@ -18,6 +19,10 @@ function CustomerNavBar() {
 
   const navLinkCls = ({ isActive }) =>
     `customer-nav-link${isActive ? ' active' : ''}`
+
+  if (!isCustomer && !pwaMode) {
+    return <PublicSiteNavBar />
+  }
 
   return (
     <nav className={`customer-nav${pwaMode ? ' customer-nav--pwa' : ''}`} role="navigation" aria-label="Customer navigation">

@@ -90,7 +90,7 @@ function EventDetailModal({ job, event, onClose }) {
             View Job Order
           </Link>
           <Link
-            to="/dispatcher/dispatch-best-fit"
+            to="/dispatcher/dispatch"
             className="btn-dx-secondary btn-sm"
             state={{ jobOrderId: event.job_order_id }}
           >

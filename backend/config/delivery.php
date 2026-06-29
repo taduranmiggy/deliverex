@@ -16,4 +16,12 @@ return [
     |--------------------------------------------------------------------------
     */
     'average_travel_speed_kmh' => (float) env('AVERAGE_TRAVEL_SPEED_KMH', 30),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Minimum scheduled delivery window (minutes)
+    |--------------------------------------------------------------------------
+    | scheduled_end must be at least this many minutes after scheduled_start.
+    */
+    'min_delivery_window_minutes' => (int) env('MIN_DELIVERY_WINDOW_MINUTES', 60),
 ];

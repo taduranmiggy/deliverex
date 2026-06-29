@@ -93,7 +93,6 @@ class ManagerDashboardTest extends TestCase
             'delivery_completion_pct',
             'avg_delivery_time_hours',
             'driver_utilization_pct',
-            'best_fit_efficiency_score',
             'pod_completion_pct',
             'exception_rate_pct',
             'period' => ['from', 'to'],
@@ -102,7 +101,6 @@ class ManagerDashboardTest extends TestCase
         $response->assertJsonPath('on_time_pct', 100.0);
         $response->assertJsonPath('delivery_completion_pct', 100.0);
         $response->assertJsonPath('pod_completion_pct', 100.0);
-        $response->assertJsonPath('best_fit_efficiency_score', 88.5);
         $this->assertNotNull($response->json('avg_delivery_time_hours'));
     }
 

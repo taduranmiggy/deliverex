@@ -6,7 +6,7 @@ import StaffAppShell from './StaffAppShell'
 const NAV = [
   { to: '/dispatcher', label: 'Dashboard', Icon: LayoutDashboard, end: true },
   { to: '/dispatcher/job-orders', label: 'Job Orders', Icon: Truck },
-  { to: '/dispatcher/dispatch-best-fit', label: 'Fleet Dispatch', Icon: Route },
+  { to: '/dispatcher/dispatch', label: 'Fleet Dispatch', Icon: Route },
   { to: '/dispatcher/calendar', label: 'Calendar', Icon: Calendar },
   { to: '/dispatcher/live-tracking', label: 'Tracking', Icon: Map },
   { to: '/dispatcher/ocr-review', label: 'OCR Review', Icon: FileSearch },

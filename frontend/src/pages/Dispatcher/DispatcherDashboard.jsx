@@ -57,7 +57,7 @@ function DispatcherDashboard() {
           icon={Clock}
           iconVariant="yellow"
           hint="Open Fleet Dispatch"
-          onClick={() => navigate('/dispatcher/dispatch-best-fit')}
+          onClick={() => navigate('/dispatcher/dispatch')}
         />
         <StatCard
           label="Active Deliveries"
@@ -104,7 +104,7 @@ function DispatcherDashboard() {
           <span style={{ fontWeight: 600 }}>
             {summary.pending} job{summary.pending > 1 ? 's' : ''} awaiting assignment
           </span>
-          <Link to="/dispatcher/dispatch-best-fit" className="btn-dx-primary btn-sm">
+          <Link to="/dispatcher/dispatch" className="btn-dx-primary btn-sm">
             Dispatch now <ArrowRight size={14} />
           </Link>
         </div>
@@ -159,7 +159,7 @@ function DispatcherDashboard() {
           <SectionCard title="Quick Actions">
             {[
               { label: 'Create Job Order',   to: '/dispatcher/job-orders',        cls: 'btn-dx-primary' },
-              { label: 'Fleet Dispatch',      to: '/dispatcher/dispatch-best-fit', cls: 'btn-dx-secondary' },
+              { label: 'Fleet Dispatch',      to: '/dispatcher/dispatch', cls: 'btn-dx-secondary' },
               { label: 'Calendar',            to: '/dispatcher/calendar',          cls: 'btn-dx-secondary' },
               { label: 'OCR Review',          to: '/dispatcher/ocr-review',         cls: 'btn-dx-secondary' },
               { label: 'Tracking',            to: '/dispatcher/live-tracking',      cls: 'btn-dx-secondary' },

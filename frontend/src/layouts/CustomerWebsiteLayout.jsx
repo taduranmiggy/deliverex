@@ -2,7 +2,7 @@ import { Suspense } from 'react'
 import { Outlet } from 'react-router-dom'
 import PageTransition from '../components/PageTransition'
 import RouteFallback from '../components/RouteFallback'
-import CustomerLegalFooter from '../components/customer/CustomerLegalFooter'
+import DeliverexSiteFooter from '../components/customer/DeliverexSiteFooter'
 import CustomerWebsiteNavBar from '../components/customer/CustomerWebsiteNavBar'
 import CustomerWebsiteBottomNav from '../components/customer/CustomerWebsiteBottomNav'
 import SessionStatusBar from '../components/session/SessionStatusBar'
@@ -23,7 +23,7 @@ function CustomerWebsiteLayout() {
           </main>
         </PageTransition>
 
-        <CustomerLegalFooter />
+        <DeliverexSiteFooter />
         <CustomerWebsiteBottomNav />
       </div>
     </CustomerSurfaceProvider>

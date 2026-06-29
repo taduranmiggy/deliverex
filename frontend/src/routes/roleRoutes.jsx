@@ -54,6 +54,7 @@ const CustomerDeliveriesPage = lazy(() => import('../pages/Customer/CustomerDeli
 const CustomerLinkDeliveryPage = lazy(() => import('../pages/Customer/CustomerLinkDeliveryPage'))
 const CustomerAccountPage = lazy(() => import('../pages/Customer/CustomerAccountPage'))
 const CustomerSupportPage = lazy(() => import('../pages/Customer/CustomerSupportPage'))
+const CustomerFeedbackPage = lazy(() => import('../pages/Customer/CustomerFeedbackPage'))
 const CustomerHistoryPage = lazy(() => import('../pages/Customer/CustomerHistoryPage'))
 const AboutUsPage = lazy(() => import('../pages/Customer/AboutUsPage'))
 const ServicesPage = lazy(() => import('../pages/Customer/ServicesPage'))
@@ -79,7 +80,8 @@ export const roleRoutes = {
     <Route key="dispatcher-job" path="job-orders" element={<CreateJobOrderPage />} />,
     <Route key="dispatcher-calendar" path="calendar" element={<DispatcherCalendarPage />} />,
     <Route key="dispatcher-ocr" path="ocr-review" element={<OcrReviewPage />} />,
-    <Route key="dispatcher-assign" path="dispatch-best-fit" element={<AssignDriverVehiclePage />} />,
+    <Route key="dispatcher-assign" path="dispatch" element={<AssignDriverVehiclePage />} />,
+    <Route key="dispatcher-assign-legacy" path="dispatch-best-fit" element={<Navigate to="/dispatcher/dispatch" replace />} />,
     <Route key="dispatcher-monitor" path="live-tracking" element={<DeliveryMonitoringPage />} />,
     <Route key="dispatcher-notifs" path="notifications" element={<DispatcherNotificationsPage />} />,
   ],
@@ -109,6 +111,7 @@ export const roleRoutes = {
     <Route key="customer-forgot" path="forgot-password" element={<CustomerForgotPasswordPage />} />,
     <Route key="customer-track" path="track" element={<TrackingPage />} />,
     <Route key="customer-support" path="support" element={<CustomerSupportPage />} />,
+    <Route key="customer-feedback" path="feedback" element={<CustomerFeedbackPage />} />,
     <Route key="customer-privacy" path="privacy-policy" element={<CustomerLegalPage type="privacy-policy" />} />,
     <Route key="customer-terms" path="terms-and-conditions" element={<CustomerLegalPage type="terms-and-conditions" />} />,
     <Route key="customer-data-privacy" path="data-privacy-notice" element={<CustomerLegalPage type="data-privacy-notice" />} />,
@@ -127,6 +130,7 @@ export const roleRoutes = {
     <Route key="customer-web-deliveries" path="deliveries" element={<CustomerDeliveriesPage />} />,
     <Route key="customer-web-history" path="history" element={<CustomerHistoryPage />} />,
     <Route key="customer-web-support" path="support" element={<CustomerSupportPage />} />,
+    <Route key="customer-web-feedback" path="feedback" element={<CustomerFeedbackPage />} />,
     <Route key="customer-web-link" path="link-delivery" element={<CustomerLinkDeliveryPage />} />,
     <Route key="customer-web-team" path="team" element={<CustomerCompanyUsersPage />} />,
     <Route key="customer-web-profile" path="profile" element={<CustomerAccountPage />} />,

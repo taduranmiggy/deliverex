@@ -21,8 +21,8 @@ export function deleteJobOrder(id) {
   return apiRequest(`/dispatch/job-orders/${id}`, { method: 'DELETE' })
 }
 
-export function getBestFit(jobOrderId) {
-  return apiRequest(`/dispatch/best-fit/${jobOrderId}`)
+export function fetchDispatchOptions(jobOrderId) {
+  return apiRequest(`/dispatch/assignments/options/${jobOrderId}`)
 }
 
 export function createAssignment(payload) {

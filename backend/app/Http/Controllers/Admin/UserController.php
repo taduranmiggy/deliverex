@@ -41,14 +41,32 @@ class UserController extends Controller
             'email' => 'required|email|unique:users,email',
             'phone' => 'nullable|string|max:30',
             'company_id' => 'nullable|exists:companies,id',
-            'company_role' => 'nullable|in:owner,staff,viewer',
+            'new_company' => 'nullable|array',
+            'new_company.company_name' => 'required_without:company_id|nullable|string|max:180',
+            'new_company.company_email' => 'required_without:company_id|nullable|email|max:255|unique:companies,company_email',
+            'new_company.contact_person' => 'nullable|string|max:120',
+            'new_company.contact_number' => 'nullable|string|max:50',
+            'new_company.address' => 'nullable|string',
         ]);
 
         $role = Role::query()->findOrFail($data['role_id']);
         $this->assertSupportedRole($role->name);
 
         $isCustomer = $role->name === 'customer';
-        if ($isCustomer && empty($data['company_id'])) {
+        $companyId = $data['company_id'] ?? null;
+
+        if ($isCustomer && ! $companyId) {
+            if (empty($data['new_company']['company_name']) || empty($data['new_company']['company_email'])) {
+                throw ValidationException::withMessages([
+                    'new_company.company_name' => ['Company details are required for Customer accounts.'],
+                ]);
+            }
+
+            $company = $this->companies->createPendingCompany($data['new_company'], $request->user());
+            $companyId = $company->id;
+        }
+
+        if ($isCustomer && ! $companyId) {
             throw ValidationException::withMessages([
                 'company_id' => ['Company is required for Customer accounts.'],
             ]);
@@ -68,8 +86,8 @@ class UserController extends Controller
             CompanyUser::query()->updateOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'company_id' => (int) $data['company_id'],
-                    'role' => $data['company_role'] ?? CompanyUser::ROLE_OWNER,
+                    'company_id' => (int) $companyId,
+                    'role' => CompanyUser::ROLE_OWNER,
                     'is_active' => true,
                     'force_password_change' => true,
                 ],
@@ -123,7 +141,7 @@ class UserController extends Controller
                 ['user_id' => $user->id],
                 [
                     'company_id' => (int) $companyId,
-                    'role' => $data['company_role'] ?? $user->companyUser?->role ?? CompanyUser::ROLE_OWNER,
+                    'role' => $user->companyUser?->role ?? CompanyUser::ROLE_OWNER,
                     'is_active' => ($user->status ?? 'active') !== 'inactive',
                 ],
             );

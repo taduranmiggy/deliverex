@@ -21,7 +21,6 @@ use App\Http\Controllers\AssignmentAuditController;
 use App\Http\Controllers\IssueReportController;
 use App\Http\Controllers\VehicleUtilizationController;
 use App\Http\Controllers\Dispatcher\AssignmentController as DispatcherAssignmentController;
-use App\Http\Controllers\Dispatcher\BestFitController;
 use App\Http\Controllers\Dispatcher\CalendarController;
 use App\Http\Controllers\Dispatcher\DelayController as DispatcherDelayController;
 use App\Http\Controllers\Dispatcher\JobOrderController;
@@ -86,6 +85,8 @@ Route::middleware('auth.api')->group(function () {
     Route::middleware('role:customer')->prefix('customer/portal')->group(function () {
         Route::get('/orders', [CustomerPortalController::class, 'orders']);
         Route::post('/link-delivery', [CustomerPortalController::class, 'linkDelivery']);
+        Route::get('/concerns', [InquiryController::class, 'mine']);
+        Route::post('/concerns', [InquiryController::class, 'storeForCustomer']);
     });
 
     Route::middleware(['role:customer', 'company.role:owner'])->prefix('company/users')->group(function () {
@@ -160,16 +161,14 @@ Route::middleware('auth.api')->group(function () {
     });
 
     // ─── Dispatcher ONLY: write operations — Admin is intentionally excluded ─
-    // Assignment creation, job order mutation, and Best-Fit dispatch are
-    // restricted to the Dispatcher role. Admin receives 403 if attempted.
+    // Assignment creation and job order mutation are restricted to the Dispatcher role.
     Route::middleware('role:dispatcher')->prefix('dispatch')->group(function () {
         Route::post('/job-orders',                    [JobOrderController::class, 'store']);
         Route::put('/job-orders/{jobOrder}',          [JobOrderController::class, 'update']);
         Route::delete('/job-orders/{jobOrder}',       [JobOrderController::class, 'destroy']);
 
         Route::post('/assignments',                   [DispatcherAssignmentController::class, 'store']);
-
-        Route::get('/best-fit/{jobOrder}',            [BestFitController::class, 'show']);
+        Route::get('/assignments/options/{jobOrder}', [DispatcherAssignmentController::class, 'options']);
         Route::get('/calendar',                       [CalendarController::class, 'index']);
         Route::post('/master-data/material-types',    [MaterialMasterDataController::class, 'storeMaterialType']);
         Route::post('/master-data/material-specifications', [MaterialMasterDataController::class, 'storeMaterialSpecification']);

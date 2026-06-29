@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { sendInquiry } from '../api/customer'
 import DeliverexAssistantChat from '../components/DeliverexAssistantChat'
-import CustomerBrandMark from '../components/customer/CustomerBrandMark'
-import CustomerLegalFooter from '../components/customer/CustomerLegalFooter'
+import DeliverexSiteFooter from '../components/customer/DeliverexSiteFooter'
+import InquiryForm from '../components/customer/InquiryForm'
+import PublicSiteNavBar from '../components/customer/PublicSiteNavBar'
 import { ArrowRight, CheckCircle2, FileCheck2, HeadphonesIcon, History, MessageSquare, Package, Search, X } from 'lucide-react'
 
 function LandingPage() {
@@ -11,10 +12,7 @@ function LandingPage() {
   const [trackCode, setTrackCode] = useState('')
   const [chatOpen, setChatOpen] = useState(false)
   const [contactOpen, setContactOpen] = useState(false)
-  const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
   const [contactSent, setContactSent] = useState(false)
-  const [contactError, setContactError] = useState('')
-  const [sending, setSending] = useState(false)
 
   const handleTrack = (e) => {
     e.preventDefault()
@@ -23,40 +21,9 @@ function LandingPage() {
     }
   }
 
-  const set = (k) => (e) => setContactForm((f) => ({ ...f, [k]: e.target.value }))
-  const handleContact = async (e) => {
-    e.preventDefault()
-    setSending(true)
-    setContactError('')
-    try {
-      await sendInquiry(contactForm)
-      setContactSent(true)
-    } catch (err) {
-      setContactError(err.message)
-    } finally {
-      setSending(false)
-    }
-  }
-
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <nav className="customer-nav">
-        <div className="customer-nav-inner">
-          <Link to="/" className="customer-nav-brand">
-            <CustomerBrandMark />
-            <span className="customer-nav-brand-text">Deliverex</span>
-          </Link>
-          <div className="customer-nav-links customer-nav-links--desktop">
-            <Link to="/customer/about" className="customer-nav-link">About</Link>
-            <Link to="/customer/services" className="customer-nav-link">Services</Link>
-            <Link to="/customer/support" className="customer-nav-link">Support</Link>
-            <Link to="/customer/track" className="customer-nav-link">Track Delivery</Link>
-          </div>
-          <div className="customer-nav-actions customer-nav-actions--desktop">
-            <Link to="/login" className="btn-dx-primary btn-sm">Sign in <ArrowRight size={13} /></Link>
-          </div>
-        </div>
-      </nav>
+      <PublicSiteNavBar />
 
       <section style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 45%, #2563eb 100%)', padding: 'clamp(60px, 10vw, 120px) 24px', textAlign: 'center', color: '#fff' }}>
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
@@ -125,30 +92,7 @@ function LandingPage() {
         </div>
       </section>
 
-      <footer style={{ background: 'var(--slate-800)', color: 'rgba(255,255,255,0.5)', padding: '40px 0 24px', fontSize: '0.8125rem' }}>
-        <div className="customer-container" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 24, marginBottom: 28 }}>
-          <div>
-            <p style={{ color: '#fff', fontWeight: 700, marginBottom: 10 }}>Deliverex</p>
-            <p style={{ lineHeight: 1.6, margin: 0 }}>Logistics dispatch, delivery tracking, and proof-of-delivery for site preparation teams.</p>
-          </div>
-          <div>
-            <p style={{ color: 'rgba(255,255,255,0.75)', fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.75rem' }}>Explore</p>
-            <p style={{ margin: '6px 0' }}><Link to="/customer/about" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>About Us</Link></p>
-            <p style={{ margin: '6px 0' }}><Link to="/customer/services" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Services</Link></p>
-            <p style={{ margin: '6px 0' }}><Link to="/customer/support" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Support</Link></p>
-            <p style={{ margin: '6px 0' }}><Link to="/customer/track" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Track Delivery</Link></p>
-          </div>
-          <div>
-            <p style={{ color: 'rgba(255,255,255,0.75)', fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.75rem' }}>Account</p>
-            <p style={{ margin: '6px 0' }}><Link to="/login" style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>Sign in</Link></p>
-            <p style={{ margin: '6px 0', color: 'rgba(255,255,255,0.65)', fontSize: '0.875rem' }}>Company accounts are created by your administrator.</p>
-          </div>
-          <CustomerLegalFooter variant="dark" compact />
-        </div>
-        <p style={{ textAlign: 'center', margin: 0, borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 20 }}>
-          Deliverex Logistics · Providential 628 Site Preparation Services
-        </p>
-      </footer>
+      <DeliverexSiteFooter />
 
       {contactOpen && (
         <div className="dx-modal-backdrop" onClick={() => setContactOpen(false)}>
@@ -166,16 +110,15 @@ function LandingPage() {
                   <button type="button" className="btn-dx-primary" onClick={() => { setContactOpen(false); setContactSent(false) }}>Close</button>
                 </div>
               ) : (
-                <form className="form-grid" style={{ gridTemplateColumns: '1fr' }} onSubmit={handleContact}>
-                  <label>Name <input required value={contactForm.name} onChange={set('name')} placeholder="Your full name" /></label>
-                  <label>Email <input required type="email" value={contactForm.email} onChange={set('email')} placeholder="you@example.com" /></label>
-                  <label>Message <textarea required rows={4} value={contactForm.message} onChange={set('message')} placeholder="How can we help?" /></label>
-                  {contactError && <p className="notice error" style={{ margin: 0 }}>{contactError}</p>}
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button type="submit" className="btn-dx-primary" disabled={sending}>{sending ? 'Sending…' : 'Send message'}</button>
-                    <button type="button" className="btn-dx-secondary" onClick={() => setContactOpen(false)}>Cancel</button>
-                  </div>
-                </form>
+                <InquiryForm
+                  className="dx-inquiry-form--modal"
+                  onSubmit={sendInquiry}
+                  inquiryType="general_question"
+                  submitLabel="Send message"
+                  submittingLabel="Sending…"
+                  onSuccess={() => setContactSent(true)}
+                  onCancel={() => setContactOpen(false)}
+                />
               )}
             </div>
           </div>

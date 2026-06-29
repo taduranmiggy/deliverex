@@ -1199,11 +1199,6 @@
   line-height: 1;
 }
 
-.customer-layout--pwa .customer-legal-footer--compact {
-  padding: 12px 16px 8px;
-  font-size: 0.75rem;
-}
-
 .customer-layout--pwa .customer-bottom-nav-item {
   min-height: 48px;
   padding: 8px 4px;

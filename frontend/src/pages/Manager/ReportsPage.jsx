@@ -40,7 +40,7 @@ function downloadCsv(filename, headers, rows) {
 const TABS = [
   { key: 'deliveries', label: 'Deliveries', Icon: FileText, desc: 'Complete delivery history' },
   { key: 'driver_perf', label: 'Driver Performance', Icon: Users, desc: 'Driver efficiency metrics' },
-  { key: 'assignment_audit', label: 'Assignment Audit', Icon: ClipboardList, desc: 'Best-Fit vs actual assignments' },
+  { key: 'assignment_audit', label: 'Assignment Audit', Icon: ClipboardList, desc: 'Dispatcher assignment history' },
 ]
 
 function ReportsPage() {
@@ -156,17 +156,14 @@ function ReportsPage() {
       )
     } else {
       downloadCsv(`assignment-audit-${new Date().toISOString().slice(0, 10)}.csv`,
-        ['When', 'Dispatcher', 'Job', 'Best-Fit Driver', 'Best-Fit Vehicle', 'Assigned Driver', 'Assigned Vehicle', 'Override', 'Reason'],
+        ['When', 'Dispatcher', 'Job', 'Assigned Driver', 'Assigned Vehicle', 'Notes'],
         auditTrails.map((t) => [
           t.created_at ? new Date(t.created_at).toLocaleString() : '—',
           t.dispatcher_name ?? '—',
           t.job_order_id ? formatJobPublicId(t.job_order_id) : '—',
-          t.recommended_driver_name ?? '—',
-          t.recommended_vehicle_plate ?? '—',
           t.assigned_driver_name ?? '—',
           t.assigned_vehicle_plate ?? '—',
-          t.is_override ? 'Yes' : 'No',
-          t.override_reason ?? (t.is_override ? '—' : 'Matched Best-Fit'),
+          t.override_reason ?? '—',
         ])
       )
     }
@@ -263,7 +260,7 @@ function ReportsPage() {
           <>
             <p style={{ color: 'var(--muted)', fontSize: '0.8125rem', marginBottom: 16 }}>{auditMeta.total} assignment decisions recorded</p>
             <DataTable
-              headers={['When', 'Dispatcher', 'Job', 'Best-Fit', 'Assigned', 'Override Reason']}
+              headers={['When', 'Dispatcher', 'Job', 'Assigned', 'Notes']}
               loading={loading}
               empty={<EmptyState icon={ClipboardList} title="No assignment audits" message="Assignment decisions will appear here as dispatchers confirm assignments." />}
             >
@@ -277,16 +274,11 @@ function ReportsPage() {
                     {t.job_order_id ? formatJobPublicId(t.job_order_id) : '—'}
                   </td>
                   <td style={{ fontSize: '0.8125rem' }}>
-                    {t.recommended_driver_name
-                      ? `${t.recommended_driver_name}${t.recommended_vehicle_plate ? ` · ${t.recommended_vehicle_plate}` : ''}`
-                      : '—'}
-                  </td>
-                  <td style={{ fontSize: '0.8125rem' }}>
                     <strong>{t.assigned_driver_name}</strong>
                     {t.assigned_vehicle_plate ? ` · ${t.assigned_vehicle_plate}` : ''}
                   </td>
                   <td style={{ fontSize: '0.8125rem', color: 'var(--muted)', maxWidth: 260 }}>
-                    {t.override_reason ?? (t.is_override ? '—' : 'Matched Best-Fit')}
+                    {t.override_reason ?? '—'}
                   </td>
                 </tr>
               ))}

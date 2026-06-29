@@ -92,30 +92,42 @@ class AdminUserManagementDriverTest extends TestCase
         ]);
     }
 
-    public function test_admin_can_create_customer_user_with_company_membership(): void
+    public function test_admin_can_create_customer_user_with_new_company(): void
     {
         $admin = $this->makeAdmin();
         $customerRole = Role::where('name', 'customer')->first();
-        $company = Company::query()->create([
-            'company_name' => 'ABC Construction',
-            'company_email' => 'abc@example.com',
-            'status' => Company::STATUS_ACTIVE,
-            'created_by' => $admin->id,
-        ]);
 
         $response = $this->actingAs($admin, 'sanctum')->postJson('/api/admin/users', [
             'role_id' => $customerRole->id,
             'name' => 'Customer User',
             'email' => 'customer.user@example.com',
-            'company_id' => $company->id,
-            'company_role' => CompanyUser::ROLE_OWNER,
+            'phone' => '09171234567',
+            'new_company' => [
+                'company_name' => 'ABC Construction',
+                'company_email' => 'abc@example.com',
+                'contact_person' => 'Customer User',
+                'contact_number' => '09171234567',
+            ],
         ]);
 
         $response->assertCreated()
             ->assertJsonPath('role.name', 'customer')
-            ->assertJsonPath('company_id', $company->id)
             ->assertJsonPath('company_name', 'ABC Construction')
             ->assertJsonPath('status', 'pending');
+
+        $companyId = $response->json('company_id');
+
+        $this->assertDatabaseHas('companies', [
+            'id' => $companyId,
+            'company_name' => 'ABC Construction',
+            'company_email' => 'abc@example.com',
+        ]);
+
+        $this->assertDatabaseHas('company_users', [
+            'user_id' => $response->json('id'),
+            'company_id' => $companyId,
+            'role' => CompanyUser::ROLE_OWNER,
+        ]);
     }
 
     public function test_admin_can_resend_invite_for_pending_user(): void

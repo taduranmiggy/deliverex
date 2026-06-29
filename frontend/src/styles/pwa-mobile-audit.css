@@ -675,15 +675,28 @@
   padding-bottom: var(--pwa-nav-height);
 }
 
-.customer-feature-grid,
-.customer-service-grid {
+.customer-feature-grid {
   grid-template-columns: 1fr;
 }
 
 @media (min-width: 600px) {
-  .customer-feature-grid,
-  .customer-service-grid {
+  .customer-feature-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .customer-service-grid {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  .customer-service-card {
+    flex: 0 0 min(280px, 85vw);
+    scroll-snap-align: start;
   }
 }
 

@@ -794,6 +794,76 @@
 .form-grid textarea { resize: vertical; }
 .form-error { color: var(--color-error); font-size: 0.8125rem; font-weight: 500; }
 
+/* ── Inquiry form (landing + support) ─────────────────────── */
+.dx-inquiry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.dx-inquiry-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--slate-700);
+  min-width: 0;
+}
+
+.dx-inquiry-form input,
+.dx-inquiry-form textarea,
+.dx-inquiry-form select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1.5px solid var(--stroke);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.dx-inquiry-form textarea {
+  min-height: 96px;
+  max-height: 200px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.dx-inquiry-form .dx-phone-ph {
+  width: 100%;
+  max-width: 100%;
+}
+
+.dx-inquiry-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.dx-inquiry-form--modal {
+  padding: 0;
+}
+
+.dx-inquiry-form--card {
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: var(--surface);
+}
+
+.dx-modal .dx-inquiry-form--modal {
+  padding: 0 4px 4px;
+}
+
 /* ── NOTICES / ALERTS ────────────────────────────────────── */
 .notice {
   padding: 12px 16px;
@@ -2335,13 +2405,18 @@
 }
 
 .customer-service-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
   gap: 16px;
   margin-bottom: 16px;
+  width: 100%;
+  min-width: 0;
 }
 
 .customer-service-card {
+  flex: 1 1 0;
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--stroke);
   border-radius: var(--radius-xl);
@@ -4464,6 +4539,15 @@
   font-size: 0.875rem;
   color: var(--muted);
   margin: 0 0 20px;
+}
+
+.dx-wizard-section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 10px;
 }
 
 /* ── Field layout inside steps ───────────────────────────── */

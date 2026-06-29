@@ -5,7 +5,7 @@ import DriverPerformanceSection from '../../components/DriverPerformanceSection'
 import IssueReportsSection from '../../components/IssueReportsSection'
 import VehicleUtilizationSection from '../../components/VehicleUtilizationSection'
 import { PageHeader, SectionCard, StatCard } from '../../components/ui'
-import { AlertTriangle, Car, CheckCircle2, Clock, FileCheck, Target, Timer, TrendingUp, Truck, Users, Zap } from 'lucide-react'
+import { AlertTriangle, Car, CheckCircle2, Clock, FileCheck, Timer, TrendingUp, Truck, Users, Zap } from 'lucide-react'
 
 function formatPct(value) {
   return value != null ? `${value}%` : '—'
@@ -13,10 +13,6 @@ function formatPct(value) {
 
 function formatHours(value) {
   return value != null ? `${value} hrs` : '—'
-}
-
-function formatScore(value) {
-  return value != null ? String(value) : '—'
 }
 
 function MiniBarChart({ data }) {
@@ -57,7 +53,6 @@ function ManagerDashboard() {
     { label: 'Delivery Completion Rate', value: formatPct(s.delivery_completion_pct), icon: CheckCircle2, iconVariant: 'green' },
     { label: 'Average Delivery Time', value: formatHours(s.avg_delivery_time_hours), icon: Timer, iconVariant: 'purple', hint: 'Per completed delivery' },
     { label: 'Driver Utilization Rate', value: formatPct(s.driver_utilization_pct), icon: Users, iconVariant: 'default' },
-    { label: 'Best-Fit Assignment Efficiency', value: formatScore(s.best_fit_efficiency_score), icon: Target, iconVariant: 'orange' },
     { label: 'PoD Completion Rate', value: formatPct(s.pod_completion_pct), icon: FileCheck, iconVariant: 'green' },
     { label: 'Exception Rate', value: formatPct(s.exception_rate_pct), icon: Zap, iconVariant: s.exception_rate_pct > 10 ? 'red' : 'default' },
   ]

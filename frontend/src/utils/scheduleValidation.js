@@ -6,6 +6,11 @@ export const SCHEDULE_END_REQUIRED = 'End date and time is required.'
 export const SCHEDULE_END_AFTER_START =
   'End date and time must be after the start date and time.'
 
+export const MIN_DELIVERY_WINDOW_MINUTES = 60
+
+export const scheduleMinWindowMessage = (minutes = MIN_DELIVERY_WINDOW_MINUTES) =>
+  `Delivery window must be at least ${minutes} minutes.`
+
 /** True if datetime-local or ISO value is before now (minute precision). */
 export function isPastScheduleValue(value) {
   if (!value) return false
@@ -47,12 +52,28 @@ export function validateJobSchedule(fields, options = {}) {
     errors.scheduled_end = PAST_SCHEDULE_MESSAGE
   }
   if (start && end && !errors.scheduled_start && !errors.scheduled_end) {
-    if (new Date(end).getTime() <= new Date(start).getTime()) {
+    const diffMs = new Date(end).getTime() - new Date(start).getTime()
+    if (diffMs <= 0) {
       errors.scheduled_end = SCHEDULE_END_AFTER_START
+    } else if (diffMs < MIN_DELIVERY_WINDOW_MINUTES * 60 * 1000) {
+      errors.scheduled_end = scheduleMinWindowMessage()
     }
   }
 
   return errors
+}
+
+/** Minimum value for end datetime-local: start + minimum delivery window (or now). */
+export function minEndDatetimeLocalValue(start, minMinutes = MIN_DELIVERY_WINDOW_MINUTES) {
+  const pad = (n) => String(n).padStart(2, '0')
+  const toLocal = (d) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+
+  const now = new Date()
+  const base = start ? new Date(start) : now
+  const withWindow = new Date(base.getTime() + minMinutes * 60 * 1000)
+  const effective = withWindow.getTime() < now.getTime() ? now : withWindow
+  return toLocal(effective)
 }
 
 /** Minimum value for <input type="datetime-local" /> (local time, no past times today). */

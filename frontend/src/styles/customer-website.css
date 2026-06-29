@@ -472,6 +472,97 @@
   color: var(--muted);
 }
 
+/* Support page — FAQ + inquiry side by side on desktop */
+.customer-support-faq-inquiry {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+
+.customer-support-faq-inquiry__col {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+/* Customer feedback */
+.customer-feedback-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--customer-section-gap, 28px);
+  padding-bottom: 24px;
+}
+
+.customer-feedback-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.customer-feedback-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.customer-feedback-card {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.customer-feedback-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.customer-feedback-card__ref {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.customer-feedback-card__subject {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.customer-feedback-card__meta {
+  margin: 0 0 10px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.customer-feedback-card__message {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .customer-support-faq-inquiry {
+    grid-template-columns: 1fr;
+    gap: var(--customer-section-gap, 28px);
+  }
+}
+
 /* Support page — single row contact cards, contained on narrow screens */
 .customer-support-actions {
   display: flex;

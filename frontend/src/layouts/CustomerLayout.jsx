@@ -4,7 +4,7 @@ import PageTransition from '../components/PageTransition'
 import RouteFallback from '../components/RouteFallback'
 import SyncStatusBar from '../components/SyncStatusBar'
 import CustomerBottomNav from '../components/customer/CustomerBottomNav'
-import CustomerLegalFooter from '../components/customer/CustomerLegalFooter'
+import DeliverexSiteFooter from '../components/customer/DeliverexSiteFooter'
 import CustomerNavBar from '../components/customer/CustomerNavBar'
 import SessionStatusBar from '../components/session/SessionStatusBar'
 import { CustomerSurfaceProvider } from '../context/CustomerSurfaceContext'
@@ -36,7 +36,7 @@ function CustomerLayout() {
         </main>
       </PageTransition>
 
-      <CustomerLegalFooter compact={pwaMode} />
+      <DeliverexSiteFooter />
       <CustomerBottomNav />
       </div>
     </CustomerSurfaceProvider>

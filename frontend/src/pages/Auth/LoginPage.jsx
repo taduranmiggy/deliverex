@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { login as loginRequest } from '../../api/auth'
 import useAuth from '../../hooks/useAuth'
-import CustomerLegalFooter from '../../components/customer/CustomerLegalFooter'
+import DeliverexSiteFooter from '../../components/customer/DeliverexSiteFooter'
 import { roleHome } from '../../utils/roleUtils'
 import { IconChevronLeft, IconLockOutlined, IconMail } from '../../components/DxIcons'
 import './LoginPage.css'
@@ -217,10 +217,7 @@ function LoginPage() {
           </div>
         </aside>
       </section>
-      <div className="auth-footer-split-wrap">
-        <p className="auth-footer-tagline auth-footer-split">Deliverex Logistics - Providential 628 Site Preparation Services.</p>
-        <CustomerLegalFooter />
-      </div>
+      <DeliverexSiteFooter />
     </div>
   )
 }

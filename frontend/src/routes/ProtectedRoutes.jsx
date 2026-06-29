@@ -33,6 +33,7 @@ function ProtectedRoutes({ children, roles }) {
         pathname.startsWith('/customer/about') ||
         pathname.startsWith('/customer/services') ||
         pathname.startsWith('/customer/support') ||
+        pathname.startsWith('/customer/feedback') ||
         pathname.startsWith('/customer/history') ||
         pathname.startsWith('/customer/account')
       if (!customerPublic) {

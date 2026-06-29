@@ -26,7 +26,7 @@ function AssignmentAuditSection({ title = 'Assignment Audit Trail', limit = 8, o
   return (
     <SectionCard title={title} action={<ClipboardList size={16} color="var(--color-primary)" />}>
       <DataTable
-        headers={['When', 'Dispatcher', 'Job', 'Best-Fit', 'Assigned', 'Override Reason']}
+        headers={['When', 'Dispatcher', 'Job', 'Assigned', 'Notes']}
         loading={loading}
         empty={
           <EmptyState
@@ -46,28 +46,13 @@ function AssignmentAuditSection({ title = 'Assignment Audit Trail', limit = 8, o
               {t.job_order_id ? formatJobPublicId(t.job_order_id) : '—'}
             </td>
             <td style={{ fontSize: '0.8125rem' }}>
-              {t.recommended_driver_name
-                ? (
-                  <>
-                    <strong>{t.recommended_driver_name}</strong>
-                    {t.recommended_vehicle_plate ? ` · ${t.recommended_vehicle_plate}` : ''}
-                  </>
-                )
-                : '—'}
-            </td>
-            <td style={{ fontSize: '0.8125rem' }}>
               <strong>{t.assigned_driver_name}</strong>
               {t.assigned_vehicle_plate ? ` · ${t.assigned_vehicle_plate}` : ''}
-              {t.is_override && (
-                <span className="badge-dx badge-dx--reviewing" style={{ marginLeft: 6, fontSize: '0.65rem' }}>
-                  Override
-                </span>
-              )}
             </td>
             <td style={{ fontSize: '0.8125rem', color: 'var(--muted)', maxWidth: 220 }}>
               {t.override_reason
                 ? (t.override_reason.length > 70 ? `${t.override_reason.slice(0, 70)}…` : t.override_reason)
-                : t.is_override ? '—' : 'Matched Best-Fit'}
+                : '—'}
             </td>
           </tr>
         ))}
