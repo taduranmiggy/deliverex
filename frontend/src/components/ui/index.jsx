@@ -460,6 +460,8 @@ export function ProofImageModal({ documentId, title = 'En Route Proof', onClose 
   )
 }
 
+export { ConfirmationModal } from './ConfirmationModal'
+
 /* ─── FormField ─────────────────────────────────────────────── */
 export function FormField({ label, error, children, required, hint }) {
   return (

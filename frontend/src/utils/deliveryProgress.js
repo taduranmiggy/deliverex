@@ -4,7 +4,7 @@ export const DELIVERY_PROGRESS_STEPS = [
   { key: 'assigned', label: 'Dispatched', icon: CheckCircle2 },
   { key: 'en_route_to_pickup', label: 'En Route to Pickup', icon: Truck },
   { key: 'arrived_at_pickup', label: 'Arrived at Pickup', icon: MapPin },
-  { key: 'en_route_to_destination', label: 'En Route to Destination', icon: Truck },
+  { key: 'en_route_to_destination', label: 'Enroute to Destination', icon: Truck },
   { key: 'arrived', label: 'Arrived', icon: MapPin },
   { key: 'completed', label: 'Completed', icon: CheckCircle2 },
 ]

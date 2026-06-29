@@ -28,11 +28,17 @@ export function isValidPhMobileDigits(digits) {
   return PH_MOBILE_DIGITS.test(digits)
 }
 
-/** Compact storage: +639171234567 */
+/** Compact storage: +639171234567 (complete numbers only). */
 export function formatPhoneForStorage(nationalDigits) {
   const digits = sanitizePhMobileInput(nationalDigits)
   if (!isValidPhMobileDigits(digits)) return ''
   return `+63${digits}`
+}
+
+/** Form state while typing — keeps partial +63… values until the number is complete. */
+export function formatPhoneDraftForStorage(nationalDigits) {
+  const digits = sanitizePhMobileInput(nationalDigits)
+  return digits ? `+63${digits}` : ''
 }
 
 /** Display digits for the input beside fixed +63. */

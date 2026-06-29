@@ -3,6 +3,7 @@ import { createUser, deleteUser, fetchCompanies, fetchRoles, fetchUsers, sendUse
 import PhonePhInput from '../../components/PhonePhInput'
 import UserNameFields from '../../components/UserNameFields'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
+import useConfirmation from '../../hooks/useConfirmation'
 import { composeFullName, splitFullName, validateNameParts } from '../../utils/nameParts'
 import { parsePhoneForInput, validatePhPhone } from '../../utils/phonePh'
 import { Plus, Users } from 'lucide-react'
@@ -332,6 +333,7 @@ function UserManagementPage() {
   const [companyFilter, setCompanyFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage]         = useState(1)
+  const { requestConfirmation, confirmationModal } = useConfirmation()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -368,10 +370,24 @@ function UserManagementPage() {
     } catch (err) { setError(err.message) }
   }
 
-  const handleDelete = async (user) => {
-    if (!window.confirm(`Delete user "${user.name}"?`)) return
-    try { await deleteUser(user.id); flash('User deleted.'); load() }
-    catch (err) { setError(err.message) }
+  const handleDelete = (user) => {
+    requestConfirmation({
+      title: 'Delete User Account',
+      message: `Are you sure you want to delete "${user.name}"?`,
+      detail: 'This action cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteUser(user.id)
+          flash('User deleted.')
+          load()
+        } catch (err) {
+          setError(err.message)
+          throw err
+        }
+      },
+    })
   }
 
   const handleSendInvite = async (user) => {
@@ -576,6 +592,7 @@ function UserManagementPage() {
           onSaved={handleSaved}
         />
       )}
+      {confirmationModal}
     </>
   )
 }

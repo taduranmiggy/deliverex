@@ -1,4 +1,4 @@
-import { formatPhoneForStorage, parsePhoneForInput, sanitizePhMobileInput } from '../utils/phonePh.js'
+import { formatPhoneDraftForStorage, parsePhoneForInput, sanitizePhMobileInput } from '../utils/phonePh.js'
 
 /**
  * Philippine mobile input with fixed +63 prefix.
@@ -17,7 +17,7 @@ export function PhonePhInput({
 
   const handleChange = (e) => {
     const next = sanitizePhMobileInput(e.target.value)
-    onChange(next ? formatPhoneForStorage(next) : '')
+    onChange(next ? formatPhoneDraftForStorage(next) : '')
   }
 
   return (

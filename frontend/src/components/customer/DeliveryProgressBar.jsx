@@ -1,7 +1,8 @@
 import { DELIVERY_PROGRESS_STEPS, deliveryProgressIndex, isDeliveryCancelled } from '../../utils/deliveryProgress'
 
-function DeliveryProgressBar({ status, showStepNumbers = false }) {
+function DeliveryProgressBar({ status, showStepNumbers = false, layout = 'horizontal' }) {
   const currentIdx = deliveryProgressIndex(status)
+  const stacked = layout === 'stacked'
 
   if (isDeliveryCancelled(status)) {
     return (
@@ -12,8 +13,8 @@ function DeliveryProgressBar({ status, showStepNumbers = false }) {
   }
 
   return (
-    <div className="pwa-delivery-progress" aria-label="Delivery progress">
-      <div className="pwa-delivery-progress__track pwa-delivery-progress__track--seven">
+    <div className={`pwa-delivery-progress${stacked ? ' pwa-delivery-progress--stacked' : ''}`} aria-label="Delivery progress">
+      <div className={`pwa-delivery-progress__track pwa-delivery-progress__track--seven${stacked ? ' pwa-delivery-progress__track--stacked' : ''}`}>
         {DELIVERY_PROGRESS_STEPS.map((step, idx) => {
           const done = idx < currentIdx
           const active = idx === currentIdx

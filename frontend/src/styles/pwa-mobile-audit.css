@@ -353,7 +353,8 @@
   padding: 12px 0;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .pwa-delivery-progress__track {
@@ -429,6 +430,44 @@
 .pwa-delivery-progress__label--active {
   font-weight: 700;
   color: var(--color-primary);
+}
+
+/* Vertical list — fits 7 steps in the tracking status panel */
+.pwa-delivery-progress--stacked .pwa-delivery-progress__track,
+.pwa-delivery-progress__track--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  overflow: visible;
+}
+
+.pwa-delivery-progress--stacked .pwa-delivery-progress__step,
+.pwa-delivery-progress__track--stacked .pwa-delivery-progress__step {
+  flex: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--stroke);
+}
+
+.pwa-delivery-progress--stacked .pwa-delivery-progress__step:last-child,
+.pwa-delivery-progress__track--stacked .pwa-delivery-progress__step:last-child {
+  border-bottom: none;
+}
+
+.pwa-delivery-progress--stacked .pwa-delivery-progress__connector,
+.pwa-delivery-progress__track--stacked .pwa-delivery-progress__connector {
+  display: none;
+}
+
+.pwa-delivery-progress--stacked .pwa-delivery-progress__label,
+.pwa-delivery-progress__track--stacked .pwa-delivery-progress__label {
+  margin-top: 0;
+  text-align: left;
+  font-size: 0.8125rem;
+  flex: 1;
 }
 
 .pwa-delivery-progress__track--seven .pwa-delivery-progress__label {

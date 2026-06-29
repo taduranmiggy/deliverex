@@ -8,6 +8,7 @@ import {
 import CompanyCombobox from '../../components/CompanyCombobox'
 import CreatableCombobox from '../../components/CreatableCombobox'
 import { useToast } from '../../context/ToastContext'
+import useConfirmation from '../../hooks/useConfirmation'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
 import {
@@ -1023,6 +1024,7 @@ function CreateJobOrderPage() {
   const [search, setSearch]         = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage]             = useState(1)
+  const { requestConfirmation, confirmationModal } = useConfirmation()
 
   const load = useCallback(async () => {
     setClientsLoading(true)
@@ -1127,17 +1129,27 @@ function CreateJobOrderPage() {
     setSelected(savedOrder)
   }
 
-  const handleDelete = async (order) => {
-    if (!window.confirm(`Delete job order ${formatJobPublicId(order.id)}? This cannot be undone.`)) return
-    setError('')
-    try {
-      await deleteJobOrder(order.id)
-      toast(`Job order ${formatJobPublicId(order.id)} deleted.`, 'warning')
-      setSelected(null)
-      load()
-    } catch (err) {
-      toast(err.message || 'Failed to delete job order.', 'error')
-    }
+  const handleDelete = (order) => {
+    const publicId = formatJobPublicId(order.id)
+    requestConfirmation({
+      title: 'Delete Job Order',
+      message: `Are you sure you want to delete job order ${publicId}?`,
+      detail: 'This action cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        setError('')
+        try {
+          await deleteJobOrder(order.id)
+          toast(`Job order ${publicId} deleted.`, 'warning')
+          setSelected(null)
+          load()
+        } catch (err) {
+          toast(err.message || 'Failed to delete job order.', 'error')
+          throw err
+        }
+      },
+    })
   }
 
   const firstAssignment = selected?.assignments?.[0]
@@ -1392,6 +1404,7 @@ function CreateJobOrderPage() {
           </div>
         </div>
       </div>
+      {confirmationModal}
     </section>
   )
 }

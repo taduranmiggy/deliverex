@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { convertInquiry, deleteInquiry, fetchInquiries, markInquiryRead } from '../../api/admin'
+import useConfirmation from '../../hooks/useConfirmation'
 
 const STATUS_BADGE = {
   new:       'badge-dx badge-dx--pending',
@@ -17,6 +18,7 @@ function InquiriesPage() {
   const [msg, setMsg]             = useState('')
   const [page, setPage]           = useState(1)
   const [meta, setMeta]           = useState({ last_page: 1 })
+  const { requestConfirmation, confirmationModal } = useConfirmation()
 
   const load = useCallback(async (p = 1, f = 'all') => {
     setError('')
@@ -34,20 +36,45 @@ function InquiriesPage() {
     try { await markInquiryRead(id); load(page, filter) } catch (err) { setError(err.message) }
   }
 
-  const handleConvert = async (id) => {
-    if (!window.confirm('Convert this inquiry into a Job Order?')) return
-    try {
-      const res = await convertInquiry(id)
-      setMsg(`Job Order created (Tracking: ${res.job_order?.tracking_code}). Redirecting to Job Orders…`)
-      load(page, filter)
-      setTimeout(() => { setMsg(''); navigate('/dispatcher/job-orders') }, 2500)
-    } catch (err) { setError(err.message) }
+  const handleConvert = (id) => {
+    requestConfirmation({
+      title: 'Convert Inquiry',
+      message: 'Convert this inquiry into a Job Order?',
+      detail: 'A new job order will be created from this inquiry.',
+      confirmLabel: 'Convert',
+      variant: 'primary',
+      onConfirm: async () => {
+        try {
+          const res = await convertInquiry(id)
+          setMsg(`Job Order created (Tracking: ${res.job_order?.tracking_code}). Redirecting to Job Orders…`)
+          load(page, filter)
+          setTimeout(() => { setMsg(''); navigate('/dispatcher/job-orders') }, 2500)
+        } catch (err) {
+          setError(err.message)
+          throw err
+        }
+      },
+    })
   }
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this inquiry?')) return
-    try { await deleteInquiry(id); setSelected(null); load(page, filter) }
-    catch (err) { setError(err.message) }
+  const handleDelete = (id) => {
+    requestConfirmation({
+      title: 'Delete Inquiry',
+      message: 'Are you sure you want to delete this inquiry?',
+      detail: 'This action cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteInquiry(id)
+          setSelected(null)
+          load(page, filter)
+        } catch (err) {
+          setError(err.message)
+          throw err
+        }
+      },
+    })
   }
 
   const unreadCount = inquiries.filter((i) => i.status === 'new').length
@@ -163,6 +190,7 @@ function InquiriesPage() {
           </div>
         </div>
       </div>
+      {confirmationModal}
     </section>
   )
 }

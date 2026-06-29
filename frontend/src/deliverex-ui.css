@@ -579,12 +579,13 @@
 .btn-dx-secondary:hover, .btn.ghost:hover { background: var(--slate-50); border-color: var(--slate-300); color: var(--text); }
 .btn-dx-secondary:disabled { opacity: 0.55; cursor: not-allowed; }
 
-.btn-danger {
+.btn-dx-danger, .btn-danger {
   background: var(--color-error-light);
   color: var(--color-error);
   border-color: var(--color-error-mid);
 }
-.btn-danger:hover { background: var(--color-error); color: #fff; border-color: var(--color-error); }
+.btn-dx-danger:hover, .btn-danger:hover { background: var(--color-error); color: #fff; border-color: var(--color-error); }
+.btn-dx-danger:disabled, .btn-danger:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
 .btn-sm { padding: 6px 12px; font-size: 0.8125rem; border-radius: 8px; }
 .btn-lg { padding: 12px 24px; font-size: 1rem; border-radius: 14px; }
@@ -1052,6 +1053,106 @@
 .dx-modal-close:hover { background: var(--slate-200); color: var(--text); }
 
 .dx-modal .form-grid { padding: 24px 28px 28px; }
+
+/* ── Confirmation modal ──────────────────────────────────── */
+.dx-confirm-modal {
+  padding: 0;
+  overflow: hidden;
+}
+
+.dx-confirm-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 22px 24px 0;
+}
+
+.dx-confirm-modal__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.dx-confirm-modal__icon--danger {
+  background: var(--color-error-light);
+  color: var(--color-error);
+}
+
+.dx-confirm-modal__icon--warning {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.dx-confirm-modal__icon--archive {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.dx-confirm-modal__icon--restore {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.dx-confirm-modal__icon--primary {
+  background: #dbeafe;
+  color: var(--color-primary);
+}
+
+.dx-confirm-modal__body {
+  padding: 16px 24px 8px;
+}
+
+.dx-confirm-modal__title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  line-height: 1.35;
+}
+
+.dx-confirm-modal__message {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.dx-confirm-modal__detail {
+  margin: 10px 0 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.dx-confirm-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 24px 24px;
+  border-top: 1px solid var(--stroke);
+  margin-top: 12px;
+}
+
+.dx-confirm-modal__spinner {
+  animation: spin 0.7s linear infinite;
+  margin-right: 6px;
+  vertical-align: -3px;
+}
+
+@media (max-width: 520px) {
+  .dx-confirm-modal__footer {
+    flex-direction: column-reverse;
+  }
+
+  .dx-confirm-modal__footer .btn-dx-secondary,
+  .dx-confirm-modal__footer .btn-dx-primary,
+  .dx-confirm-modal__footer .btn-dx-danger {
+    width: 100%;
+    justify-content: center;
+  }
+}
 
 /* ── KV PAIRS ────────────────────────────────────────────── */
 .dx-kv {

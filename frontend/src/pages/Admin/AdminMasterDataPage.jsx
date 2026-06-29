@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { archiveMasterDataRecord, createMasterDataRecord, fetchMasterData, generateAllDriverAccounts, generateDriverAccount, updateMasterDataRecord } from '../../api/admin'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
+import useConfirmation from '../../hooks/useConfirmation'
 import { ChevronRight, Database, Link2, Plus, RefreshCw, UserPlus } from 'lucide-react'
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
@@ -422,6 +423,7 @@ function AdminMasterDataPage() {
   const [generatingAll, setGeneratingAll] = useState(false)
   const [genResult, setGenResult]         = useState(null)  // bulk result summary
   const [credentialModal, setCredentialModal] = useState(null)
+  const { requestConfirmation, confirmationModal } = useConfirmation()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -513,33 +515,52 @@ function AdminMasterDataPage() {
     }
   }
 
-  const onGenerateAll = async () => {
-    if (!window.confirm('Generate login accounts for all unlinked drivers? Each new account gets a unique temporary password (DRV-XXXXXX).')) return
-    setGeneratingAll(true)
-    setError('')
-    setGenResult(null)
-    try {
-      const res = await generateAllDriverAccounts()
-      setGenResult(res)
-      flash(res.message || 'Done.')
-      load()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setGeneratingAll(false)
-    }
+  const onGenerateAll = () => {
+    requestConfirmation({
+      title: 'Generate Driver Accounts',
+      message: 'Generate login accounts for all unlinked drivers?',
+      detail: 'Each new account gets a unique temporary password (DRV-XXXXXX).',
+      confirmLabel: 'Generate Accounts',
+      variant: 'warning',
+      onConfirm: async () => {
+        setGeneratingAll(true)
+        setError('')
+        setGenResult(null)
+        try {
+          const res = await generateAllDriverAccounts()
+          setGenResult(res)
+          flash(res.message || 'Done.')
+          load()
+        } catch (err) {
+          setError(err.message)
+          throw err
+        } finally {
+          setGeneratingAll(false)
+        }
+      },
+    })
   }
 
   // archive accepts an explicit tabKey so accordion spec rows can archive correctly
-  const onArchive = async (item, tabKey = tab) => {
-    if (!window.confirm(`Archive this ${TAB_CONFIG[tabKey].title.toLowerCase()} record?`)) return
-    try {
-      await archiveMasterDataRecord(tabKey, item.id)
-      flash('Record archived.')
-      load()
-    } catch (err) {
-      setError(err.message)
-    }
+  const onArchive = (item, tabKey = tab) => {
+    const recordTitle = TAB_CONFIG[tabKey].title
+    requestConfirmation({
+      title: `Archive ${recordTitle}`,
+      message: `Are you sure you want to archive this ${recordTitle.toLowerCase()} record?`,
+      detail: 'Archived records can still be restored later.',
+      confirmLabel: 'Archive',
+      variant: 'archive',
+      onConfirm: async () => {
+        try {
+          await archiveMasterDataRecord(tabKey, item.id)
+          flash('Record archived.')
+          load()
+        } catch (err) {
+          setError(err.message)
+          throw err
+        }
+      },
+    })
   }
 
   // ── Add button label ───────────────────────────────────────────────────
@@ -759,6 +780,7 @@ function AdminMasterDataPage() {
           </div>
         </div>
       )}
+      {confirmationModal}
     </>
   )
 }

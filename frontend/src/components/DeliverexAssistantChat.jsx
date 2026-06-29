@@ -108,7 +108,7 @@ const STATUS_GUIDE = [
   { label: 'Dispatched', desc: 'Driver and vehicle assigned.', tone: '#2563eb' },
   { label: 'En Route to Pickup', desc: 'Driver heading to pickup location.', tone: '#0891b2' },
   { label: 'Arrived at Pickup', desc: 'Driver at pickup; loading cargo.', tone: '#0d9488' },
-  { label: 'En Route to Destination', desc: 'Cargo loaded; heading to drop-off.', tone: '#0284c7' },
+  { label: 'Enroute to Destination', desc: 'Cargo loaded; heading to drop-off.', tone: '#0284c7' },
   { label: 'Arrived', desc: 'Driver has reached the destination.', tone: '#d97706' },
   { label: 'Completed', desc: 'Delivery finished successfully.', tone: '#059669' },
 ]

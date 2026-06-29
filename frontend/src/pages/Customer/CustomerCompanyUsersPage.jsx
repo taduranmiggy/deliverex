@@ -4,6 +4,7 @@ import {
   deleteCompanyUser, fetchCompanyUsers, updateCompanyUser,
 } from '../../api/customerPortal'
 import useAuth from '../../hooks/useAuth'
+import useConfirmation from '../../hooks/useConfirmation'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { Users } from 'lucide-react'
@@ -16,6 +17,7 @@ function CustomerCompanyUsersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const msg = 'New customer users are now provisioned by admins in User Management.'
+  const { requestConfirmation, confirmationModal } = useConfirmation()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -41,14 +43,23 @@ function CustomerCompanyUsersPage() {
     }
   }
 
-  const removeUser = async (row) => {
-    if (!window.confirm(`Remove ${row.user?.name}?`)) return
-    try {
-      await deleteCompanyUser(row.id)
-      load()
-    } catch (err) {
-      setError(err.message)
-    }
+  const removeUser = (row) => {
+    requestConfirmation({
+      title: 'Remove Team Member',
+      message: `Are you sure you want to remove ${row.user?.name}?`,
+      detail: 'They will no longer have access to this company account.',
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteCompanyUser(row.id)
+          load()
+        } catch (err) {
+          setError(err.message)
+          throw err
+        }
+      },
+    })
   }
 
   if (!isOwner) {
@@ -96,6 +107,7 @@ function CustomerCompanyUsersPage() {
       </section>
 
       <p><Link to={paths.profile}>Back to account</Link></p>
+      {confirmationModal}
     </CustomerPageShell>
   )
 }
