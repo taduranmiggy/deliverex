@@ -10,7 +10,7 @@ use App\Models\DispatchAssignment;
 use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Vehicle;
-use App\Services\Assignment\DispatchResourceService;
+use App\Services\Assignment\BestFitAssignmentService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Support\AssignmentScheduleConflict;
 use App\Support\AuditLogger;
@@ -22,7 +22,7 @@ class AssignmentController extends Controller
 {
     public function __construct(
         private NotificationDispatcher $notificationDispatcher,
-        private DispatchResourceService $dispatchResourceService
+        private BestFitAssignmentService $bestFitAssignmentService
     ) {
     }
 
@@ -44,20 +44,13 @@ class AssignmentController extends Controller
         );
     }
 
-    public function options(JobOrder $jobOrder)
-    {
-        return response()->json([
-            'job_order_id' => $jobOrder->id,
-            'options' => $this->dispatchResourceService->optionsForJob($jobOrder),
-        ]);
-    }
-
     public function store(Request $request)
     {
         $data = $request->validate([
             'job_order_id'     => 'required|exists:job_orders,id',
             'driver_id'        => 'required|exists:drivers,id',
             'vehicle_id'       => 'required|exists:vehicles,id',
+            'override_reason'  => 'nullable|string|max:500',
         ]);
 
         $driver   = Driver::with('user')->findOrFail($data['driver_id']);
@@ -117,6 +110,18 @@ class AssignmentController extends Controller
             return response()->json(['message' => 'Vehicle has a conflicting assignment for this schedule.'], 422);
         }
 
+        $recommendations = $this->bestFitAssignmentService->recommend($jobOrder);
+        $recommended     = $recommendations[0] ?? null;
+        $isOverride      = $recommended
+            ? ($recommended['driver_id'] !== $driver->id || $recommended['vehicle_id'] !== $vehicle->id)
+            : false;
+
+        if ($isOverride && ! trim((string) ($data['override_reason'] ?? ''))) {
+            return response()->json([
+                'message' => 'Override reason is required when assignment differs from the Best-Fit recommendation.',
+            ], 422);
+        }
+
         $assignment = DispatchAssignment::create([
             'job_order_id' => $jobOrder->id,
             'driver_id'    => $driver->id,
@@ -129,7 +134,7 @@ class AssignmentController extends Controller
         DeliveryStatusLog::create([
             'assignment_id' => $assignment->id,
             'status'        => DeliveryStatus::ASSIGNED,
-            'notes'         => 'Dispatched by dispatcher',
+            'notes'         => 'Dispatched via Best-Fit assignment',
             'created_at'    => now(),
         ]);
 
@@ -139,7 +144,7 @@ class AssignmentController extends Controller
             'status' => DeliveryStatus::ASSIGNED,
             'updated_by' => $request->user()?->id,
             'updated_at' => now(),
-            'remarks' => 'Dispatched by dispatcher',
+            'remarks' => 'Dispatched via Best-Fit assignment',
             'created_at' => now(),
         ]);
 
@@ -155,24 +160,27 @@ class AssignmentController extends Controller
             'assignment_id'             => $assignment->id,
             'job_order_id'              => $jobOrder->id,
             'dispatcher_id'             => $request->user()?->id,
-            'recommended_driver_id'     => null,
-            'recommended_vehicle_id'    => null,
-            'recommended_driver_name'   => null,
-            'recommended_vehicle_plate' => null,
+            'recommended_driver_id'     => $recommended ? $recommended['driver_id'] : null,
+            'recommended_vehicle_id'    => $recommended ? $recommended['vehicle_id'] : null,
+            'recommended_driver_name'   => $recommended ? ($recommended['driver_name'] ?? null) : null,
+            'recommended_vehicle_plate' => $recommended ? ($recommended['vehicle_plate'] ?? null) : null,
             'assigned_driver_id'        => $driver->id,
             'assigned_vehicle_id'       => $vehicle->id,
             'assigned_driver_name'      => $driver->full_name ?: ($driver->user?->name ?? 'Driver #'.$driver->id),
             'assigned_vehicle_plate'    => $vehicle->plate_no,
-            'is_override'               => false,
-            'override_reason'           => null,
-            'best_fit_score'            => null,
-            'best_fit_reasons'          => null,
+            'is_override'               => $isOverride,
+            'override_reason'           => $isOverride ? trim($data['override_reason']) : null,
+            'best_fit_score'            => $recommended ? ($recommended['score'] ?? null) : null,
+            'best_fit_reasons'          => $recommended ? ($recommended['reasons'] ?? null) : null,
         ]);
 
         AuditLogger::record($request->user(), 'dispatch.assignment_created', DispatchAssignment::class, $assignment->id, [
             'job_order_id'      => $jobOrder->id,
             'driver_id'         => $driver->id,
             'vehicle_id'        => $vehicle->id,
+            'recommended'       => $recommended,
+            'override'          => $isOverride,
+            'override_reason'   => $auditTrail->override_reason,
             'audit_trail_id'    => $auditTrail->id,
         ], $request);
 

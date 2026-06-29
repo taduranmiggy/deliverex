@@ -1,8 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { resetPassword } from '../../api/auth'
+import { fetchPasswordResetContext, resetPassword } from '../../api/auth'
 import { isStandalonePwa } from '../../utils/pwaUtils'
 import './LoginPage.css'
+
+const BLANK_ADDRESS = {
+  street: '',
+  barangay: '',
+  city: '',
+  province: '',
+}
 
 function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
@@ -17,8 +24,38 @@ function ResetPasswordPage() {
 
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
+  const [companyAddress, setCompanyAddress] = useState(BLANK_ADDRESS)
+  const [context, setContext] = useState(null)
+  const [loadingContext, setLoadingContext] = useState(true)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!token || !email) {
+      setLoadingContext(false)
+      return undefined
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await fetchPasswordResetContext({ email, token })
+        if (!cancelled) setContext(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setLoadingContext(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [email, token])
+
+  const needsCompanyAddress = Boolean(context?.needs_company_address)
+
+  const setAddress = (key) => (e) => {
+    setCompanyAddress((prev) => ({ ...prev, [key]: e.target.value }))
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -37,17 +74,35 @@ function ResetPasswordPage() {
       return
     }
 
+    if (needsCompanyAddress) {
+      const missing = ['street', 'barangay', 'city', 'province'].filter((k) => !companyAddress[k]?.trim())
+      if (missing.length) {
+        setError('Complete company address is required before activating your account.')
+        return
+      }
+    }
+
     setSubmitting(true)
     try {
-      await resetPassword({
+      const payload = {
         token,
         email,
         password,
         password_confirmation: passwordConfirmation,
-      })
+      }
+      if (needsCompanyAddress) {
+        payload.company_address = {
+          street: companyAddress.street.trim(),
+          barangay: companyAddress.barangay.trim(),
+          city: companyAddress.city.trim(),
+          province: companyAddress.province.trim(),
+        }
+      }
+
+      await resetPassword(payload)
       navigate(loginPath, {
         replace: true,
-        state: { notice: 'Password updated. Sign in with your new password.' },
+        state: { notice: 'Account activated. Sign in with your new password.' },
       })
     } catch (err) {
       setError(err.message)
@@ -72,14 +127,59 @@ function ResetPasswordPage() {
     )
   }
 
+  if (loadingContext) {
+    return (
+      <div className="auth-page auth-page--dx">
+        <div className="auth-card auth-card--dx"><p>Validating activation link…</p></div>
+      </div>
+    )
+  }
+
+  if (error && !context) {
+    return (
+      <div className="auth-page auth-page--dx">
+        <div className="auth-card auth-card--dx">
+          <h1>Activation unavailable</h1>
+          <p className="auth-error-dx">{error}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="auth-page auth-page--dx">
-      <div className="auth-card auth-card--dx">
-        <h1>Create new password</h1>
+      <div className="auth-card auth-card--dx auth-card--signup">
+        <h1>{needsCompanyAddress ? 'Activate your account' : 'Create new password'}</h1>
         <p className="auth-welcome auth-welcome--sub">
-          Set a new password for <strong>{email}</strong>.
+          {needsCompanyAddress ? (
+            <>Set your password and company address for <strong>{context?.company_name}</strong>.</>
+          ) : (
+            <>Set a new password for <strong>{email}</strong>.</>
+          )}
         </p>
         <form onSubmit={handleSubmit} className="auth-form-dx">
+          {needsCompanyAddress && (
+            <div className="auth-form-section">
+              <p className="auth-form-section__title">Company address</p>
+              <label>
+                Street / building / site
+                <input required value={companyAddress.street} onChange={setAddress('street')} />
+              </label>
+              <label>
+                Barangay
+                <input required value={companyAddress.barangay} onChange={setAddress('barangay')} />
+              </label>
+              <label>
+                City / municipality
+                <input required value={companyAddress.city} onChange={setAddress('city')} />
+              </label>
+              <label>
+                Province
+                <input required value={companyAddress.province} onChange={setAddress('province')} />
+              </label>
+            </div>
+          )}
+
           <label>
             New password
             <input
@@ -104,7 +204,7 @@ function ResetPasswordPage() {
           </label>
           {error ? <p className="auth-error-dx">{error}</p> : null}
           <button className="btn-dx-login" type="submit" disabled={submitting}>
-            {submitting ? 'Saving…' : 'Update password'}
+            {submitting ? 'Saving…' : needsCompanyAddress ? 'Activate account' : 'Update password'}
           </button>
         </form>
         <p className="auth-alt-link" style={{ marginTop: 16 }}>

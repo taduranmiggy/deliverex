@@ -58,13 +58,15 @@ if ($jo.tracking_code) { Ok "tracking_code = $($jo.tracking_code)" } else { Bad 
 if ($jo.quarry.quarry_name) { Ok "quarry auto-filled = $($jo.quarry.quarry_name)" } else { Bad 'quarry not auto-filled' }
 $tracking = $jo.tracking_code
 
-# ── 3. Dispatch options ──
-Step '3. Dispatch resource options'
-$opts = Invoke-RestMethod -Uri "$base/dispatch/assignments/options/$jobId" -Headers (Hdr $tDisp)
-if ($opts.options.drivers.Count -gt 0) { Ok "drivers available ($($opts.options.drivers.Count))" } else { Bad 'no drivers available' }
-if ($opts.options.vehicles.Count -gt 0) { Ok "vehicles available ($($opts.options.vehicles.Count))" } else { Bad 'no vehicles available' }
-$vehicleId = $opts.options.vehicles[0].id
-Ok "selected vehicle_id=$vehicleId"
+# ── 3. Best-Fit ──
+Step '3. Best-Fit recommendation'
+$bf = Invoke-RestMethod -Uri "$base/dispatch/best-fit/$jobId" -Headers (Hdr $tDisp)
+if ($bf.recommendations.Count -gt 0) { Ok "recommendations returned ($($bf.recommendations.Count))" } else { Bad 'no recommendations' }
+$top = $bf.recommendations[0]
+if ($top.reasons.Count -gt 0) { Ok "top recommendation has reasons ($($top.reasons.Count))" } else { Bad 'no reasons on recommendation' }
+if ($top.vehicle_cbm_capacity) { Ok "capacity matching present (cbm=$($top.vehicle_cbm_capacity), load=$($top.load_volume))" } else { Bad 'no capacity data' }
+$vehicleId = $top.vehicle_id
+Ok "top vehicle_id=$vehicleId type=$($top.vehicle_type)"
 
 # ── 4. Dispatcher assignment (assign demo driver so PWA can be tested) ──
 Step '4. Dispatcher assignment confirmation'

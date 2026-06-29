@@ -21,6 +21,7 @@ use App\Http\Controllers\AssignmentAuditController;
 use App\Http\Controllers\IssueReportController;
 use App\Http\Controllers\VehicleUtilizationController;
 use App\Http\Controllers\Dispatcher\AssignmentController as DispatcherAssignmentController;
+use App\Http\Controllers\Dispatcher\BestFitController;
 use App\Http\Controllers\Dispatcher\CalendarController;
 use App\Http\Controllers\Dispatcher\DelayController as DispatcherDelayController;
 use App\Http\Controllers\Dispatcher\JobOrderController;
@@ -59,6 +60,8 @@ Route::post('/auth/verify/resend', [AuthController::class, 'resendVerification']
     ->middleware('throttle:6,1');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
     ->middleware('throttle:6,1');
+Route::get('/auth/reset-password/context', [AuthController::class, 'passwordResetContext'])
+    ->middleware('throttle:12,1');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
     ->middleware('throttle:6,1');
 
@@ -168,7 +171,7 @@ Route::middleware('auth.api')->group(function () {
         Route::delete('/job-orders/{jobOrder}',       [JobOrderController::class, 'destroy']);
 
         Route::post('/assignments',                   [DispatcherAssignmentController::class, 'store']);
-        Route::get('/assignments/options/{jobOrder}', [DispatcherAssignmentController::class, 'options']);
+        Route::get('/best-fit/{jobOrder}',            [BestFitController::class, 'show']);
         Route::get('/calendar',                       [CalendarController::class, 'index']);
         Route::post('/master-data/material-types',    [MaterialMasterDataController::class, 'storeMaterialType']);
         Route::post('/master-data/material-specifications', [MaterialMasterDataController::class, 'storeMaterialSpecification']);

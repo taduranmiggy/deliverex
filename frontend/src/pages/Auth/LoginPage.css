@@ -830,6 +830,22 @@
   min-height: 88px;
 }
 
+.auth-form-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--stroke, #e2e8f0);
+  border-radius: 12px;
+  background: var(--slate-50, #f8fafc);
+}
+
+.auth-form-section__title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text, #0f172a);
+}
+
 .auth-password-row {
   position: relative;
 }

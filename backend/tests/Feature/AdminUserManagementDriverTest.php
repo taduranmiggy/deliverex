@@ -104,9 +104,6 @@ class AdminUserManagementDriverTest extends TestCase
             'phone' => '09171234567',
             'new_company' => [
                 'company_name' => 'ABC Construction',
-                'company_email' => 'abc@example.com',
-                'contact_person' => 'Customer User',
-                'contact_number' => '09171234567',
             ],
         ]);
 
@@ -120,7 +117,9 @@ class AdminUserManagementDriverTest extends TestCase
         $this->assertDatabaseHas('companies', [
             'id' => $companyId,
             'company_name' => 'ABC Construction',
-            'company_email' => 'abc@example.com',
+            'company_email' => 'customer.user@example.com',
+            'contact_person' => 'Customer User',
+            'contact_number' => '09171234567',
         ]);
 
         $this->assertDatabaseHas('company_users', [

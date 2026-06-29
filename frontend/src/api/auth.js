@@ -64,6 +64,11 @@ export async function forgotPassword(payload) {
   })
 }
 
+export async function fetchPasswordResetContext({ email, token }) {
+  const params = new URLSearchParams({ email, token })
+  return apiRequest(`/auth/reset-password/context?${params.toString()}`)
+}
+
 export async function resetPassword(payload) {
   return apiRequest('/auth/reset-password', {
     method: 'POST',

@@ -21,6 +21,7 @@ import {
 } from '../../utils/scheduleValidation'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { composeStructuredAddress, validateJobOrderAddresses } from '../../utils/jobOrderAddressValidation'
+import { companyDropoffFields } from '../../utils/companyAddress'
 import { formatJobSchedule } from '../../utils/driverAssignment'
 import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
 import { FilterSelect } from '../../components/ui'
@@ -456,9 +457,16 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       userEditedRef.current.delete('contact_person')
       userEditedRef.current.delete('customer_email')
       userEditedRef.current.delete('customer_contact')
+      userEditedRef.current.delete('dropoff_street')
+      userEditedRef.current.delete('dropoff_barangay')
+      userEditedRef.current.delete('dropoff_city')
+      userEditedRef.current.delete('dropoff_province')
+      userEditedRef.current.delete('dropoff_location')
       const prefQuarryId = pref?.quarry_id ? String(pref.quarry_id) : ''
       const prefQuarry = prefQuarryId ? quarries.find((q) => String(q.id) === prefQuarryId) : null
       const canAutoFillPickup = Boolean(prefQuarry) && !userEditedRef.current.has('pickup_location')
+      const dropoffAutofill = companyDropoffFields(client)
+      const canAutoFillDropoff = Boolean(dropoffAutofill)
       setForm((f) => {
         const next = {
           ...f,
@@ -473,6 +481,9 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
           next.pickup_location = prefQuarry.quarry_name
           next.pickup_street = prefQuarry.quarry_name
         }
+        if (canAutoFillDropoff) {
+          Object.assign(next, dropoffAutofill)
+        }
         return next
       })
       if (canAutoFillPickup) {
@@ -484,6 +495,12 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
         filled.customer_contact = Boolean(client.phone)
       }
       if (canAutoFillPickup) filled.pickup_location = true
+      if (canAutoFillDropoff) {
+        filled.dropoff_street = true
+        filled.dropoff_barangay = true
+        filled.dropoff_city = true
+        filled.dropoff_province = true
+      }
       if (pref?.vehicle_type_id) filled.preferred_vehicle_type_id = true
       setAutoFilled(filled)
     } else {

@@ -143,6 +143,12 @@ body.dx-nav-locked {
   .sidebar-close-btn {
     display: none !important;
   }
+
+  .sidebar {
+    align-self: stretch;
+    min-height: 100%;
+    height: auto;
+  }
 }
 
 /* ── Touch targets ─────────────────────────────────────────── */

@@ -8,7 +8,9 @@
   display: grid;
   grid-template-columns: 240px 1fr;
   grid-template-rows: 1fr;
+  align-items: stretch;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ── SIDEBAR ─────────────────────────────────────────────── */
@@ -17,9 +19,12 @@
   color: #fff;
   display: flex;
   flex-direction: column;
+  align-self: stretch;
   position: sticky;
   top: 0;
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: auto;
   overflow-y: auto;
   z-index: 50;
   border-right: 1px solid rgba(255,255,255,0.05);
@@ -29,6 +34,8 @@
   background: var(--sidebar-dark);
   padding: 0;
   gap: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .sidebar-brand-block {
@@ -3626,6 +3633,8 @@
   background:
     radial-gradient(circle at 50% -10%, rgba(37,99,235,0.22), transparent 60%),
     linear-gradient(180deg, var(--navy-deep) 0%, var(--sidebar-dark2) 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 .sidebar-brand-icon { box-shadow: var(--shadow-brand); }
 .sidebar-link {

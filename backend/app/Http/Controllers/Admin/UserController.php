@@ -43,10 +43,6 @@ class UserController extends Controller
             'company_id' => 'nullable|exists:companies,id',
             'new_company' => 'nullable|array',
             'new_company.company_name' => 'required_without:company_id|nullable|string|max:180',
-            'new_company.company_email' => 'required_without:company_id|nullable|email|max:255|unique:companies,company_email',
-            'new_company.contact_person' => 'nullable|string|max:120',
-            'new_company.contact_number' => 'nullable|string|max:50',
-            'new_company.address' => 'nullable|string',
         ]);
 
         $role = Role::query()->findOrFail($data['role_id']);
@@ -56,13 +52,18 @@ class UserController extends Controller
         $companyId = $data['company_id'] ?? null;
 
         if ($isCustomer && ! $companyId) {
-            if (empty($data['new_company']['company_name']) || empty($data['new_company']['company_email'])) {
+            if (empty($data['new_company']['company_name'])) {
                 throw ValidationException::withMessages([
-                    'new_company.company_name' => ['Company details are required for Customer accounts.'],
+                    'new_company.company_name' => ['Company name is required for Customer accounts.'],
                 ]);
             }
 
-            $company = $this->companies->createPendingCompany($data['new_company'], $request->user());
+            $company = $this->companies->createPendingCompany([
+                'company_name' => trim($data['new_company']['company_name']),
+                'company_email' => strtolower(trim($data['email'])),
+                'contact_person' => trim($data['name']),
+                'contact_number' => $data['phone'] ?? null,
+            ], $request->user());
             $companyId = $company->id;
         }
 

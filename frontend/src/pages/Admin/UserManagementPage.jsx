@@ -48,10 +48,6 @@ function buildEditForm(user) {
 
 const BLANK_NEW_COMPANY = {
   company_name: '',
-  company_email: '',
-  contact_person: '',
-  contact_number: '',
-  address: '',
 }
 
 function buildCreateForm() {
@@ -98,21 +94,6 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
-  const setNewCompany = (k) => (e) => {
-    const value = e.target.value
-    setForm((f) => ({
-      ...f,
-      new_company: { ...f.new_company, [k]: value },
-    }))
-    if (fieldErrors[`new_company.${k}`]) {
-      setFieldErrors((prev) => {
-        const next = { ...prev }
-        delete next[`new_company.${k}`]
-        return next
-      })
-    }
-  }
-
   const validate = () => {
     const errors = {
       ...validateNameParts(form),
@@ -130,11 +111,6 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
     if (isCustomerRole && !isEdit) {
       const nc = form.new_company ?? BLANK_NEW_COMPANY
       if (!nc.company_name?.trim()) errors['new_company.company_name'] = 'Company name is required.'
-      const companyEmail = String(nc.company_email ?? '').trim()
-      if (!companyEmail) errors['new_company.company_email'] = 'Company email is required.'
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyEmail)) {
-        errors['new_company.company_email'] = 'Enter a valid company email address.'
-      }
     }
 
     if (isEdit && form.password && form.password.length < 8) {
@@ -173,10 +149,6 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
       const nc = form.new_company ?? BLANK_NEW_COMPANY
       payload.new_company = {
         company_name: nc.company_name.trim(),
-        company_email: String(nc.company_email).trim(),
-        contact_person: nc.contact_person?.trim() || composeFullName(form) || null,
-        contact_number: nc.contact_number?.trim() || form.phone || null,
-        address: nc.address?.trim() || null,
       }
     }
 
@@ -283,67 +255,36 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
           </label>
 
           {isCustomerRole && !isEdit && (
-            <>
-              <p style={{ gridColumn: '1/-1', margin: '4px 0 0', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text)' }}>
-                New company
-              </p>
-              <label style={{ gridColumn: '1/-1' }}>
-                Company name <span className="dx-required">*</span>
-                <input
-                  required
-                  value={form.new_company?.company_name ?? ''}
-                  onChange={setNewCompany('company_name')}
-                  disabled={saving}
-                  aria-invalid={fieldErrors['new_company.company_name'] ? 'true' : undefined}
-                />
-                {fieldErrors['new_company.company_name'] && (
-                  <span className="form-error">{fieldErrors['new_company.company_name']}</span>
-                )}
-              </label>
-              <label style={{ gridColumn: '1/-1' }}>
-                Company email <span className="dx-required">*</span>
-                <input
-                  required
-                  type="email"
-                  value={form.new_company?.company_email ?? ''}
-                  onChange={setNewCompany('company_email')}
-                  placeholder={form.email ? `Defaults can match user email (${form.email})` : 'billing@company.com'}
-                  disabled={saving}
-                  aria-invalid={fieldErrors['new_company.company_email'] ? 'true' : undefined}
-                />
-                {fieldErrors['new_company.company_email'] && (
-                  <span className="form-error">{fieldErrors['new_company.company_email']}</span>
-                )}
-              </label>
-              <label>
-                Contact person
-                <input
-                  value={form.new_company?.contact_person ?? ''}
-                  onChange={setNewCompany('contact_person')}
-                  placeholder={composeFullName(form) || 'Optional — uses user name if blank'}
-                  disabled={saving}
-                />
-              </label>
-              <label>
-                Contact number
-                <input
-                  value={form.new_company?.contact_number ?? ''}
-                  onChange={setNewCompany('contact_number')}
-                  placeholder={form.phone || 'Optional — uses user phone if blank'}
-                  disabled={saving}
-                />
-              </label>
-              <label style={{ gridColumn: '1/-1' }}>
-                Company address
-                <textarea
-                  rows={2}
-                  value={form.new_company?.address ?? ''}
-                  onChange={setNewCompany('address')}
-                  placeholder="Optional"
-                  disabled={saving}
-                />
-              </label>
-            </>
+            <label style={{ gridColumn: '1/-1' }}>
+              Company name <span className="dx-required">*</span>
+              <input
+                required
+                value={form.new_company?.company_name ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setForm((f) => ({
+                    ...f,
+                    new_company: { ...f.new_company, company_name: value },
+                  }))
+                  if (fieldErrors['new_company.company_name']) {
+                    setFieldErrors((prev) => {
+                      const next = { ...prev }
+                      delete next['new_company.company_name']
+                      return next
+                    })
+                  }
+                }}
+                disabled={saving}
+                placeholder="New company for this customer"
+                aria-invalid={fieldErrors['new_company.company_name'] ? 'true' : undefined}
+              />
+              {fieldErrors['new_company.company_name'] && (
+                <span className="form-error">{fieldErrors['new_company.company_name']}</span>
+              )}
+              <span style={{ display: 'block', marginTop: 6, fontSize: '0.75rem', color: 'var(--muted)' }}>
+                Company email, contact, and address are taken from the user details and completed when the customer activates their account.
+              </span>
+            </label>
           )}
 
           {isCustomerRole && isEdit && (

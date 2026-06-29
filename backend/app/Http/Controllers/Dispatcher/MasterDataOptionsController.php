@@ -27,6 +27,11 @@ class MasterDataOptionsController extends Controller
                 'contact_person' => $c->contact_person,
                 'contact_number' => $c->contact_number,
                 'phone' => $c->contact_number,
+                'address' => $c->address,
+                'address_street' => $c->address_street,
+                'address_barangay' => $c->address_barangay,
+                'address_city' => $c->address_city,
+                'address_province' => $c->address_province,
             ]);
 
         $preferences = CompanyQuarryVehiclePreference::query()

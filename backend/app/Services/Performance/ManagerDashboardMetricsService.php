@@ -20,6 +20,7 @@ class ManagerDashboardMetricsService
      *   delivery_completion_pct: float|null,
      *   avg_delivery_time_hours: float|null,
      *   driver_utilization_pct: float|null,
+     *   best_fit_efficiency_score: float|null,
      *   pod_completion_pct: float|null,
      *   exception_rate_pct: float|null,
      * }
@@ -43,6 +44,7 @@ class ManagerDashboardMetricsService
         $onTimePct = $this->computeOnTimePct($fromDate, $toDate);
         $avgDeliveryTimeHours = $this->computeAvgDeliveryTimeHours($fromDate, $toDate);
         $driverUtilizationPct = $this->computeDriverUtilizationPct($fromDate, $toDate, $periodDays);
+        $bestFitEfficiencyScore = $this->computeBestFitEfficiencyScore($fromDate, $toDate);
         $podCompletionPct = $this->computePodCompletionPct($fromDate, $toDate);
         $exceptionRatePct = $this->computeExceptionRatePct($fromDate, $toDate, $totalAssignments);
 
@@ -55,6 +57,7 @@ class ManagerDashboardMetricsService
             'delivery_completion_pct'     => $deliveryCompletionPct,
             'avg_delivery_time_hours'     => $avgDeliveryTimeHours,
             'driver_utilization_pct'      => $driverUtilizationPct,
+            'best_fit_efficiency_score'   => $bestFitEfficiencyScore,
             'pod_completion_pct'          => $podCompletionPct,
             'exception_rate_pct'          => $exceptionRatePct,
         ];
@@ -164,6 +167,20 @@ class ManagerDashboardMetricsService
         });
 
         return round($utilizationValues->avg(), 1);
+    }
+
+    private function computeBestFitEfficiencyScore(Carbon $fromDate, Carbon $toDate): ?float
+    {
+        $avgScore = AssignmentAuditTrail::query()
+            ->whereBetween('created_at', [$fromDate, $toDate])
+            ->whereNotNull('best_fit_score')
+            ->avg('best_fit_score');
+
+        if ($avgScore === null) {
+            return null;
+        }
+
+        return round((float) $avgScore, 1);
     }
 
     private function computePodCompletionPct(Carbon $fromDate, Carbon $toDate): ?float

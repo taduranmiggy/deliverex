@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\JobOrder;
 use App\Models\Company;
+use App\Support\CompanyAddressHelper;
 use App\Support\AuditLogger;
 use App\Support\DriverAccount;
 use App\Services\Auth\SessionService;
@@ -293,17 +294,50 @@ class AuthController extends Controller
         ]);
     }
 
+    public function passwordResetContext(Request $request)
+    {
+        $payload = $request->validate([
+            'email' => 'required|email',
+            'token' => 'required|string',
+        ]);
+
+        $user = User::query()->where('email', $payload['email'])->first();
+        if (! $user || ! Password::broker()->tokenExists($user, $payload['token'])) {
+            throw ValidationException::withMessages([
+                'token' => ['Invalid or expired reset link.'],
+            ]);
+        }
+
+        $user->load(['role', 'companyUser.company']);
+        $company = $user->companyUser?->company;
+
+        return response()->json([
+            'email' => $user->email,
+            'needs_company_address' => $user->role?->name === 'customer'
+                && $company
+                && ! CompanyAddressHelper::hasStructuredAddress($company),
+            'company_name' => $company?->company_name,
+        ]);
+    }
+
     public function resetPassword(Request $request)
     {
         $request->validate([
             'token' => 'required|string',
             'email' => 'required|email',
             'password' => 'required|string|min:8|confirmed',
+            'company_address' => 'nullable|array',
+            'company_address.street' => 'required_with:company_address|nullable|string|max:255',
+            'company_address.barangay' => 'required_with:company_address|nullable|string|max:100',
+            'company_address.city' => 'required_with:company_address|nullable|string|max:100',
+            'company_address.province' => 'required_with:company_address|nullable|string|max:100',
         ]);
+
+        $companyAddress = $request->input('company_address');
 
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
-            function (User $user, string $password) {
+            function (User $user, string $password) use ($companyAddress) {
                 $user->forceFill([
                     'password' => $password,
                     'must_change_password' => false,
@@ -311,6 +345,15 @@ class AuthController extends Controller
                     'status' => 'active',
                     'invitation_accepted_at' => now(),
                 ])->save();
+
+                if (is_array($companyAddress)) {
+                    $user->load(['role', 'companyUser.company']);
+                    if ($user->role?->name === 'customer' && $user->companyUser?->company) {
+                        $user->companyUser->company->update(
+                            CompanyAddressHelper::normalizeStructured($companyAddress),
+                        );
+                    }
+                }
             }
         );
 
