@@ -47,11 +47,13 @@ function LandingPage() {
             </div>
             <span className="customer-nav-brand-text">Deliverex</span>
           </Link>
-          <div className="customer-nav-actions" style={{ marginLeft: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div className="customer-nav-links customer-nav-links--desktop">
             <Link to="/customer/about" className="customer-nav-link">About</Link>
             <Link to="/customer/services" className="customer-nav-link">Services</Link>
-            <Link to="/customer/support" className="btn-dx-secondary btn-sm">Support</Link>
-            <Link to="/customer/track" className="btn-dx-secondary btn-sm">Track Delivery</Link>
+            <Link to="/customer/support" className="customer-nav-link">Support</Link>
+            <Link to="/customer/track" className="customer-nav-link">Track Delivery</Link>
+          </div>
+          <div className="customer-nav-actions customer-nav-actions--desktop">
             <Link to="/login" className="btn-dx-primary btn-sm">Sign in <ArrowRight size={13} /></Link>
           </div>
         </div>

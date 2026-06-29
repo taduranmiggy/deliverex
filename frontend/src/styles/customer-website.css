@@ -18,18 +18,20 @@
   height: auto;
   min-height: var(--customer-nav-height, 64px);
   padding-block: 10px;
-  gap: 16px;
+  gap: 12px 20px;
 }
 
 .customer-nav--website .customer-nav-brand {
-  margin-right: 8px;
+  margin-right: 0;
   flex-shrink: 0;
 }
 
 .customer-nav--website .customer-nav-links--website {
   gap: 6px;
-  flex: 1 1 auto;
+  flex: unset;
   min-width: 0;
+  justify-self: center;
+  justify-content: center;
 }
 
 .customer-nav--website .customer-nav-link {
@@ -39,10 +41,11 @@
 
 .customer-nav--website .customer-nav-actions--website {
   gap: 10px;
-  margin-left: auto;
+  margin-left: 0;
   padding-left: 16px;
   border-left: 1px solid var(--stroke);
   flex-shrink: 0;
+  justify-self: end;
 }
 
 .customer-nav-link--action {

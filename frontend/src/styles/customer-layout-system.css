@@ -94,10 +94,34 @@
   padding-inline: var(--customer-container-padding);
   height: var(--customer-nav-height);
   min-height: var(--customer-nav-height);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 0;
+  gap: 12px 20px;
   box-sizing: border-box;
+}
+
+.customer-nav-brand {
+  justify-self: start;
+  margin-right: 0;
+}
+
+.customer-nav-links {
+  justify-self: center;
+  flex: unset;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.customer-nav-actions {
+  justify-self: end;
+  margin-left: 0;
+}
+
+@media (max-width: 900px) {
+  .customer-nav-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
 }
 
 .customer-layout-main {
