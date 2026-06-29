@@ -18,8 +18,13 @@ use Illuminate\Support\Facades\Log;
 
 class DocumentController extends Controller
 {
-    /** @var list<string> */
-    private const OCR_GATED_TYPES = [
+    /** Document types that skip OCR and are stored on the assignment only. */
+    private const STORE_ONLY_TYPES = [
+        'departure',
+    ];
+
+    /** OCR document types that require Arrived or Completed before upload. */
+    private const STATUS_GATED_OCR_TYPES = [
         'pod',
         'receipt',
         'gate_pass',
@@ -47,9 +52,10 @@ class DocumentController extends Controller
         }
 
         $type = $data['type'] ?? 'other';
-        $requiresOcrGate = in_array($type, self::OCR_GATED_TYPES, true);
+        $storeOnly = in_array($type, self::STORE_ONLY_TYPES, true);
+        $requiresArrivalGate = in_array($type, self::STATUS_GATED_OCR_TYPES, true);
         $status = DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
-        if ($requiresOcrGate && ! in_array($status, [DeliveryStatus::ARRIVED, DeliveryStatus::COMPLETED], true)) {
+        if ($requiresArrivalGate && ! in_array($status, [DeliveryStatus::ARRIVED, DeliveryStatus::COMPLETED], true)) {
             return response()->json([
                 'message' => 'OCR uploads are only allowed when delivery status is Arrived or Completed.',
             ], 422);
@@ -84,8 +90,8 @@ class DocumentController extends Controller
             ]);
         }
 
-        // Store-only document types (non-OCR) should not enter the OCR pipeline.
-        if (! $requiresOcrGate) {
+        // Store-only types (e.g. departure) skip the OCR pipeline.
+        if ($storeOnly) {
             return response()->json([
                 'document'     => $document,
                 'ocr_result'   => null,

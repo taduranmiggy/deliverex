@@ -100,6 +100,28 @@ class DeliveryStatusWorkflowTest extends TestCase
         $this->assertStringContainsString('OCR uploads are only allowed', (string) $response->json('message'));
     }
 
+    public function test_driver_other_document_upload_enters_ocr_review_queue(): void
+    {
+        Storage::fake('public');
+        [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::EN_ROUTE_TO_PICKUP);
+
+        $response = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/documents', [
+            'assignment_id' => $assignment->id,
+            'type' => 'other',
+            'file' => UploadedFile::fake()->image('misc.png'),
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('document.type', 'other');
+
+        $documentId = (int) $response->json('document.id');
+        $this->assertNotNull($response->json('ocr_result'));
+        $this->assertDatabaseHas('ocr_results', [
+            'document_id' => $documentId,
+            'review_status' => 'pending_review',
+        ]);
+    }
+
     public function test_customer_tracking_returns_ordered_status_timeline(): void
     {
         [, $assignment, $jobOrder] = $this->createDriverAssignment(DeliveryStatus::ASSIGNED);

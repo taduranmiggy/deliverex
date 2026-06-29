@@ -292,11 +292,11 @@ function DocumentUploadPage() {
         </div>
         {docType === 'other' ? (
           <p style={{ fontSize: '0.8125rem', color: 'var(--da-muted)', margin: '0 0 12px' }}>
-            Other documents are saved to the job but do not appear in OCR Review.
+            Other documents are sent to OCR Review for admin review.
           </p>
         ) : (
           <p style={{ fontSize: '0.8125rem', color: 'var(--da-muted)', margin: '0 0 12px' }}>
-            Receipt, invoice, PoD, and job order uploads enter OCR Review after you mark Arrived at destination.
+            Receipt, invoice, PoD, and job order uploads require Arrived at destination; all types enter OCR Review.
           </p>
         )}
 
