@@ -9,6 +9,7 @@ import './styles/session-status.css'
 import './styles/accessibility.css'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
+import AppErrorBoundary from './components/AppErrorBoundary'
 import PwaSplashScreen from './components/customer/PwaSplashScreen'
 import AppRouter from './routes/AppRouter'
 
@@ -18,13 +19,14 @@ function App() {
       <a href="#main-content" className="skip-to-main-link">
         Skip to main content
       </a>
-      <PwaSplashScreen>
-        <AuthProvider>
-          <ToastProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <AppErrorBoundary>
             <AppRouter />
-          </ToastProvider>
-        </AuthProvider>
-      </PwaSplashScreen>
+          </AppErrorBoundary>
+        </ToastProvider>
+      </AuthProvider>
+      <PwaSplashScreen />
     </>
   )
 }

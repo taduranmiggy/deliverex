@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Lottie from 'lottie-react'
+import { createPortal } from 'react-dom'
 import { isStandalonePwa } from '../../utils/pwaUtils'
 
 const SPLASH_KEY = 'deliverex_pwa_splash_shown'
@@ -11,7 +11,7 @@ function prefersReducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-function PwaSplashScreen({ children }) {
+function PwaSplashScreen() {
   const [showSplash, setShowSplash] = useState(() => {
     if (!isStandalonePwa()) return false
     try {
@@ -21,6 +21,7 @@ function PwaSplashScreen({ children }) {
     }
   })
   const [animationData, setAnimationData] = useState(null)
+  const [Lottie, setLottie] = useState(null)
   const [useFallback, setUseFallback] = useState(false)
   const shownAtRef = useRef(0)
   const finishedRef = useRef(false)
@@ -66,6 +67,18 @@ function PwaSplashScreen({ children }) {
     }
 
     let cancelled = false
+
+    import('lottie-react')
+      .then((mod) => {
+        if (!cancelled) setLottie(() => mod.default)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUseFallback(true)
+          scheduleDismiss()
+        }
+      })
+
     import('../../assets/deliverex-splash.json')
       .then((mod) => {
         if (!cancelled) setAnimationData(mod.default ?? mod)
@@ -93,38 +106,37 @@ function PwaSplashScreen({ children }) {
     scheduleDismiss()
   }, [scheduleDismiss])
 
-  return (
-    <>
-      {showSplash ? (
-        <div className="pwa-splash" role="presentation" aria-busy="true" aria-label="Loading Deliverex">
-          <div className="pwa-splash__content">
-            <div className="pwa-splash__logo-stage">
-              <img
-                src={FAVICON_SRC}
-                alt=""
-                className={`pwa-splash__logo-fallback${useFallback || !animationData ? ' pwa-splash__logo-fallback--visible' : ''}`}
-                aria-hidden
-              />
-              {animationData && !useFallback ? (
-                <Lottie
-                  animationData={animationData}
-                  loop={false}
-                  autoplay
-                  onComplete={handleLottieComplete}
-                  onDataFailed={handleLottieDataFailed}
-                  onLoopComplete={handleLottieComplete}
-                  className="pwa-splash__lottie"
-                  aria-hidden
-                />
-              ) : null}
-            </div>
-            <p className="pwa-splash__title">Deliverex</p>
-          </div>
+  if (!showSplash) return null
+
+  const splash = (
+    <div className="pwa-splash" role="presentation" aria-busy="true" aria-label="Loading Deliverex">
+      <div className="pwa-splash__content">
+        <div className="pwa-splash__logo-stage">
+          <img
+            src={FAVICON_SRC}
+            alt=""
+            className={`pwa-splash__logo-fallback${useFallback || !animationData || !Lottie ? ' pwa-splash__logo-fallback--visible' : ''}`}
+            aria-hidden
+          />
+          {animationData && Lottie && !useFallback ? (
+            <Lottie
+              animationData={animationData}
+              loop={false}
+              autoplay
+              onComplete={handleLottieComplete}
+              onDataFailed={handleLottieDataFailed}
+              onLoopComplete={handleLottieComplete}
+              className="pwa-splash__lottie"
+              aria-hidden
+            />
+          ) : null}
         </div>
-      ) : null}
-      {children}
-    </>
+        <p className="pwa-splash__title">Deliverex</p>
+      </div>
+    </div>
   )
+
+  return createPortal(splash, document.body)
 }
 
 export default PwaSplashScreen

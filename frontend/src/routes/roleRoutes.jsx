@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { Route, Navigate } from 'react-router-dom'
 import ProtectedCustomerOutlet from './ProtectedCustomerOutlet'
+import CustomerHomePage from '../pages/Customer/CustomerHomePage'
 
 // Route-level code splitting: every page is loaded on demand so each role only
 // downloads the chunks it actually visits. Suspense boundaries live in the
@@ -46,7 +47,6 @@ const ManagerFleetTrackingPage = lazy(() => import('../pages/Manager/ManagerFlee
 
 // Customer (PWA + website share several pages)
 const CustomerCompanyUsersPage = lazy(() => import('../pages/Customer/CustomerCompanyUsersPage'))
-const CustomerHomePage = lazy(() => import('../pages/Customer/CustomerHomePage'))
 const TrackingPage = lazy(() => import('../pages/Customer/TrackingPage'))
 const CustomerLoginPage = lazy(() => import('../pages/Customer/CustomerLoginPage'))
 const CustomerForgotPasswordPage = lazy(() => import('../pages/Customer/CustomerForgotPasswordPage'))

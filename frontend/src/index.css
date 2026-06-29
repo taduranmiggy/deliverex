@@ -185,3 +185,21 @@ input, select, textarea { font: inherit; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--slate-300); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--slate-400); }
+
+/* PWA: never leave route content invisible after splash */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  #root,
+  #root .customer-layout,
+  #root .customer-layout-main,
+  #root .dx-page-enter,
+  #root .dx-route-fallback,
+  #root .pwa-home {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  #root .dx-page-enter,
+  #root .dx-route-fallback {
+    animation: none !important;
+  }
+}
