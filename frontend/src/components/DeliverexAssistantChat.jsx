@@ -369,7 +369,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
             <div className="dx-assistant-chat__avatar" aria-hidden>D</div>
             <div style={{ flex: 1 }}>
               <div id="dx-assistant-title" style={{ fontWeight: 700, fontSize: '0.9375rem' }}>Deliverex Assistant</div>
-              <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>AI-powered · Online</div>
+              <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>Online</div>
             </div>
             <div className="dx-assistant-chat__hdr-controls">
               <button
