@@ -207,6 +207,7 @@ class StatusController extends Controller
         return response()->json([
             'message'          => 'Status updated',
             'status'           => $status,
+            'event_at'         => $actionAt->toIso8601String(),
             'arrival_verified' => $arrivalVerified,
             'next_status'      => $nextAction['next_status'],
             'allowed_action'   => $nextAction['label'],

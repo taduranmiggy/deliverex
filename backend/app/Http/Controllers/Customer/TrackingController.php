@@ -55,6 +55,7 @@ class TrackingController extends Controller
                     'status'            => DeliveryStatus::canonicalize((string) $row->status) ?? $row->status,
                     'notes'             => $row->notes,
                     'at'                => $row->created_at?->toIso8601String(),
+                    'event_at'          => $row->created_at?->toIso8601String(),
                     'arrival_verified'  => (bool) $row->arrival_verified,
                     'gps_verified_at'   => $row->arrival_verified
                         ? $row->created_at?->toIso8601String()
@@ -82,12 +83,14 @@ class TrackingController extends Controller
                 'status' => 'pending',
                 'label' => 'Pending',
                 'timestamp' => $jobOrder->created_at?->toIso8601String(),
+                'event_at' => $jobOrder->created_at?->toIso8601String(),
             ],
             ...collect(DeliveryStatus::lifecycle())
                 ->map(fn (string $stage) => [
                     'status' => $stage,
                     'label' => $stage === DeliveryStatus::ASSIGNED ? 'Dispatched' : DeliveryStatus::label($stage),
                     'timestamp' => null,
+                    'event_at' => null,
                 ])
                 ->values()
                 ->all(),
@@ -108,6 +111,7 @@ class TrackingController extends Controller
             foreach ($orderedTimeline as $index => $item) {
                 $stage = $item['status'];
                 $orderedTimeline[$index]['timestamp'] = $timelineMap[$stage] ?? null;
+                $orderedTimeline[$index]['event_at'] = $timelineMap[$stage] ?? null;
             }
         }
 
@@ -133,6 +137,7 @@ class TrackingController extends Controller
                 'receiver_contact' => $completionProof->receiver_contact,
                 'delivery_notes'   => $completionProof->delivery_notes,
                 'submitted_at'     => $completionProof->created_at?->toIso8601String(),
+                'submitted_event_at' => $completionProof->submitted_event_at,
             ] : null,
             'proof_documents'     => $proofDocuments,
             'delay_flag'          => $this->delayFlag($jobOrder, $latestAssignment, $latestStatus),

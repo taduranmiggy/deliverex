@@ -19,6 +19,7 @@ final class CustomerProofDocuments
      *     label: string,
      *     url: string,
      *     uploaded_at: string|null,
+     *     uploaded_event_at: string|null,
      *     ocr_ready: bool
      * }>
      */
@@ -80,6 +81,7 @@ final class CustomerProofDocuments
             'label'       => DeliveryCompletionProof::TYPES[$completionProof->proof_type] ?? $doc->type,
             'url'         => Storage::disk('public')->url($doc->file_path),
             'uploaded_at' => $completionProof->created_at?->toIso8601String(),
+            'uploaded_event_at' => $completionProof->submitted_event_at,
             'ocr_ready'   => $doc->ocrResult?->is_validated ?? false,
         ];
     }
@@ -104,6 +106,7 @@ final class CustomerProofDocuments
             'label'       => 'Receiver Signature',
             'url'         => Storage::disk('public')->url($completionProof->receiver_signature_path),
             'uploaded_at' => $completionProof->created_at?->toIso8601String(),
+            'uploaded_event_at' => $completionProof->submitted_event_at,
             'ocr_ready'   => false,
         ];
     }
@@ -126,6 +129,7 @@ final class CustomerProofDocuments
             'label'       => 'Proof of Delivery',
             'url'         => Storage::disk('public')->url($doc->file_path),
             'uploaded_at' => $doc->created_at?->toIso8601String(),
+            'uploaded_event_at' => $doc->uploaded_event_at,
             'ocr_ready'   => $doc->ocrResult?->is_validated ?? false,
         ];
     }

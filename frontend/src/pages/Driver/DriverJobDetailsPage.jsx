@@ -122,7 +122,7 @@ function DriverJobDetailsPage() {
 
   const job = assignment?.job_order
   const logs = [...(assignment?.delivery_status_logs ?? [])].sort(
-    (a, b) => new Date(a.created_at) - new Date(b.created_at),
+    (a, b) => new Date(a.event_at ?? a.created_at) - new Date(b.event_at ?? b.created_at),
   )
   const isActive = assignment && !['completed', 'cancelled'].includes(assignment.status)
   const latestGps = [...(assignment?.tracking_logs ?? [])].sort(
@@ -229,10 +229,11 @@ function DriverJobDetailsPage() {
     reader.readAsDataURL(file)
   }
 
-  const buildCompletionProofFormData = () => {
+  const buildCompletionProofFormData = (actionTs) => {
     const fd = new FormData()
     fd.append('assignment_id', String(assignment.id))
     fd.append('proof_type', proofType)
+    if (actionTs) fd.append('action_timestamp', actionTs)
     if (proofType === 'ocr_document') fd.append('document_type', ocrDocType)
     if (receiverName.trim()) fd.append('receiver_name', receiverName.trim())
     if (receiverContact.trim()) fd.append('receiver_contact', receiverContact.trim())
@@ -274,7 +275,7 @@ function DriverJobDetailsPage() {
 
     setStatusSubmitting(true)
     try {
-      const statusPayload = { assignment_id: assignment.id, status: pendingStatus }
+      const statusPayload = { assignment_id: assignment.id, status: pendingStatus, action_timestamp: actionTs }
       if (needsGpsProof && gpsCoords) {
         statusPayload.latitude = gpsCoords.latitude
         statusPayload.longitude = gpsCoords.longitude
@@ -328,7 +329,7 @@ function DriverJobDetailsPage() {
       }
 
       if (isCompleteProof && !hasExistingProof && proofFile) {
-        await uploadCompletionProof(buildCompletionProofFormData())
+        await uploadCompletionProof(buildCompletionProofFormData(actionTs))
       }
 
       if (isStartTrip && departureFile) {
@@ -336,6 +337,7 @@ function DriverJobDetailsPage() {
         fd.append('assignment_id', String(assignment.id))
         fd.append('type', 'departure')
         fd.append('notes', 'Departure photo')
+        fd.append('action_timestamp', actionTs)
         fd.append('file', departureFile, departureFile.name)
         await uploadDocument(fd)
       }
@@ -387,6 +389,7 @@ function DriverJobDetailsPage() {
         const fd = new FormData()
         fd.append('assignment_id', String(assignment.id))
         fd.append('issue_type', issueType)
+        fd.append('action_timestamp', actionTs)
         if (issueNotes.trim()) fd.append('notes', issueNotes.trim())
         if (issuePhoto) fd.append('photo', issuePhoto, issuePhoto.name)
         await uploadIssueReport(fd)
@@ -420,6 +423,7 @@ function DriverJobDetailsPage() {
       assignment_id: assignment.id,
       delay_reason: delayReason,
       delay_notes: delayNotes.trim() || undefined,
+      action_timestamp: actionTs,
     }
     try {
       if (!isOnline) {
@@ -545,7 +549,7 @@ function DriverJobDetailsPage() {
               {logs.map((log, i) => (
                 <div key={i} className="da-kv" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                    <span>{log.created_at ? new Date(log.created_at).toLocaleString() : '—'}</span>
+                    <span>{(log.event_at || log.created_at) ? new Date(log.event_at || log.created_at).toLocaleString() : '—'}</span>
                     <DriverStatusChip status={log.status} />
                   </div>
                   {log.status === 'arrived' && log.arrival_verified && (

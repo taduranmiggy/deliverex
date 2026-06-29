@@ -8,6 +8,10 @@ class TrackingLog extends Model
 {
     public $timestamps = false;
 
+    protected $appends = [
+        'event_at',
+    ];
+
     protected $fillable = [
         'assignment_id',
         'latitude',
@@ -18,6 +22,11 @@ class TrackingLog extends Model
     protected $casts = [
         'captured_at' => 'datetime',
     ];
+
+    public function getEventAtAttribute(): ?string
+    {
+        return $this->captured_at?->toIso8601String();
+    }
 
     public function assignment()
     {

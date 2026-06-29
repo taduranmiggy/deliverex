@@ -8,6 +8,10 @@ class DeliveryStatusLog extends Model
 {
     public $timestamps = false;
 
+    protected $appends = [
+        'event_at',
+    ];
+
     protected $fillable = [
         'assignment_id',
         'status',
@@ -24,6 +28,11 @@ class DeliveryStatusLog extends Model
         'arrival_verified'=> 'boolean',
         'created_at'       => 'datetime',
     ];
+
+    public function getEventAtAttribute(): ?string
+    {
+        return $this->created_at?->toIso8601String();
+    }
 
     public function assignment()
     {

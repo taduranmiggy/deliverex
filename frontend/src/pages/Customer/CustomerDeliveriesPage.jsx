@@ -133,8 +133,8 @@ function DeliveryDetailModal({ order, onClose }) {
                   <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
                     <div>
                       <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem' }}>{doc.label || doc.type || 'Document'}</p>
-                      {doc.uploaded_at && (
-                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>Uploaded {formatDate(doc.uploaded_at)}</p>
+                      {(doc.uploaded_event_at || doc.uploaded_at) && (
+                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>Uploaded {formatDate(doc.uploaded_event_at || doc.uploaded_at)}</p>
                       )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -225,7 +225,7 @@ function CustomerDeliveriesPage() {
         </td>
         <td data-label="Status"><StatusBadge status={r.status} /></td>
         <td data-label="Last Update" style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
-          {formatDate(r.status_at || r.updated_at)}
+          {formatDate(r.completed_event_at || r.status_event_at || r.status_at || r.updated_at)}
         </td>
         <td data-label="Route" style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
           {buildDisplayAddress('pickup', r)} → {buildDisplayAddress('dropoff', r)}

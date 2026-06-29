@@ -6,6 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class DispatchAssignment extends Model
 {
+    protected $appends = [
+        'assigned_event_at',
+        'started_event_at',
+        'completed_event_at',
+        'pod_verified_event_at',
+    ];
+
     protected $fillable = [
         'job_order_id',
         'driver_id',
@@ -25,6 +32,26 @@ class DispatchAssignment extends Model
         'completed_at' => 'datetime',
         'pod_verified_at' => 'datetime',
     ];
+
+    public function getAssignedEventAtAttribute(): ?string
+    {
+        return $this->assigned_at?->toIso8601String();
+    }
+
+    public function getStartedEventAtAttribute(): ?string
+    {
+        return $this->started_at?->toIso8601String();
+    }
+
+    public function getCompletedEventAtAttribute(): ?string
+    {
+        return $this->completed_at?->toIso8601String();
+    }
+
+    public function getPodVerifiedEventAtAttribute(): ?string
+    {
+        return $this->pod_verified_at?->toIso8601String();
+    }
 
     public function jobOrder()
     {

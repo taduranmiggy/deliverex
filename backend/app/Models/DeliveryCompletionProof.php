@@ -14,6 +14,10 @@ class DeliveryCompletionProof extends Model
         self::TYPE_OCR_DOCUMENT  => 'OCR Document Upload',
     ];
 
+    protected $appends = [
+        'submitted_event_at',
+    ];
+
     protected $fillable = [
         'job_order_id',
         'assignment_id',
@@ -26,6 +30,11 @@ class DeliveryCompletionProof extends Model
         'receiver_signature_path',
         'delivery_notes',
     ];
+
+    public function getSubmittedEventAtAttribute(): ?string
+    {
+        return $this->created_at?->toIso8601String();
+    }
 
     public function jobOrder()
     {

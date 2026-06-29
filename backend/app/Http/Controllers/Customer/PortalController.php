@@ -42,6 +42,7 @@ class PortalController extends Controller
                 : null;
             $status = $latestStatus?->status ?? $job->status;
             $statusAt = $latestStatus?->created_at?->toIso8601String();
+            $completedAt = $assignment?->completed_at?->toIso8601String();
 
             $documents = $assignment
                 ? CustomerProofDocuments::forAssignment($assignment, (string) $status)
@@ -52,6 +53,8 @@ class PortalController extends Controller
                 'tracking_code' => $job->tracking_code,
                 'status' => $status,
                 'status_at' => $statusAt,
+                'status_event_at' => $statusAt,
+                'completed_event_at' => $completedAt,
                 'pickup_location' => $job->pickup_location,
                 'dropoff_location' => $job->dropoff_location,
                 'customer_contact' => $job->customer_contact,

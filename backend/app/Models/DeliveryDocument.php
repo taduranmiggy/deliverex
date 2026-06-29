@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class DeliveryDocument extends Model
 {
+    protected $appends = [
+        'uploaded_event_at',
+    ];
+
     protected $fillable = [
         'assignment_id',
         'file_path',
@@ -13,6 +17,11 @@ class DeliveryDocument extends Model
         'uploaded_by',
         'notes',
     ];
+
+    public function getUploadedEventAtAttribute(): ?string
+    {
+        return $this->created_at?->toIso8601String();
+    }
 
     public function assignment()
     {

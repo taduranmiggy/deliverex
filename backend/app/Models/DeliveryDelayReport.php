@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class DeliveryDelayReport extends Model
 {
+    protected $appends = [
+        'reported_event_at',
+    ];
+
     protected $fillable = [
         'job_order_id',
         'assignment_id',
@@ -20,6 +24,11 @@ class DeliveryDelayReport extends Model
     protected $casts = [
         'acknowledged_at' => 'datetime',
     ];
+
+    public function getReportedEventAtAttribute(): ?string
+    {
+        return $this->created_at?->toIso8601String();
+    }
 
     public const REASONS = [
         'traffic_congestion'   => 'Traffic Congestion',

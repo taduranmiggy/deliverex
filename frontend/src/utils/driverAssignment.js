@@ -3,13 +3,15 @@ export function getAssignmentLastUpdated(assignment) {
   if (!assignment) return null
   const times = []
   for (const log of assignment.delivery_status_logs ?? []) {
-    if (log.created_at) times.push(new Date(log.created_at).getTime())
-  }
-  for (const log of assignment.tracking_logs ?? []) {
-    const t = log.captured_at ?? log.created_at
+    const t = log.event_at ?? log.created_at
     if (t) times.push(new Date(t).getTime())
   }
-  if (assignment.updated_at) times.push(new Date(assignment.updated_at).getTime())
+  for (const log of assignment.tracking_logs ?? []) {
+    const t = log.event_at ?? log.captured_at ?? log.created_at
+    if (t) times.push(new Date(t).getTime())
+  }
+  if (assignment.completed_event_at) times.push(new Date(assignment.completed_event_at).getTime())
+  if (!times.length && assignment.updated_at) times.push(new Date(assignment.updated_at).getTime())
   if (!times.length) return null
   return new Date(Math.max(...times))
 }

@@ -111,6 +111,8 @@ function DocumentUploadPage() {
       return
     }
 
+    const actionTs = new Date().toISOString()
+
     setUploading(true)
     setUploadProgress(0)
 
@@ -142,7 +144,7 @@ function DocumentUploadPage() {
             fileType: file.type,
             fileBase64: base64,
           },
-          action_timestamp: new Date().toISOString(),
+          action_timestamp: actionTs,
         })
         showToast(`Document queued (${pendingCount + 1} pending sync)`)
         clearFile()
@@ -153,6 +155,7 @@ function DocumentUploadPage() {
       fd.append('assignment_id', String(selectedId))
       fd.append('type', docType)
       fd.append('notes', notes)
+      fd.append('action_timestamp', actionTs)
       fd.append('file', file)
       const res = await uploadDocumentWithProgress(fd, setUploadProgress)
       setUploadProgress(100)

@@ -23,7 +23,8 @@ function TrackingPage() {
   const [pollKey, setPollKey]   = useState(null)
 
   const lastUpdate = Array.isArray(result?.timeline) && result.timeline.length > 0
-    ? result.timeline[result.timeline.length - 1]?.at : null
+    ? (result.timeline[result.timeline.length - 1]?.event_at ?? result.timeline[result.timeline.length - 1]?.timestamp ?? result.timeline[result.timeline.length - 1]?.at)
+    : null
 
   const loadTrack = useCallback(async (trackingCode) => {
     const res = await trackDelivery(trackingCode)
@@ -286,8 +287,8 @@ function TrackingPage() {
                       {result.completion_proof.receiver_contact && (
                         <div><strong>Contact:</strong> {result.completion_proof.receiver_contact}</div>
                       )}
-                      {result.completion_proof.submitted_at && (
-                        <div><strong>Submitted:</strong> {new Date(result.completion_proof.submitted_at).toLocaleString()}</div>
+                      {(result.completion_proof.submitted_event_at || result.completion_proof.submitted_at) && (
+                        <div><strong>Submitted:</strong> {new Date(result.completion_proof.submitted_event_at || result.completion_proof.submitted_at).toLocaleString()}</div>
                       )}
                       {result.completion_proof.delivery_notes && (
                         <div style={{ marginTop: 4 }}>{result.completion_proof.delivery_notes}</div>
@@ -300,7 +301,7 @@ function TrackingPage() {
                         <li key={i}>
                           <span style={{ fontWeight: 600 }}>{p.label || p.type}</span>
                           <span style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                            Uploaded {p.uploaded_at ? new Date(p.uploaded_at).toLocaleString() : '—'}
+                            Uploaded {(p.uploaded_event_at || p.uploaded_at) ? new Date(p.uploaded_event_at || p.uploaded_at).toLocaleString() : '—'}
                           </span>
                           {p.type !== 'signature' && (
                             <span className={`badge-dx ${p.ocr_ready ? 'badge-dx--completed' : 'badge-dx--dispatched'}`}>
@@ -331,7 +332,7 @@ function TrackingPage() {
                   <ul className="tracking-timeline">
                     {result.timeline.map((row, i) => (
                       <li key={i}>
-                        <div className="tracking-time">{row.at ? new Date(row.at).toLocaleString() : '—'}</div>
+                        <div className="tracking-time">{(row.event_at || row.timestamp || row.at) ? new Date(row.event_at || row.timestamp || row.at).toLocaleString() : '—'}</div>
                         <div>
                           <StatusBadge status={row.status} />
                           {row.status === 'arrived' && row.arrival_verified && (

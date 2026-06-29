@@ -10,6 +10,10 @@ class DeliveryStatusHistory extends Model
 
     public $timestamps = false;
 
+    protected $appends = [
+        'event_at',
+    ];
+
     protected $fillable = [
         'job_order_id',
         'assignment_id',
@@ -28,4 +32,9 @@ class DeliveryStatusHistory extends Model
         'latitude' => 'float',
         'longitude' => 'float',
     ];
+
+    public function getEventAtAttribute(): ?string
+    {
+        return $this->updated_at?->toIso8601String();
+    }
 }

@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class DeliveryIssueReport extends Model
 {
+    protected $appends = [
+        'reported_event_at',
+    ];
+
     protected $fillable = [
         'assignment_id',
         'driver_id',
@@ -34,6 +38,11 @@ class DeliveryIssueReport extends Model
         'vehicle_problem'      => 'Vehicle Problem',
         'package_damaged'      => 'Package Damaged',
     ];
+
+    public function getReportedEventAtAttribute(): ?string
+    {
+        return $this->created_at?->toIso8601String();
+    }
 
     public static function typeLabel(string $type): string
     {
