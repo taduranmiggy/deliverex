@@ -25,9 +25,9 @@ class OcrConfidenceScorerTest extends TestCase
     public function test_high_provider_and_complete_fields_scores_high(): void
     {
         $parsed = $this->parsed([
-            'length' => 7.3,
-            'width' => 2.3,
-            'height' => 2.15,
+            'length' => 730,
+            'width' => 230,
+            'height' => 215,
             'volume' => 36.09,
             'delivery_receipt_number' => 'DR-2936806',
         ], parserScore: 5.8, receiptConfidence: 0.95);

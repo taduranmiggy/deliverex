@@ -665,7 +665,7 @@ class OcrService
         $volume = $best['volume'];
 
         if ($volume === null && $length !== null && $width !== null && $height !== null) {
-            $volume = round($length * $width * $height, 4);
+            $volume = round(($length * $width * $height) / 1_000_000, 4);
         }
 
         $drCandidates = $this->extractReceiptCandidates($normalized, $best);
@@ -1077,6 +1077,8 @@ class OcrService
     }
 
     /**
+     * Normalize dimensions to centimeters for storage (matches receipt handwriting and master data).
+     *
      * @param  array{length:?float,width:?float,height:?float,volume:?float}  $dims
      * @return array{length:?float,width:?float,height:?float,volume:?float}
      */
@@ -1090,14 +1092,14 @@ class OcrService
         }
 
         $max = max($length, $width, $height);
-        if ($max <= 50) {
+        if ($max > 50) {
             return $dims;
         }
 
         return [
-            'length' => round($length / 100, 4),
-            'width' => round($width / 100, 4),
-            'height' => round($height / 100, 4),
+            'length' => round($length * 100, 4),
+            'width' => round($width * 100, 4),
+            'height' => round($height * 100, 4),
             'volume' => $dims['volume'],
         ];
     }
@@ -1344,9 +1346,13 @@ class OcrService
         $normalized = preg_replace('/\bm3\b/u', 'volume', $normalized) ?? $normalized;
         $normalized = preg_replace('/\bm³\b/u', 'volume', $normalized) ?? $normalized;
         $normalized = preg_replace('/\bl\s*:\s*/u', 'length: ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bl\s*=\s*/u', 'length: ', $normalized) ?? $normalized;
         $normalized = preg_replace('/\bw\s*:\s*/u', 'width: ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bw\s*=\s*/u', 'width: ', $normalized) ?? $normalized;
         $normalized = preg_replace('/\bh\s*:\s*/u', 'height: ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bh\s*=\s*/u', 'height: ', $normalized) ?? $normalized;
         $normalized = preg_replace('/\bv\s*:\s*/u', 'volume: ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bv\s*=\s*/u', 'volume: ', $normalized) ?? $normalized;
         $normalized = preg_replace('/\brn\b/u', 'm', $normalized) ?? $normalized;
 
         return $normalized;

@@ -302,10 +302,10 @@ function OcrReviewPage() {
   }
 
   const ocrRows = selected ? [
-    { key: 'length', label: 'Length', value: selected.extracted_length },
-    { key: 'width', label: 'Width', value: selected.extracted_width },
-    { key: 'height', label: 'Height', value: selected.extracted_height },
-    { key: 'volume', label: 'Volume', value: selected.extracted_volume },
+    { key: 'length', label: 'Length (cm)', value: selected.extracted_length },
+    { key: 'width', label: 'Width (cm)', value: selected.extracted_width },
+    { key: 'height', label: 'Height (cm)', value: selected.extracted_height },
+    { key: 'volume', label: 'Volume (m³)', value: selected.extracted_volume },
     { key: 'delivery_receipt_number', label: 'Delivery Receipt No', value: selected.delivery_receipt_number },
   ] : []
 
@@ -489,10 +489,9 @@ function OcrReviewPage() {
                       const missing = row.value == null || row.value === ''
                       const fieldScore = fieldScores[row.key]
                       const tone = confidenceTone(fieldScore)
-                      const lowConfidence = tone === 'low' && !missing
                       const mediumConfidence = tone === 'medium' && !missing
                       const noHit = structuredHits[row.key] === false
-                      const showNoMatch = missing || lowConfidence || noHit
+                      const showNoMatch = missing || noHit
                       const suggestions = Array.isArray(reviewSuggestions[row.key]) ? reviewSuggestions[row.key] : []
                       const showSuggestions = suggestions.length > 0 && (tone !== 'high' || expandedAlternatives[row.key])
                       const fieldPct = formatConfidencePct(fieldScore)

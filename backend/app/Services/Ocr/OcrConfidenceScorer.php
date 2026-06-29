@@ -173,7 +173,7 @@ class OcrConfidenceScorer
       return 0.5;
     }
 
-    $calc = (float) $length * (float) $width * (float) $height;
+    $calc = ((float) $length * (float) $width * (float) $height) / 1_000_000;
     $delta = abs($calc - (float) $volume) / max((float) $volume, 0.0001);
 
     if ($delta <= 0.10) {

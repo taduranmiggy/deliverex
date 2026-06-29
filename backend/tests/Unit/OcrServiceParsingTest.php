@@ -41,9 +41,9 @@ class OcrServiceParsingTest extends TestCase
 
         $parsed = $this->parse($text);
 
-        $this->assertEqualsWithDelta(2.5, (float) $parsed['length'], 0.0001);
-        $this->assertEqualsWithDelta(1.2, (float) $parsed['width'], 0.0001);
-        $this->assertEqualsWithDelta(0.8, (float) $parsed['height'], 0.0001);
+        $this->assertEqualsWithDelta(250, (float) $parsed['length'], 0.0001);
+        $this->assertEqualsWithDelta(120, (float) $parsed['width'], 0.0001);
+        $this->assertEqualsWithDelta(80, (float) $parsed['height'], 0.0001);
         $this->assertEqualsWithDelta(2.4, (float) $parsed['volume'], 0.0001);
         $this->assertSame('DR-982134', $parsed['delivery_receipt_number']);
     }
@@ -57,9 +57,9 @@ class OcrServiceParsingTest extends TestCase
 
         $parsed = $this->parse($text);
 
-        $this->assertEqualsWithDelta(2.4, (float) $parsed['length'], 0.0001);
-        $this->assertEqualsWithDelta(1.3, (float) $parsed['width'], 0.0001);
-        $this->assertEqualsWithDelta(0.5, (float) $parsed['height'], 0.0001);
+        $this->assertEqualsWithDelta(240, (float) $parsed['length'], 0.0001);
+        $this->assertEqualsWithDelta(130, (float) $parsed['width'], 0.0001);
+        $this->assertEqualsWithDelta(50, (float) $parsed['height'], 0.0001);
         $this->assertSame('AB-441122', $parsed['delivery_receipt_number']);
         $this->assertEqualsWithDelta(1.56, (float) $parsed['volume'], 0.0001);
     }
@@ -75,9 +75,9 @@ class OcrServiceParsingTest extends TestCase
 
         $parsed = $this->parse($text);
 
-        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.0001);
-        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.0001);
-        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.0001);
+        $this->assertEqualsWithDelta(730, (float) $parsed['length'], 0.0001);
+        $this->assertEqualsWithDelta(230, (float) $parsed['width'], 0.0001);
+        $this->assertEqualsWithDelta(215, (float) $parsed['height'], 0.0001);
         $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.0001);
         $this->assertSame('DR-2936506', $parsed['delivery_receipt_number']);
     }
@@ -96,9 +96,9 @@ class OcrServiceParsingTest extends TestCase
         $parsed = $this->parse($text);
 
         $this->assertSame('DR-2936806', $parsed['delivery_receipt_number']);
-        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
-        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
-        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(730, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(230, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(215, (float) $parsed['height'], 0.01);
         $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
     }
 
@@ -127,9 +127,9 @@ class OcrServiceParsingTest extends TestCase
         $parsed = $this->parse($text);
 
         $this->assertSame('DR-2936806', $parsed['delivery_receipt_number']);
-        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
-        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
-        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(730, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(230, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(215, (float) $parsed['height'], 0.01);
         $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
     }
 
@@ -149,9 +149,9 @@ class OcrServiceParsingTest extends TestCase
         $parsed = $this->parse($text);
 
         $this->assertSame('DR-2936806', $parsed['delivery_receipt_number']);
-        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
-        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
-        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(730, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(230, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(215, (float) $parsed['height'], 0.01);
         $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
     }
 
@@ -181,10 +181,10 @@ class OcrServiceParsingTest extends TestCase
 
         $parsed = $this->parse($text);
 
-        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
-        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
-        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
-        $this->assertEqualsWithDelta(36.119, (float) $parsed['volume'], 0.01);
+        $this->assertEqualsWithDelta(730, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(230, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(215, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(36.0985, (float) $parsed['volume'], 0.01);
         $this->assertSame('DR-2936807', $parsed['delivery_receipt_number']);
     }
 
@@ -199,9 +199,9 @@ class OcrServiceParsingTest extends TestCase
 
         $parsed = $this->parse($text);
 
-        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
-        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
-        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(730, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(230, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(215, (float) $parsed['height'], 0.01);
         $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
         $this->assertSame('DR-2936808', $parsed['delivery_receipt_number']);
     }
@@ -223,9 +223,9 @@ class OcrServiceParsingTest extends TestCase
 
         $parsed = $this->parseWithHints($text, $hints);
 
-        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
-        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
-        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(730, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(230, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(215, (float) $parsed['height'], 0.01);
         $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
         $this->assertSame('DR-2936810', $parsed['delivery_receipt_number']);
     }
@@ -246,8 +246,8 @@ class OcrServiceParsingTest extends TestCase
         $parsed = $this->parseWithHints($text, []);
 
         $this->assertSame('DR-2936811', $parsed['delivery_receipt_number']);
-        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
-        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
-        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(730, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(230, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(215, (float) $parsed['height'], 0.01);
     }
 }
