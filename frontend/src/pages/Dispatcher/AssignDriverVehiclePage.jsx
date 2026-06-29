@@ -122,7 +122,9 @@ function AssignConfirmModal({ job, candidate, recommendedTop, isOverride, overri
 /* ── Candidate Card ─────────────────────────────────────────── */
 function CandidateCard({ item, isTop, onAssign, onOverride }) {
   const topFactor = Array.isArray(item.factors) && item.factors.length > 0
-    ? [...item.factors].sort((a, b) => b.contribution - a.contribution)[0]
+    ? [...item.factors]
+      .filter((f) => f.key !== 'distance')
+      .sort((a, b) => b.contribution - a.contribution)[0]
     : null
   const noAccount = item.driver_has_account === false
 

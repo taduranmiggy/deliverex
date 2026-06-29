@@ -1,24 +1,21 @@
 import { formatJobStatus } from '../../utils/statusLabels'
+import { DELIVERY_PROGRESS_STEPS } from '../../utils/deliveryProgress'
 import { CheckCircle2, Circle, Truck } from 'lucide-react'
 
-const STEPS = [
-  { key: 'assigned', label: 'Assigned' },
-  { key: 'en_route_to_pickup', label: 'En Route to Pickup' },
-  { key: 'arrived_at_pickup', label: 'Arrived at Pickup' },
-  { key: 'en_route_to_destination', label: 'En Route to Destination' },
-  { key: 'arrived', label: 'Arrived' },
-  { key: 'completed', label: 'Completed' },
-]
+const STEPS = DELIVERY_PROGRESS_STEPS.map(({ key, label }) => ({ key, label }))
 
 const RANK = {
+  pending: 0,
   assigned: 1,
-  in_progress: 4, // legacy alias
+  dispatched: 1,
   en_route_to_pickup: 2,
   arrived_at_pickup: 3,
   en_route_to_destination: 4,
+  in_progress: 4,
+  en_route: 4,
   arrived: 5,
   completed: 6,
-  cancelled: 0,
+  cancelled: -1,
 }
 
 function stepState(currentStatus, stepKey) {

@@ -6,62 +6,10 @@ import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
+import DeliveryProgressBar from '../../components/customer/DeliveryProgressBar'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { StatusBadge } from '../../components/ui'
-import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, MessageSquare, Package, RefreshCw, Search, Truck } from 'lucide-react'
-
-const DELIVERY_STEPS = [
-  { key: 'pending',     label: 'Order Created',  icon: Package },
-  { key: 'assigned',    label: 'Assigned',        icon: CheckCircle2 },
-  { key: 'in_progress', label: 'En Route',        icon: Truck },
-  { key: 'arrived',     label: 'Arrived',         icon: MapPin },
-  { key: 'completed',   label: 'Delivered',       icon: CheckCircle2 },
-]
-
-const STATUS_STEP_INDEX = {
-  pending: 0, assigned: 1, in_progress: 2, arrived: 3, completed: 4, cancelled: -1,
-}
-
-function DeliveryProgressBar({ status }) {
-  const currentIdx = STATUS_STEP_INDEX[status] ?? 0
-  if (status === 'cancelled') {
-    return (
-      <div className="tracking-alert" role="status">
-        This delivery has been cancelled.
-      </div>
-    )
-  }
-  return (
-    <div className="pwa-delivery-progress" aria-label="Delivery progress">
-      <div className="pwa-delivery-progress__track">
-        {DELIVERY_STEPS.map((step, idx) => {
-          const done = idx < currentIdx
-          const active = idx === currentIdx
-          const Icon = step.icon
-          return (
-            <div key={step.key} className="pwa-delivery-progress__step">
-              {idx < DELIVERY_STEPS.length - 1 && (
-                <div className={`pwa-delivery-progress__connector${done ? ' pwa-delivery-progress__connector--done' : ''}`} aria-hidden />
-              )}
-              <div
-                className={[
-                  'pwa-delivery-progress__dot',
-                  done || active ? 'pwa-delivery-progress__dot--done' : '',
-                  active ? 'pwa-delivery-progress__dot--active pwa-timeline-step--active' : '',
-                ].filter(Boolean).join(' ')}
-              >
-                <Icon size={16} color={done || active ? '#fff' : 'var(--muted)'} />
-              </div>
-              <span className={`pwa-delivery-progress__label${active ? ' pwa-delivery-progress__label--active' : ''}`}>
-                {step.label}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, MessageSquare, RefreshCw, Search } from 'lucide-react'
 
 function TrackingPage() {
   const location = useLocation()

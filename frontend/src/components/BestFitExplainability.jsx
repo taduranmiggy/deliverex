@@ -2,16 +2,29 @@ import { CheckCircle2, XCircle } from 'lucide-react'
 
 function formatScore(candidate) {
   const score = candidate?.score
-  const max = candidate?.score_max ?? 100
+  const max = candidate?.score_max ?? 90
   if (score == null) return null
   return `${Math.round(score)}/${max}`
+}
+
+const VISIBLE_FACTOR_KEYS = new Set([
+  'vehicle_capacity_match',
+  'driver_available',
+  'load_efficiency',
+  'vehicle_type_match',
+  'schedule_match',
+])
+
+function visibleFactors(candidate) {
+  return (Array.isArray(candidate?.factors) ? candidate.factors : [])
+    .filter((factor) => VISIBLE_FACTOR_KEYS.has(factor.key))
 }
 
 function BestFitExplainability({ candidate, compact = false }) {
   if (!candidate) return null
 
   const scoreLabel = formatScore(candidate)
-  const factors = Array.isArray(candidate.factors) ? candidate.factors : []
+  const factors = visibleFactors(candidate)
 
   if (!scoreLabel && factors.length === 0) return null
 
@@ -24,20 +37,18 @@ function BestFitExplainability({ candidate, compact = false }) {
         padding: compact ? '12px 14px' : '16px 18px',
       }}
     >
-      {scoreLabel && (
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: factors.length ? 14 : 0 }}>
-          <span style={{ fontSize: compact ? '0.8125rem' : '0.875rem', fontWeight: 700, color: 'var(--muted)' }}>Score</span>
-          <span style={{ fontSize: compact ? '1.125rem' : '1.5rem', fontWeight: 800, color: 'var(--color-primary)', letterSpacing: '-0.02em' }}>
-            {scoreLabel}
-          </span>
-        </div>
-      )}
-
       {factors.length > 0 && (
         <>
-          <p style={{ margin: '0 0 10px', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>
-            Match Score Breakdown
-          </p>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, gap: 12 }}>
+            <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>
+              Match Score Breakdown
+            </p>
+            {scoreLabel && (
+              <span style={{ fontSize: compact ? '0.9375rem' : '1.125rem', fontWeight: 800, color: 'var(--color-primary)', letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                {scoreLabel}
+              </span>
+            )}
+          </div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: compact ? 8 : 10 }}>
             {factors.map((factor) => {
               const Icon = factor.matched ? CheckCircle2 : XCircle

@@ -12,7 +12,7 @@ use App\Support\VehicleCapacity;
 
 class BestFitAssignmentService
 {
-    private const SCORE_MAX = 100;
+    private const SCORE_MAX = 90;
     private const DIVERSITY_WINDOW_DAYS = 7;
 
     /**
@@ -358,33 +358,7 @@ class BestFitAssignmentService
             $efficiencyDetail,
         );
 
-        // 4. Distance / Route Readiness (max 10)
-        $distanceMax = 10;
-        $distanceContribution = 6;
-        $distanceMatched = true;
-        $distanceDetail = 'Pickup and delivery route are available for dispatch';
-
-        if ($jobOrder->dropoff_latitude !== null && $jobOrder->dropoff_longitude !== null) {
-            $distanceContribution = 10;
-            $distanceDetail = 'Delivery coordinates available for route and ETA checks';
-        } elseif (! empty($jobOrder->pickup_location) && ! empty($jobOrder->dropoff_location)) {
-            $distanceContribution = 8;
-        } elseif (empty($jobOrder->pickup_location) || empty($jobOrder->dropoff_location)) {
-            $distanceContribution = 3;
-            $distanceMatched = false;
-            $distanceDetail = 'Route is incomplete; dispatcher should verify locations';
-        }
-
-        $factors[] = $this->factor(
-            'distance',
-            'Distance',
-            $distanceMatched,
-            $distanceContribution,
-            $distanceMax,
-            $distanceDetail,
-        );
-
-        // 5. Vehicle Type Match (max 10) — binary pass/fail on exact required type
+        // 4. Vehicle Type Match (max 10) — binary pass/fail on exact required type
         $typeMax = 10;
         $typeContribution = 0;
         $typeMatched = false;
@@ -412,7 +386,7 @@ class BestFitAssignmentService
             $typeDetail,
         );
 
-        // 6. Schedule Match (max 10)
+        // 5. Schedule Match (max 10)
         $scheduleMax = 10;
         $scheduleContribution = 5;
         $scheduleMatched = true;

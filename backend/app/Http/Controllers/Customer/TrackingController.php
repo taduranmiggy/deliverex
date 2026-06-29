@@ -65,7 +65,11 @@ class TrackingController extends Controller
         }
 
         $rawCurrentStatus = $latestStatus?->status ?? $jobOrder->status;
-        $currentStatus = DeliveryStatus::canonicalize($rawCurrentStatus) ?? $rawCurrentStatus;
+        if (! $latestAssignment && in_array(strtolower((string) $jobOrder->status), ['pending', ''], true)) {
+            $currentStatus = 'pending';
+        } else {
+            $currentStatus = DeliveryStatus::canonicalize($rawCurrentStatus) ?? $rawCurrentStatus;
+        }
         $completionProof = $latestAssignment?->completionProof;
         $proofDocuments  = CustomerProofDocuments::forAssignment($latestAssignment, (string) $currentStatus);
         $proofAvailable  = strtolower((string) $currentStatus) === DeliveryStatus::COMPLETED
@@ -73,14 +77,21 @@ class TrackingController extends Controller
 
         $eta = $this->etaEstimation->estimate($jobOrder, $latestTracking, $currentStatus);
 
-        $orderedTimeline = collect(DeliveryStatus::lifecycle())
-            ->map(fn (string $stage) => [
-                'status' => $stage,
-                'label' => DeliveryStatus::label($stage),
-                'timestamp' => null,
-            ])
-            ->values()
-            ->all();
+        $orderedTimeline = [
+            [
+                'status' => 'pending',
+                'label' => 'Pending',
+                'timestamp' => $jobOrder->created_at?->toIso8601String(),
+            ],
+            ...collect(DeliveryStatus::lifecycle())
+                ->map(fn (string $stage) => [
+                    'status' => $stage,
+                    'label' => $stage === DeliveryStatus::ASSIGNED ? 'Dispatched' : DeliveryStatus::label($stage),
+                    'timestamp' => null,
+                ])
+                ->values()
+                ->all(),
+        ];
         if ($latestAssignment) {
             $timelineMap = $latestAssignment->deliveryStatusLogs()
                 ->orderBy('created_at')

@@ -6,8 +6,9 @@ import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell from '../../components/customer/CustomerPageShell'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from '../../components/ui'
+import DeliveryProgressBar from '../../components/customer/DeliveryProgressBar'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
-import { CheckCircle2, ExternalLink, FileText, Link2, MapPin, Package, Truck, X } from 'lucide-react'
+import { ExternalLink, FileText, Link2, MapPin, Package, Truck, X } from 'lucide-react'
 
 function formatDate(v) {
   if (!v) return '—'
@@ -22,57 +23,9 @@ function formatDateFull(v) {
 }
 
 /* ── Mini progress bar reused inside modal ─────────────────── */
-const STATUS_STEPS = [
-  { key: 'pending',     label: 'Order Created' },
-  { key: 'assigned',    label: 'Assigned' },
-  { key: 'in_progress', label: 'En Route' },
-  { key: 'arrived',     label: 'Arrived' },
-  { key: 'completed',   label: 'Delivered' },
-]
-const STATUS_IDX = { pending: 0, assigned: 1, in_progress: 2, arrived: 3, completed: 4, cancelled: -1 }
 
 function DeliveryTimeline({ status }) {
-  const currentIdx = STATUS_IDX[status] ?? 0
-  if (status === 'cancelled') {
-    return (
-      <div className="tracking-alert" role="status">
-        This delivery was cancelled.
-      </div>
-    )
-  }
-  return (
-    <div className="pwa-delivery-progress" aria-label="Delivery progress">
-      <div className="pwa-delivery-progress__track">
-        {STATUS_STEPS.map((step, idx) => {
-          const done = idx < currentIdx
-          const active = idx === currentIdx
-          return (
-            <div key={step.key} className="pwa-delivery-progress__step">
-              {idx < STATUS_STEPS.length - 1 && (
-                <div className={`pwa-delivery-progress__connector${done ? ' pwa-delivery-progress__connector--done' : ''}`} aria-hidden />
-              )}
-              <div
-                className={[
-                  'pwa-delivery-progress__dot',
-                  done || active ? 'pwa-delivery-progress__dot--done' : '',
-                  active ? 'pwa-delivery-progress__dot--active' : '',
-                ].filter(Boolean).join(' ')}
-              >
-                {done ? (
-                  <CheckCircle2 size={14} color="#fff" />
-                ) : (
-                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: active ? '#fff' : '#94a3b8' }}>{idx + 1}</span>
-                )}
-              </div>
-              <span className={`pwa-delivery-progress__label${active ? ' pwa-delivery-progress__label--active' : ''}`}>
-                {step.label}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
+  return <DeliveryProgressBar status={status} showStepNumbers />
 }
 
 /* ── Delivery Detail Modal ─────────────────────────────────── */

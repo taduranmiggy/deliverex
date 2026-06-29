@@ -49,6 +49,18 @@ class BestFitVehicleTypeMatchTest extends TestCase
         $this->assertStringContainsString('does not match', $factor['detail']);
     }
 
+    public function test_recommendations_do_not_include_distance_factor(): void
+    {
+        [$jobOrder, $vehicle] = $this->seedPair('10 Wheeler', '10 Wheeler');
+
+        $recommendations = app(BestFitAssignmentService::class)->recommend($jobOrder);
+        $match = collect($recommendations)->firstWhere('vehicle_id', $vehicle->id);
+
+        $this->assertNotNull($match);
+        $this->assertSame(90, $match['score_max']);
+        $this->assertFalse(collect($match['factors'])->contains(fn ($f) => ($f['key'] ?? null) === 'distance'));
+    }
+
     /**
      * @return array{0: JobOrder, 1: Vehicle}
      */
