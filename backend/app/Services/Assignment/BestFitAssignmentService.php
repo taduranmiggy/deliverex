@@ -20,6 +20,7 @@ class BestFitAssignmentService
      */
     public function recommend(JobOrder $jobOrder): array
     {
+        $jobOrder->loadMissing('preferredVehicleType');
         $drivers = $this->eligibleDrivers($jobOrder);
         $vehicles = $this->eligibleVehicles($jobOrder);
         $driverDiversity = $this->driverDiversityStats($drivers->pluck('id')->all());
@@ -383,36 +384,23 @@ class BestFitAssignmentService
             $distanceDetail,
         );
 
-        // 5. Vehicle Type Match (max 25) — binary pass/fail against configured CBM range
-        $typeMax = 25;
+        // 5. Vehicle Type Match (max 10) — binary pass/fail on exact required type
+        $typeMax = 10;
         $typeContribution = 0;
         $typeMatched = false;
-        $vehicleType = $vehicle->vehicleType;
+        $requiredTypeName = $jobOrder->preferredVehicleType?->name ?? $jobOrder->vehicle_type_required;
+        $vehicleTypeName = $vehicle->vehicleType?->name ?? $vehicle->type;
 
-        if ($requiredVolumeM3 === null || $requiredVolumeM3 <= 0) {
-            $typeDetail = 'Job volume is required to evaluate vehicle type CBM range match.';
-        } elseif (! $vehicleType) {
+        if ($this->normalizeVehicleTypeName($requiredTypeName) === null) {
+            $typeDetail = 'Job order does not specify a required vehicle type.';
+        } elseif ($this->normalizeVehicleTypeName($vehicleTypeName) === null) {
             $typeDetail = 'Vehicle type is not configured for this fleet unit.';
-        } elseif ($vehicleType->min_cbm === null || $vehicleType->max_cbm === null) {
-            $typeDetail = 'Vehicle type CBM range is not configured in master data.';
+        } elseif ($this->vehicleTypesMatch($requiredTypeName, $vehicleTypeName)) {
+            $typeContribution = $typeMax;
+            $typeMatched = true;
+            $typeDetail = 'Vehicle type exactly matches the Job Order requirement.';
         } else {
-            $minCbm = (float) $vehicleType->min_cbm;
-            $maxCbm = (float) $vehicleType->max_cbm;
-            $typeName = $vehicleType->name ?? 'vehicle type';
-            $rangeLabel = rtrim(rtrim(number_format($minCbm, 1, '.', ''), '0'), '.')
-                .'–'
-                .rtrim(rtrim(number_format($maxCbm, 1, '.', ''), '0'), '.')
-                .' m³';
-
-            if ($requiredVolumeM3 >= $minCbm && $requiredVolumeM3 <= $maxCbm) {
-                $typeContribution = $typeMax;
-                $typeMatched = true;
-                $typeDetail = "Job volume falls within the configured CBM range for this vehicle type ({$rangeLabel}).";
-            } elseif ($requiredVolumeM3 > $maxCbm) {
-                $typeDetail = "Job volume exceeds the configured CBM range for this vehicle type ({$rangeLabel}).";
-            } else {
-                $typeDetail = "Job volume is below the configured CBM range for this vehicle type ({$rangeLabel}).";
-            }
+            $typeDetail = 'Vehicle type does not match the Job Order requirement.';
         }
 
         $factors[] = $this->factor(
@@ -504,6 +492,25 @@ class BestFitAssignmentService
             'max'          => $max,
             'detail'       => $detail,
         ];
+    }
+
+    private function normalizeVehicleTypeName(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = mb_strtolower(trim($value));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    private function vehicleTypesMatch(?string $requiredTypeName, ?string $vehicleTypeName): bool
+    {
+        $required = $this->normalizeVehicleTypeName($requiredTypeName);
+        $actual = $this->normalizeVehicleTypeName($vehicleTypeName);
+
+        return $required !== null && $actual !== null && $required === $actual;
     }
 
 }
