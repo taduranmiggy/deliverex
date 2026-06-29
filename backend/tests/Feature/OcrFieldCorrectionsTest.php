@@ -86,11 +86,40 @@ class OcrFieldCorrectionsTest extends TestCase
 
         $this->actingAs($admin, 'sanctum')->putJson("/api/ocr/{$ocr->id}/corrections", [
             'fields' => ['length' => 0],
+            'issue_type' => 'ocr_misread',
+            'reason' => 'Test',
         ])->assertUnprocessable();
 
         $this->actingAs($admin, 'sanctum')->putJson("/api/ocr/{$ocr->id}/corrections", [
             'fields' => ['delivery_receipt_number' => ''],
+            'issue_type' => 'ocr_misread',
+            'reason' => 'Test',
         ])->assertUnprocessable();
+    }
+
+    public function test_save_corrections_ignores_non_reviewable_fields(): void
+    {
+        [$admin, $ocr] = $this->seedOcrPair('admin');
+
+        $this->actingAs($admin, 'sanctum')->putJson("/api/ocr/{$ocr->id}/corrections", [
+            'fields' => [
+                'supplier' => 'Ignored Supplier',
+                'quantity' => 99,
+            ],
+            'issue_type' => 'ocr_misread',
+            'reason' => 'Test',
+        ])->assertUnprocessable();
+
+        $this->actingAs($admin, 'sanctum')->putJson("/api/ocr/{$ocr->id}/corrections", [
+            'fields' => [
+                'length' => 735,
+                'supplier' => 'Ignored Supplier',
+            ],
+            'issue_type' => 'ocr_misread',
+            'reason' => 'Test',
+        ])->assertOk()
+            ->assertJsonMissingPath('field_corrections.supplier')
+            ->assertJsonPath('field_corrections.length.corrected', 735);
     }
 
     public function test_approve_applies_effective_structured_values_and_preserves_audit(): void

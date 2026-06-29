@@ -23,17 +23,13 @@ class OcrResult extends Model
         'total',
     ];
 
-    /** @var list<string> */
+    /** @var list<string> Fields shown in OCR Review and editable by administrators. */
     public const CORRECTABLE_FIELDS = [
+        'delivery_receipt_number',
         'length',
         'width',
         'height',
         'volume',
-        'delivery_receipt_number',
-        'supplier',
-        'date',
-        'quantity',
-        'total',
     ];
 
     protected $fillable = [

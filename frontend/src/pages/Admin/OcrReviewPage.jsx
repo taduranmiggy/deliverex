@@ -90,14 +90,10 @@ function OcrFieldConfidence({ fieldScore, missing }) {
 
 const OCR_FIELD_DEFS = [
   { key: 'delivery_receipt_number', label: 'Delivery Receipt No', type: 'text' },
-  { key: 'supplier', label: 'Supplier', type: 'text' },
-  { key: 'date', label: 'Delivery Date', type: 'text' },
   { key: 'length', label: 'Length (cm)', type: 'number' },
   { key: 'width', label: 'Width (cm)', type: 'number' },
   { key: 'height', label: 'Height (cm)', type: 'number' },
   { key: 'volume', label: 'Volume (m³)', type: 'number' },
-  { key: 'quantity', label: 'Quantity', type: 'number' },
-  { key: 'total', label: 'Amount', type: 'text' },
 ]
 
 const STRUCTURED_COLUMN_MAP = {
@@ -122,7 +118,7 @@ function validateEditDrafts(drafts) {
   }
 
   for (const field of OCR_FIELD_DEFS) {
-    if (!['length', 'width', 'height', 'volume', 'quantity'].includes(field.key)) {
+    if (!CORE_VALIDATED_FIELDS.includes(field.key)) {
       continue
     }
     const raw = String(drafts[field.key] ?? '').trim()
@@ -147,21 +143,15 @@ const FIELD_DEF_BY_KEY = Object.fromEntries(OCR_FIELD_DEFS.map((f) => [f.key, f]
 const OCR_FIELD_GROUPS = [
   {
     id: 'document',
-    title: 'Document Information',
+    title: 'Delivery Receipt',
     layout: 'stack',
-    keys: ['delivery_receipt_number', 'supplier', 'date'],
+    keys: ['delivery_receipt_number'],
   },
   {
     id: 'dimensions',
     title: 'Dimensions',
     layout: 'grid',
     keys: ['length', 'width', 'height', 'volume'],
-  },
-  {
-    id: 'material',
-    title: 'Material Information',
-    layout: 'stack',
-    keys: ['quantity', 'total'],
   },
 ]
 
@@ -382,29 +372,30 @@ function OcrSuggestionsPanel({
 
 function OcrSystemDataCompact({ selected }) {
   const deliveryDate = selected.delivery_date ? new Date(selected.delivery_date) : null
+  const jobOrder = selected.document?.assignment?.job_order
+    ?? selected.document?.assignment?.jobOrder
+    ?? null
+  const customer = jobOrder?.display_name
+    ?? jobOrder?.company?.company_name
+    ?? jobOrder?.client?.company_name
+    ?? jobOrder?.custom_client_name
+    ?? null
+  const material = [jobOrder?.material_type, jobOrder?.specification_size].filter(Boolean).join(' · ') || null
+  const loadVolume = jobOrder?.load_volume_m3 ?? jobOrder?.volume_m3 ?? null
+
+  const row = (label, value) => (
+    <div className="ocr-system-data__row">
+      <span className="ocr-system-data__label">{label}</span>
+      <span className="ocr-system-data__value">{value || '—'}</span>
+    </div>
+  )
 
   return (
     <div className="ocr-system-data">
-      <div className="ocr-system-data__row">
-        <span className="ocr-system-data__label">Job Order</span>
-        <span className="ocr-system-data__value">
-          {selected.job_order_id ? formatJobPublicId(selected.job_order_id) : '—'}
-        </span>
-      </div>
-      <div className="ocr-system-data__row">
-        <span className="ocr-system-data__label">Assignment</span>
-        <span className="ocr-system-data__value">
-          {selected.assignment_id ? `#${selected.assignment_id}` : '—'}
-        </span>
-      </div>
-      <div className="ocr-system-data__row">
-        <span className="ocr-system-data__label">Vehicle</span>
-        <span className="ocr-system-data__value">{selected.vehicle_plate_no || '—'}</span>
-      </div>
-      <div className="ocr-system-data__row">
-        <span className="ocr-system-data__label">Driver</span>
-        <span className="ocr-system-data__value">{selected.driver_name || '—'}</span>
-      </div>
+      {row('Job Order', selected.job_order_id ? formatJobPublicId(selected.job_order_id) : null)}
+      {row('Assignment', selected.assignment_id ? `#${selected.assignment_id}` : null)}
+      {row('Vehicle', selected.vehicle_plate_no)}
+      {row('Driver', selected.driver_name)}
       <div className="ocr-system-data__row">
         <span className="ocr-system-data__label">Delivery</span>
         {deliveryDate ? (
@@ -418,6 +409,10 @@ function OcrSystemDataCompact({ selected }) {
           <span className="ocr-system-data__value">—</span>
         )}
       </div>
+      {row('Customer', customer)}
+      {row('Supplier', jobOrder?.quarry?.quarry_name)}
+      {row('Material', material)}
+      {loadVolume != null && row('Load Volume', `${loadVolume} m³`)}
     </div>
   )
 }

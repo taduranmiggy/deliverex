@@ -18,7 +18,13 @@ class OcrReviewController extends Controller
     }
     public function index(Request $request)
     {
-        $query = OcrResult::with('document.completionProof', 'document.assignment.jobOrder', 'document.assignment.driver.user', 'document.assignment.vehicle')
+        $query = OcrResult::with(
+            'document.completionProof',
+            'document.assignment.jobOrder.company',
+            'document.assignment.jobOrder.quarry',
+            'document.assignment.driver.user',
+            'document.assignment.vehicle'
+        )
             ->orderByDesc('created_at');
         $this->applyFilters($query, $request);
 
@@ -139,11 +145,7 @@ class OcrReviewController extends Controller
             'fields.width' => 'nullable|numeric|gt:0',
             'fields.height' => 'nullable|numeric|gt:0',
             'fields.volume' => 'nullable|numeric|gt:0',
-            'fields.quantity' => 'nullable|numeric|gt:0',
             'fields.delivery_receipt_number' => 'nullable|string|min:1|max:120',
-            'fields.supplier' => 'nullable|string|max:200',
-            'fields.date' => 'nullable|string|max:120',
-            'fields.total' => 'nullable|string|max:120',
             'issue_type' => 'required|in:ocr_misread,wrong_unit,missing_value,incorrect_format,low_ocr_accuracy,supplier_layout_difference,other',
             'reason' => 'required|string|min:1|max:500',
         ]);
@@ -311,7 +313,7 @@ class OcrReviewController extends Controller
             return null;
         }
 
-        if (in_array($field, ['length', 'width', 'height', 'volume', 'quantity'], true)) {
+        if (in_array($field, ['length', 'width', 'height', 'volume'], true)) {
             return is_numeric($value) ? (float) $value : null;
         }
 
@@ -324,7 +326,7 @@ class OcrReviewController extends Controller
             return true;
         }
 
-        if (in_array($field, ['length', 'width', 'height', 'volume', 'quantity'], true)) {
+        if (in_array($field, ['length', 'width', 'height', 'volume'], true)) {
             if (! is_numeric($original) || ! is_numeric($corrected)) {
                 return (string) $original === (string) $corrected;
             }
