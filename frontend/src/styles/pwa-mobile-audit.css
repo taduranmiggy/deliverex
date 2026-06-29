@@ -151,12 +151,17 @@
 .pwa-action-card__title,
 .pwa-action-card__desc,
 .pwa-delivery-card__route,
-.pwa-delivery-card__code,
 .pwa-section__title,
 .pwa-page-header h1,
 .pwa-page-header p {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.pwa-delivery-card__code.customer-tracking-code {
+  overflow-wrap: normal;
+  word-break: keep-all;
+  white-space: nowrap;
 }
 
 .pwa-delivery-card__top {

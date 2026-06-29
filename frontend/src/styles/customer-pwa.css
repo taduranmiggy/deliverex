@@ -1130,6 +1130,80 @@
   }
 }
 
+/* Deliveries table — keep tracking IDs on one line */
+.customer-tracking-code {
+  display: inline-block;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  background: var(--slate-100);
+  padding: 4px 10px;
+  border-radius: 6px;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.customer-deliveries-table {
+  min-width: 860px;
+}
+
+.customer-deliveries-table th:nth-child(1),
+.customer-deliveries-table td.customer-deliveries-table__tracking {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.customer-deliveries-table th:nth-child(2),
+.customer-deliveries-table td:nth-child(2) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.customer-deliveries-table th:nth-child(3),
+.customer-deliveries-table td:nth-child(3) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.customer-deliveries-table th:nth-child(4),
+.customer-deliveries-table td:nth-child(4) {
+  min-width: 180px;
+  max-width: 420px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.customer-deliveries-table th:nth-child(5),
+.customer-deliveries-table td:nth-child(5) {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.customer-deliveries-table th:nth-child(6),
+.customer-deliveries-table td:nth-child(6) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.customer-deliveries-table-wrap.dx-data-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .customer-deliveries-table-wrap.dx-data-table-wrap--stack .dx-data-table tbody td.customer-deliveries-table__tracking {
+    align-items: center;
+  }
+
+  .customer-deliveries-table-wrap.dx-data-table-wrap--stack .dx-data-table tbody td.customer-deliveries-table__tracking .customer-tracking-code {
+    margin-left: auto;
+  }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .pwa-splash__logo,

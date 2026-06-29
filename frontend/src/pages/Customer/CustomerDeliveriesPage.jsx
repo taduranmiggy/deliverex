@@ -265,8 +265,8 @@ function CustomerDeliveriesPage() {
     const hasPod = Array.isArray(r.documents) && r.documents.length > 0
     return (
       <tr>
-        <td data-label="Tracking ID">
-          <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.875rem', background: 'var(--slate-100)', padding: '3px 8px', borderRadius: 6 }}>
+        <td data-label="Tracking ID" className="customer-deliveries-table__tracking">
+          <span className="customer-tracking-code">
             {r.tracking_code || `#${r.id}`}
           </span>
         </td>
@@ -353,7 +353,7 @@ function CustomerDeliveriesPage() {
                 onClick={() => setSelected(r)}
               >
                 <div className="pwa-delivery-card__top">
-                  <span className="pwa-delivery-card__code">{r.tracking_code}</span>
+                  <span className="customer-tracking-code pwa-delivery-card__code">{r.tracking_code}</span>
                   <StatusBadge status={r.status} />
                 </div>
                 <p className="pwa-delivery-card__route">
@@ -363,8 +363,8 @@ function CustomerDeliveriesPage() {
             ))}
           </div>
 
-          <div className="pwa-deliveries-table-wrap dx-data-table-wrap dx-data-table-wrap--stack">
-            <table className="dx-data-table">
+          <div className="pwa-deliveries-table-wrap customer-deliveries-table-wrap dx-data-table-wrap dx-data-table-wrap--stack">
+            <table className="dx-data-table customer-deliveries-table">
               <thead>
                 <tr>
                   <th>Tracking ID</th>
