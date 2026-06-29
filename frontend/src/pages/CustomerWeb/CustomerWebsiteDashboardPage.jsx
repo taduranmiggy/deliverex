@@ -10,21 +10,17 @@ import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import useAuth from '../../hooks/useAuth'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 import {
-  BriefcaseBusiness,
+  ClipboardList,
   FileText,
-  HeadphonesIcon,
-  History,
-  Info,
   Link2,
-  MapPin,
-  MessageSquare,
   Package,
+  Phone,
   Search,
   Truck,
   Users,
 } from 'lucide-react'
 
-const ACTIVE_STATUSES = ['pending', 'assigned', 'in_progress', 'arrived']
+const ACTIVE_STATUSES = new Set(['pending', 'assigned', 'dispatched', 'in_progress', 'en_route', 'arrived'])
 const NOTIFICATION_LABELS = {
   assigned: 'Assigned',
   in_progress: 'En Route',
@@ -64,7 +60,7 @@ function CustomerWebsiteDashboardPage() {
   }, [])
 
   const activeOrders = useMemo(
-    () => orders.filter((o) => ACTIVE_STATUSES.includes(o.status)),
+    () => orders.filter((o) => ACTIVE_STATUSES.has(String(o.status || '').toLowerCase())),
     [orders],
   )
   const recentCompleted = useMemo(
@@ -79,6 +75,12 @@ function CustomerWebsiteDashboardPage() {
     return counts
   }, [orders])
 
+  const completedCount = statusCounts.completed
+  const podAvailableCount = useMemo(
+    () => orders.filter((o) => o.status === 'completed' && Array.isArray(o.documents) && o.documents.length > 0).length,
+    [orders],
+  )
+
   const handleTrack = (e) => {
     e.preventDefault()
     const trimmed = trackCode.trim()
@@ -90,24 +92,52 @@ function CustomerWebsiteDashboardPage() {
     navigate(paths.track, { state: { prefillTracking: trimmed } })
   }
 
-  const quickActions = [
-    { icon: MapPin, title: 'Track Delivery', description: 'Look up status by Tracking ID', to: paths.track },
-    { icon: Package, title: 'My Deliveries', description: 'Full delivery list and details', to: paths.deliveries },
-    { icon: History, title: 'Delivery History', description: 'Review past and active shipments', to: paths.history },
-    { icon: FileText, title: 'Proof of Delivery', description: 'Access POD after completion', to: paths.track },
-    { icon: Link2, title: 'Link Delivery', description: 'Connect a tracking ID to your account', to: paths.linkDelivery },
-    { icon: HeadphonesIcon, title: 'Contact Support', description: 'Phone, email, and inquiries', to: paths.support },
-    { icon: MessageSquare, title: 'Chat Assistant', description: 'Get instant help', onClick: () => setChatOpen(true) },
-    { icon: Info, title: 'About Us', description: 'Learn about Deliverex', to: paths.about },
-    { icon: BriefcaseBusiness, title: 'Our Services', description: 'Logistics solutions we offer', to: paths.services },
+  const deliveryActions = [
+    {
+      icon: ClipboardList,
+      title: 'My Deliveries',
+      description: 'View all your ongoing and scheduled deliveries in progress.',
+      to: paths.deliveries,
+      badge: `${activeOrders.length} Active`,
+      badgeVariant: 'blue',
+    },
+    {
+      icon: FileText,
+      title: 'Proof of Delivery',
+      description: 'Download signed POD documents after delivery completion.',
+      to: paths.deliveries,
+      badge: podAvailableCount > 0 ? `${podAvailableCount} Available` : 'View deliveries',
+      badgeVariant: 'purple',
+    },
+  ]
+
+  const supportActions = [
+    {
+      icon: Link2,
+      title: 'Link a Delivery',
+      description: 'Connect a Tracking ID to your account for easier monitoring and access.',
+      to: paths.linkDelivery,
+      badge: 'Quick Link',
+      badgeVariant: 'yellow',
+    },
+    {
+      icon: Phone,
+      title: 'Contact Support',
+      description: 'Reach our team via phone, email, or submit an inquiry.',
+      to: paths.support,
+      badge: 'Get Help',
+      badgeVariant: 'red',
+    },
   ]
 
   if (user?.company_role === 'owner') {
-    quickActions.splice(5, 0, {
+    supportActions.push({
       icon: Users,
       title: 'Team',
-      description: 'Manage company users',
+      description: 'Manage company users and portal access.',
       to: paths.team,
+      badge: 'Manage',
+      badgeVariant: 'blue',
     })
   }
 
@@ -219,7 +249,7 @@ function CustomerWebsiteDashboardPage() {
               <section className="customer-web-panel">
                 <div className="customer-web-panel__head">
                   <h2>Recently completed</h2>
-                  <Link to={paths.history} className="customer-web-panel__link">View history</Link>
+                  <Link to={paths.deliveries} className="customer-web-panel__link">View all deliveries</Link>
                 </div>
                 <div className="customer-web-delivery-grid">
                   {recentCompleted.map((order) => (
@@ -227,7 +257,7 @@ function CustomerWebsiteDashboardPage() {
                       key={order.id}
                       type="button"
                       className="customer-web-delivery-card customer-web-delivery-card--muted"
-                      onClick={() => navigate(paths.history)}
+                      onClick={() => navigate(paths.deliveries, { state: { openOrderId: order.id } })}
                     >
                       <div className="customer-web-delivery-card__top">
                         <span className="customer-web-delivery-card__code">{order.tracking_code}</span>
@@ -236,17 +266,27 @@ function CustomerWebsiteDashboardPage() {
                     </button>
                   ))}
                 </div>
+                {completedCount > 0 && (
+                  <p className="customer-web-panel__meta">{completedCount} completed shipment{completedCount === 1 ? '' : 's'} on your account</p>
+                )}
               </section>
             ) : null}
           </>
         )}
 
-        <section className="customer-web-panel">
-          <div className="customer-web-panel__head">
-            <h2>Quick actions</h2>
+        <section className="customer-web-action-section" aria-labelledby="customer-deliveries-actions">
+          <h2 id="customer-deliveries-actions" className="customer-web-action-section__title">My Deliveries</h2>
+          <div className="customer-web-action-grid customer-web-action-grid--deliveries">
+            {deliveryActions.map((action) => (
+              <CustomerActionCard key={action.title} {...action} />
+            ))}
           </div>
-          <div className="customer-web-action-grid">
-            {quickActions.map((action) => (
+        </section>
+
+        <section className="customer-web-action-section" aria-labelledby="customer-support-actions">
+          <h2 id="customer-support-actions" className="customer-web-action-section__title">Support &amp; Account</h2>
+          <div className="customer-web-action-grid customer-web-action-grid--support">
+            {supportActions.map((action) => (
               <CustomerActionCard key={action.title} {...action} />
             ))}
           </div>

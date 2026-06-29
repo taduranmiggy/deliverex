@@ -133,7 +133,7 @@
 }
 
 @media (min-width: 360px) {
-  .pwa-action-grid {
+  .pwa-action-grid:not(.pwa-action-grid--support) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

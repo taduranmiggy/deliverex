@@ -571,9 +571,13 @@
   padding-bottom: 24px;
 }
 
-@media (min-width: 720px) {
+.pwa-action-grid--support {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 479px) {
   .pwa-action-grid--support {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
@@ -658,9 +662,63 @@
 }
 
 .pwa-action-card--app .pwa-action-card__chevron {
-  position: absolute;
-  top: 14px;
-  right: 12px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.pwa-action-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.pwa-action-card--badged {
+  min-height: 168px;
+  padding-bottom: 14px;
+}
+
+.pwa-action-card--badged .pwa-action-card__body {
+  flex: 1;
+}
+
+.pwa-action-card__badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+
+.pwa-action-card__badge--blue {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.pwa-action-card__badge--green {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.pwa-action-card__badge--purple {
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+}
+
+.pwa-action-card__badge--yellow {
+  background: rgba(202, 138, 4, 0.14);
+  color: #a16207;
+}
+
+.pwa-action-card__badge--red {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
 }
 
 /* Delivery cards */
