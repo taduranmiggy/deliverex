@@ -53,23 +53,50 @@ if (file_exists($backendRoot . '/vendor/autoload.php') && $envExists) {
 echo 'db=' . $db . "\n";
 
 $currentShaFile = $sharedRoot . '/deploy-state/current-sha';
+$deploySha = '';
 if (is_readable($currentShaFile)) {
     $deploySha = trim((string) file_get_contents($currentShaFile));
-    if ($deploySha !== '' && $deploySha !== 'none' && $deploySha !== 'unknown') {
-        echo 'deploy=' . substr($deploySha, 0, 7) . "\n";
+    if ($deploySha === 'none' || $deploySha === 'unknown') {
+        $deploySha = '';
     }
 }
 
+$pendingFile = $sharedRoot . '/deploy-state/pending-deploy.json';
+if (is_readable($pendingFile)) {
+    $pending = json_decode((string) file_get_contents($pendingFile), true);
+    $pendingSha = is_array($pending) ? trim((string) ($pending['sha'] ?? '')) : '';
+    if ($pendingSha !== '' && $pendingSha !== 'unknown') {
+        echo 'deploy_pending=' . substr($pendingSha, 0, 7) . "\n";
+    }
+}
+
+if ($deploySha !== '') {
+    echo 'version=' . substr($deploySha, 0, 7) . "\n";
+    echo 'deploy=' . substr($deploySha, 0, 7) . "\n";
+}
+
 $repoRoot = dirname($backendRoot);
+$gitSha = '';
 if (is_dir($repoRoot . '/.git')) {
     $head = @trim((string) @file_get_contents($repoRoot . '/.git/HEAD'));
     if (str_starts_with($head, 'ref: ')) {
         $ref = substr($head, 5);
         $hash = @trim((string) @file_get_contents($repoRoot . '/.git/' . $ref));
         if ($hash !== '') {
-            echo 'git=' . substr($hash, 0, 7) . "\n";
+            $gitSha = $hash;
         }
     } elseif ($head !== '') {
-        echo 'git=' . substr($head, 0, 7) . "\n";
+        $gitSha = $head;
+    }
+}
+
+// hPanel git clone is not updated by CI tarball deploys — only show when it matches live version.
+if ($gitSha !== '') {
+    $gitShort = substr($gitSha, 0, 7);
+    $deployShort = $deploySha !== '' ? substr($deploySha, 0, 7) : '';
+    if ($deployShort === '' || $gitShort === $deployShort) {
+        echo 'git=' . $gitShort . "\n";
+    } else {
+        echo 'git_clone=' . $gitShort . "\n";
     }
 }

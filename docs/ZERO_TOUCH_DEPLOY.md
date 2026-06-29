@@ -70,8 +70,13 @@ Dapat makita:
 pong
 env=yes
 vendor=yes
-git=6d3f6c6   ← dapat tumugma sa latest commit
+version=fe4d5c8   ← live deployed commit (tumugma sa latest push)
+deploy=fe4d5c8
 ```
+
+Kung `version=d2fa9f1` pa rin habang ang GitHub `main` ay `fe4d5c8`, **hindi pa na-a-apply ng server ang bagong deploy** — hindi mali ang ping.
+
+`git_clone=` (kung lumabas) ay luma na hPanel git folder — **ignore**; ang `version=` / `deploy=` ang totoong live code.
 
 Kung `env=no` o `vendor=no` → hindi pa tumatakbo ang deploy script. Ulitin ang one-time setup sa itaas.
 

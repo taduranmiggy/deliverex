@@ -48,7 +48,11 @@ queue_latest_from_github_if_needed() {
   github_token="$(read_secret GITHUB_DEPLOY_TOKEN)"
   repo="$(read_secret GITHUB_REPO taduranmiggy/deliverex)"
   app_url="$(read_secret APP_URL https://deliverexapp.com)"
-  last_deployed="$(cat "$LAST_DEPLOYED_SHA_FILE" 2>/dev/null || true)"
+  last_deployed="$(cat "$SHARED_STATE/current-sha" 2>/dev/null | tr -d '\r\n' || true)"
+  if [ -z "$last_deployed" ]; then
+    last_deployed="$(cat "$LAST_DEPLOYED_SHA_FILE" 2>/dev/null | tr -d '\r\n' || true)"
+  fi
+  last_deployed="${last_deployed:0:7}"
   last_queued="$(cat "$LAST_QUEUED_RUN_FILE" 2>/dev/null || true)"
 
   if [ -z "$github_token" ]; then
@@ -79,7 +83,7 @@ queue_latest_from_github_if_needed() {
     if [ -n "$last_deployed" ] && [ "$candidate_short" = "$last_deployed" ]; then
       continue
     fi
-    if [ "$candidate_run" = "$last_queued" ]; then
+    if [ "$candidate_run" = "$last_queued" ] && [ -f "$PENDING" ]; then
       continue
     fi
 
@@ -239,7 +243,7 @@ log "Applying deploy sha=${DEPLOY_SHA:0:7} bundle=$DEPLOY_BUNDLE"
 if bash "$SCRIPT_DIR/deploy-from-ci.sh" >>"$LOG_FILE" 2>&1; then
   rm -f "$PENDING"
   if [ -n "$DEPLOY_SHA" ] && [ "$DEPLOY_SHA" != "unknown" ]; then
-    echo "${DEPLOY_SHA:0:7}" >"$LAST_DEPLOYED_SHA_FILE"
+    echo "$DEPLOY_SHA" >"$LAST_DEPLOYED_SHA_FILE"
   fi
   log "Deploy complete sha=${DEPLOY_SHA:0:7}"
 else
