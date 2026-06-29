@@ -3738,7 +3738,8 @@
 /* ── Page entrance ───────────────────────────────────────── */
 /* Applied by PageTransition wrapper on every route change   */
 .dx-page-enter {
-  animation: dx-fade-up 0.2s ease both;
+  opacity: 1;
+  animation: none;
 }
 
 /* ── Stat card staggered entrance ────────────────────────── */

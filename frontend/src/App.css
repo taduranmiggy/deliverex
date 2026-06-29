@@ -753,7 +753,8 @@ button.table-row {
     justify-content: space-between;
   }
 
-  .customer-nav {
+  /* Legacy collapsible shell nav only — not the PWA / website top bars */
+  .customer-shell .customer-nav:not(.customer-nav--pwa):not(.customer-nav--website) {
     width: 100%;
     display: none;
     flex-direction: column;
@@ -762,7 +763,7 @@ button.table-row {
     border-top: 1px solid var(--stroke);
   }
 
-  .customer-nav--open {
+  .customer-shell .customer-nav--open {
     display: flex;
   }
 

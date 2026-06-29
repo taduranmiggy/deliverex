@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import PageTransition from '../components/PageTransition'
 import RouteFallback from '../components/RouteFallback'
@@ -12,6 +12,14 @@ import { isStandalonePwa } from '../utils/pwaUtils'
 
 function CustomerLayout() {
   const pwaMode = isStandalonePwa()
+
+  useEffect(() => {
+    if (!pwaMode) return undefined
+    const id = requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent('deliverex:app-ready'))
+    })
+    return () => cancelAnimationFrame(id)
+  }, [pwaMode])
 
   return (
     <CustomerSurfaceProvider surface="pwa">

@@ -29,6 +29,14 @@
   animation: none !important;
 }
 
+.customer-layout--pwa .customer-nav.customer-nav--pwa {
+  display: block;
+}
+
+.customer-layout--pwa .customer-bottom-nav {
+  display: flex !important;
+}
+
 .pwa-splash__content {
   display: flex;
   flex-direction: column;
@@ -66,6 +74,21 @@
 
 .pwa-splash__logo-fallback--visible {
   opacity: 1;
+}
+
+.pwa-splash__logo-animate {
+  animation: pwa-splash-logo-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pwa-splash-logo-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .pwa-splash__title {
