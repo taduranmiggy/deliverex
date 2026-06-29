@@ -56,6 +56,19 @@ function formatSuggestionValue(value) {
   return String(value)
 }
 
+function formatConfidencePct(score) {
+  if (score == null || Number.isNaN(Number(score))) return null
+  return `${Math.round(Number(score) * 100)}%`
+}
+
+function confidenceTone(score) {
+  const n = Number(score)
+  if (!Number.isFinite(n) || n <= 0) return 'low'
+  if (n >= 0.85) return 'high'
+  if (n >= 0.65) return 'medium'
+  return 'low'
+}
+
 function OcrReviewPage() {
   const toast = useToast()
   const { user } = useAuth()
@@ -84,6 +97,7 @@ function OcrReviewPage() {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
   const [total, setTotal] = useState(0)
+  const [expandedAlternatives, setExpandedAlternatives] = useState({})
   const loadRequestId = useRef(0)
 
   const load = useCallback(async (filter = 'all', pageNum = page) => {
@@ -136,6 +150,7 @@ function OcrReviewPage() {
       setRejectReason(selected.error_message ?? '')
       setReviewNotes(selected.review_notes ?? '')
       setIssueType('')
+      setExpandedAlternatives({})
     }
   }, [selected])
 
@@ -271,8 +286,10 @@ function OcrReviewPage() {
   const parserPartial = parserStatus === 'partial'
   const reviewSuggestions = diagnostics?.review_suggestions ?? {}
   const structuredHits = diagnostics?.structured_hits ?? {}
-  const dimensionConfidence = Number(diagnostics?.confidence_breakdown?.dimension ?? 0)
-  const receiptConfidence = Number(diagnostics?.confidence_breakdown?.delivery_receipt_number ?? 0)
+  const confidenceModel = diagnostics?.confidence_model ?? {}
+  const fieldScores = confidenceModel?.field_scores ?? {}
+  const overallConfidence = selected?.confidence_score
+  const overallConfidenceLabel = formatConfidencePct(overallConfidence)
 
   const appendSuggestionToCorrection = (label, value) => {
     const line = `${label}: ${value}`
@@ -459,27 +476,57 @@ function OcrReviewPage() {
             <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
               <div className="dx-grid-2 dx-grid-2--12">
                 <div style={{ border: '1px solid var(--stroke)', borderRadius: 10, padding: 12 }}>
-                  <p style={{ margin: '0 0 8px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>OCR Data</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>OCR Data</p>
+                    {overallConfidenceLabel && (
+                      <span className={`badge-dx badge-dx--${confidenceTone(overallConfidence) === 'high' ? 'validated' : confidenceTone(overallConfidence) === 'medium' ? 'reviewing' : 'failed'}`}>
+                        OCR Confidence: {overallConfidenceLabel}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ display: 'grid', gap: 6, fontSize: '0.85rem' }}>
                     {ocrRows.map((row) => {
                       const missing = row.value == null || row.value === ''
-                      const lowConfidence = row.key === 'delivery_receipt_number'
-                        ? receiptConfidence > 0 && receiptConfidence < 0.65
-                        : dimensionConfidence > 0 && dimensionConfidence < 0.6
+                      const fieldScore = fieldScores[row.key]
+                      const tone = confidenceTone(fieldScore)
+                      const lowConfidence = tone === 'low' && !missing
+                      const mediumConfidence = tone === 'medium' && !missing
                       const noHit = structuredHits[row.key] === false
                       const showNoMatch = missing || lowConfidence || noHit
                       const suggestions = Array.isArray(reviewSuggestions[row.key]) ? reviewSuggestions[row.key] : []
+                      const showSuggestions = suggestions.length > 0 && (tone !== 'high' || expandedAlternatives[row.key])
+                      const fieldPct = formatConfidencePct(fieldScore)
                       return (
                         <div key={row.key}>
                           <div>
                             <strong>{row.label}:</strong> {missing ? '—' : row.value}
+                            {fieldPct && !missing && (
+                              <span style={{
+                                marginLeft: 8,
+                                fontSize: '0.72rem',
+                                color: tone === 'high' ? 'var(--success)' : tone === 'medium' ? 'var(--warning, #b45309)' : 'var(--danger)',
+                              }}>
+                                {fieldPct}
+                                {mediumConfidence && ' · review suggested'}
+                              </span>
+                            )}
                             {showNoMatch && (
                               <span style={{ marginLeft: 8, color: 'var(--muted)', fontSize: '0.75rem' }}>
                                 No confident match found.
                               </span>
                             )}
                           </div>
-                          {suggestions.length > 0 && (
+                          {suggestions.length > 0 && tone === 'high' && !expandedAlternatives[row.key] && (
+                            <button
+                              type="button"
+                              className="btn-dx-secondary btn-sm"
+                              style={{ marginTop: 4, padding: '2px 8px', fontSize: '0.72rem' }}
+                              onClick={() => setExpandedAlternatives((prev) => ({ ...prev, [row.key]: true }))}
+                            >
+                              Show alternatives
+                            </button>
+                          )}
+                          {showSuggestions && (
                             <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                               <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>Suggested Values:</span>
                               {suggestions.map((entry, idx) => {

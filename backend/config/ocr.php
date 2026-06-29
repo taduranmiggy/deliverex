@@ -82,4 +82,31 @@ return [
     */
     'stub_fallback' => filter_var(env('OCR_STUB_FALLBACK', false), FILTER_VALIDATE_BOOLEAN),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Image preprocessing (GD)
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, images are lightly preprocessed before Google Document AI.
+    | Gracefully skipped when GD or EXIF is unavailable.
+    |
+    */
+    'preprocess_enabled' => filter_var(env('OCR_PREPROCESS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Confidence scoring weights (weighted-v1)
+    |--------------------------------------------------------------------------
+    */
+    'confidence_weights' => [
+        'provider_ocr' => 0.28,
+        'text_quality' => 0.07,
+        'dimension_extraction' => 0.18,
+        'receipt_pattern' => 0.12,
+        'field_completeness' => 0.20,
+        'volume_cross_validation' => 0.08,
+        'table_detection' => 0.04,
+        'auxiliary_fields' => 0.03,
+    ],
+
 ];

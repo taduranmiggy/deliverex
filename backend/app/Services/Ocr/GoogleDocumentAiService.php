@@ -13,13 +13,20 @@ use Throwable;
 
 class GoogleDocumentAiService
 {
+    public function __construct(
+        private readonly DocumentAiStructuredExtractor $structuredExtractor,
+    ) {
+    }
+
     /**
      * @return array{
      *   text:string,
      *   confidence:?float,
      *   engine:string,
      *   diagnostics:array<string,mixed>,
-     *   command:string
+     *   command:string,
+     *   structured_hints:array<string,mixed>,
+     *   provider_signals:array<string,mixed>
      * }
      */
     public function extractFromImage(string $diskPath): array
@@ -77,20 +84,23 @@ class GoogleDocumentAiService
 
             $text = trim((string) $document->getText());
             $confidence = $this->extractAverageEntityConfidence($document);
+            $structured = $this->structuredExtractor->extract($document, $confidence);
 
             return [
                 'text' => $text,
                 'confidence' => $confidence,
                 'engine' => 'google-document-ai',
                 'command' => 'google.documentai.processDocument',
-                'diagnostics' => [
+                'structured_hints' => $structured['structured_hints'],
+                'provider_signals' => $structured['provider_signals'],
+                'diagnostics' => array_merge([
                     'provider' => 'document_ai',
                     'processor_name' => $processorName,
                     'mime_type' => $mimeType,
                     'transport' => $this->configuredTransport(),
                     'entities_count' => count($document->getEntities()),
                     'pages_count' => count($document->getPages()),
-                ],
+                ], $structured['diagnostics']),
             ];
         } catch (ApiException $e) {
             Log::warning('Google Document AI request failed', [

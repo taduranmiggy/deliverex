@@ -10,14 +10,23 @@ class OcrServiceParsingTest extends TestCase
 {
     private function parse(string $text): array
     {
+        return $this->parseWithHints($text, []);
+    }
+
+    /**
+     * @param  array<string, mixed>  $hints
+     * @return array{length:?float,width:?float,height:?float,volume:?float,delivery_receipt_number:?string}
+     */
+    private function parseWithHints(string $text, array $hints = []): array
+    {
         $service = app(OcrService::class);
-        $method = new ReflectionMethod($service, 'extractStructuredFields');
+        $method = new ReflectionMethod($service, 'extractStructuredFieldsWithDebug');
         $method->setAccessible(true);
 
-        /** @var array{length:?float,width:?float,height:?float,volume:?float,delivery_receipt_number:?string} $result */
-        $result = $method->invoke($service, $text);
+        /** @var array{values:array{length:?float,width:?float,height:?float,volume:?float,delivery_receipt_number:?string}} $result */
+        $result = $method->invoke($service, $text, $hints);
 
-        return $result;
+        return $result['values'];
     }
 
     public function test_extracts_fields_with_common_ocr_label_noise(): void
@@ -195,5 +204,50 @@ class OcrServiceParsingTest extends TestCase
         $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
         $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
         $this->assertSame('DR-2936808', $parsed['delivery_receipt_number']);
+    }
+
+    public function test_parser_accepts_structured_hints_with_table_lines(): void
+    {
+        $text = <<<TXT
+        DELIVERY RECEIPT
+        Supplier: Providential
+        TXT;
+
+        $hints = [
+            'table_lines' => [
+                'Item Qty Description L (cm) W (cm) H (cm) V (m3)',
+                '1 1 Crushed Aggregate 730 230 215 36.09',
+            ],
+            'entity_mentions' => ['DR-2936810'],
+        ];
+
+        $parsed = $this->parseWithHints($text, $hints);
+
+        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
+        $this->assertEqualsWithDelta(36.09, (float) $parsed['volume'], 0.01);
+        $this->assertSame('DR-2936810', $parsed['delivery_receipt_number']);
+    }
+
+    public function test_neighbor_label_extraction_reads_value_from_next_line(): void
+    {
+        $text = <<<TXT
+        ticket no
+        2936811
+        length
+        7.30
+        width
+        2.30
+        height
+        2.15
+        TXT;
+
+        $parsed = $this->parseWithHints($text, []);
+
+        $this->assertSame('DR-2936811', $parsed['delivery_receipt_number']);
+        $this->assertEqualsWithDelta(7.30, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(2.30, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(2.15, (float) $parsed['height'], 0.01);
     }
 }

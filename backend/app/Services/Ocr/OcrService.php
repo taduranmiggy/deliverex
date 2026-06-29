@@ -25,6 +25,8 @@ class OcrService
 
     public function __construct(
         private readonly GoogleDocumentAiService $googleDocumentAiService,
+        private readonly OcrImagePreprocessor $imagePreprocessor,
+        private readonly OcrConfidenceScorer $confidenceScorer,
     ) {
     }
 
@@ -157,7 +159,9 @@ class OcrService
                 null,
                 'tesseract',
                 [],
-                $debugContext
+                $debugContext,
+                [],
+                []
             );
         } catch (Throwable $e) {
             Log::error('OCR processing exception', ['document_id' => $document->id, 'error' => $e->getMessage()]);
@@ -183,8 +187,12 @@ class OcrService
 
     private function processWithGoogleDocumentAi(OcrResult $result, DeliveryDocument $document, string $diskPath, array $debugContext): ?OcrResult
     {
+        $preprocess = $this->imagePreprocessor->preprocess($diskPath);
+        $ocrPath = $preprocess['path'];
+        $preprocessDiagnostics = is_array($preprocess['diagnostics'] ?? null) ? $preprocess['diagnostics'] : [];
+
         try {
-            $payload = $this->googleDocumentAiService->extractFromImage($diskPath);
+            $payload = $this->googleDocumentAiService->extractFromImage($ocrPath);
         } catch (Throwable $e) {
             $debugContext['google_document_ai_error'] = $e->getMessage();
             Log::warning('Google Document AI failed, falling back to legacy OCR.', [
@@ -192,7 +200,15 @@ class OcrService
                 'error' => $e->getMessage(),
             ]);
 
+            if ($ocrPath !== $diskPath && is_file($ocrPath)) {
+                @unlink($ocrPath);
+            }
+
             return null;
+        } finally {
+            if ($ocrPath !== $diskPath && is_file($ocrPath)) {
+                @unlink($ocrPath);
+            }
         }
 
         if (! is_array($payload)) {
@@ -205,16 +221,34 @@ class OcrService
         }
 
         $text = trim((string) ($payload['text'] ?? ''));
-        $confidence = is_numeric($payload['confidence'] ?? null)
+        $providerConfidence = is_numeric($payload['confidence'] ?? null)
             ? (float) $payload['confidence']
             : null;
         $engine = trim((string) ($payload['engine'] ?? 'google-document-ai')) ?: 'google-document-ai';
         $diagnostics = is_array($payload['diagnostics'] ?? null) ? $payload['diagnostics'] : [];
+        $structuredHints = is_array($payload['structured_hints'] ?? null) ? $payload['structured_hints'] : [];
+        $providerSignals = is_array($payload['provider_signals'] ?? null) ? $payload['provider_signals'] : [];
+        if ($providerConfidence !== null) {
+            $providerSignals['entity_confidence_avg'] = $providerConfidence;
+            $providerSignals['provider_ocr'] = $providerConfidence;
+        }
+
+        $diagnostics = array_merge($diagnostics, $preprocessDiagnostics);
 
         $debugContext['tesseract_command'] = (string) ($payload['command'] ?? 'google.documentai.processDocument');
-        $debugContext['preprocessed_path'] = (string) ($payload['preprocessed_image_path'] ?? '');
+        $debugContext['preprocessed_path'] = (string) ($preprocessDiagnostics['preprocessed_path'] ?? '');
 
-        return $this->persistExtraction($result, $document, $text, $confidence, $engine, $diagnostics, $debugContext);
+        return $this->persistExtraction(
+            $result,
+            $document,
+            $text,
+            null,
+            $engine,
+            $diagnostics,
+            $debugContext,
+            $structuredHints,
+            $providerSignals
+        );
     }
 
     private function processWithRemoteService(OcrResult $result, DeliveryDocument $document, string $diskPath, array $debugContext): OcrResult
@@ -278,7 +312,7 @@ class OcrService
         }
 
         $text = trim((string) ($payload['text'] ?? ''));
-        $confidence = is_numeric($payload['confidence'] ?? null)
+        $providerConfidence = is_numeric($payload['confidence'] ?? null)
             ? (float) $payload['confidence']
             : null;
         $engine = trim((string) ($payload['engine'] ?? 'render-tesseract')) ?: 'render-tesseract';
@@ -286,11 +320,30 @@ class OcrService
             is_array($payload['diagnostics'] ?? null) ? $payload['diagnostics'] : [],
             $debugContext
         );
+        $providerSignals = [
+            'provider_ocr' => $providerConfidence,
+            'entity_confidence_avg' => $providerConfidence,
+        ];
+        if (is_numeric($diagnostics['avg_conf'] ?? null)) {
+            $tsvConf = ((float) $diagnostics['avg_conf']) / 100.0;
+            $providerSignals['provider_ocr'] = $tsvConf;
+            $providerSignals['entity_confidence_avg'] = $tsvConf;
+        }
 
         $debugContext['tesseract_command'] = (string) ($payload['command'] ?? 'remote:multipass');
         $debugContext['preprocessed_path'] = (string) ($payload['preprocessed_image_path'] ?? '');
 
-        return $this->persistExtraction($result, $document, $text, $confidence, $engine, $diagnostics, $debugContext);
+        return $this->persistExtraction(
+            $result,
+            $document,
+            $text,
+            null,
+            $engine,
+            $diagnostics,
+            $debugContext,
+            [],
+            $providerSignals
+        );
     }
 
     /**
@@ -316,11 +369,17 @@ class OcrService
         string $engine,
         array $diagnostics = [],
         array $debugContext = [],
+        array $structuredHints = [],
+        array $providerSignals = [],
     ): OcrResult {
-        $confidence ??= $this->estimateConfidence($text);
         $displayText = $text !== '' ? $text : '(No text detected — image may be blank or low contrast.)';
-        $parsed = $this->extractStructuredFieldsWithDebug($text);
+        $parsed = $this->extractStructuredFieldsWithDebug($text, $structuredHints);
         $structured = $parsed['values'];
+
+        $scoreResult = $this->confidenceScorer->compute($text, $providerSignals, $parsed);
+        $confidence = $confidence ?? $scoreResult['final'];
+        $confidenceModel = $scoreResult['confidence_model'];
+
         $system = $this->buildSystemContext($document);
         $hasStructured = $structured['length'] !== null
             || $structured['width'] !== null
@@ -333,13 +392,16 @@ class OcrService
             $status = self::STATUS_NEEDS_REVIEW;
         }
 
+        $parserMeta = $parsed['meta'] ?? [];
+        $parserMeta['confidence_model'] = $confidenceModel;
+
         $diagnostics = $this->buildDiagnostics(
             $diagnostics,
             $text,
             $confidence,
             $structured,
             $parsed['matches'],
-            $parsed['meta'] ?? []
+            $parserMeta
         );
 
         $result->forceFill([
@@ -508,23 +570,6 @@ class OcrService
         return $result->fresh();
     }
 
-    private function estimateConfidence(string $text): ?float
-    {
-        if ($text === '' || str_starts_with($text, '(No text detected')) {
-            return null;
-        }
-
-        $len = strlen($text);
-        if ($len > 200) {
-            return 0.88;
-        }
-        if ($len > 50) {
-            return 0.75;
-        }
-
-        return 0.55;
-    }
-
     private function fail(OcrResult $result, string $message, array $debugContext = []): OcrResult
     {
         $result->forceFill([
@@ -591,15 +636,24 @@ class OcrService
         ], $parserMeta);
     }
 
-    private function extractStructuredFields(string $text): array
+    private function extractStructuredFields(string $text, array $hints = []): array
     {
-        return $this->extractStructuredFieldsWithDebug($text)['values'];
+        return $this->extractStructuredFieldsWithDebug($text, $hints)['values'];
     }
 
-    private function extractStructuredFieldsWithDebug(string $text): array
+    /**
+     * @param  array<string, mixed>  $hints
+     */
+    private function extractStructuredFieldsWithDebug(string $text, array $hints = []): array
     {
-        $normalized = $this->normalizeOcrText($text);
+        $normalized = $this->normalizeOcrText($this->mergeParserInput($text, $hints));
+        $neighborText = $this->extractNeighborLabelValues($normalized);
+        if ($neighborText !== '') {
+            $normalized = $this->normalizeOcrText($normalized."\n".$neighborText);
+        }
+
         $dimensionCandidates = $this->extractDimensionCandidates($normalized);
+        $dimensionCandidates = $this->injectEntityDimensionHints($dimensionCandidates, $hints);
         $dimensionPick = $this->pickBestDimensionCandidate($dimensionCandidates);
         $best = $dimensionPick['candidate'];
         $bestScore = $dimensionPick['score'];
@@ -615,8 +669,10 @@ class OcrService
         }
 
         $drCandidates = $this->extractReceiptCandidates($normalized, $best);
+        $drCandidates = $this->injectEntityReceiptHints($drCandidates, $hints);
         $drParsed = $this->pickBestReceiptCandidate($drCandidates);
         $reviewSuggestions = $this->buildReviewSuggestions($normalized, $dimensionCandidates, $drCandidates);
+        $this->injectNeighborSuggestions($reviewSuggestions, $hints);
 
         return [
             'values' => [
@@ -784,7 +840,7 @@ class OcrService
             ];
         }
 
-        $this->appendLabelSuggestion($suggestions['supplier'], $text, ['supplier', 'vendor', 'company'], 'supplier');
+        $this->appendLabelSuggestion($suggestions['supplier'], $text, ['supplier', 'vendor', 'company', 'quarry', 'plant', 'batching', 'aggregates', 'concrete'], 'supplier');
         $this->appendLabelSuggestion($suggestions['customer'], $text, ['customer', 'client', 'sold to'], 'customer');
         $this->appendLabelSuggestion($suggestions['date'], $text, ['delivery date', 'invoice date', 'receipt date', 'date'], 'date');
         $this->appendLabelSuggestion($suggestions['quantity'], $text, ['qty', 'quantity'], 'quantity');
@@ -876,13 +932,13 @@ class OcrService
     private function extractLabeledDimensions(string $text): array
     {
         $lengthParsed = $this->extractMeasurement($text, [
-            'length', 'len', 'lngth', 'lengt', '1ength', 'iength', 'dimension length',
+            'length', 'len', 'lngth', 'lengt', '1ength', 'iength', 'dimension length', 'dim', 'size', 'measurement',
         ]);
         $widthParsed = $this->extractMeasurement($text, [
-            'width', 'wid', 'wdth', 'w1dth', 'dimension width',
+            'width', 'wid', 'wdth', 'w1dth', 'dimension width', 'dim', 'size', 'measurement',
         ]);
         $heightParsed = $this->extractMeasurement($text, [
-            'height', 'hgt', 'he1ght', 'hieght', 'dimension height',
+            'height', 'hgt', 'he1ght', 'hieght', 'dimension height', 'dim', 'size', 'measurement',
         ]);
         $volumeParsed = $this->extractMeasurement($text, [
             'volume', 'vol', 'cbm', 'cu m', 'cubic', 'cubic meter', 'm3', 'm³',
@@ -1081,6 +1137,10 @@ class OcrService
         $patterns = [
             ['regex' => '/\bdr\s*(?:no|number|#)?\s*[:.\-]?\s*(?:dr\s*[-:\s]?)?(\d{5,10})\b/i', 'source' => 'dr_label', 'confidence' => 0.95],
             ['regex' => '/\b(dr[-\s]?\d{5,10})\b/i', 'source' => 'dr_token', 'confidence' => 0.9],
+            ['regex' => '/\bdr#\s*(\d{5,10})\b/i', 'source' => 'dr_hash', 'confidence' => 0.92],
+            ['regex' => '/\bticket\s*no\.?\s*[:#.\-]?\s*(\d{5,10})\b/i', 'source' => 'ticket_no', 'confidence' => 0.88],
+            ['regex' => '/\bsi\s*no\.?\s*[:#.\-]?\s*(\d{5,10})\b/i', 'source' => 'si_no', 'confidence' => 0.86],
+            ['regex' => '/\bweighbridge\s*[:#.\-]?\s*(\d{5,10})\b/i', 'source' => 'weighbridge', 'confidence' => 0.84],
             ['regex' => '/(?:delivery\s*receipt|receipt|invoice|reference|ref|delivery)\s*(?:no|number|#)?\s*[:#.\-]?\s*(dr[-\/]?[0-9]{5,10}|[a-z]{1,4}[-\/]?[0-9]{4,})/i', 'source' => 'reference_label', 'confidence' => 0.8],
             ['regex' => '/(?:delivery\s*receipt[\s\S]{0,120})\bno\.?\s*[:#.\-]?\s*(\d{5,10})\b/i', 'source' => 'header_no', 'confidence' => 0.78],
             ['regex' => '/\bn[o0]\s*[:#.\-]\s*(\d{5,10})\b/i', 'source' => 'no_label', 'confidence' => 0.7],
@@ -1291,6 +1351,186 @@ class OcrService
 
         return $normalized;
     }
+
+    /**
+     * @param  array<string, mixed>  $hints
+     */
+    private function mergeParserInput(string $text, array $hints): string
+    {
+        $parts = [trim($text)];
+        foreach ((array) ($hints['table_lines'] ?? []) as $line) {
+            $line = trim((string) $line);
+            if ($line !== '') {
+                $parts[] = $line;
+            }
+        }
+        foreach ((array) ($hints['entity_mentions'] ?? []) as $mention) {
+            $mention = trim((string) $mention);
+            if ($mention !== '') {
+                $parts[] = $mention;
+            }
+        }
+        foreach ((array) ($hints['neighbor_pairs'] ?? []) as $pair) {
+            if (! is_array($pair)) {
+                continue;
+            }
+            $label = trim((string) ($pair['label'] ?? ''));
+            $value = trim((string) ($pair['value'] ?? ''));
+            if ($label !== '' && $value !== '') {
+                $parts[] = $label.': '.$value;
+            }
+        }
+
+        return implode("\n", array_values(array_unique(array_filter($parts, static fn ($p) => $p !== ''))));
+    }
+
+  private function extractNeighborLabelValues(string $text): string
+  {
+    $lines = preg_split('/\R/', $text) ?: [];
+    $pairs = [];
+    $labelPattern = '/^(supplier|vendor|customer|date|total|amount|invoice|receipt|dr|delivery\s*receipt|length|width|height|volume|dim|size|measurement|ticket\s*no|si\s*no|weighbridge)\b/i';
+
+    for ($i = 0; $i < count($lines) - 1; $i++) {
+      $current = trim($lines[$i]);
+      $next = trim($lines[$i + 1]);
+      if ($current === '' || $next === '') {
+        continue;
+      }
+      if (preg_match($labelPattern, $current) && ! preg_match('/^\d/', $next)) {
+        $pairs[] = $current.': '.$next;
+      } elseif (preg_match($labelPattern, $current) && preg_match('/^[\d$]/', $next)) {
+        $pairs[] = $current.': '.$next;
+      }
+    }
+
+    return implode("\n", array_unique($pairs));
+  }
+
+  /**
+   * @param  list<array{source:string,stage:string,score:float,confidence:float,candidate:array{length:?float,width:?float,height:?float,volume:?float}}>  $candidates
+   * @param  array<string, mixed>  $hints
+   * @return list<array{source:string,stage:string,score:float,confidence:float,candidate:array{length:?float,width:?float,height:?float,volume:?float}}>
+   */
+  private function injectEntityDimensionHints(array $candidates, array $hints): array
+  {
+    foreach ((array) ($hints['entities'] ?? []) as $entity) {
+      if (! is_array($entity)) {
+        continue;
+      }
+      $conf = is_numeric($entity['confidence'] ?? null) ? (float) $entity['confidence'] : 0.75;
+      if ($conf < 0.6) {
+        continue;
+      }
+
+      $type = (string) ($entity['type'] ?? '');
+      $value = $entity['normalized_value'] ?? $entity['mention_text'] ?? null;
+      $float = $this->toFloat($value);
+      if ($float === null) {
+        continue;
+      }
+
+      $candidate = ['length' => null, 'width' => null, 'height' => null, 'volume' => null];
+      if (str_contains($type, 'length') || str_contains($type, 'dimension')) {
+        $candidate['length'] = $float;
+      } elseif (str_contains($type, 'width')) {
+        $candidate['width'] = $float;
+      } elseif (str_contains($type, 'height')) {
+        $candidate['height'] = $float;
+      } elseif (str_contains($type, 'volume') || str_contains($type, 'total_amount')) {
+        $candidate['volume'] = $float;
+      } else {
+        continue;
+      }
+
+      $score = $this->scoreDimensionCandidate($candidate);
+      if ($score < 0) {
+        continue;
+      }
+
+      $candidates[] = [
+        'source' => 'document_ai_entity',
+        'stage' => 'structured',
+        'score' => $score + 0.85,
+        'confidence' => min(0.99, $conf),
+        'candidate' => $this->normalizeDimensionUnits($candidate),
+      ];
+    }
+
+    return $candidates;
+  }
+
+  /**
+   * @param  list<array{value:string,match:string,source:string,confidence:float}>  $candidates
+   * @param  array<string, mixed>  $hints
+   * @return list<array{value:string,match:string,source:string,confidence:float}>
+   */
+  private function injectEntityReceiptHints(array $candidates, array $hints): array
+  {
+    foreach ((array) ($hints['entities'] ?? []) as $entity) {
+      if (! is_array($entity)) {
+        continue;
+      }
+      $type = strtolower((string) ($entity['type'] ?? ''));
+      if (! preg_match('/invoice|receipt|reference|delivery|ticket/', $type)) {
+        continue;
+      }
+
+      $conf = is_numeric($entity['confidence'] ?? null) ? (float) $entity['confidence'] : 0.8;
+      if ($conf < 0.6) {
+        continue;
+      }
+
+      $raw = trim((string) ($entity['normalized_value'] ?? $entity['mention_text'] ?? ''));
+      $value = $this->normalizeReceiptNumber($raw, $raw);
+      if ($value === '') {
+        continue;
+      }
+
+      $candidates[] = [
+        'value' => $value,
+        'match' => 'entity:'.$type,
+        'source' => 'document_ai_entity',
+        'confidence' => min(0.99, $conf),
+      ];
+    }
+
+    return $candidates;
+  }
+
+  /**
+   * @param  array<string, list<array{value:mixed,source:string,confidence:float}>>  $reviewSuggestions
+   * @param  array<string, mixed>  $hints
+   */
+  private function injectNeighborSuggestions(array &$reviewSuggestions, array $hints): void
+  {
+    foreach ((array) ($hints['neighbor_pairs'] ?? []) as $pair) {
+      if (! is_array($pair)) {
+        continue;
+      }
+      $label = strtolower(trim((string) ($pair['label'] ?? '')));
+      $value = trim((string) ($pair['value'] ?? ''));
+      if ($value === '') {
+        continue;
+      }
+
+      $field = match (true) {
+        str_contains($label, 'supplier'), str_contains($label, 'vendor') => 'supplier',
+        str_contains($label, 'date') => 'date',
+        str_contains($label, 'total'), str_contains($label, 'amount') => 'total',
+        default => null,
+      };
+
+      if ($field === null || ! isset($reviewSuggestions[$field])) {
+        continue;
+      }
+
+      $reviewSuggestions[$field][] = [
+        'value' => $value,
+        'source' => 'neighbor_label',
+        'confidence' => 0.72,
+      ];
+    }
+  }
 
     private function toFloat(mixed $value): ?float
     {
