@@ -127,7 +127,7 @@
 
 /* Action grid: 1 col only on very narrow phones */
 @media (max-width: 359px) {
-  .pwa-action-grid {
+  .pwa-action-grid:not(.pwa-action-grid--support) {
     grid-template-columns: 1fr;
   }
 }
@@ -608,19 +608,15 @@
   font-size: 16px;
 }
 
-.landing-chat-launcher-pill-row {
+.dx-chat-launcher {
   bottom: calc(var(--pwa-nav-height) + 8px);
   right: max(12px, env(safe-area-inset-right, 0px));
-  left: max(12px, env(safe-area-inset-left, 0px));
-  justify-content: flex-end;
-  max-width: calc(100vw - 24px);
 }
 
 .dx-chat-pill {
   max-width: calc(100vw - 100px);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 @media (max-width: 600px) {

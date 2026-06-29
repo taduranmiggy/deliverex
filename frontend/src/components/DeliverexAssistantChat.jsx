@@ -525,12 +525,12 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
   return (
     <>
       {showFabStrip ? (
-        <div className="landing-chat-launcher-pill-row" aria-live="polite">
-          <span className="dx-chat-pill">Chat with Deliverex Assistant</span>
+        <div className="dx-chat-launcher">
+          <span className="dx-chat-pill" aria-hidden="true">Chat with Deliverex Assistant</span>
           <button
             type="button"
-            className="dx-chat-fab-landing"
-            aria-label="Open Deliverex Assistant"
+            className="dx-chat-fab"
+            aria-label="Chat with Deliverex Assistant"
             onClick={() => {
               setMinimized(false)
               setAssistantExpanded(false)

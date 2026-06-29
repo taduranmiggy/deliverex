@@ -552,11 +552,10 @@ body.dx-nav-locked {
     max-height: min(82vh, calc(100vh - 100px));
   }
 
-  .landing-chat-launcher-pill-row {
+  .dx-chat-launcher {
     right: 12px;
-    left: 12px;
+    left: auto;
     bottom: calc(76px + env(safe-area-inset-bottom, 0px));
-    justify-content: flex-end;
   }
 
   .dx-msg-quick-row {

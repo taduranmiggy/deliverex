@@ -124,20 +124,23 @@ function CustomerSupportPage() {
       />
 
       <div className="customer-support-stack">
-        <div className="pwa-action-grid pwa-action-grid--compact pwa-action-grid--support">
+        <div className="customer-support-actions">
           <CustomerActionCard
+            layout="inline"
             icon={MessageSquare}
             title="Chat Assistant"
             description="Instant answers about tracking and services"
             onClick={() => setChatOpen(true)}
           />
           <CustomerActionCard
+            layout="inline"
             icon={Phone}
             title="Call Support"
             description="+63 995 582 0222"
             onClick={() => { window.location.href = 'tel:+639955820222' }}
           />
           <CustomerActionCard
+            layout="inline"
             icon={Mail}
             title="Email Support"
             description="deliverex.support@gmail.com"

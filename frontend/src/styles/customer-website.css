@@ -472,6 +472,42 @@
   color: var(--muted);
 }
 
+/* Support page — always one row of contact cards */
+.customer-support-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.customer-support-actions > .pwa-action-card {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.customer-support-actions .pwa-action-card__desc {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 639px) {
+  .customer-support-actions {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  .customer-support-actions > .pwa-action-card {
+    flex: 0 0 min(260px, 78vw);
+    scroll-snap-align: start;
+  }
+}
+
 @media (max-width: 1200px) {
   .customer-nav--website .customer-nav-link {
     padding: 7px 10px;

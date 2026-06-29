@@ -609,6 +609,28 @@
   padding: 18px 16px 16px;
 }
 
+.pwa-action-card--inline {
+  flex-direction: row;
+  align-items: center;
+  min-height: 88px;
+  padding: 14px 16px;
+}
+
+.pwa-action-card--inline .pwa-action-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.pwa-action-card--inline .pwa-action-card__title {
+  font-size: 0.875rem;
+}
+
+.pwa-action-card--inline .pwa-action-card__chevron {
+  align-self: center;
+  margin-top: 0;
+}
+
 .pwa-action-card:active {
   transform: scale(0.98);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
