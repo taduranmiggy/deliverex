@@ -290,6 +290,15 @@ function DocumentUploadPage() {
             </button>
           ))}
         </div>
+        {docType === 'other' ? (
+          <p style={{ fontSize: '0.8125rem', color: 'var(--da-muted)', margin: '0 0 12px' }}>
+            Other documents are saved to the job but do not appear in OCR Review.
+          </p>
+        ) : (
+          <p style={{ fontSize: '0.8125rem', color: 'var(--da-muted)', margin: '0 0 12px' }}>
+            Receipt, invoice, PoD, and job order uploads enter OCR Review after you mark Arrived at destination.
+          </p>
+        )}
 
         <div className="da-field">
           <label htmlFor="doc-notes">Notes (optional)</label>

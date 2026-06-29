@@ -16,6 +16,8 @@ use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class StatusController extends Controller
 {
@@ -105,26 +107,30 @@ class StatusController extends Controller
             ], 422);
         }
 
-        DeliveryStatusLog::create([
-            'assignment_id'    => $assignment->id,
-            'status'           => $status,
-            'notes'            => $data['notes'] ?? null,
-            'latitude'         => $latitude,
-            'longitude'        => $longitude,
-            'arrival_verified' => $arrivalVerified,
-            'created_at'       => now(),
-        ]);
+        DB::transaction(function () use ($assignment, $status, $data, $latitude, $longitude, $arrivalVerified, $request) {
+            DeliveryStatusLog::create([
+                'assignment_id'    => $assignment->id,
+                'status'           => $status,
+                'notes'            => $data['notes'] ?? null,
+                'latitude'         => $latitude,
+                'longitude'        => $longitude,
+                'arrival_verified' => $arrivalVerified,
+                'created_at'       => now(),
+            ]);
 
-        $this->logStatusHistory(
-            assignment: $assignment,
-            status: $status,
-            updatedBy: $request->user()?->id,
-            latitude: $latitude,
-            longitude: $longitude,
-            remarks: $data['notes'] ?? null,
-        );
+            $this->logStatusHistory(
+                assignment: $assignment,
+                status: $status,
+                updatedBy: $request->user()?->id,
+                latitude: $latitude,
+                longitude: $longitude,
+                remarks: $data['notes'] ?? null,
+            );
 
-        $assignment->update(['status' => $status]);
+            $assignment->update(['status' => $status]);
+        });
+
+        $assignment->refresh();
         $this->notificationDispatcher->statusUpdated($assignment, $status);
 
         if ($latitude !== null && $longitude !== null) {
@@ -251,16 +257,25 @@ class StatusController extends Controller
         ?float $longitude = null,
         ?string $remarks = null,
     ): void {
-        DeliveryStatusHistory::create([
-            'job_order_id' => $assignment->job_order_id,
-            'assignment_id' => $assignment->id,
-            'status' => $status,
-            'updated_by' => $updatedBy,
-            'updated_at' => now(),
-            'latitude' => $latitude,
-            'longitude' => $longitude,
-            'remarks' => $remarks,
-            'created_at' => now(),
-        ]);
+        try {
+            DeliveryStatusHistory::create([
+                'job_order_id' => $assignment->job_order_id,
+                'assignment_id' => $assignment->id,
+                'status' => $status,
+                'updated_by' => $updatedBy,
+                'updated_at' => now(),
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'remarks' => $remarks,
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            // Status history is supplementary; never block a driver's status update.
+            Log::warning('Failed to write delivery status history', [
+                'assignment_id' => $assignment->id,
+                'status' => $status,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

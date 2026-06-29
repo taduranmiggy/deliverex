@@ -66,6 +66,25 @@ class DeliveryStatusWorkflowTest extends TestCase
         );
     }
 
+    public function test_driver_can_transition_to_en_route_to_destination_after_pickup(): void
+    {
+        [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::ARRIVED_AT_PICKUP);
+
+        $response = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/status', [
+            'assignment_id' => $assignment->id,
+            'status' => DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('status', DeliveryStatus::EN_ROUTE_TO_DESTINATION)
+            ->assertJsonPath('allowed_action', 'Arrived');
+
+        $this->assertDatabaseHas('dispatch_assignments', [
+            'id' => $assignment->id,
+            'status' => DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+        ]);
+    }
+
     public function test_driver_document_upload_blocks_ocr_before_arrival(): void
     {
         Storage::fake('public');
