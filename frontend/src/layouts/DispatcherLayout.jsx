@@ -20,6 +20,7 @@ function DispatcherLayout() {
       brandIcon={Route}
       navItems={NAV}
       notificationPath="/dispatcher/notifications"
+      profilePath="/dispatcher/profile"
     />
   )
 }

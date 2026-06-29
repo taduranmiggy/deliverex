@@ -640,6 +640,34 @@ body.dx-nav-locked {
 /* ── OCR Review: Final dataset panel ───────────────────────── */
 .ocr-dataset-panel {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (min-width: 901px) {
+  .ocr-dataset-panel {
+    max-height: calc(100dvh - 168px);
+  }
+}
+
+.ocr-dataset-panel__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  margin-right: -4px;
+  scrollbar-gutter: stable;
+}
+
+.ocr-dataset-panel__actions {
+  flex-shrink: 0;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--stroke);
+  background: var(--surface);
 }
 
 @media (max-width: 900px) {
@@ -659,6 +687,7 @@ body.dx-nav-locked {
   gap: 12px;
   margin-bottom: 14px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .ocr-review-detail {

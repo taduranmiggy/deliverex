@@ -20,6 +20,7 @@ function ManagerLayout() {
       brandIcon={BarChart3}
       navItems={NAV}
       notificationPath="/manager/notifications"
+      profilePath="/manager/profile"
     />
   )
 }

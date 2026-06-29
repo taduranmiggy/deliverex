@@ -376,6 +376,33 @@ class AuthController extends Controller
         return response()->json($user);
     }
 
+    public function updateProfile(Request $request)
+    {
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $user = $request->user();
+
+        if (array_key_exists('name', $data)) {
+            $user->name = $data['name'];
+        }
+        if (array_key_exists('phone', $data)) {
+            $user->phone = $data['phone'];
+        }
+        $user->save();
+
+        AuditLogger::record($user, 'auth.profile_updated', User::class, $user->id, [], $request);
+
+        $this->prepareUserPayload($user);
+
+        return response()->json([
+            'message' => 'Profile updated successfully.',
+            'user' => $user,
+        ]);
+    }
+
     public function changePassword(Request $request)
     {
         $data = $request->validate([

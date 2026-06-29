@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import LogoutButton from '../components/LogoutButton'
 import PageTransition from '../components/PageTransition'
 import RouteFallback from '../components/RouteFallback'
+import UserAccountMenu from '../components/UserAccountMenu'
 import useAuth from '../hooks/useAuth'
 import { Bell, Menu, X } from 'lucide-react'
 
@@ -16,6 +17,7 @@ function StaffAppShell({
   brandIcon: BrandIcon,
   navItems,
   notificationPath,
+  profilePath,
 }) {
   const { user } = useAuth()
   const location = useLocation()
@@ -109,7 +111,7 @@ function StaffAppShell({
             <NavLink to={notificationPath} className="topbar-icon-btn" aria-label="Notifications">
               <Bell size={18} />
             </NavLink>
-            <div className="topbar-avatar" title={user?.name}>{initials}</div>
+            <UserAccountMenu profilePath={profilePath} />
           </div>
         </header>
         <main id="main-content" tabIndex={-1} className="page-content">

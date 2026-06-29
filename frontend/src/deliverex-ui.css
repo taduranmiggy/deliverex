@@ -283,6 +283,73 @@
   font-size: 0.875rem;
   cursor: pointer;
   flex-shrink: 0;
+  border: none;
+  padding: 0;
+  font: inherit;
+}
+
+.dx-account-menu {
+  position: relative;
+}
+
+.dx-account-menu__trigger--open {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+}
+
+.dx-account-menu__panel {
+  min-width: 200px;
+}
+
+.dx-account-menu__heading {
+  margin: 0;
+  padding: 6px 12px 2px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.dx-account-menu__email {
+  margin: 0 0 4px;
+  padding: 0 12px 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.dx-account-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: background 0.12s;
+  text-align: left;
+}
+
+.dx-account-menu__item:hover {
+  background: var(--slate-100);
+}
+
+.dx-profile-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .dx-profile-edit-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── MAIN CONTENT AREA ───────────────────────────────────── */

@@ -19,6 +19,7 @@ const AdminAuditLogsPage = lazy(() => import('../pages/Admin/AdminAuditLogsPage'
 const AdminEmailLogsPage = lazy(() => import('../pages/Admin/AdminEmailLogsPage'))
 const AdminChatbotPage = lazy(() => import('../pages/Admin/AdminChatbotPage'))
 const NotificationsPage = lazy(() => import('../pages/Admin/NotificationsPage'))
+const EditProfilePage = lazy(() => import('../pages/Account/EditProfilePage'))
 
 // Dispatcher
 const DispatcherDashboard = lazy(() => import('../pages/Dispatcher/DispatcherDashboard'))
@@ -74,6 +75,7 @@ export const roleRoutes = {
     <Route key="admin-audit"      path="audit-logs"      element={<AdminAuditLogsPage />} />,
     <Route key="admin-email"      path="email-logs"      element={<AdminEmailLogsPage />} />,
     <Route key="admin-notifs"     path="notifications"   element={<NotificationsPage />} />,
+    <Route key="admin-profile"    path="profile"         element={<EditProfilePage />} />,
   ],
   dispatcher: [
     <Route key="dispatcher-home" index element={<DispatcherDashboard />} />,
@@ -84,6 +86,7 @@ export const roleRoutes = {
     <Route key="dispatcher-assign-legacy" path="dispatch-best-fit" element={<Navigate to="/dispatcher/dispatch" replace />} />,
     <Route key="dispatcher-monitor" path="live-tracking" element={<DeliveryMonitoringPage />} />,
     <Route key="dispatcher-notifs" path="notifications" element={<DispatcherNotificationsPage />} />,
+    <Route key="dispatcher-profile" path="profile" element={<EditProfilePage />} />,
   ],
   driver: [
     <Route key="driver-home" index element={<DriverHomePage />} />,
@@ -102,6 +105,7 @@ export const roleRoutes = {
     <Route key="manager-ocr" path="delivery-documentation" element={<OcrReviewPage />} />,
     <Route key="manager-fleet" path="fleet-tracking" element={<ManagerFleetTrackingPage />} />,
     <Route key="manager-notifs" path="notifications" element={<ManagerNotificationsPage />} />,
+    <Route key="manager-profile" path="profile" element={<EditProfilePage />} />,
   ],
   customer: [
     <Route key="customer-home" index element={<CustomerHomePage />} />,

@@ -1,18 +1,27 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { changePassword } from '../../api/auth'
+import { changePassword, updateProfile } from '../../api/auth'
+import { PhonePhInput } from '../../components/PhonePhInput'
 import useAuth from '../../hooks/useAuth'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
-import { Link2, Lock, LogOut, Package, Settings, User, Users } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
+import { Link2, Lock, LogOut, Package, Save, Settings, User, Users } from 'lucide-react'
 
 function CustomerAccountPage() {
   const { user, isAuthenticated, role, logout, updateUser } = useAuth()
+  const toast = useToast()
   const navigate = useNavigate()
   const { paths } = useCustomerSurface()
   const isCustomer = isAuthenticated && role === 'customer'
   const signInPath = paths.signIn
+
+  const [name, setName] = useState(user?.name ?? '')
+  const [phone, setPhone] = useState(user?.phone ?? '')
+  const [profileMessage, setProfileMessage] = useState('')
+  const [profileError, setProfileError] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
@@ -20,6 +29,36 @@ function CustomerAccountPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    setName(user?.name ?? '')
+    setPhone(user?.phone ?? '')
+  }, [user?.id, user?.name, user?.phone])
+
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault()
+    setProfileError('')
+    setProfileMessage('')
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      setProfileError('Name is required.')
+      return
+    }
+    setSavingProfile(true)
+    try {
+      const res = await updateProfile({
+        name: trimmedName,
+        phone: phone.trim() || null,
+      })
+      updateUser(res.user)
+      setProfileMessage('Profile updated successfully.')
+      toast('Profile updated.', 'success')
+    } catch (err) {
+      setProfileError(err.message)
+    } finally {
+      setSavingProfile(false)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -106,6 +145,29 @@ function CustomerAccountPage() {
       </div>
 
       <section className="pwa-section">
+        <h2 className="pwa-section__title">Profile details</h2>
+        <form className="pwa-form-card" onSubmit={handleProfileSubmit}>
+          <label>
+            Full name
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" />
+          </label>
+          <label>
+            Email
+            <input type="email" value={user?.email ?? ''} readOnly disabled />
+          </label>
+          <label>
+            Phone
+            <PhonePhInput value={phone} onChange={setPhone} />
+          </label>
+          {profileError ? <p className="notice error">{profileError}</p> : null}
+          {profileMessage ? <p className="notice">{profileMessage}</p> : null}
+          <button type="submit" className="btn-dx-primary" disabled={savingProfile}>
+            <Save size={16} /> {savingProfile ? 'Saving…' : 'Save profile'}
+          </button>
+        </form>
+      </section>
+
+      <section className="pwa-section">
         <h2 className="pwa-section__title">Change password</h2>
         <form className="pwa-form-card" onSubmit={handleSubmit}>
           <label>
@@ -132,7 +194,7 @@ function CustomerAccountPage() {
         <LogOut size={18} /> Sign out
       </button>
 
-      <LoadingOverlay open={submitting} message="Updating password" submessage="Please wait." />
+      <LoadingOverlay open={submitting || savingProfile} message="Saving changes" submessage="Please wait." />
     </CustomerPageShell>
   )
 }

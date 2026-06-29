@@ -23,6 +23,7 @@ function AdminLayout() {
       brandIcon={Shield}
       navItems={NAV}
       notificationPath="/admin/notifications"
+      profilePath="/admin/profile"
     />
   )
 }

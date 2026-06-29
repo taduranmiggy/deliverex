@@ -78,6 +78,7 @@ Route::middleware('auth.api')->group(function () {
     Route::post('/auth/revoke', [AuthController::class, 'revoke']);
     Route::get('/auth/session', [AuthController::class, 'session']);
     Route::get('/auth/me',      [AuthController::class, 'me']);
+    Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
 
     // Shared notifications (any authenticated user)

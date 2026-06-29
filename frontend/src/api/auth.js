@@ -28,6 +28,13 @@ export async function getProfile() {
   return apiRequest('/auth/me')
 }
 
+export async function updateProfile(payload) {
+  return apiRequest('/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function getSessionInfo() {
   return apiRequest('/auth/session')
 }

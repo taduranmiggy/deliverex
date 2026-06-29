@@ -1020,6 +1020,8 @@ function OcrReviewPage() {
           {!selected ? (
             <EmptyState icon={FileSearch} title="No document selected" message="Select a document from the queue to review." />
           ) : (
+            <>
+            <div className="ocr-dataset-panel__scroll">
             <div className="form-grid ocr-review-detail" style={{ gridTemplateColumns: '1fr' }}>
               <div className="ocr-review-top-grid">
                 <div className="ocr-dataset-card ocr-dataset-card--ocr">
@@ -1217,6 +1219,9 @@ function OcrReviewPage() {
                   </div>
                 </details>
               )}
+            </div>
+            </div>
+            <div className="ocr-dataset-panel__actions">
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {!isReadOnly && (
                 <>
@@ -1248,6 +1253,7 @@ function OcrReviewPage() {
                 </button>
               </div>
             </div>
+            </>
           )}
         </div>
       </div>
