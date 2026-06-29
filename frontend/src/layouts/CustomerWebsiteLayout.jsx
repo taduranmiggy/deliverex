@@ -4,6 +4,7 @@ import PageTransition from '../components/PageTransition'
 import RouteFallback from '../components/RouteFallback'
 import CustomerLegalFooter from '../components/customer/CustomerLegalFooter'
 import CustomerWebsiteNavBar from '../components/customer/CustomerWebsiteNavBar'
+import CustomerWebsiteBottomNav from '../components/customer/CustomerWebsiteBottomNav'
 import SessionStatusBar from '../components/session/SessionStatusBar'
 import { CustomerSurfaceProvider } from '../context/CustomerSurfaceContext'
 
@@ -23,6 +24,7 @@ function CustomerWebsiteLayout() {
         </PageTransition>
 
         <CustomerLegalFooter />
+        <CustomerWebsiteBottomNav />
       </div>
     </CustomerSurfaceProvider>
   )
