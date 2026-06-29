@@ -9,6 +9,28 @@
   --pwa-nav-height: calc(64px + var(--pwa-safe-bottom));
 }
 
+@media (max-width: 390px) {
+  .customer-layout--pwa .customer-container {
+    padding-left: max(12px, env(safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
+  }
+
+  .customer-layout--pwa .customer-container,
+  .customer-layout--pwa .customer-page-shell,
+  .customer-layout--pwa .customer-layout-main,
+  .customer-layout--pwa .pwa-home,
+  .customer-layout--pwa .pwa-page {
+    min-width: 0;
+  }
+
+  .customer-layout--pwa .customer-container > *,
+  .customer-layout--pwa .customer-page-shell > *,
+  .customer-layout--pwa .customer-layout-main > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
 /* ── Containment: zero horizontal scroll ─────────────────── */
 .customer-layout,
 .customer-layout-main,
@@ -62,8 +84,12 @@
 
 /* ── Hero & home ─────────────────────────────────────────── */
 .pwa-home-header,
-.pwa-track-card {
+.pwa-track-card,
+.pwa-track-search,
+.pwa-track-search__row {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
 }
 
@@ -707,12 +733,69 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  min-width: 0;
+}
+
+.pwa-track-search__row,
+.pwa-track-search__input-wrap,
+.pwa-track-search__input,
+.pwa-hero__track,
+.pwa-hero__track-input-wrap,
+.pwa-hero__track input,
+.customer-layout .tracking-input-row,
+.customer-layout .tracking-input-row input,
+.customer-layout .tracking-input-row button {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.customer-layout .tracking-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.customer-deliveries-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .customer-deliveries-table {
+    min-width: 0;
+  }
+
+  .customer-deliveries-table-wrap:not(.dx-data-table-wrap--stack) {
+    overflow-x: auto;
+  }
 }
 
 .pwa-form-card input,
 .pwa-form-card textarea,
 .pwa-form-card select {
   font-size: 16px;
+}
+
+/* ── PWA layout overflow guard (all phone widths) ─────────── */
+.customer-layout--pwa,
+.customer-layout--pwa .customer-layout-main,
+.customer-layout--pwa .dx-page-enter {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.customer-layout--pwa input,
+.customer-layout--pwa textarea,
+.customer-layout--pwa select,
+.customer-layout--pwa button,
+.customer-layout--pwa .pwa-btn {
+  max-width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {

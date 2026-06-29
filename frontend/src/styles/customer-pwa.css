@@ -22,18 +22,30 @@
   background: linear-gradient(160deg, #0f172a 0%, #1e3a8a 55%, #1d4ed8 100%);
 }
 
-.pwa-splash__logo {
-  width: 80px;
-  height: 80px;
+.pwa-splash__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.pwa-splash__lottie {
+  width: clamp(120px, 32vw, 160px);
+  height: clamp(120px, 32vw, 160px);
+  flex-shrink: 0;
+}
+
+.pwa-splash__logo-fallback {
+  width: clamp(88px, 24vw, 112px);
+  height: clamp(88px, 24vw, 112px);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.12);
-  display: grid;
-  place-items: center;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  object-fit: contain;
 }
 
 .pwa-splash__title {
-  margin: 16px 0 0;
+  margin: 12px 0 0;
   font-size: 1.375rem;
   font-weight: 800;
   color: #fff;
@@ -1249,6 +1261,13 @@
   min-width: 860px;
 }
 
+@media (max-width: 768px) {
+  .customer-deliveries-table-wrap.dx-data-table-wrap--stack .customer-deliveries-table {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
 .customer-deliveries-table th:nth-child(1),
 .customer-deliveries-table td.customer-deliveries-table__tracking {
   width: 1%;
@@ -1305,7 +1324,8 @@
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .pwa-splash__logo,
+  .pwa-splash__lottie,
+  .pwa-splash__logo-fallback,
   .pwa-action-card,
   .pwa-delivery-card,
   .pwa-empty-state--float .pwa-empty-state__icon,

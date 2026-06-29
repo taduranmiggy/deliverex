@@ -13,7 +13,7 @@
 
 .dx-assistant-chat {
   position: fixed;
-  z-index: 120;
+  z-index: 130;
   width: min(384px, calc(100vw - 48px));
   max-height: min(560px, calc(100vh - 96px));
   display: flex;
@@ -649,9 +649,9 @@
 
 .dx-chat-launcher {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 90;
+  bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  right: max(24px, env(safe-area-inset-right, 0px));
+  z-index: 115;
   display: flex;
   align-items: center;
   justify-content: flex-end;

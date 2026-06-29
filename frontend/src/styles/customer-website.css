@@ -472,7 +472,7 @@
   color: var(--muted);
 }
 
-/* Support page — always one row of contact cards */
+/* Support page — single row contact cards, contained on narrow screens */
 .customer-support-actions {
   display: flex;
   flex-direction: row;
@@ -481,6 +481,7 @@
   gap: 12px;
   width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .customer-support-actions > .pwa-action-card {
@@ -503,7 +504,7 @@
   }
 
   .customer-support-actions > .pwa-action-card {
-    flex: 0 0 min(260px, 78vw);
+    flex: 0 0 min(240px, 78vw);
     scroll-snap-align: start;
   }
 }

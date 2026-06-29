@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import './DeliverexAssistantChat.css'
 import { trackDelivery } from '../api/customer'
@@ -522,7 +523,7 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
 
   const showFabStrip = !open || minimized
 
-  return (
+  const chatUi = (
     <>
       {showFabStrip ? (
         <div className="dx-chat-launcher">
@@ -664,4 +665,6 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
       `}</style>
     </>
   )
+
+  return createPortal(chatUi, document.body)
 }

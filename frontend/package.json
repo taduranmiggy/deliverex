@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "generate-favicons": "node scripts/generate-favicons.mjs",
+    "generate-splash-lottie": "node scripts/generate-splash-lottie.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -14,6 +15,7 @@
     "date-fns": "^4.4.0",
     "framer-motion": "^12.41.0",
     "leaflet": "^1.9.4",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",
     "react-big-calendar": "^1.19.6",

@@ -12,6 +12,7 @@
   margin-inline: auto;
   padding-inline: var(--customer-container-padding);
   box-sizing: border-box;
+  min-width: 0;
 }
 
 .customer-layout {
@@ -34,6 +35,7 @@
   padding-block: clamp(24px, 4vw, 32px) clamp(28px, 5vw, 48px);
   box-sizing: border-box;
   overflow-x: clip;
+  min-width: 0;
 }
 
 .customer-page-shell--bleed {
@@ -127,9 +129,10 @@
 .customer-layout-main {
   flex: 1 1 auto;
   width: 100%;
-  max-width: 100vw;
+  max-width: 100%;
   overflow-x: clip;
   padding-bottom: 0;
+  min-width: 0;
 }
 
 .customer-legal-footer {

@@ -503,8 +503,9 @@ body.dx-nav-locked {
 
 /* ── Customer layout ─────────────────────────────────────── */
 .customer-layout {
-  overflow-x: hidden;
-  max-width: 100vw;
+  overflow-x: clip;
+  max-width: 100%;
+  width: 100%;
 }
 
 .customer-content {
