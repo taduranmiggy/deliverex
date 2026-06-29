@@ -12,6 +12,7 @@ LOCK="$SHARED_STATE/deploy.lock"
 LOG_DIR="$SHARED_STATE/deploy-logs"
 LOG_FILE="$LOG_DIR/cron-deploy.log"
 VARS_TMP="/tmp/deliverex-deploy-vars.$$"
+RUNS_LIST_TMP="/tmp/deliverex-deploy-runs.$$"
 LAST_QUEUED_RUN_FILE="$SHARED_STATE/last-queued-run-id"
 LAST_DEPLOYED_SHA_FILE="$SHARED_STATE/last-deployed-sha"
 
@@ -24,7 +25,7 @@ log() {
 }
 
 cleanup() {
-  rm -f "$VARS_TMP"
+  rm -f "$VARS_TMP" "$RUNS_LIST_TMP"
 }
 trap cleanup EXIT
 
@@ -77,6 +78,19 @@ queue_latest_from_github_if_needed() {
 
   run_id=""
   sha=""
+  : >"$RUNS_LIST_TMP"
+  printf '%s' "$runs_json" | php -r '
+    $j = json_decode(stream_get_contents(STDIN), true);
+    if (!is_array($j) || empty($j["workflow_runs"])) { exit(0); }
+    foreach ($j["workflow_runs"] as $run) {
+      $id = (string)($run["id"] ?? "");
+      $head = (string)($run["head_sha"] ?? "");
+      if ($id !== "" && $head !== "") {
+        echo $id . "\t" . $head . "\n";
+      }
+    }
+  ' >>"$RUNS_LIST_TMP" 2>>"$LOG_FILE" || true
+
   while IFS=$'\t' read -r candidate_run candidate_sha; do
     [ -z "$candidate_run" ] && continue
     local candidate_short="${candidate_sha:0:7}"
@@ -113,17 +127,7 @@ queue_latest_from_github_if_needed() {
       sha="$candidate_sha"
       break
     fi
-  done < <(printf '%s' "$runs_json" | php -r '
-    $j = json_decode(stream_get_contents(STDIN), true);
-    if (!is_array($j) || empty($j["workflow_runs"])) { exit(0); }
-    foreach ($j["workflow_runs"] as $run) {
-      $id = (string)($run["id"] ?? "");
-      $head = (string)($run["head_sha"] ?? "");
-      if ($id !== "" && $head !== "") {
-        echo $id . "\t" . $head . "\n";
-      }
-    }
-  ' 2>>"$LOG_FILE" || true)
+  done <"$RUNS_LIST_TMP"
 
   if [ -z "$run_id" ]; then
     log "WARN: No deploy artifact ready on GitHub yet."
