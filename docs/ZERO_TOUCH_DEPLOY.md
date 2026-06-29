@@ -3,60 +3,59 @@
 Pag na-setup na **isang beses** ang server, ang flow ay:
 
 ```
-git push origin main  →  GitHub Actions  →  server auto-deploy  →  live
+git push origin main  →  GitHub Actions (build + artifact)  →  server cron auto-deploy  →  live
 ```
 
-**Hindi mo na kailangan** mag-SSH o mag-run ng commands pagkatapos mag-push.
+**Hindi mo na kailangan** mag-SSH pagkatapos mag-push.
 
 ---
 
-## Isang beses lang (pili ng isa)
+## Isang beses lang (required)
 
-### Option A — hPanel Post-Deploy Script (pinakasimple)
-
-1. hPanel → **Websites** → **Git** → i-connect ang repo (`taduranmiggy/deliverex`, branch `main`)
-2. I-enable **Auto Deployment** (kung may toggle)
-3. Sa **Post-deployment script**, i-paste:
-
-```bash
-bash /home/u826622735/domains/deliverexapp.com/public_html/scripts/hostinger-hpanel-git-deploy.sh
-```
-
-Palitan ang path kung iba ang install path mo (check sa hPanel Git → Install path).
-
-4. Click **Deploy** isang beses para ma-run ang unang deploy.
-
-**Tapos na.** Bawat `git push` sa `main` → hPanel auto-pull → script tumatakbo → composer + migrate + live.
-
----
-
-### Option B — GitHub Deploy Hook (instant, ~30 segundo)
-
-1. Sa server (SSH, isang beses):
+### 1. Server secrets (SSH, isang beses)
 
 ```bash
 cd ~/domains/deliverexapp.com/public_html
 bash scripts/setup-hostinger-autodeploy.sh
 ```
 
-2. Kopyahin ang `DEPLOY_HOOK_TOKEN` na ipapakita
-3. GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New secret**
-   - Name: `DEPLOY_HOOK_TOKEN`
-   - Value: (yung token)
+Sa `~/domains/deliverexapp.com/shared/.deploy.secrets`, lagyan ng:
 
-**Tapos na.** Bawat push → GitHub Actions tumatawag sa deploy hook → server nagde-deploy agad.
+```
+GITHUB_DEPLOY_TOKEN=<GitHub PAT with repo + actions:read>
+```
+
+### 2. GitHub Actions secret
+
+GitHub repo → **Settings** → **Secrets** → **Actions**:
+
+| Name | Value |
+|------|-------|
+| `DEPLOY_HOOK_TOKEN` | Same token as in `shared/.deploy.secrets` |
+
+### 3. hPanel cron (isang beses — ito ang auto-deploy, walang SSH after)
+
+hPanel → **Advanced** → **Cron Jobs** → add **every minute**:
+
+```bash
+* * * * * bash /home/u826622735/domains/deliverexapp.com/public_html/scripts/process-deploy-queue.sh
+```
+
+Palitan ang path kung iba ang install path mo.
+
+**Tapos na.** Bawat `git push` sa `main`:
+
+1. GitHub Actions nagbu-build ng frontend at nag-upload ng artifact
+2. Sa loob ng ~1–2 minuto, ang cron sa server kumukuha ng artifact mula GitHub at nagde-deploy
+3. Walang SSH na kailangan
+
+> **Note:** Ang deploy webhook (`deploy-hook.php`) ay bonus lang — madalas blocked ang GitHub IPs sa Hostinger. Ang cron ang primary path.
 
 ---
 
-### Option C — Cron (walang GitHub secret, ~5 min delay)
+## Optional — hPanel Git (huwag gamitin kasabay ng CI)
 
-hPanel → **Advanced** → **Cron Jobs** → add:
-
-```bash
-*/5 * * * * bash /home/u826622735/domains/deliverexapp.com/public_html/scripts/hostinger-cron-deploy.sh
-```
-
-**Tapos na.** Bawat push → within 5 minutes auto-pull + deploy.
+**I-disable** ang hPanel Git Auto Deployment kung gumagamit ka ng GitHub Actions + cron — magdudulot ng race condition.
 
 ---
 
@@ -70,25 +69,28 @@ Dapat makita:
 pong
 env=yes
 vendor=yes
-version=fe4d5c8   ← live deployed commit (tumugma sa latest push)
-deploy=fe4d5c8
+version=d9ef9e5   ← live deployed commit (tumugma sa latest push)
+deploy=d9ef9e5
 ```
 
-Kung `version=d2fa9f1` pa rin habang ang GitHub `main` ay `fe4d5c8`, **hindi pa na-a-apply ng server ang bagong deploy** — hindi mali ang ping.
+Kung `version=` ay luma pa habang may bagong push sa GitHub `main`, check ang cron log:
 
-`git_clone=` (kung lumabas) ay luma na hPanel git folder — **ignore**; ang `version=` / `deploy=` ang totoong live code.
+```bash
+tail -40 ~/domains/deliverexapp.com/shared/deploy-state/deploy-logs/cron-deploy.log
+```
 
-Kung `env=no` o `vendor=no` → hindi pa tumatakbo ang deploy script. Ulitin ang one-time setup sa itaas.
+Kung `GITHUB_DEPLOY_TOKEN missing` → lagyan sa `shared/.deploy.secrets`.
 
 ---
 
 ## Ano ang ginagawa ng auto-deploy
 
-- Restore `backend/.env` mula sa `.deliverex.env` backup
+- Download CI artifact (`deliverex-deploy.tar.gz`) mula GitHub
+- Restore `backend/.env` mula sa `shared/.env`
 - `composer install --no-dev`
 - `php artisan migrate --force` (safe — hindi dine-delete ang data)
 - Cache clear + config cache
-- Frontend mula sa `backend/public/` (naka-commit na sa git)
+- Frontend mula sa CI build
 
 ---
 
@@ -96,10 +98,11 @@ Kung `env=no` o `vendor=no` → hindi pa tumatakbo ang deploy script. Ulitin ang
 
 | Symptom | Fix |
 |---------|-----|
-| Push pero luma pa ang site | Check hPanel Auto Deploy ON; o i-run Option B/C |
-| `env=no` sa ping | Walang post-deploy script — i-paste Option A |
-| `composer install failed` / `Could not determine the current working directory` | Sa SSH: `cd ~/domains/deliverexapp.com/public_html && bash scripts/hostinger-hpanel-git-deploy.sh` — na-fix na sa latest script (auto-retry) |
-| GitHub Actions hindi tumatakbo | Check **Actions** tab sa GitHub — dapat may green check |
+| Push pero luma pa ang site | Check hPanel cron (every minute) + `GITHUB_DEPLOY_TOKEN` |
+| `env=no` sa ping | Run `setup-hostinger-autodeploy.sh` once |
+| Cron log: `No deploy artifact ready` | Wait 1–2 min after push (CI still building) |
+| Cron log: `deploy-from-ci.sh failed` | `tail -80 ~/domains/deliverexapp.com/shared/deploy-state/deploy-logs/cron-deploy.log` |
+| GitHub Actions red | Check **Actions** tab — build must succeed first |
 
 ---
 

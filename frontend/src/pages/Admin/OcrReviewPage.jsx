@@ -140,20 +140,15 @@ function validateEditDrafts(drafts) {
 
 const FIELD_DEF_BY_KEY = Object.fromEntries(OCR_FIELD_DEFS.map((f) => [f.key, f]))
 
-const OCR_FIELD_GROUPS = [
-  {
-    id: 'document',
-    title: 'Delivery Receipt',
-    layout: 'stack',
-    keys: ['delivery_receipt_number'],
-  },
-  {
-    id: 'dimensions',
-    title: 'Dimensions',
-    layout: 'grid',
-    keys: ['length', 'width', 'height', 'volume'],
-  },
-]
+const OCR_FIELD_DISPLAY_ORDER = ['length', 'width', 'height', 'volume', 'delivery_receipt_number']
+
+const OCR_DISPLAY_LABELS = {
+  length: 'Length',
+  width: 'Width',
+  height: 'Height',
+  volume: 'Volume',
+  delivery_receipt_number: 'Delivery Receipt No',
+}
 
 function fieldSuggestionAttention(fieldKey, ctx) {
   const suggestions = Array.isArray(ctx.reviewSuggestions[fieldKey]) ? ctx.reviewSuggestions[fieldKey] : []
@@ -168,35 +163,8 @@ function fieldSuggestionAttention(fieldKey, ctx) {
   return tone !== 'high' || missing || showNoMatch
 }
 
-function gridFieldLabel(field) {
-  const short = {
-    length: 'Length',
-    width: 'Width',
-    height: 'Height',
-    volume: 'Volume',
-  }
-  return short[field.key] ?? field.label
-}
-
-function gridFieldUnit(field) {
-  const units = {
-    length: 'cm',
-    width: 'cm',
-    height: 'cm',
-    volume: 'm³',
-  }
-  return units[field.key] ?? null
-}
-
-function OcrFieldLabel({ field, layout }) {
-  const unit = layout === 'grid' ? gridFieldUnit(field) : null
-  const text = layout === 'grid' ? gridFieldLabel(field) : field.label
-  return (
-    <span className="ocr-field-compact__label">
-      <span className="ocr-field-compact__label-text">{text}</span>
-      {unit ? <span className="ocr-field-compact__unit">{unit}</span> : null}
-    </span>
-  )
+function ocrDisplayLabel(field) {
+  return OCR_DISPLAY_LABELS[field.key] ?? field.label
 }
 
 function OcrCompactField({
@@ -207,7 +175,6 @@ function OcrCompactField({
   corrected,
   showNoMatch,
   fieldScore,
-  layout,
   isDatasetEditMode,
   editDrafts,
   setEditDrafts,
@@ -215,13 +182,15 @@ function OcrCompactField({
   canEditDataset,
   onStartEdit,
 }) {
+  const label = ocrDisplayLabel(field)
+
   if (isDatasetEditMode) {
     return (
-      <label className={`ocr-field-compact ocr-field-compact--edit${layout === 'grid' ? ' ocr-field-compact--grid' : ''}`}>
-        <OcrFieldLabel field={field} layout={layout} />
+      <label className="ocr-field-inline ocr-field-inline--edit">
+        <span className="ocr-field-inline__label">{label}:</span>
         <input
           type={field.type === 'number' ? 'number' : 'text'}
-          className="ocr-field-compact__input"
+          className="ocr-field-inline__input"
           value={editDrafts[field.key] ?? ''}
           onChange={(e) => {
             setEditDrafts((prev) => ({ ...prev, [field.key]: e.target.value }))
@@ -235,33 +204,33 @@ function OcrCompactField({
   }
 
   return (
-    <div className={`ocr-field-compact${layout === 'grid' ? ' ocr-field-compact--grid' : ''}`}>
-      <div className="ocr-field-compact__body">
-        <OcrFieldLabel field={field} layout={layout} />
-        <div className="ocr-field-compact__value-row">
-          <span className="ocr-field-compact__value">
+    <div className="ocr-field-inline">
+      <div className="ocr-field-inline__main">
+        <div className="ocr-field-inline__content">
+          <span className="ocr-field-inline__label">{label}:</span>
+          <span className="ocr-field-inline__value">
             {missing ? '—' : formatSuggestionValue(value)}
           </span>
           <OcrFieldConfidence fieldScore={fieldScore} missing={missing} />
           {corrected && (
-            <span className="badge-dx badge-dx--reviewing ocr-field-compact__badge">Corrected</span>
+            <span className="badge-dx badge-dx--reviewing ocr-field-inline__badge">Corrected</span>
           )}
           {showNoMatch && !formatConfidencePct(fieldScore) && (
-            <span className="ocr-field-compact__hint">No confident match found.</span>
+            <span className="ocr-field-inline__hint">No confident match found.</span>
           )}
         </div>
         {corrected && original != null && String(original) !== String(value) && (
-          <div className="ocr-field-compact__audit">
-            <span className="ocr-field-compact__audit-original">{formatSuggestionValue(original)}</span>
+          <div className="ocr-field-inline__audit">
+            <span className="ocr-field-inline__audit-original">{formatSuggestionValue(original)}</span>
             <span aria-hidden>→</span>
-            <span className="ocr-field-compact__audit-final">{formatSuggestionValue(value)}</span>
+            <span className="ocr-field-inline__audit-final">{formatSuggestionValue(value)}</span>
           </div>
         )}
       </div>
       {canEditDataset && (
         <button
           type="button"
-          className="ocr-field-compact__edit"
+          className="ocr-field-inline__edit"
           onClick={() => onStartEdit(field.key)}
           title={`Edit ${field.label}`}
           aria-label={`Edit ${field.label}`}
@@ -273,8 +242,8 @@ function OcrCompactField({
   )
 }
 
-function OcrFieldSections({
-  groups,
+function OcrFieldList({
+  keys,
   getFieldProps,
   isDatasetEditMode,
   editDrafts,
@@ -284,31 +253,23 @@ function OcrFieldSections({
   onStartEdit,
 }) {
   return (
-    <div className="ocr-field-sections">
-      {groups.map((group) => (
-        <section key={group.id} className="ocr-field-section">
-          <h4 className="ocr-field-section__title">{group.title}</h4>
-          <div className={group.layout === 'grid' ? 'ocr-dimensions-grid' : 'ocr-field-section__stack'}>
-            {group.keys.map((key) => {
-              const props = getFieldProps(key)
-              if (!props?.field) return null
-              return (
-                <OcrCompactField
-                  key={key}
-                  layout={group.layout === 'grid' ? 'grid' : 'row'}
-                  isDatasetEditMode={isDatasetEditMode}
-                  editDrafts={editDrafts}
-                  setEditDrafts={setEditDrafts}
-                  setEditValidationError={setEditValidationError}
-                  canEditDataset={canEditDataset}
-                  onStartEdit={onStartEdit}
-                  {...props}
-                />
-              )
-            })}
-          </div>
-        </section>
-      ))}
+    <div className="ocr-field-list">
+      {keys.map((key) => {
+        const props = getFieldProps(key)
+        if (!props?.field) return null
+        return (
+          <OcrCompactField
+            key={key}
+            isDatasetEditMode={isDatasetEditMode}
+            editDrafts={editDrafts}
+            setEditDrafts={setEditDrafts}
+            setEditValidationError={setEditValidationError}
+            canEditDataset={canEditDataset}
+            onStartEdit={onStartEdit}
+            {...props}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -403,47 +364,24 @@ function OcrSuggestionsPanel({
 
 function OcrSystemDataCompact({ selected }) {
   const deliveryDate = selected.delivery_date ? new Date(selected.delivery_date) : null
-  const jobOrder = selected.document?.assignment?.job_order
-    ?? selected.document?.assignment?.jobOrder
-    ?? null
-  const customer = jobOrder?.display_name
-    ?? jobOrder?.company?.company_name
-    ?? jobOrder?.client?.company_name
-    ?? jobOrder?.custom_client_name
-    ?? null
-  const material = [jobOrder?.material_type, jobOrder?.specification_size].filter(Boolean).join(' · ') || null
-  const loadVolume = jobOrder?.load_volume_m3 ?? jobOrder?.volume_m3 ?? null
 
-  const row = (label, value) => (
-    <div className="ocr-system-data__row">
-      <span className="ocr-system-data__label">{label}</span>
-      <span className="ocr-system-data__value">{value || '—'}</span>
-    </div>
-  )
+  const rows = [
+    ['Job Order', selected.job_order_id ? formatJobPublicId(selected.job_order_id) : null],
+    ['Assignment ID', selected.assignment_id ?? null],
+    ['Driver', selected.driver_name],
+    ['Driver ID', selected.driver_id ?? null],
+    ['Vehicle', selected.vehicle_plate_no],
+    ['Delivery Date', deliveryDate ? deliveryDate.toLocaleString() : null],
+  ]
 
   return (
-    <div className="ocr-system-data">
-      {row('Job Order', selected.job_order_id ? formatJobPublicId(selected.job_order_id) : null)}
-      {row('Assignment', selected.assignment_id ? `#${selected.assignment_id}` : null)}
-      {row('Vehicle', selected.vehicle_plate_no)}
-      {row('Driver', selected.driver_name)}
-      <div className="ocr-system-data__row">
-        <span className="ocr-system-data__label">Delivery</span>
-        {deliveryDate ? (
-          <span className="ocr-system-data__value ocr-system-data__value--stacked">
-            <span>{deliveryDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-            <span className="ocr-system-data__sub">
-              {deliveryDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-            </span>
-          </span>
-        ) : (
-          <span className="ocr-system-data__value">—</span>
-        )}
-      </div>
-      {row('Customer', customer)}
-      {row('Supplier', jobOrder?.quarry?.quarry_name)}
-      {row('Material', material)}
-      {loadVolume != null && row('Load Volume', `${loadVolume} m³`)}
+    <div className="ocr-system-data ocr-system-data--inline">
+      {rows.map(([label, value]) => (
+        <div key={label} className="ocr-system-data__row">
+          <span className="ocr-system-data__label">{label}:</span>
+          <span className="ocr-system-data__value">{value ?? '—'}</span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -1086,8 +1024,8 @@ function OcrReviewPage() {
               <div className="ocr-review-top-grid">
                 <div className="ocr-dataset-card ocr-dataset-card--ocr">
                   <p className="ocr-dataset-card__label">OCR DATA</p>
-                  <OcrFieldSections
-                    groups={OCR_FIELD_GROUPS}
+                  <OcrFieldList
+                    keys={OCR_FIELD_DISPLAY_ORDER}
                     getFieldProps={getOcrFieldProps}
                     isDatasetEditMode={isDatasetEditMode}
                     editDrafts={editDrafts}

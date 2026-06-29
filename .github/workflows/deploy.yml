@@ -115,11 +115,11 @@ jobs:
 
       - name: Wait for cron deploy and verify health
         continue-on-error: true
-        timeout-minutes: 4
+        timeout-minutes: 6
         env:
           EXPECTED_DEPLOY_SHA: ${{ github.sha }}
-          HEALTH_CHECK_ATTEMPTS: 8
+          HEALTH_CHECK_ATTEMPTS: 18
           HEALTH_CHECK_INTERVAL: 10
           ALLOW_UNREACHABLE_HEALTH_CHECK: "1"
-          SKIP_DEPLOY_SHA_CHECK: "1"
+          SKIP_DEPLOY_SHA_CHECK: "0"
         run: bash scripts/health-check.sh "$APP_URL"
