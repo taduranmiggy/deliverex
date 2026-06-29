@@ -133,14 +133,33 @@
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
 .pwa-track-search__icon {
   position: absolute;
   left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--muted);
   pointer-events: none;
   flex-shrink: 0;
+  z-index: 1;
+}
+
+.pwa-track-search__input-wrap .pwa-track-search__input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px 12px 44px;
+  border-radius: 12px;
+  border: 1.5px solid var(--stroke);
+  background: var(--slate-50);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.4;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 
 .pwa-track-search__input {

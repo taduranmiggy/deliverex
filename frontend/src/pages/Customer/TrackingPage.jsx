@@ -168,7 +168,7 @@ function TrackingPage() {
           <h2 className="pwa-track-card__title">Look up shipment</h2>
           <div className="pwa-track-search">
             <label className="pwa-track-search__label" htmlFor="tid">Tracking ID</label>
-            <div className="pwa-track-search__row tracking-input-row">
+            <div className="pwa-track-search__row">
               <div className={`pwa-track-search__input-wrap${error ? ' pwa-track-search__input-wrap--invalid' : ''}`}>
                 <Search size={18} className="pwa-track-search__icon" aria-hidden />
                 <input

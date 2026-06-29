@@ -2131,8 +2131,18 @@
 .tracking-form { display: flex; flex-direction: column; }
 .tracking-label { font-size: 0.875rem; font-weight: 700; color: var(--text); margin-bottom: 10px; display: block; }
 .tracking-input-row { display: flex; gap: 8px; }
-.tracking-input-row input { flex: 1; padding: 11px 14px; border: 1.5px solid var(--stroke); border-radius: var(--radius-md); font: inherit; font-size: 0.9375rem; background: var(--slate-50); transition: border-color 0.15s, background 0.15s; }
-.tracking-input-row input:focus { outline: none; border-color: var(--color-primary); background: var(--surface); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+.tracking-input-row input:not(.pwa-track-search__input) {
+  flex: 1;
+  padding: 11px 14px;
+  border: 1.5px solid var(--stroke);
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 0.9375rem;
+  background: var(--slate-50);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.tracking-input-row input:not(.pwa-track-search__input):focus { outline: none; border-color: var(--color-primary); background: var(--surface); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
 .tracking-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .tracking-hint { font-size: 0.8125rem; color: var(--muted); margin-top: 8px; }
 .tracking-pill { display: inline-flex; padding: 4px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 600; background: var(--color-primary-light); color: var(--color-primary); }
