@@ -740,7 +740,7 @@ body.dx-nav-locked {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px 10px;
 }
 
 .ocr-field-compact__value {
@@ -758,6 +758,56 @@ body.dx-nav-locked {
 .ocr-field-compact__hint {
   font-size: 0.6875rem;
   color: var(--muted);
+}
+
+.ocr-field-compact__confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ocr-field-compact__confidence-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ocr-field-compact__confidence--high .ocr-field-compact__confidence-dot {
+  background: var(--success, #16a34a);
+}
+
+.ocr-field-compact__confidence--medium .ocr-field-compact__confidence-dot {
+  background: var(--warning, #d97706);
+}
+
+.ocr-field-compact__confidence--low .ocr-field-compact__confidence-dot {
+  background: var(--danger, #dc2626);
+}
+
+.ocr-field-compact__confidence--high {
+  color: var(--success, #166534);
+}
+
+.ocr-field-compact__confidence--medium {
+  color: var(--warning, #b45309);
+}
+
+.ocr-field-compact__confidence--low {
+  color: var(--danger, #dc2626);
+}
+
+.ocr-field-compact__confidence-hint {
+  font-weight: 500;
+}
+
+.ocr-field-compact--edit .ocr-field-compact__confidence {
+  margin-top: 2px;
 }
 
 .ocr-field-compact__audit {

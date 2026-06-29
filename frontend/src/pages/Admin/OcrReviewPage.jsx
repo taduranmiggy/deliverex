@@ -65,6 +65,29 @@ function confidenceTone(score) {
   return 'low'
 }
 
+function formatConfidencePct(score) {
+  if (score == null || Number.isNaN(Number(score))) return null
+  return `${Math.round(Number(score) * 100)}%`
+}
+
+function OcrFieldConfidence({ fieldScore, missing }) {
+  const pct = formatConfidencePct(fieldScore)
+  if (!pct) return null
+
+  const tone = confidenceTone(fieldScore)
+  const showReviewHint = tone === 'low' || (tone === 'medium' && !missing)
+
+  return (
+    <span className={`ocr-field-compact__confidence ocr-field-compact__confidence--${tone}`} title={`OCR confidence: ${pct}`}>
+      <span className="ocr-field-compact__confidence-dot" aria-hidden />
+      {pct}
+      {showReviewHint && (
+        <span className="ocr-field-compact__confidence-hint"> • Review Suggested</span>
+      )}
+    </span>
+  )
+}
+
 const OCR_FIELD_DEFS = [
   { key: 'delivery_receipt_number', label: 'Delivery Receipt No', type: 'text' },
   { key: 'supplier', label: 'Supplier', type: 'text' },
@@ -162,6 +185,7 @@ function OcrCompactField({
   missing,
   corrected,
   showNoMatch,
+  fieldScore,
   layout,
   isDatasetEditMode,
   editDrafts,
@@ -184,6 +208,7 @@ function OcrCompactField({
           }}
           step={field.type === 'number' ? 'any' : undefined}
         />
+        <OcrFieldConfidence fieldScore={fieldScore} missing={missing} />
       </label>
     )
   }
@@ -196,11 +221,12 @@ function OcrCompactField({
           <span className="ocr-field-compact__value">
             {missing ? '—' : formatSuggestionValue(value)}
           </span>
+          <OcrFieldConfidence fieldScore={fieldScore} missing={missing} />
           {corrected && (
             <span className="badge-dx badge-dx--reviewing ocr-field-compact__badge">Corrected</span>
           )}
-          {showNoMatch && (
-            <span className="ocr-field-compact__hint">Low confidence</span>
+          {showNoMatch && !formatConfidencePct(fieldScore) && (
+            <span className="ocr-field-compact__hint">No confident match found.</span>
           )}
         </div>
         {corrected && original != null && String(original) !== String(value) && (
@@ -852,7 +878,7 @@ function OcrReviewPage() {
     const showNoMatch = missing && (STRUCTURED_COLUMN_MAP[key] ? noHit : !getSuggestionValue(key))
     const corrected = isFieldCorrected(key)
 
-    return { field, value, original, missing, corrected, showNoMatch }
+    return { field, value, original, missing, corrected, showNoMatch, fieldScore: fieldScores[key] }
   }
 
   return (
