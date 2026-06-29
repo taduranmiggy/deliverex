@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchJobOrders } from '../../api/dispatcher'
 import { EmptyState, FilterSelect, LoadingSpinner, PageHeader, PaginationBar, ProofImageModal, SearchInput } from '../../components/ui'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
+import { formatJobSchedule } from '../../utils/driverAssignment'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
 import { ClipboardList, Info, Loader2 } from 'lucide-react'
@@ -84,7 +85,7 @@ function DetailPanel({ order }) {
         {order.material_type && kv('Material', `${order.material_type}${order.specification_size ? ` · ${order.specification_size}` : ''}`)}
         {kv('Load', order.load_volume_m3 || order.volume_m3 ? `${order.load_volume_m3 ?? order.volume_m3} m³` : null)}
         {kv('Quarry', order.quarry?.quarry_name)}
-        {kv('Schedule', order.scheduled_start ? new Date(order.scheduled_start).toLocaleString() : null)}
+        {kv('Schedule', order.scheduled_start || order.scheduled_end ? formatJobSchedule(order) : null)}
         {kv('Priority', order.priority ? order.priority.charAt(0).toUpperCase() + order.priority.slice(1) : null)}
         {kv('Tracking', order.tracking_code)}
 
@@ -247,7 +248,7 @@ function AdminJobOrdersPage() {
                     {buildDisplayAddress('pickup', order)} → {buildDisplayAddress('dropoff', order)}
                   </p>
                   <p className="dx-mobile-card__meta">
-                    Priority: {order.priority} · {order.scheduled_start ? new Date(order.scheduled_start).toLocaleDateString() : 'No schedule'}
+                    Priority: {order.priority} · {formatJobSchedule(order)}
                   </p>
                   {order.tracking_code && (
                     <p className="dx-mobile-card__meta">Tracking: {order.tracking_code}</p>
@@ -312,7 +313,7 @@ function AdminJobOrdersPage() {
                       </td>
                       <td data-label="Priority" style={{ textTransform: 'capitalize', fontSize: '0.875rem' }}>{order.priority}</td>
                       <td data-label="Schedule" style={{ fontSize: '0.8125rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                        {order.scheduled_start ? new Date(order.scheduled_start).toLocaleDateString() : '—'}
+                        {formatJobSchedule(order)}
                       </td>
                       <td data-label="Status">
                         <span className={jobStatusBadgeClass(order.status)}>

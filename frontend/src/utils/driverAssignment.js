@@ -36,9 +36,9 @@ export function formatJobSchedule(job) {
     const start = new Date(job.scheduled_start)
     const end = new Date(job.scheduled_end)
     if (start.toDateString() === end.toDateString()) {
-      return `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${start.toLocaleTimeString(undefined, timeOpts)} – ${end.toLocaleTimeString(undefined, timeOpts)}`
+      return `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${start.toLocaleTimeString(undefined, timeOpts)} → ${end.toLocaleTimeString(undefined, timeOpts)}`
     }
-    return `${start.toLocaleString(undefined, dateOpts)} – ${end.toLocaleString(undefined, dateOpts)}`
+    return `${start.toLocaleString(undefined, dateOpts)} → ${end.toLocaleString(undefined, dateOpts)}`
   }
 
   const single = new Date(job.scheduled_start || job.scheduled_end)

@@ -8,6 +8,7 @@ import { fetchCalendarEvents, fetchJobOrder } from '../../api/dispatcher'
 import { EmptyState, PageHeader, StatusBadge } from '../../components/ui'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
+import { formatJobSchedule } from '../../utils/driverAssignment'
 import { AlertTriangle, Calendar, Search, X } from 'lucide-react'
 
 const locales = { 'en-US': enUS }
@@ -156,7 +157,7 @@ function UpcomingPanel({ upcoming, onSelectJob }) {
                 <strong>{item.job_number}</strong>
                 <span>{item.customer_name}</span>
                 <span className="dx-muted" style={{ fontSize: '0.75rem' }}>
-                  {item.scheduled_start ? formatDateTime(item.scheduled_start) : 'No schedule'}
+                  {formatJobSchedule(item)}
                   {item.driver_name ? ` · ${item.driver_name}` : ''}
                 </span>
               </button>

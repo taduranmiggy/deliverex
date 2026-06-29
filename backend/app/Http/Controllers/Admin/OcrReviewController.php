@@ -134,12 +134,12 @@ class OcrReviewController extends Controller
 
         $data = $request->validate([
             'fields' => 'required|array',
-            'fields.length' => 'nullable|numeric|min:0',
-            'fields.width' => 'nullable|numeric|min:0',
-            'fields.height' => 'nullable|numeric|min:0',
-            'fields.volume' => 'nullable|numeric|min:0',
-            'fields.quantity' => 'nullable|numeric|min:0',
-            'fields.delivery_receipt_number' => 'nullable|string|max:120',
+            'fields.length' => 'nullable|numeric|gt:0',
+            'fields.width' => 'nullable|numeric|gt:0',
+            'fields.height' => 'nullable|numeric|gt:0',
+            'fields.volume' => 'nullable|numeric|gt:0',
+            'fields.quantity' => 'nullable|numeric|gt:0',
+            'fields.delivery_receipt_number' => 'nullable|string|min:1|max:120',
             'fields.supplier' => 'nullable|string|max:200',
             'fields.date' => 'nullable|string|max:120',
             'fields.total' => 'nullable|string|max:120',

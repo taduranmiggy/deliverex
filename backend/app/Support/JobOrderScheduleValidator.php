@@ -30,6 +30,16 @@ class JobOrderScheduleValidator
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
+
+        if (
+            ! empty($data['scheduled_start'])
+            && ! empty($data['scheduled_end'])
+            && Carbon::parse($data['scheduled_end'])->lte(Carbon::parse($data['scheduled_start']))
+        ) {
+            throw ValidationException::withMessages([
+                'scheduled_end' => ['End date and time must be after the scheduled start.'],
+            ]);
+        }
     }
 
     public static function validateJobOrder(JobOrder $jobOrder): void

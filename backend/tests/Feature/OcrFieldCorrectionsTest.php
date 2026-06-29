@@ -61,6 +61,19 @@ class OcrFieldCorrectionsTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_save_corrections_rejects_non_positive_dimensions(): void
+    {
+        [$admin, $ocr] = $this->seedOcrPair('admin');
+
+        $this->actingAs($admin, 'sanctum')->putJson("/api/ocr/{$ocr->id}/corrections", [
+            'fields' => ['length' => 0],
+        ])->assertUnprocessable();
+
+        $this->actingAs($admin, 'sanctum')->putJson("/api/ocr/{$ocr->id}/corrections", [
+            'fields' => ['delivery_receipt_number' => ''],
+        ])->assertUnprocessable();
+    }
+
     public function test_approve_applies_effective_structured_values_and_preserves_audit(): void
     {
         [$admin, $ocr] = $this->seedOcrPair('admin');

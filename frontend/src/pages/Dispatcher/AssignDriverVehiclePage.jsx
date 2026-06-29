@@ -7,6 +7,7 @@ import { IconRouteArrow } from '../../components/DxIcons'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus } from '../../utils/statusLabels'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
+import { formatJobSchedule } from '../../utils/driverAssignment'
 import { PaginationBar } from '../../components/ui'
 import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-react'
 
@@ -418,9 +419,9 @@ function AssignDriverVehiclePage() {
                     <span style={{ flexShrink: 0 }}><IconRouteArrow /></span>
                     <span>{buildDisplayAddress('dropoff', order)}</span>
                   </p>
-                  {order.scheduled_start && (
+                  {(order.scheduled_start || order.scheduled_end) && (
                     <p style={{ margin: '3px 0 0', fontSize: '0.7rem', color: 'var(--muted)' }}>
-                      {new Date(order.scheduled_start).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {formatJobSchedule(order)}
                     </p>
                   )}
                 </button>
@@ -455,9 +456,9 @@ function AssignDriverVehiclePage() {
                       {(selected.load_volume_m3 || selected.volume_m3) ? ` · ${selected.load_volume_m3 ?? selected.volume_m3} m³` : ''}
                     </p>
                   </div>
-                  {selected.scheduled_end && (
-                    <span style={{ fontSize: '0.75rem', color: '#991b1b', background: '#fef2f2', padding: '2px 8px', borderRadius: 8, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      By {new Date(selected.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {(selected.scheduled_start || selected.scheduled_end) && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      {formatJobSchedule(selected)}
                     </span>
                   )}
                 </div>

@@ -12,10 +12,13 @@ import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
 import {
   firstScheduleError,
+  formatScheduleReviewParts,
   minDatetimeLocalValue,
+  toDatetimeLocalValue,
   validateJobSchedule,
 } from '../../utils/scheduleValidation'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
+import { formatJobSchedule } from '../../utils/driverAssignment'
 import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
 import { FilterSelect } from '../../components/ui'
 
@@ -37,7 +40,7 @@ const STEPS = [
   { id: 1, label: 'Client Information', hint: 'Company & contacts' },
   { id: 2, label: 'Material Information', hint: 'Type, spec, vehicle & volume' },
   { id: 3, label: 'Route', hint: 'Pickup & delivery' },
-  { id: 4, label: 'Schedule', hint: 'Date, time & priority' },
+  { id: 4, label: 'Schedule', hint: 'Start, end & priority' },
   { id: 5, label: 'Review & Confirm', hint: 'Check and submit' },
 ]
 
@@ -203,6 +206,36 @@ function RR({ label, value }) {
   )
 }
 
+function ScheduleReviewRows({ start, end }) {
+  const parts = formatScheduleReviewParts(start, end)
+  if (!parts?.start && !parts?.end) {
+    return <RR label="Schedule" value={null} />
+  }
+
+  return (
+    <>
+      {parts.start && (
+        <div className="dx-review-row">
+          <span className="dx-review-row__label">Start</span>
+          <span className="dx-review-row__value" style={{ display: 'grid', gap: 2 }}>
+            <span>{parts.start.date}</span>
+            <span style={{ color: 'var(--muted)', fontSize: '0.875rem', fontWeight: 500 }}>{parts.start.time}</span>
+          </span>
+        </div>
+      )}
+      {parts.end && (
+        <div className="dx-review-row">
+          <span className="dx-review-row__label">End</span>
+          <span className="dx-review-row__value" style={{ display: 'grid', gap: 2 }}>
+            <span>{parts.end.date}</span>
+            <span style={{ color: 'var(--muted)', fontSize: '0.875rem', fontWeight: 500 }}>{parts.end.time}</span>
+          </span>
+        </div>
+      )}
+    </>
+  )
+}
+
 // ─── Job Order Wizard Form ─────────────────────────────────────────────────────
 
 function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading, onSaved, onCancel, onRefreshOptions }) {
@@ -278,8 +311,8 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       material_type_id: String(initialMaterialTypeId),
       material_specification_id: String(initialSpecificationId),
       load_volume_m3: initial.load_volume_m3 ?? initial.volume_m3 ?? '',
-      scheduled_start: initial.scheduled_start ? new Date(initial.scheduled_start).toISOString().slice(0, 16) : '',
-      scheduled_end: '',
+      scheduled_start: toDatetimeLocalValue(initial.scheduled_start),
+      scheduled_end: toDatetimeLocalValue(initial.scheduled_end),
       priority: initial.priority ?? 'normal',
       special_handling_instructions: '',
       notes: '',
@@ -516,9 +549,11 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
         errs.dropoff_location = 'Delivery location is required.'
     }
     if (step === 4) {
-      const schedErrs = validateJobSchedule({ scheduled_start: form.scheduled_start, scheduled_end: form.scheduled_end })
+      const schedErrs = validateJobSchedule(
+        { scheduled_start: form.scheduled_start, scheduled_end: form.scheduled_end },
+        { requireBoth: true },
+      )
       Object.assign(errs, schedErrs)
-      if (!form.scheduled_start) errs.scheduled_start = 'Scheduled start is required.'
     }
     setFE(errs)
     return Object.keys(errs).length === 0
@@ -572,7 +607,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     special_handling_instructions: null,
     job_requirements:         null,
     scheduled_start:          form.scheduled_start || null,
-    scheduled_end:            null,
+    scheduled_end:            form.scheduled_end || null,
     priority:                 form.priority,
   })
 
@@ -826,11 +861,26 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
         {currentStep === 4 && (
           <>
             <p className="dx-wizard-step-title">Schedule</p>
-            <p className="dx-wizard-step-subtitle">Set the delivery date, time, and priority.</p>
+            <p className="dx-wizard-step-subtitle">Set the expected delivery window (start and end) and priority.</p>
 
             <div className="dx-wiz-grid" style={{ marginBottom: 16 }}>
-              <FieldWrap label="Date & Time" required error={fieldErrors.scheduled_start}>
-                <WizInput type="datetime-local" min={scheduleMin} value={form.scheduled_start} onChange={set('scheduled_start')} error={fieldErrors.scheduled_start} />
+              <FieldWrap label="Start Date & Time" required error={fieldErrors.scheduled_start}>
+                <WizInput
+                  type="datetime-local"
+                  min={scheduleMin}
+                  value={form.scheduled_start}
+                  onChange={set('scheduled_start')}
+                  error={fieldErrors.scheduled_start}
+                />
+              </FieldWrap>
+              <FieldWrap label="End Date & Time" required error={fieldErrors.scheduled_end}>
+                <WizInput
+                  type="datetime-local"
+                  min={form.scheduled_start || scheduleMin}
+                  value={form.scheduled_end}
+                  onChange={set('scheduled_end')}
+                  error={fieldErrors.scheduled_end}
+                />
               </FieldWrap>
               <FieldWrap label="Priority">
                 <select value={form.priority} onChange={set('priority')} className="dx-wiz-input" style={{ cursor: 'pointer' }}>
@@ -870,8 +920,8 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
             </ReviewBlock>
 
             <ReviewBlock title="Schedule" onEdit={goToStep} stepNum={4} cols={2}>
-              <RR label="Date & Time" value={form.scheduled_start ? new Date(form.scheduled_start).toLocaleString() : null} />
-              <RR label="Priority"        value={PRIORITY_LABELS[form.priority] ?? form.priority} />
+              <ScheduleReviewRows start={form.scheduled_start} end={form.scheduled_end} />
+              <RR label="Priority" value={PRIORITY_LABELS[form.priority] ?? form.priority} />
             </ReviewBlock>
 
             {error && <p className="notice error" style={{ marginTop: 6 }}>{error}</p>}
@@ -1221,7 +1271,7 @@ function CreateJobOrderPage() {
                       </td>
                       <td style={{ textTransform: 'capitalize', fontSize: '0.875rem' }}>{order.priority}</td>
                       <td style={{ fontSize: '0.8125rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                        {order.scheduled_start ? new Date(order.scheduled_start).toLocaleDateString() : '—'}
+                        {formatJobSchedule(order)}
                       </td>
                       <td><span className={jobStatusBadgeClass(order.status)}>{formatJobStatus(order.status)}</span></td>
                     </tr>
@@ -1269,9 +1319,7 @@ function CreateJobOrderPage() {
                   <strong>{selected.load_volume_m3 || selected.volume_m3 ? `${selected.load_volume_m3 ?? selected.volume_m3} m³` : '—'}</strong>
                 </div>
                 <div className="dx-kv"><span>Schedule</span>
-                  <strong>
-                    {selected.scheduled_start ? new Date(selected.scheduled_start).toLocaleString() : '—'}
-                  </strong>
+                  <strong>{formatJobSchedule(selected)}</strong>
                 </div>
                 <div className="dx-kv"><span>Priority</span><strong style={{ textTransform: 'capitalize' }}>{selected.priority}</strong></div>
                 <div style={{ marginBottom: 4 }}><span className={jobStatusBadgeClass(selected.status)}>{formatJobStatus(selected.status)}</span></div>
