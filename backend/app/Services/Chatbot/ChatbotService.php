@@ -83,6 +83,11 @@ class ChatbotService
             return $this->knowledgeResponse('overview');
         }
 
+        $dbIntent = $this->matchDbIntent($normalized);
+        if ($dbIntent) {
+            return $this->dbIntentResponse($dbIntent);
+        }
+
         if ($this->looksLikeTrackingIntent($normalized)) {
             return $this->startTracking();
         }
@@ -97,11 +102,6 @@ class ChatbotService
 
         if ($this->looksLikeAccountIntent($normalized)) {
             return $this->accountHelpResponse($normalized);
-        }
-
-        $dbIntent = $this->matchDbIntent($normalized);
-        if ($dbIntent) {
-            return $this->dbIntentResponse($dbIntent);
         }
 
         $topic = $this->matchKnowledge($normalized, $history);
@@ -628,13 +628,11 @@ class ChatbotService
     /** @return array<string, mixed> */
     private function fallbackResponse(string $message, ?User $user): array
     {
-        $text = "I'm not fully sure about that specific question, but I can help with:\n\n"
-            . "• Tracking deliveries (paste a Tracking ID)\n"
-            . "• Submitting concerns and complaints\n"
-            . "• Account, login, and password help\n"
-            . "• How Deliverex works (dispatch, Best-Fit, OCR, roles)\n"
-            . "• Delivery statuses and proof of delivery\n\n"
-            . 'Try rephrasing, or pick an option below. For urgent issues, use Submit a Concern or Contact Support.';
+        $phone = config('chatbot.support_phone');
+        $email = config('chatbot.support_email');
+        $text = "I'm sorry, I could not find an answer to that. Please contact "
+            .config('chatbot.company_name')
+            ." directly at {$phone} or {$email} for further assistance.";
 
         return $this->withIntentMeta([
             'messages' => [['type' => 'text', 'body' => $text]],
@@ -761,7 +759,11 @@ class ChatbotService
 
     private function looksLikeTrackingIntent(string $normalized): bool
     {
-        return (bool) preg_match('/\b(track|tracking|saan|nasaan|status ng padala|where is my)\b/', $normalized);
+        if (preg_match('/\b(tracking id|tracking code|where is my tracking)\b/', $normalized)) {
+            return false;
+        }
+
+        return (bool) preg_match('/\b(track my delivery|track delivery|track|tracking|saan|nasaan|status ng padala|where is my delivery|where is my package)\b/', $normalized);
     }
 
     private function looksLikeInquiryIntent(string $normalized): bool

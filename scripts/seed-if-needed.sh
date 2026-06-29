@@ -51,27 +51,13 @@ seed_chatbot_intents_if_needed() {
     return 0
   fi
 
-  local intent_result
-  intent_result="$(php artisan tinker --execute='try {
-    if (! Schema::hasTable("chatbot_intents")) { echo "missing"; }
-    else { echo App\Models\ChatbotIntent::count(); }
-  } catch (Throwable $e) { echo "error:".$e->getMessage(); }' 2>&1 | tail -1)"
+  if ! php artisan tinker --execute='echo Schema::hasTable("chatbot_intents") ? "yes" : "no";' 2>/dev/null | tail -1 | grep -q yes; then
+    echo "==> Skipping chatbot intent sync: chatbot_intents table missing"
+    return 0
+  fi
 
-  case "$intent_result" in
-    0|missing)
-      echo "==> Seeding chatbot intents (php artisan db:seed --class=ChatbotIntentSeeder --force)"
-      php artisan db:seed --class=ChatbotIntentSeeder --force
-      ;;
-    error:*)
-      echo "WARN: Could not check chatbot_intents: ${intent_result#error:}" >&2
-      ;;
-    ''|*[!0-9]*)
-      echo "WARN: Unexpected chatbot intent check: $intent_result" >&2
-      ;;
-    *)
-      echo "==> chatbot_intents already has $intent_result row(s) — skipping ChatbotIntentSeeder"
-      ;;
-  esac
+  echo "==> Syncing chatbot intents (php artisan db:seed --class=ChatbotIntentSeeder --force)"
+  php artisan db:seed --class=ChatbotIntentSeeder --force
 }
 
 seed_chatbot_intents_if_needed

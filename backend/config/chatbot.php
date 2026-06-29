@@ -3,6 +3,12 @@
 return [
     'support_email' => env('MAIL_SUPPORT_ADDRESS', 'deliverexapp@gmail.com'),
     'support_phone' => env('CHATBOT_SUPPORT_PHONE', '(+63) 995-582-0222'),
+    'company_name' => env('CHATBOT_COMPANY_NAME', 'Providential 628 Site Preparation Services'),
+    'office_address' => env(
+        'CHATBOT_OFFICE_ADDRESS',
+        '7353 Casa Zaragoza Cluster 3, Commonwealth Avenue Extension, San Benissa Garden Villas, Kaligayahan, District 5, Quezon City 1124',
+    ),
+    'business_hours' => env('CHATBOT_BUSINESS_HOURS', 'Monday to Saturday from 9:00 AM to 8:00 PM'),
 
     'rate_limit' => [
         'max_attempts' => (int) env('CHATBOT_RATE_LIMIT', 30),
