@@ -40,7 +40,7 @@ class AuditLogsController extends Controller
             });
         }
 
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
+        $perPage = min(100, max(1, (int) $request->query('per_page', 6)));
         $sortDir = strtolower((string) $request->query('sort', 'desc')) === 'asc' ? 'asc' : 'desc';
         $query->reorder()->orderBy('created_at', $sortDir);
 

@@ -107,6 +107,7 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/users',                [AdminUserController::class, 'index']);
         Route::post('/users',               [AdminUserController::class, 'store']);
         Route::put('/users/{user}',         [AdminUserController::class, 'update']);
+        Route::post('/users/{user}/send-invite', [AdminUserController::class, 'sendInvite']);
         Route::delete('/users/{user}',      [AdminUserController::class, 'destroy']);
 
         Route::get('/companies',                        [AdminCompanyController::class, 'index']);

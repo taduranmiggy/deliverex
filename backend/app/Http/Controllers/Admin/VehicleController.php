@@ -10,9 +10,11 @@ use Illuminate\Support\Str;
 
 class VehicleController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Vehicle::with('vehicleType')->paginate(20));
+        $perPage = max(1, min(100, (int) $request->query('per_page', 6)));
+
+        return response()->json(Vehicle::with('vehicleType')->paginate($perPage));
     }
 
     public function store(Request $request)

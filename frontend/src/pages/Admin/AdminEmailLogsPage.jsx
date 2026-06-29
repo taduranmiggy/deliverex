@@ -13,7 +13,7 @@ const STATUS_OPTS = [
 
 function AdminEmailLogsPage() {
   const [logs, setLogs] = useState([])
-  const [meta, setMeta] = useState({ current_page: 1, per_page: 25, total: 0 })
+  const [meta, setMeta] = useState({ current_page: 1, per_page: 6, total: 0 })
   const [stats, setStats] = useState({ pending: 0, sent: 0, delivered: 0, failed: 0 })
   const [types, setTypes] = useState([])
   const [loading, setLoading] = useState(false)
@@ -33,10 +33,10 @@ function AdminEmailLogsPage() {
     setLoading(true)
     setError('')
     try {
-      const params = { page, per_page: 25, search: search || undefined, status: status || undefined, email_type: emailType || undefined }
+      const params = { page, per_page: 6, search: search || undefined, status: status || undefined, email_type: emailType || undefined }
       const res = await fetchEmailLogs(params)
       setLogs(res.data || [])
-      setMeta({ current_page: res.current_page || 1, per_page: res.per_page || 25, total: res.total || 0 })
+      setMeta({ current_page: res.current_page || 1, per_page: res.per_page || 6, total: res.total || 0 })
       const s = await fetchEmailLogStats()
       setStats(s)
     } catch (err) {
@@ -110,7 +110,7 @@ function AdminEmailLogsPage() {
         </DataTable>
 
         {meta.total > 0 && (
-          <PaginationBar page={meta.current_page} perPage={meta.per_page} total={meta.total} onPage={setPage} onPerPage={() => {}} perPageOptions={[25]} />
+          <PaginationBar page={meta.current_page} perPage={meta.per_page} total={meta.total} onPage={setPage} />
         )}
       </div>
     </>

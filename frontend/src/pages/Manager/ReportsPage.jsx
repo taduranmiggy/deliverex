@@ -69,7 +69,7 @@ function ReportsPage() {
   const loadAnalytics = useCallback(async () => {
     setLoading(true)
     try {
-      setAnalytics(await fetchAnalytics({ drivers_page: 1, drivers_per_page: 100 }))
+      setAnalytics(await fetchAnalytics({ drivers_page: 1, drivers_per_page: 6 }))
     } catch { /* silent */ }
     finally { setLoading(false) }
   }, [])
@@ -77,7 +77,7 @@ function ReportsPage() {
   const loadAuditTrails = useCallback(async (p = 1) => {
     setLoading(true); setError('')
     try {
-      const res = await fetchAssignmentAuditTrails({ page: p, per_page: 20 })
+      const res = await fetchAssignmentAuditTrails({ page: p, per_page: 6 })
       setAuditTrails(res.data || [])
       setAuditMeta({ last_page: res.last_page ?? 1, total: res.total ?? 0 })
     } catch (err) { setError(err.message) }

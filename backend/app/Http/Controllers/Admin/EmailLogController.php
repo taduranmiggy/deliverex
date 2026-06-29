@@ -47,7 +47,7 @@ class EmailLogController extends Controller
             $query->where('user_id', $userId);
         }
 
-        $perPage = min(100, max(10, (int) $request->query('per_page', 25)));
+        $perPage = min(100, max(1, (int) $request->query('per_page', 6)));
 
         return response()->json($query->paginate($perPage));
     }

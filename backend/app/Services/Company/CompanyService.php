@@ -29,12 +29,9 @@ class CompanyService
             'contact_person' => $data['contact_person'] ?? null,
             'contact_number' => $data['contact_number'] ?? null,
             'address' => $data['address'] ?? null,
-            'status' => Company::STATUS_PENDING,
+            'status' => Company::STATUS_ACTIVE,
             'created_by' => $admin->id,
         ]);
-
-        $token = $company->issueActivationToken(72);
-        $this->sendActivationEmail($company, $token);
 
         return $company->fresh();
     }

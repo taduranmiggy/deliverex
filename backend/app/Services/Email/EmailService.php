@@ -136,6 +136,23 @@ class EmailService
         );
     }
 
+    public function sendUserInvitation(User $user, string $inviteUrl): EmailLog
+    {
+        return $this->send(
+            EmailType::USER_INVITATION,
+            $user->email,
+            'You have been invited to Deliverex',
+            'mail.user-invitation',
+            [
+                'user' => $user,
+                'inviteUrl' => $inviteUrl,
+                'subject' => 'You have been invited to Deliverex',
+            ],
+            config('mail.addresses.accounts'),
+            userId: $user->id,
+        );
+    }
+
     public function sendPasswordReset(User $user, string $resetUrl): EmailLog
     {
         return $this->send(
@@ -248,7 +265,8 @@ class EmailService
         return match ($type) {
             EmailType::COMPANY_ACTIVATION,
             EmailType::COMPANY_INVITATION,
-            EmailType::DRIVER_CREDENTIALS => config('mail.addresses.accounts'),
+            EmailType::DRIVER_CREDENTIALS,
+            EmailType::USER_INVITATION => config('mail.addresses.accounts'),
             EmailType::CONTACT_SUPPORT,
             EmailType::SUPPORT_INQUIRY => config('mail.addresses.support'),
             default => config('mail.addresses.noreply'),

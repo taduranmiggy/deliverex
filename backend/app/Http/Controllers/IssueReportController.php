@@ -25,7 +25,7 @@ class IssueReportController extends Controller
             $query->where('created_at', '>=', now()->subDays(30));
         }
 
-        $paginated = $query->paginate(20);
+        $paginated = $query->paginate(max(1, min(100, (int) $request->query('per_page', 6))));
 
         $paginated->getCollection()->transform(fn (DeliveryIssueReport $report) => $this->formatReport($report));
 

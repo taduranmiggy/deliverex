@@ -399,7 +399,7 @@ function MaterialsAccordion({ materials, specsGrouped, search, page, perPage, on
 }
 
 // ─── Page ───────────────────────────────────────────────────────────────────────
-const DEFAULT_PER_PAGE = 10
+const DEFAULT_PER_PAGE = 6
 
 function AdminMasterDataPage() {
   const [tab, setTab]       = useState('material-types')
@@ -411,7 +411,7 @@ function AdminMasterDataPage() {
   const [modal, setModal]   = useState(null)
   // Pagination
   const [page, setPage]     = useState(1)
-  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE)
+  const [perPage] = useState(DEFAULT_PER_PAGE)
   const [data, setData]     = useState({
     material_types: [], material_specifications: [],
     clients: [], quarries: [], vehicle_types: [],
@@ -726,7 +726,6 @@ function AdminMasterDataPage() {
             perPage={perPage}
             total={paginationTotal}
             onPage={setPage}
-            onPerPage={(n) => { setPerPage(n); setPage(1) }}
           />
         )}
       </div>

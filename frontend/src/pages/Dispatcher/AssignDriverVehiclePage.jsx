@@ -11,8 +11,6 @@ import { formatJobSchedule } from '../../utils/driverAssignment'
 import { PaginationBar } from '../../components/ui'
 import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-react'
 
-const ALT_PER_PAGE_OPTIONS = [3, 5, 10, 15]
-
 // ─── Priority helpers ──────────────────────────────────────────────────────────
 const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 }
 
@@ -231,7 +229,7 @@ function AssignDriverVehiclePage() {
   const [manualVehicleId, setManualVehicleId] = useState('')
   const [overrideTab, setOverrideTab] = useState('suggested')
   const [altPage, setAltPage] = useState(1)
-  const [altPerPage, setAltPerPage] = useState(5)
+  const [altPerPage] = useState(6)
 
   const location = useLocation()
   const preselectJobId = location.state?.jobOrderId ?? null
@@ -603,8 +601,6 @@ function AssignDriverVehiclePage() {
                   perPage={altPerPage}
                   total={alternatives.length}
                   onPage={setAltPage}
-                  onPerPage={(n) => { setAltPerPage(n); setAltPage(1) }}
-                  perPageOptions={ALT_PER_PAGE_OPTIONS}
                 />
               )}
             </>

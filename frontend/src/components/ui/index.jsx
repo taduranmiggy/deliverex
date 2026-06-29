@@ -287,19 +287,17 @@ export function DataTable({ headers, children, loading, empty, mobileCards = fal
 }
 
 /* ─── PaginationBar ─────────────────────────────────────────── */
-const PER_PAGE_OPTIONS_DEFAULT = [10, 25, 50, 100]
+export const TABLE_PAGE_SIZE = 6
 
 /**
  * Universal pagination footer.
  * Props:
  *   page, perPage, total — numbers
  *   onPage(n)            — called when user navigates to page n
- *   onPerPage(n)         — called when user changes rows-per-page
- *   perPageOptions       — array of integers (default [10, 25, 50, 100])
+ *   onPerPage(n)         — optional (legacy signature, no selector rendered)
  */
 export function PaginationBar({
-  page, perPage, total, onPage, onPerPage,
-  perPageOptions = PER_PAGE_OPTIONS_DEFAULT,
+  page, perPage = TABLE_PAGE_SIZE, total, onPage,
 }) {
   const totalPages  = Math.max(1, Math.ceil(total / perPage))
   const from        = total === 0 ? 0 : (page - 1) * perPage + 1
@@ -310,18 +308,6 @@ export function PaginationBar({
 
   return (
     <div className="dx-pagination-bar">
-      {/* Per-page selector */}
-      <div className="dx-pagination-bar__perpage">
-        <span className="dx-pagination-bar__label">Rows per page:</span>
-        <select
-          value={perPage}
-          onChange={(e) => onPerPage(Number(e.target.value))}
-          className="dx-pagination-bar__pp-select"
-        >
-          {perPageOptions.map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
-      </div>
-
       {/* Showing X–Y of Z */}
       <span className="dx-pagination-bar__info">
         {total === 0

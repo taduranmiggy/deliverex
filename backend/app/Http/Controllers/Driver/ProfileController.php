@@ -38,7 +38,7 @@ class ProfileController extends Controller
             ->whereIn('status', ['completed', 'cancelled'])
             ->orderByDesc('completed_at')
             ->orderByDesc('id')
-            ->paginate(10, ['*'], 'history_page', $historyPage);
+            ->paginate(6, ['*'], 'history_page', $historyPage);
 
         $baseQuery = DispatchAssignment::query()->where('driver_id', $driver->id);
         $stats = [

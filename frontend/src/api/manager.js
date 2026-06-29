@@ -12,7 +12,7 @@ export function fetchAnalytics(params = {}) {
 }
 
 export function fetchReports(page = 1, status = '') {
-  const qs = new URLSearchParams({ page })
+  const qs = new URLSearchParams({ page, per_page: 6 })
   if (status) qs.set('status', status)
   return apiRequest(`/manager/reports?${qs.toString()}`)
 }

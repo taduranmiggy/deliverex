@@ -27,7 +27,7 @@ class AssignmentAuditController extends Controller
             $query->where('job_order_id', $request->integer('job_order_id'));
         }
 
-        $paginated = $query->paginate($request->integer('per_page', 20));
+        $paginated = $query->paginate(max(1, min(100, (int) $request->integer('per_page', 6))));
 
         $paginated->getCollection()->transform(fn (AssignmentAuditTrail $trail) => $this->formatTrail($trail));
 

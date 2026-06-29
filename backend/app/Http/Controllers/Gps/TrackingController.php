@@ -10,7 +10,7 @@ class TrackingController extends Controller
     public function show(DispatchAssignment $assignment)
     {
         return response()->json(
-            $assignment->trackingLogs()->latest('captured_at')->paginate(50)
+            $assignment->trackingLogs()->latest('captured_at')->paginate(6)
         );
     }
 }

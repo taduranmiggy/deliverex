@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createUser, deleteUser, fetchRoles, fetchUsers, updateUser } from '../../api/admin'
+import { createUser, deleteUser, fetchCompanies, fetchRoles, fetchUsers, sendUserInvite, updateUser } from '../../api/admin'
+import CompanyCombobox from '../../components/CompanyCombobox'
 import PhonePhInput from '../../components/PhonePhInput'
 import UserNameFields from '../../components/UserNameFields'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
 import { composeFullName, splitFullName, validateNameParts } from '../../utils/nameParts'
-import { generateInitialPassword, validateGeneratedPassword } from '../../utils/generateInitialPassword'
 import { parsePhoneForInput, validatePhPhone } from '../../utils/phonePh'
 import { Plus, Users } from 'lucide-react'
 
-const INTERNAL_ROLE_NAMES = ['admin', 'dispatcher', 'manager', 'driver']
+const PAGE_SIZE = 6
 
 const ROLE_TABS = [
   { value: 'all',        label: 'All' },
@@ -21,6 +21,7 @@ const ROLE_TABS = [
 
 const STATUS_OPTS = [
   { value: 'all',      label: 'All Statuses' },
+  { value: 'pending',  label: 'Pending' },
   { value: 'active',   label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
 ]
@@ -42,6 +43,8 @@ function buildEditForm(user) {
     password: '',
     role_id: user?.role_id ?? user?.role?.id ?? '',
     status: user?.status ?? 'active',
+    company_id: user?.company_id ?? '',
+    company_role: user?.company_role ?? 'owner',
   }
 }
 
@@ -53,16 +56,38 @@ function buildCreateForm() {
     email: '',
     phone: '',
     role_id: '',
+    company_id: '',
+    company_role: 'owner',
   }
 }
 
-function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
+function UserModal({ user, roles, companies, existingUsers, onClose, onSaved }) {
   const isEdit = Boolean(user?.id)
-  const assignableRoles = roles.filter((r) => INTERNAL_ROLE_NAMES.includes(r.name?.toLowerCase()))
+  const roleNameById = useMemo(
+    () => Object.fromEntries((roles || []).map((r) => [String(r.id), r.name?.toLowerCase()])),
+    [roles],
+  )
+  const assignableRoles = roles
+    .filter((r) => ['admin', 'dispatcher', 'manager', 'driver', 'customer'].includes(r.name?.toLowerCase()))
+    .sort((a, b) => {
+      const order = ['admin', 'manager', 'dispatcher', 'driver', 'customer']
+      return order.indexOf(a.name?.toLowerCase()) - order.indexOf(b.name?.toLowerCase())
+    })
   const [form, setForm] = useState(isEdit ? buildEditForm(user) : buildCreateForm())
   const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [companyValue, setCompanyValue] = useState(() => {
+    if (!isEdit || !user?.company_id) return null
+    return {
+      type: 'existing',
+      companyId: user.company_id,
+      label: user.company_name || 'Not Assigned',
+    }
+  })
+
+  const selectedRoleName = roleNameById[String(form.role_id)] ?? ''
+  const isCustomerRole = selectedRoleName === 'customer'
 
   useEffect(() => {
     document.body.classList.add('dx-nav-locked')
@@ -76,7 +101,7 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
-  const validate = useCallback(() => {
+  const validate = () => {
     const errors = {
       ...validateNameParts(form),
     }
@@ -89,12 +114,8 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
     if (phoneErr) errors.phone = phoneErr
 
     if (!form.role_id) errors.role_id = 'Role is required.'
-
-    if (!isEdit) {
-      const pwd = generateInitialPassword(form.last_name, parsePhoneForInput(form.phone))
-      const pwdErr = validateGeneratedPassword(pwd)
-      if (pwdErr) errors._password = pwdErr
-    } else if (form.password && form.password.length < 8) {
+    if (isCustomerRole && !form.company_id) errors.company_id = 'Company is required for Customer accounts.'
+    if (isEdit && form.password && form.password.length < 8) {
       errors.password = 'Password must be at least 8 characters.'
     }
 
@@ -108,7 +129,7 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
     }
 
     return errors
-  }, [form, isEdit, existingUsers, user?.id])
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -126,11 +147,14 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
       role_id: form.role_id,
     }
 
+    if (isCustomerRole) {
+      payload.company_id = form.company_id
+      payload.company_role = form.company_role
+    }
+
     if (isEdit) {
       payload.status = form.status
       if (form.password) payload.password = form.password
-    } else {
-      payload.password = generateInitialPassword(form.last_name, parsePhoneForInput(form.phone))
     }
 
     try {
@@ -207,12 +231,12 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
 
           {!isEdit && (
             <p style={{ gridColumn: '1/-1', margin: 0, fontSize: '0.8125rem', color: 'var(--muted)', lineHeight: 1.5 }}>
-              Initial password is generated automatically as <strong>LastName_last4</strong> of the phone number (e.g. Cruz_4567). New accounts default to <strong>Active</strong>.
+              Submitting creates a pending invitation and sends the user an email to set their own password. New accounts stay <strong>Pending</strong> until accepted.
             </p>
           )}
 
           <p style={{ gridColumn: '1/-1', margin: 0, fontSize: '0.8125rem', color: 'var(--muted)' }}>
-            B2B customer accounts are created in <strong>Company Management</strong>. Fleet drivers from Master Data can also use <strong>Generate Account</strong> for auto-linked logins.
+            User Management is the single provisioning module for all account roles.
           </p>
 
           <label>
@@ -230,24 +254,53 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
             {fieldErrors.role_id && <span className="form-error">{fieldErrors.role_id}</span>}
           </label>
 
+          {isCustomerRole && (
+            <>
+              <label style={{ gridColumn: '1/-1' }}>
+                Company <span className="dx-required">*</span>
+                <CompanyCombobox
+                  companies={companies}
+                  value={companyValue}
+                  onChange={(next) => {
+                    setCompanyValue(next)
+                    setForm((f) => ({ ...f, company_id: next?.companyId ?? '' }))
+                  }}
+                  disabled={saving}
+                  error={fieldErrors.company_id}
+                />
+                {fieldErrors.company_id && <span className="form-error">{fieldErrors.company_id}</span>}
+              </label>
+              <label>
+                Customer role in company
+                <select
+                  value={form.company_role}
+                  onChange={set('company_role')}
+                  disabled={saving}
+                >
+                  <option value="owner">Owner</option>
+                  <option value="staff">Staff</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </label>
+            </>
+          )}
+
           {isEdit && (
             <label>
               Status
               <select value={form.status} onChange={set('status')} disabled={saving}>
+                <option value="pending">Pending</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
             </label>
           )}
 
-          {fieldErrors._password && (
-            <p className="notice error" style={{ margin: 0, gridColumn: '1/-1' }}>{fieldErrors._password}</p>
-          )}
           {error && <p className="notice error" style={{ margin: 0, gridColumn: '1/-1' }}>{error}</p>}
 
           <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button type="submit" className="btn-dx-primary" disabled={saving}>
-              {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create user'}
+              {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Submit'}
             </button>
             <button type="button" className="btn-dx-secondary" onClick={onClose} disabled={saving}>Cancel</button>
           </div>
@@ -260,29 +313,35 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
 function UserManagementPage() {
   const [users, setUsers]       = useState([])
   const [roles, setRoles]       = useState([])
+  const [companies, setCompanies] = useState([])
   const [error, setError]       = useState('')
   const [msg, setMsg]           = useState('')
   const [modal, setModal]       = useState(null)
   const [loading, setLoading]   = useState(false)
   const [search, setSearch]     = useState('')
   const [roleTab, setRoleTab]   = useState('all')
+  const [companyFilter, setCompanyFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage]         = useState(1)
-  const [perPage, setPerPage]   = useState(15)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const [res, rolesRes] = await Promise.all([fetchUsers(1, 500), fetchRoles()])
+      const [res, rolesRes, companiesRes] = await Promise.all([
+        fetchUsers(1, 500),
+        fetchRoles(),
+        fetchCompanies('status=active&per_page=500'),
+      ])
       setUsers(res.data || [])
       setRoles(rolesRes || [])
+      setCompanies(companiesRes?.data || [])
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [search, roleTab, statusFilter, perPage])
+  useEffect(() => { setPage(1) }, [search, roleTab, companyFilter, statusFilter])
 
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3500) }
 
@@ -306,6 +365,16 @@ function UserManagementPage() {
     catch (err) { setError(err.message) }
   }
 
+  const handleSendInvite = async (user) => {
+    try {
+      await sendUserInvite(user.id)
+      flash(`Invitation sent to ${user.email}.`)
+      load()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   const roleCounts = useMemo(() => {
     const counts = {}
     users.forEach((u) => {
@@ -321,17 +390,18 @@ function UserManagementPage() {
       const roleName = u.role?.name?.toLowerCase() ?? ''
       if (roleTab !== 'all' && roleName !== roleTab) return false
       if (statusFilter !== 'all' && u.status !== statusFilter) return false
+      if (companyFilter && (u.company_name || '').toLowerCase() !== companyFilter.toLowerCase()) return false
       if (q && !u.name?.toLowerCase().includes(q) && !u.email?.toLowerCase().includes(q)) return false
       return true
     })
-  }, [users, roleTab, statusFilter, search])
+  }, [users, roleTab, statusFilter, companyFilter, search])
 
   const pagedUsers = useMemo(
-    () => filtered.slice((page - 1) * perPage, page * perPage),
-    [filtered, page, perPage],
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page],
   )
 
-  const hasActiveFilters = roleTab !== 'all' || statusFilter !== 'all' || search
+  const hasActiveFilters = roleTab !== 'all' || statusFilter !== 'all' || companyFilter || search
 
   return (
     <>
@@ -384,12 +454,26 @@ function UserManagementPage() {
           >
             {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
+          <select
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            style={{
+              padding: '8px 12px', border: '1.5px solid var(--stroke)', borderRadius: 10,
+              font: 'inherit', fontSize: '0.875rem', background: 'var(--surface)',
+              color: 'var(--text)', cursor: 'pointer',
+            }}
+          >
+            <option value="">All Companies</option>
+            {companies.map((c) => (
+              <option key={c.id} value={c.company_name}>{c.company_name}</option>
+            ))}
+          </select>
           {hasActiveFilters && (
             <button
               type="button"
               className="btn-dx-secondary"
               style={{ fontSize: '0.8125rem', padding: '7px 12px' }}
-              onClick={() => { setSearch(''); setRoleTab('all'); setStatusFilter('all') }}
+              onClick={() => { setSearch(''); setRoleTab('all'); setStatusFilter('all'); setCompanyFilter('') }}
             >
               Clear filters
             </button>
@@ -402,7 +486,7 @@ function UserManagementPage() {
         </div>
 
         <DataTable
-          headers={['Name', 'Email', 'Role', 'Status', 'Actions']}
+          headers={['Name', 'Email', 'Company', 'Role', 'Status', 'Actions']}
           loading={loading}
           empty={
             <EmptyState
@@ -429,6 +513,9 @@ function UserManagementPage() {
                   </div>
                 </td>
                 <td style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>{user.email}</td>
+                <td style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+                  {user.role?.name === 'customer' ? (user.company_name || 'Not Assigned') : '—'}
+                </td>
                 <td>
                   <span style={{
                     padding: '3px 10px', borderRadius: 6,
@@ -439,13 +526,18 @@ function UserManagementPage() {
                     {user.role?.name ?? '—'}
                   </span>
                 </td>
-                <td><StatusBadge status={user.status === 'active' ? 'active' : 'inactive'} /></td>
+                <td><StatusBadge status={user.status} /></td>
                 <td>
                   <div className="dx-text-actions">
                     <button type="button" onClick={() => setModal({ user })}>Edit</button>
                     <button type="button" onClick={() => handleToggle(user)}>
                       {user.status === 'active' ? 'Deactivate' : 'Activate'}
                     </button>
+                    {user.can_send_invite && (
+                      <button type="button" onClick={() => handleSendInvite(user)}>
+                        Send Invite
+                      </button>
+                    )}
                     <button type="button" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(user)}>
                       Delete
                     </button>
@@ -459,10 +551,9 @@ function UserManagementPage() {
         {filtered.length > 0 && (
           <PaginationBar
             page={page}
-            perPage={perPage}
+            perPage={PAGE_SIZE}
             total={filtered.length}
             onPage={setPage}
-            onPerPage={(n) => { setPerPage(n); setPage(1) }}
           />
         )}
       </div>
@@ -471,6 +562,7 @@ function UserManagementPage() {
         <UserModal
           user={modal.user}
           roles={roles}
+          companies={companies}
           existingUsers={users}
           onClose={() => setModal(null)}
           onSaved={handleSaved}

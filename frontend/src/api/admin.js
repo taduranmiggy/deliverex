@@ -30,7 +30,7 @@ export function resendCompanyActivation(id) {
 }
 
 // ─── Fetch (list) ─────────────────────────────────────────────────────────────
-export function fetchUsers(page = 1, perPage = 15) { return apiRequest(`/admin/users?page=${page}&per_page=${perPage}`) }
+export function fetchUsers(page = 1, perPage = 6) { return apiRequest(`/admin/users?page=${page}&per_page=${perPage}`) }
 export function fetchDrivers(page = 1)     { return apiRequest(`/admin/drivers?page=${page}`) }
 export function fetchVehicles(page = 1)    { return apiRequest(`/admin/vehicles?page=${page}`) }
 export function fetchOcrQueue(page = 1, filter = 'all', params = {}) {
@@ -83,6 +83,7 @@ export function retryEmailLog(id) {
 // ─── Users ────────────────────────────────────────────────────────────────────
 export function createUser(payload)        { return apiRequest('/admin/users', { method: 'POST', body: JSON.stringify(payload) }) }
 export function updateUser(id, payload)    { return apiRequest(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }) }
+export function sendUserInvite(id)         { return apiRequest(`/admin/users/${id}/send-invite`, { method: 'POST' }) }
 export function deleteUser(id)             { return apiRequest(`/admin/users/${id}`, { method: 'DELETE' }) }
 
 // ─── Drivers ──────────────────────────────────────────────────────────────────
@@ -128,7 +129,7 @@ export function reprocessOcr(documentId)  {
 
 // ─── Inquiries ────────────────────────────────────────────────────────────────
 export function fetchInquiries(page = 1, status = 'all') {
-  return apiRequest(`/inquiries?page=${page}&status=${status}`)
+  return apiRequest(`/inquiries?page=${page}&status=${status}&per_page=6`)
 }
 export function markInquiryRead(id)        { return apiRequest(`/inquiries/${id}/read`, { method: 'PUT' }) }
 export function convertInquiry(id)         { return apiRequest(`/inquiries/${id}/convert`, { method: 'POST' }) }

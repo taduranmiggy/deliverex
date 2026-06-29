@@ -27,7 +27,9 @@ class CompanyController extends Controller
             });
         }
 
-        return response()->json($query->paginate(20));
+        $perPage = max(1, min(100, (int) $request->query('per_page', 6)));
+
+        return response()->json($query->paginate($perPage));
     }
 
     public function store(Request $request)
@@ -78,10 +80,8 @@ class CompanyController extends Controller
 
     public function resendActivation(Request $request, Company $company)
     {
-        $this->companies->resendActivation($company);
-
-        AuditLogger::record($request->user(), 'company.resend_activation', Company::class, $company->id, [], $request);
-
-        return response()->json(['message' => 'Activation email sent.']);
+        return response()->json([
+            'message' => 'Account invitations are now managed in User Management.',
+        ], 422);
     }
 }

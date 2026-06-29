@@ -1,13 +1,13 @@
 import { apiRequest } from './client'
 
-export function fetchJobOrders(page = 1)   { return apiRequest(`/dispatch/job-orders?page=${page}`) }
+export function fetchJobOrders(page = 1, perPage = 500)   { return apiRequest(`/dispatch/job-orders?page=${page}&per_page=${perPage}`) }
 export function fetchJobOrder(id)          { return apiRequest(`/dispatch/job-orders/${id}`) }
 
 export function fetchCalendarEvents(startIso, endIso) {
   const params = new URLSearchParams({ start: startIso, end: endIso })
   return apiRequest(`/dispatch/calendar?${params}`)
 }
-export function fetchAssignments(page = 1) { return apiRequest(`/dispatch/assignments?page=${page}`) }
+export function fetchAssignments(page = 1, perPage = 6) { return apiRequest(`/dispatch/assignments?page=${page}&per_page=${perPage}`) }
 
 export function createJobOrder(payload) {
   return apiRequest('/dispatch/job-orders', { method: 'POST', body: JSON.stringify(payload) })

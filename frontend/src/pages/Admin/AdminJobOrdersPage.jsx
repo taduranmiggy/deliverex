@@ -158,7 +158,7 @@ function AdminJobOrdersPage() {
   const [search, setSearch]     = useState('')
   const [status, setStatus]     = useState('all')
   const [page, setPage]         = useState(1)
-  const [perPage, setPerPage]   = useState(25)
+  const [perPage]   = useState(6)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -333,7 +333,6 @@ function AdminJobOrdersPage() {
               perPage={perPage}
               total={filtered.length}
               onPage={setPage}
-              onPerPage={(n) => { setPerPage(n); setPage(1) }}
             />
           )}
         </div>

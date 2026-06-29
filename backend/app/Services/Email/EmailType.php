@@ -10,6 +10,8 @@ final class EmailType
 
     public const DRIVER_CREDENTIALS = 'driver_credentials';
 
+    public const USER_INVITATION = 'user_invitation';
+
     public const PASSWORD_RESET = 'password_reset';
 
     public const EMAIL_VERIFICATION = 'email_verification';
@@ -45,6 +47,7 @@ final class EmailType
             self::COMPANY_ACTIVATION => 'Company Activation',
             self::COMPANY_INVITATION => 'Company User Invitation',
             self::DRIVER_CREDENTIALS => 'Driver Credentials',
+            self::USER_INVITATION => 'User Invitation',
             self::PASSWORD_RESET => 'Password Reset',
             self::EMAIL_VERIFICATION => 'Email Verification',
             self::DELIVERY_ASSIGNED => 'Delivery Assigned',

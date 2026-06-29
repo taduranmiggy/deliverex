@@ -31,6 +31,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'status',
         'must_change_password',
         'password_changed_at',
+        'invited_at',
+        'invitation_accepted_at',
+        'invite_send_count',
     ];
 
     /**
@@ -56,6 +59,8 @@ class User extends Authenticatable implements MustVerifyEmail
             'locked_until' => 'datetime',
             'must_change_password' => 'boolean',
             'password_changed_at' => 'datetime',
+            'invited_at' => 'datetime',
+            'invitation_accepted_at' => 'datetime',
         ];
     }
 

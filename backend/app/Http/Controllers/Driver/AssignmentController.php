@@ -13,12 +13,13 @@ class AssignmentController extends Controller
     public function index(Request $request)
     {
         $driver = DriverAccount::require($request->user());
+        $perPage = max(1, min(100, (int) $request->query('per_page', 6)));
 
         return response()->json(
             DispatchAssignment::with('jobOrder', 'vehicle')
                 ->where('driver_id', $driver->id)
                 ->latest()
-                ->paginate(20)
+                ->paginate($perPage)
                 ->through(fn (DispatchAssignment $assignment) => $this->withNextAction($assignment))
         );
     }

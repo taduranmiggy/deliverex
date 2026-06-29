@@ -31,8 +31,10 @@ class JobOrderController extends Controller
     ) {
     }
 
-    public function index()
+    public function index(Request $request)
     {
+        $perPage = max(1, min(100, (int) $request->query('per_page', 6)));
+
         return response()->json(
             JobOrder::with([
                 'creator',
@@ -45,7 +47,7 @@ class JobOrderController extends Controller
                 'assignments.driver.user',
                 'assignments.vehicle.vehicleType',
                 'assignments.deliveryDocuments' => fn ($q) => $q->where('type', 'departure'),
-            ])->latest()->paginate(20)
+            ])->latest()->paginate($perPage)
         );
     }
 

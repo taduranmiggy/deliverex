@@ -474,7 +474,7 @@ function OcrReviewPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [jobOrderIdFilter, setJobOrderIdFilter] = useState('')
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(10)
+  const [perPage] = useState(6)
   const [total, setTotal] = useState(0)
   const [isDatasetEditMode, setIsDatasetEditMode] = useState(false)
   const [editDrafts, setEditDrafts] = useState(buildEmptyDrafts)
@@ -1038,8 +1038,6 @@ function OcrReviewPage() {
               perPage={perPage}
               total={total}
               onPage={setPage}
-              onPerPage={(n) => { setPerPage(n); setPage(1) }}
-              perPageOptions={[5, 10, 25, 50]}
             />
           )}
         </div>

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Company;
+use App\Models\CompanyUser;
 use App\Models\Driver;
 use App\Models\Role;
 use App\Models\User;
@@ -31,9 +33,7 @@ class AdminUserManagementDriverTest extends TestCase
             'role_id' => $driverRole->id,
             'name' => 'Pedro Driver',
             'email' => 'pedro.driver@example.com',
-            'password' => 'password123',
             'phone' => '09171234567',
-            'status' => 'active',
         ]);
 
         $response->assertCreated()
@@ -46,13 +46,15 @@ class AdminUserManagementDriverTest extends TestCase
             'id' => $userId,
             'email' => 'pedro.driver@example.com',
             'phone' => '09171234567',
-            'status' => 'active',
+            'status' => 'pending',
         ]);
 
         $this->assertDatabaseHas('drivers', [
             'user_id' => $userId,
             'full_name' => 'Pedro Driver',
         ]);
+
+        $this->assertNotNull(User::query()->find($userId)?->invited_at);
     }
 
     public function test_admin_can_update_driver_user_via_user_management(): void
@@ -90,21 +92,58 @@ class AdminUserManagementDriverTest extends TestCase
         ]);
     }
 
-    public function test_customer_role_still_blocked_from_user_management(): void
+    public function test_admin_can_create_customer_user_with_company_membership(): void
     {
         $admin = $this->makeAdmin();
         $customerRole = Role::where('name', 'customer')->first();
+        $company = Company::query()->create([
+            'company_name' => 'ABC Construction',
+            'company_email' => 'abc@example.com',
+            'status' => Company::STATUS_ACTIVE,
+            'created_by' => $admin->id,
+        ]);
 
         $response = $this->actingAs($admin, 'sanctum')->postJson('/api/admin/users', [
             'role_id' => $customerRole->id,
             'name' => 'Customer User',
-            'email' => 'customer.blocked@example.com',
-            'password' => 'password123',
-            'status' => 'active',
+            'email' => 'customer.user@example.com',
+            'company_id' => $company->id,
+            'company_role' => CompanyUser::ROLE_OWNER,
         ]);
 
-        $response->assertStatus(422)
-            ->assertJsonValidationErrors(['role_id']);
+        $response->assertCreated()
+            ->assertJsonPath('role.name', 'customer')
+            ->assertJsonPath('company_id', $company->id)
+            ->assertJsonPath('company_name', 'ABC Construction')
+            ->assertJsonPath('status', 'pending');
+    }
+
+    public function test_admin_can_resend_invite_for_pending_user(): void
+    {
+        $admin = $this->makeAdmin();
+        $driverRole = Role::where('name', 'driver')->first();
+
+        $user = User::factory()->create([
+            'role_id' => $driverRole->id,
+            'name' => 'Pending Driver',
+            'email' => 'pending.driver@example.com',
+            'status' => 'pending',
+            'invited_at' => null,
+            'invite_send_count' => 0,
+        ]);
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/admin/users/{$user->id}/send-invite");
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'Invitation email sent.')
+            ->assertJsonPath('user.status', 'pending');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'status' => 'pending',
+            'invite_send_count' => 1,
+        ]);
     }
 
     private function makeAdmin(): User

@@ -77,7 +77,7 @@ const STATUS_OPTIONS_COMPLETED = [
   { value: 'completed', label: 'Completed' },
 ]
 
-const PAGE_SIZE = 15
+const PAGE_SIZE = 6
 
 // ─── Helper builders ──────────────────────────────────────────────────────────
 

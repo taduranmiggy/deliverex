@@ -88,6 +88,10 @@ class AuthController extends Controller
             'locked_until' => null,
         ])->save();
 
+        if (($user->status ?? 'active') === 'pending') {
+            return response()->json(['message' => 'Account invitation is pending. Check your email to activate your account.'], 403);
+        }
+
         if (($user->status ?? 'active') !== 'active') {
             return response()->json(['message' => 'Account is not active'], 403);
         }
@@ -304,6 +308,8 @@ class AuthController extends Controller
                     'password' => $password,
                     'must_change_password' => false,
                     'password_changed_at' => now(),
+                    'status' => 'active',
+                    'invitation_accepted_at' => now(),
                 ])->save();
             }
         );

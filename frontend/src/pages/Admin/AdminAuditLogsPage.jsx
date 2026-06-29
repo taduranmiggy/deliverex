@@ -30,7 +30,7 @@ const MODULE_COLORS = {
   System:         '#64748b',
 }
 
-const PER_PAGE_OPTIONS = [10, 25, 50]
+const PER_PAGE = 6
 
 /* ── Helpers ────────────────────────────────────────────────── */
 function escapeCsv(v) {
@@ -194,7 +194,7 @@ function AdminAuditLogsPage() {
   const [to, setTo]             = useState('')
   const [sort, setSort]         = useState('desc')
   const [page, setPage]         = useState(1)
-  const [perPage, setPerPage]   = useState(25)
+  const [perPage]   = useState(PER_PAGE)
   const [selected, setSelected] = useState(null)
   const [showExportSummary, setShowExportSummary] = useState(false)
 
@@ -245,7 +245,6 @@ function AdminAuditLogsPage() {
   const fromCount  = sorted.length === 0 ? 0 : (safePage - 1) * perPage + 1
   const toCount    = Math.min(safePage * perPage, sorted.length)
 
-  const handlePerPage = (n) => { setPerPage(n); setPage(1) }
   const handleSort = (dir) => { setSort(dir); setPage(1) }
 
   const exportSummary = useMemo(() => {
@@ -357,15 +356,6 @@ function AdminAuditLogsPage() {
               <ArrowUp size={13} /> Oldest
             </button>
 
-            {/* Per-page */}
-            <span style={{ fontSize: '0.8125rem', color: 'var(--muted)', fontWeight: 600, marginLeft: 8 }}>Rows:</span>
-            <select
-              value={perPage}
-              onChange={(e) => handlePerPage(Number(e.target.value))}
-              style={{ padding: '6px 10px', border: '1.5px solid var(--stroke)', borderRadius: 8, font: 'inherit', fontSize: '0.8125rem', background: 'var(--surface)' }}
-            >
-              {PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
           </div>
         </div>
 

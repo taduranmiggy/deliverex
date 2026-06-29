@@ -33,27 +33,9 @@ class CompanyUserController extends Controller
 
     public function store(Request $request)
     {
-        $membership = $this->requireOwner($request);
-
-        $data = $request->validate([
-            'name' => 'required|string|max:120',
-            'email' => 'required|email|max:255|unique:users,email',
-            'phone' => 'nullable|string|max:50',
-            'password' => 'required|string|min:8',
-            'role' => 'required|in:staff,viewer',
+        throw ValidationException::withMessages([
+            'role' => ['New user accounts are now provisioned by administrators in User Management.'],
         ]);
-
-        $company = $membership->company;
-        $plainPassword = $data['password'];
-        $created = $this->companies->createCompanyUser($company, $data);
-
-        try {
-            $this->email->sendCompanyInvitation($created->user, $company, $plainPassword);
-        } catch (\Throwable) {
-            // Logged in email_logs.
-        }
-
-        return response()->json($created->load('user'), 201);
     }
 
     public function update(Request $request, CompanyUser $companyUser)

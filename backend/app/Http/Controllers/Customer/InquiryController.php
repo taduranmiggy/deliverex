@@ -91,7 +91,9 @@ class InquiryController extends Controller
             $query->where('status', $status);
         }
 
-        return response()->json($query->paginate(25));
+        $perPage = max(1, min(100, (int) $request->query('per_page', 6)));
+
+        return response()->json($query->paginate($perPage));
     }
 
     /** Admin/Dispatcher: view single inquiry. */

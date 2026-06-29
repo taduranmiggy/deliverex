@@ -28,7 +28,7 @@ class OcrReviewController extends Controller
             ->orderByDesc('created_at');
         $this->applyFilters($query, $request);
 
-        $perPage = min(50, max(10, (int) $request->query('per_page', 20)));
+        $perPage = min(50, max(1, (int) $request->query('per_page', 6)));
 
         return response()->json(
             $query->paginate($perPage)->through(function (OcrResult $ocr) {

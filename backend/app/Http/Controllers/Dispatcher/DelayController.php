@@ -27,7 +27,7 @@ class DelayController extends Controller
             $query->where('assignment_id', $request->integer('assignment_id'));
         }
 
-        return response()->json($query->paginate(20));
+        return response()->json($query->paginate(max(1, min(100, (int) $request->query('per_page', 6)))));
     }
 
     public function acknowledge(Request $request, DeliveryDelayReport $delayReport)

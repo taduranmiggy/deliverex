@@ -12,7 +12,7 @@ class NotificationController extends Controller
         return response()->json(
             NotificationLog::where('user_id', $request->user()?->id)
                 ->latest()
-                ->paginate(20)
+                ->paginate(max(1, min(100, (int) $request->query('per_page', 6))))
         );
     }
 

@@ -44,6 +44,8 @@ class ReportsController extends Controller
             }
         }
 
-        return response()->json($query->latest()->paginate(20));
+        $perPage = max(1, min(100, (int) $request->query('per_page', 6)));
+
+        return response()->json($query->latest()->paginate($perPage));
     }
 }

@@ -30,7 +30,7 @@ class AnalyticsController extends Controller
         $toDate   = $to   ? Carbon::parse($to)->endOfDay()     : now()->endOfDay();
 
         $driversPage = max(1, (int) $request->query('drivers_page', 1));
-        $driversPerPage = min(50, max(5, (int) $request->query('drivers_per_page', 10)));
+        $driversPerPage = min(50, max(1, (int) $request->query('drivers_per_page', 6)));
 
         // --- Job order summary ---
         $baseJobs = JobOrder::whereBetween('created_at', [$fromDate, $toDate]);

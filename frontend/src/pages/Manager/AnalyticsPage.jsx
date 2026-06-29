@@ -53,7 +53,7 @@ function AnalyticsPage() {
   const [to, setTo] = useState(today.toISOString().slice(0, 10))
   const [status, setStatus] = useState('')
   const [driversPage, setDriversPage] = useState(1)
-  const [driversPerPage, setDriversPerPage] = useState(10)
+  const driversPerPage = 6
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -93,18 +93,6 @@ function AnalyticsPage() {
       status: status || undefined,
       drivers_page: page,
       drivers_per_page: driversPerPage,
-    })
-  }
-
-  const handleDriversPerPage = (perPage) => {
-    setDriversPerPage(perPage)
-    setDriversPage(1)
-    load({
-      from,
-      to,
-      status: status || undefined,
-      drivers_page: 1,
-      drivers_per_page: perPage,
     })
   }
 
@@ -322,8 +310,6 @@ function AnalyticsPage() {
             perPage={driversPagination.per_page}
             total={driversPagination.total}
             onPage={handleDriversPage}
-            onPerPage={handleDriversPerPage}
-            perPageOptions={[10, 25, 50]}
           />
         )}
       </SectionCard>

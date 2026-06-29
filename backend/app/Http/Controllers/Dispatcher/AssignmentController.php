@@ -26,8 +26,10 @@ class AssignmentController extends Controller
     ) {
     }
 
-    public function index()
+    public function index(Request $request)
     {
+        $perPage = max(1, min(100, (int) $request->query('per_page', 6)));
+
         return response()->json(
             DispatchAssignment::with([
                 'jobOrder',
@@ -38,7 +40,7 @@ class AssignmentController extends Controller
                 'deliveryDocuments' => fn ($q) => $q->where('type', 'departure'),
             ])
                 ->latest()
-                ->paginate(20)
+                ->paginate($perPage)
         );
     }
 

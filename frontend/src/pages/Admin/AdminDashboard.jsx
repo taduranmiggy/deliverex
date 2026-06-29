@@ -18,14 +18,14 @@ const MODULE_COLORS = {
   System: 'var(--muted)',
 }
 
-const ACTIVITY_PER_PAGE_OPTIONS = [5, 8, 10, 15]
+const ACTIVITY_PER_PAGE = 6
 
 function AdminDashboard() {
   const [summary, setSummary] = useState({ users: 0, drivers: 0, vehicles: 0, ocr: 0 })
   const [activity, setActivity] = useState([])
-  const [activityMeta, setActivityMeta] = useState({ current_page: 1, per_page: 8, total: 0 })
+  const [activityMeta, setActivityMeta] = useState({ current_page: 1, per_page: ACTIVITY_PER_PAGE, total: 0 })
   const [activityPage, setActivityPage] = useState(1)
-  const [activityPerPage, setActivityPerPage] = useState(8)
+  const activityPerPage = ACTIVITY_PER_PAGE
   const [activitySort, setActivitySort] = useState('desc')
   const [activityLoading, setActivityLoading] = useState(false)
   const [error, setError] = useState('')
@@ -80,11 +80,6 @@ function AdminDashboard() {
 
   const handleActivitySort = (dir) => {
     setActivitySort(dir)
-    setActivityPage(1)
-  }
-
-  const handleActivityPerPage = (n) => {
-    setActivityPerPage(n)
     setActivityPage(1)
   }
 
@@ -170,8 +165,6 @@ function AdminDashboard() {
               perPage={activityMeta.per_page}
               total={activityMeta.total}
               onPage={setActivityPage}
-              onPerPage={handleActivityPerPage}
-              perPageOptions={ACTIVITY_PER_PAGE_OPTIONS}
             />
           )}
         </SectionCard>
