@@ -759,6 +759,11 @@
   color: var(--slate-700);
 }
 
+.dx-field-label {
+  display: block;
+  line-height: 1.35;
+}
+
 .form-label {
   font-size: 0.875rem;
   font-weight: 600;

@@ -4,7 +4,7 @@ const PH_MOBILE_DIGITS = /^9\d{9}$/
 export function extractPhMobileDigits(value) {
   let digits = String(value ?? '').replace(/\D/g, '')
 
-  if (digits.startsWith('63') && digits.length >= 12) {
+  if (digits.startsWith('63') && digits.length > 2) {
     digits = digits.slice(2)
   }
   if (digits.startsWith('0') && digits.length === 11) {

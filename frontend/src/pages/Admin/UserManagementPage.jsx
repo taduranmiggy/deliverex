@@ -190,7 +190,7 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
           />
 
           <label style={{ gridColumn: '1/-1' }}>
-            Email <span className="dx-required">*</span>
+            <span className="dx-field-label">Email <span className="dx-required">*</span></span>
             <input
               required
               type="email"
@@ -203,7 +203,9 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
           </label>
 
           <label style={{ gridColumn: '1/-1' }}>
-            Phone {!isEdit && <span className="dx-required">*</span>}
+            <span className="dx-field-label">
+              Phone {!isEdit && <span className="dx-required">*</span>}
+            </span>
             <PhonePhInput
               value={form.phone}
               onChange={(phone) => setForm((f) => ({ ...f, phone }))}
@@ -216,7 +218,7 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
 
           {isEdit && (
             <label style={{ gridColumn: '1/-1' }}>
-              New password
+              <span className="dx-field-label">New password</span>
               <input
                 type="password"
                 minLength={8}
@@ -241,7 +243,7 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
           </p>
 
           <label>
-            Role <span className="dx-required">*</span>
+            <span className="dx-field-label">Role <span className="dx-required">*</span></span>
             <select
               required
               value={form.role_id}
@@ -257,7 +259,7 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
 
           {isCustomerRole && !isEdit && (
             <label style={{ gridColumn: '1/-1' }}>
-              Company name <span className="dx-required">*</span>
+              <span className="dx-field-label">Company name <span className="dx-required">*</span></span>
               <input
                 required
                 value={form.new_company?.company_name ?? ''}
@@ -290,14 +292,14 @@ function UserModal({ user, roles, existingUsers, onClose, onSaved }) {
 
           {isCustomerRole && isEdit && (
             <label style={{ gridColumn: '1/-1' }}>
-              Company
+              <span className="dx-field-label">Company</span>
               <input value={user?.company_name || 'Not assigned'} disabled readOnly />
             </label>
           )}
 
           {isEdit && (
             <label>
-              Status
+              <span className="dx-field-label">Status</span>
               <select value={form.status} onChange={set('status')} disabled={saving}>
                 <option value="pending">Pending</option>
                 <option value="active">Active</option>
