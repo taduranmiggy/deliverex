@@ -8,6 +8,7 @@ use App\Models\DispatchAssignment;
 use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Vehicle;
+use App\Services\Performance\DriverPerformanceScoringService;
 use App\Support\DeliveryStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -15,6 +16,10 @@ use Illuminate\Support\Facades\DB;
 
 class AnalyticsController extends Controller
 {
+    public function __construct(private DriverPerformanceScoringService $scoringService)
+    {
+    }
+
     public function index(Request $request)
     {
         $from   = $request->query('from');
@@ -23,6 +28,9 @@ class AnalyticsController extends Controller
 
         $fromDate = $from ? Carbon::parse($from)->startOfDay() : now()->subDays(30)->startOfDay();
         $toDate   = $to   ? Carbon::parse($to)->endOfDay()     : now()->endOfDay();
+
+        $driversPage = max(1, (int) $request->query('drivers_page', 1));
+        $driversPerPage = min(50, max(5, (int) $request->query('drivers_per_page', 10)));
 
         // --- Job order summary ---
         $baseJobs = JobOrder::whereBetween('created_at', [$fromDate, $toDate]);
@@ -58,43 +66,49 @@ class AnalyticsController extends Controller
             ? round(($assignedVehicles / $totalVehicles) * 100, 1)
             : 0;
 
-        // --- Driver performance ---
-        $drivers = Driver::with('user')->get();
-        $driverStats = $drivers->map(function (Driver $driver) use ($fromDate, $toDate) {
-            $base = DispatchAssignment::where('driver_id', $driver->id)
-                ->whereBetween('created_at', [$fromDate, $toDate]);
+        // --- Driver performance (scored + paginated) ---
+        $availabilityById = Driver::pluck('availability', 'id');
+        $scored = $this->scoringService->scoreAll($fromDate, $toDate, 5);
 
-            $total     = (clone $base)->count();
-            $completed = (clone $base)->where('status', 'completed')->count();
-
-            // On-time: completed before or on scheduled_end
-            $onTime = (clone $base)
-                ->where('status', 'completed')
-                ->whereHas('jobOrder', fn ($q) => $q->whereNotNull('scheduled_end'))
-                ->whereRaw('dispatch_assignments.completed_at <= (SELECT scheduled_end FROM job_orders WHERE job_orders.id = dispatch_assignments.job_order_id)')
-                ->count();
-
-            $onTimePct = $completed > 0 ? round(($onTime / $completed) * 100, 1) : null;
+        $driverStats = $scored['drivers']->map(function (array $row) use ($availabilityById) {
+            $completedCount = (int) ($row['breakdown']['completed_deliveries'] ?? 0);
+            $totalAssignments = (int) ($row['total_assignments'] ?? 0);
 
             return [
-                'id'          => $driver->id,
-                'name'        => $driver->user?->name ?? '—',
-                'total'       => $total,
-                'completed'   => $completed,
-                'on_time'     => $onTime,
-                'on_time_pct' => $onTimePct,
-                'availability'=> $driver->availability,
+                'id'                 => $row['id'],
+                'name'               => $row['name'],
+                'reliability_score'  => $row['reliability_score'],
+                'total'              => $totalAssignments,
+                'completed'          => $completedCount,
+                'completion_pct'     => $totalAssignments > 0
+                    ? round(($completedCount / $totalAssignments) * 100, 1)
+                    : null,
+                'on_time_pct'        => $row['breakdown']['on_time_pct'] ?? null,
+                'delay_rate_pct'     => $row['breakdown']['delay_rate_pct'] ?? null,
+                'ocr_accuracy_pct'   => $row['breakdown']['ocr_accuracy_pct'] ?? null,
+                'issue_reports'      => $row['breakdown']['issue_reports'] ?? 0,
+                'availability'       => $availabilityById[$row['id']] ?? 'unknown',
             ];
-        })->sortByDesc('completed')->values();
+        })->sortByDesc('reliability_score')->values();
 
-        // --- Daily completed (last 14 days within range) ---
-        $dailyStats = DispatchAssignment::where('status', 'completed')
+        $driversTotal = $driverStats->count();
+        $driversLastPage = max(1, (int) ceil($driversTotal / $driversPerPage));
+        $driversPage = min($driversPage, $driversLastPage);
+
+        $paginatedDrivers = $driverStats
+            ->slice(($driversPage - 1) * $driversPerPage, $driversPerPage)
+            ->values();
+
+        // --- Daily completed deliveries (filled date series) ---
+        $dailyRaw = DispatchAssignment::where('status', 'completed')
             ->whereBetween('completed_at', [$fromDate, $toDate])
             ->select(DB::raw('DATE(completed_at) as date'), DB::raw('COUNT(*) as count'))
             ->groupBy(DB::raw('DATE(completed_at)'))
             ->orderBy('date')
             ->get()
-            ->map(fn ($row) => ['date' => $row->date, 'count' => (int) $row->count]);
+            ->keyBy('date');
+
+        $dailyStats = $this->buildDailySeries($fromDate, $toDate, $dailyRaw);
 
         // --- Delay reason analytics ---
         $delayBase = DeliveryDelayReport::whereBetween('created_at', [$fromDate, $toDate]);
@@ -117,6 +131,7 @@ class AnalyticsController extends Controller
             ->get()
             ->map(fn ($row) => ['month' => $row->month, 'count' => (int) $row->count]);
 
+        $drivers = Driver::with('user')->get();
         $driverDelayRates = $drivers->map(function (Driver $driver) use ($fromDate, $toDate) {
             $totalAssignments = DispatchAssignment::where('driver_id', $driver->id)
                 ->whereBetween('created_at', [$fromDate, $toDate])
@@ -166,12 +181,13 @@ class AnalyticsController extends Controller
 
         return response()->json([
             'summary' => [
-                'total'       => $totalJobs,
-                'completed'   => $completed,
-                'in_progress' => $inProgress,
-                'pending'     => $pending,
-                'cancelled'   => $cancelled,
-                'delayed'     => $delayed,
+                'total'              => $totalJobs,
+                'completed'          => $completed,
+                'in_progress'        => $inProgress,
+                'pending'            => $pending,
+                'cancelled'          => $cancelled,
+                'delayed'            => $delayed,
+                'completion_rate_pct'=> $totalJobs > 0 ? round(($completed / $totalJobs) * 100, 1) : null,
             ],
             'fleet' => [
                 'total'           => $totalVehicles,
@@ -180,20 +196,63 @@ class AnalyticsController extends Controller
                 'maintenance'     => $maintenanceVehicles,
                 'utilization_pct' => $utilizationPct,
             ],
-            'drivers'      => $driverStats,
-            'daily_stats'  => $dailyStats,
-            'delays'       => [
-                'total_reports'        => (clone $delayBase)->count(),
-                'common_reasons'       => $commonDelayReasons,
-                'monthly_trends'       => $monthlyDelayTrends,
-                'driver_delay_rates'   => $driverDelayRates,
-                'vehicle_delay_rates'  => $vehicleDelayRates,
+            'drivers'             => $paginatedDrivers,
+            'drivers_pagination'  => [
+                'current_page' => $driversPage,
+                'per_page'     => $driversPerPage,
+                'total'        => $driversTotal,
+                'last_page'    => $driversLastPage,
             ],
-            'filters'      => [
+            'driver_performance'  => [
+                'period'            => $scored['period'],
+                'top_performers'    => $scored['top_performers'],
+                'lowest_performers' => $scored['lowest_performers'],
+            ],
+            'daily_stats'         => $dailyStats,
+            'charts'              => [
+                'job_status' => [
+                    ['name' => 'Completed', 'value' => $completed],
+                    ['name' => 'In Progress', 'value' => $inProgress],
+                    ['name' => 'Pending', 'value' => $pending],
+                    ['name' => 'Cancelled', 'value' => $cancelled],
+                    ['name' => 'Delayed', 'value' => $delayed],
+                ],
+            ],
+            'delays'              => [
+                'total_reports'       => (clone $delayBase)->count(),
+                'common_reasons'      => $commonDelayReasons,
+                'monthly_trends'      => $monthlyDelayTrends,
+                'driver_delay_rates'  => $driverDelayRates,
+                'vehicle_delay_rates' => $vehicleDelayRates,
+            ],
+            'filters'             => [
                 'from'   => $fromDate->toDateString(),
                 'to'     => $toDate->toDateString(),
                 'status' => $status,
             ],
         ]);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<string, object>  $dailyRaw
+     * @return list<array{date: string, label: string, count: int}>
+     */
+    private function buildDailySeries(Carbon $fromDate, Carbon $toDate, $dailyRaw): array
+    {
+        $series = [];
+        $cursor = $fromDate->copy()->startOfDay();
+        $end = $toDate->copy()->startOfDay();
+
+        while ($cursor->lte($end)) {
+            $dateKey = $cursor->toDateString();
+            $series[] = [
+                'date'  => $dateKey,
+                'label' => $cursor->format('M j'),
+                'count' => (int) ($dailyRaw->get($dateKey)?->count ?? 0),
+            ];
+            $cursor->addDay();
+        }
+
+        return $series;
     }
 }

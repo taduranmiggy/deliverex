@@ -1,73 +1,118 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchAnalytics } from '../../api/manager'
-import { DataTable, EmptyState, FilterSelect, PageHeader, SectionCard, StatCard, StatusBadge } from '../../components/ui'
-import { AlertTriangle, BarChart3, Car, CheckCircle2, Clock, TrendingDown, Truck, Users } from 'lucide-react'
+import {
+  DailyDeliveriesChart,
+  DelayReasonsChart,
+  FleetStatusChart,
+  JobStatusChart,
+  MonthlyDelayTrendChart,
+} from '../../components/analytics/AnalyticsCharts'
+import { DataTable, EmptyState, FilterSelect, PageHeader, PaginationBar, SectionCard, StatCard, StatusBadge } from '../../components/ui'
+import { AlertTriangle, Award, BarChart3, Car, CheckCircle2, Clock, TrendingDown, Truck, Users } from 'lucide-react'
 
-function BarChart({ data, labelKey = 'date', color = 'linear-gradient(180deg, #3b82f6, #1e40af)', formatLabel }) {
-  if (!data || data.length === 0) return <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.875rem' }}>No data for selected period.</p>
-  const max = Math.max(...data.map((d) => d.count), 1)
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 120, paddingBottom: 28, position: 'relative' }}>
-      {data.map((d) => {
-        const label = formatLabel ? formatLabel(d[labelKey]) : (
-          labelKey === 'date'
-            ? new Date(d[labelKey]).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })
-            : d[labelKey]
-        )
-        return (
-        <div key={d[labelKey]} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end', position: 'relative' }}>
-          <div title={`${d.count} — ${label}`} style={{ width: '100%', minHeight: 4, height: `${Math.max(4, Math.round((d.count / max) * 88))}px`, background: color, borderRadius: '4px 4px 0 0' }} />
-          <span style={{ position: 'absolute', bottom: 0, fontSize: '0.65rem', color: 'var(--muted)', whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {label}
-          </span>
-        </div>
-        )
-      })}
-    </div>
-  )
+function scoreColor(score) {
+  if (score >= 90) return 'var(--color-success)'
+  if (score >= 75) return 'var(--color-primary)'
+  if (score >= 60) return 'var(--color-warning)'
+  return 'var(--color-error)'
 }
 
-function ReasonList({ items }) {
-  if (!items?.length) return <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.875rem' }}>No delay reports for selected period.</p>
-  const max = Math.max(...items.map((i) => i.count), 1)
+function rateColor(pct, invert = false) {
+  if (pct == null) return 'var(--muted)'
+  const good = invert ? pct <= 10 : pct >= 90
+  const warn = invert ? pct <= 20 : pct >= 75
+  if (good) return 'var(--color-success)'
+  if (warn) return 'var(--color-warning)'
+  return 'var(--color-error)'
+}
+
+function DriverRankCard({ driver, rank }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {items.map((item) => (
-        <div key={item.reason}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem', marginBottom: 4 }}>
-            <span style={{ fontWeight: 600 }}>{item.label}</span>
-            <span style={{ color: 'var(--muted)' }}>{item.count}</span>
-          </div>
-          <div style={{ height: 8, borderRadius: 99, background: 'var(--slate-200)' }}>
-            <div style={{ height: '100%', borderRadius: 99, width: `${Math.round((item.count / max) * 100)}%`, background: 'linear-gradient(90deg, #f97316, #dc2626)' }} />
-          </div>
+    <div style={{ padding: '12px 14px', borderRadius: 12, border: '1px solid var(--stroke)', background: 'var(--surface, #fff)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ width: 26, height: 26, borderRadius: 8, background: 'var(--slate-100)', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '0.75rem', color: 'var(--muted)' }}>
+          {rank}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{driver.name}</p>
+          <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>
+            {driver.completed ?? driver.breakdown?.completed_deliveries ?? 0} completed
+          </p>
         </div>
-      ))}
+        <strong style={{ fontSize: '1.25rem', color: scoreColor(driver.reliability_score ?? 0) }}>
+          {driver.reliability_score ?? '—'}
+        </strong>
+      </div>
     </div>
   )
 }
 
 function AnalyticsPage() {
   const today = new Date()
-  const [from, setFrom]     = useState(new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10))
-  const [to, setTo]         = useState(today.toISOString().slice(0, 10))
+  const [from, setFrom] = useState(new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10))
+  const [to, setTo] = useState(today.toISOString().slice(0, 10))
   const [status, setStatus] = useState('')
-  const [data, setData]     = useState(null)
-  const [error, setError]   = useState('')
+  const [driversPage, setDriversPage] = useState(1)
+  const [driversPerPage, setDriversPerPage] = useState(10)
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const load = useCallback(async (params) => {
-    setLoading(true); setError('')
-    try { setData(await fetchAnalytics(params)) }
-    catch (err) { setError(err.message) }
-    finally { setLoading(false) }
+    setLoading(true)
+    setError('')
+    try {
+      setData(await fetchAnalytics(params))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  useEffect(() => { load({ from, to }) }, []) // eslint-disable-line
+  useEffect(() => {
+    load({ from, to, drivers_page: driversPage, drivers_per_page: driversPerPage })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const applyFilters = (page = 1) => {
+    setDriversPage(page)
+    load({
+      from,
+      to,
+      status: status || undefined,
+      drivers_page: page,
+      drivers_per_page: driversPerPage,
+    })
+  }
+
+  const handleDriversPage = (page) => {
+    setDriversPage(page)
+    load({
+      from,
+      to,
+      status: status || undefined,
+      drivers_page: page,
+      drivers_per_page: driversPerPage,
+    })
+  }
+
+  const handleDriversPerPage = (perPage) => {
+    setDriversPerPage(perPage)
+    setDriversPage(1)
+    load({
+      from,
+      to,
+      status: status || undefined,
+      drivers_page: 1,
+      drivers_per_page: perPage,
+    })
+  }
 
   const s = data?.summary ?? {}
   const fleet = data?.fleet ?? {}
   const drivers = data?.drivers ?? []
+  const driversPagination = data?.drivers_pagination ?? { current_page: 1, per_page: driversPerPage, total: 0, last_page: 1 }
+  const driverPerformance = data?.driver_performance ?? {}
   const delays = data?.delays ?? {}
   const driverDelayRates = delays.driver_delay_rates ?? []
   const vehicleDelayRates = delays.vehicle_delay_rates ?? []
@@ -77,7 +122,6 @@ function AnalyticsPage() {
       <PageHeader title="Analytics" subtitle="Deep insights into operations" />
       {error && <p className="notice error">{error}</p>}
 
-      {/* Filters */}
       <div className="dx-panel dx-panel-filters" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-end', marginBottom: 20 }}>
         <label style={{ display: 'grid', gap: 5, fontWeight: 600, fontSize: '0.8125rem' }}>
           From <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: '9px 12px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }} />
@@ -90,36 +134,69 @@ function AnalyticsPage() {
           { value: 'in_progress', label: 'In Progress' }, { value: 'pending', label: 'Pending' }, { value: 'cancelled', label: 'Cancelled' },
         ]} />
         <button type="button" className="btn-dx-primary" style={{ marginLeft: 'auto', alignSelf: 'flex-end' }}
-          onClick={() => load({ from, to, status: status || undefined })} disabled={loading}>
+          onClick={() => applyFilters(1)} disabled={loading}>
           {loading ? 'Loading…' : 'Apply Filters'}
         </button>
       </div>
 
-      {/* Summary stats */}
       <div className="dx-stat-row">
-        <StatCard label="Total Jobs"    value={s.total      ?? '—'} icon={BarChart3}     iconVariant="default" />
-        <StatCard label="Completed"     value={s.completed  ?? '—'} icon={CheckCircle2}  iconVariant="green" />
-        <StatCard label="In Progress"   value={s.in_progress ?? '—'} icon={Clock}        iconVariant="purple" />
-        <StatCard label="Delayed"       value={s.delayed    ?? '—'} icon={TrendingDown}  iconVariant={s.delayed > 0 ? 'red' : 'green'} />
-        <StatCard label="Fleet Util."   value={fleet.utilization_pct != null ? `${fleet.utilization_pct}%` : '—'} icon={Car} iconVariant="orange" />
+        <StatCard label="Total Jobs" value={s.total ?? '—'} icon={BarChart3} iconVariant="default" />
+        <StatCard label="Completed" value={s.completed ?? '—'} icon={CheckCircle2} iconVariant="green" />
+        <StatCard label="Completion Rate" value={s.completion_rate_pct != null ? `${s.completion_rate_pct}%` : '—'} icon={Award} iconVariant="green" />
+        <StatCard label="In Progress" value={s.in_progress ?? '—'} icon={Clock} iconVariant="purple" />
+        <StatCard label="Delayed" value={s.delayed ?? '—'} icon={TrendingDown} iconVariant={s.delayed > 0 ? 'red' : 'green'} />
+        <StatCard label="Fleet Util." value={fleet.utilization_pct != null ? `${fleet.utilization_pct}%` : '—'} icon={Car} iconVariant="orange" />
       </div>
 
-      <div className="dx-grid-sidebar" style={{ marginBottom: 20 }}>
+      <div className="dx-grid-2" style={{ marginBottom: 20 }}>
         <SectionCard title="Daily Completed Deliveries">
-          <BarChart data={data?.daily_stats} />
+          <DailyDeliveriesChart data={data?.daily_stats} />
         </SectionCard>
-        <SectionCard title="Fleet Overview">
-          {[
-            { label: 'Available',   value: fleet.available,    color: 'var(--color-success)' },
-            { label: 'Assigned',    value: fleet.assigned,     color: 'var(--color-primary)' },
-            { label: 'Maintenance', value: fleet.maintenance,  color: 'var(--color-warning)' },
-            { label: 'Total',       value: fleet.total,        color: 'var(--muted)' },
-          ].map(({ label, value, color }) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--stroke)', fontSize: '0.875rem' }}>
-              <span style={{ color: 'var(--muted)' }}>{label}</span>
-              <strong style={{ color }}>{value ?? '—'}</strong>
+        <SectionCard title="Job Status Breakdown">
+          <JobStatusChart data={data?.charts?.job_status} />
+        </SectionCard>
+      </div>
+
+      <div className="dx-grid-2" style={{ marginBottom: 20 }}>
+        <SectionCard title="Fleet Status">
+          <FleetStatusChart fleet={fleet} />
+        </SectionCard>
+        <SectionCard title="Top & Lowest Performers">
+          <div className="dx-grid-2" style={{ gap: 16 }}>
+            <div>
+              <p style={{ margin: '0 0 10px', fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Award size={14} /> Top performers
+              </p>
+              {(driverPerformance.top_performers ?? []).length === 0 ? (
+                <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.8125rem' }}>No scored drivers in period.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {driverPerformance.top_performers.map((driver, i) => (
+                    <DriverRankCard key={driver.id} driver={driver} rank={i + 1} />
+                  ))}
+                </div>
+              )}
             </div>
-          ))}
+            <div>
+              <p style={{ margin: '0 0 10px', fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <TrendingDown size={14} /> Needs attention
+              </p>
+              {(driverPerformance.lowest_performers ?? []).length === 0 ? (
+                <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.8125rem' }}>No scored drivers in period.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {driverPerformance.lowest_performers.map((driver, i) => (
+                    <DriverRankCard key={driver.id} driver={driver} rank={i + 1} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          {driverPerformance.period && (
+            <p style={{ marginTop: 12, fontSize: '0.75rem', color: 'var(--muted)' }}>
+              Scores based on {driverPerformance.period.from} – {driverPerformance.period.to}
+            </p>
+          )}
         </SectionCard>
       </div>
 
@@ -129,18 +206,10 @@ function AnalyticsPage() {
 
       <div className="dx-grid-2" style={{ marginBottom: 20 }}>
         <SectionCard title="Most Common Delay Reasons">
-          <ReasonList items={delays.common_reasons} />
+          <DelayReasonsChart items={delays.common_reasons} />
         </SectionCard>
         <SectionCard title="Monthly Delay Trends">
-          <BarChart
-            data={delays.monthly_trends}
-            labelKey="month"
-            color="linear-gradient(180deg, #f97316, #c2410c)"
-            formatLabel={(month) => {
-              const [y, m] = month.split('-')
-              return new Date(Number(y), Number(m) - 1).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
-            }}
-          />
+          <MonthlyDelayTrendChart data={delays.monthly_trends} />
         </SectionCard>
       </div>
 
@@ -158,7 +227,7 @@ function AnalyticsPage() {
                 <td>{d.delay_reports}</td>
                 <td>
                   {d.delay_rate_pct != null ? (
-                    <span style={{ fontWeight: 700, color: d.delay_rate_pct > 20 ? 'var(--color-error)' : d.delay_rate_pct > 10 ? 'var(--color-warning)' : 'var(--color-success)' }}>
+                    <span style={{ fontWeight: 700, color: rateColor(d.delay_rate_pct, true) }}>
                       {d.delay_rate_pct}%
                     </span>
                   ) : '—'}
@@ -184,7 +253,7 @@ function AnalyticsPage() {
                 <td>{v.delay_reports}</td>
                 <td>
                   {v.delay_rate_pct != null ? (
-                    <span style={{ fontWeight: 700, color: v.delay_rate_pct > 20 ? 'var(--color-error)' : v.delay_rate_pct > 10 ? 'var(--color-warning)' : 'var(--color-success)' }}>
+                    <span style={{ fontWeight: 700, color: rateColor(v.delay_rate_pct, true) }}>
                       {v.delay_rate_pct}%
                     </span>
                   ) : '—'}
@@ -197,11 +266,11 @@ function AnalyticsPage() {
 
       <SectionCard title="Driver Performance">
         <DataTable
-          headers={['Driver', 'Total Jobs', 'Completed', 'On-Time Rate', 'Availability']}
+          headers={['Driver', 'Score', 'Total Jobs', 'Completed', 'Completion', 'On-Time', 'Delay Rate', 'OCR Accuracy', 'Availability']}
           loading={loading}
-          empty={<EmptyState icon={Users} title="No driver data" message="No drivers found for the selected period." />}
+          empty={<EmptyState icon={Users} title="No driver data" message="No drivers with assignments found for the selected period." />}
         >
-          {drivers.length > 0 && drivers.map((d) => (
+          {drivers.map((d) => (
             <tr key={d.id}>
               <td>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -211,22 +280,52 @@ function AnalyticsPage() {
                   <span style={{ fontWeight: 600 }}>{d.name}</span>
                 </div>
               </td>
+              <td>
+                {d.reliability_score != null ? (
+                  <strong style={{ color: scoreColor(d.reliability_score) }}>{d.reliability_score}</strong>
+                ) : '—'}
+              </td>
               <td>{d.total}</td>
               <td>{d.completed}</td>
               <td>
+                {d.completion_pct != null ? (
+                  <span style={{ fontWeight: 700, color: rateColor(d.completion_pct) }}>{d.completion_pct}%</span>
+                ) : '—'}
+              </td>
+              <td>
                 {d.on_time_pct != null ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ flex: 1, height: 6, borderRadius: 99, background: 'var(--slate-200)', maxWidth: 80 }}>
-                      <div style={{ height: '100%', borderRadius: 99, width: `${d.on_time_pct}%`, background: d.on_time_pct >= 90 ? 'var(--color-success)' : d.on_time_pct >= 75 ? 'var(--color-warning)' : 'var(--color-error)' }} />
+                    <div style={{ flex: 1, height: 6, borderRadius: 99, background: 'var(--slate-200)', maxWidth: 72 }}>
+                      <div style={{ height: '100%', borderRadius: 99, width: `${d.on_time_pct}%`, background: rateColor(d.on_time_pct) }} />
                     </div>
                     <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>{d.on_time_pct}%</span>
                   </div>
+                ) : '—'}
+              </td>
+              <td>
+                {d.delay_rate_pct != null ? (
+                  <span style={{ fontWeight: 700, color: rateColor(d.delay_rate_pct, true) }}>{d.delay_rate_pct}%</span>
+                ) : '—'}
+              </td>
+              <td>
+                {d.ocr_accuracy_pct != null ? (
+                  <span style={{ fontWeight: 700, color: rateColor(d.ocr_accuracy_pct) }}>{d.ocr_accuracy_pct}%</span>
                 ) : '—'}
               </td>
               <td><StatusBadge status={d.availability} /></td>
             </tr>
           ))}
         </DataTable>
+        {driversPagination.total > 0 && (
+          <PaginationBar
+            page={driversPagination.current_page}
+            perPage={driversPagination.per_page}
+            total={driversPagination.total}
+            onPage={handleDriversPage}
+            onPerPage={handleDriversPerPage}
+            perPageOptions={[10, 25, 50]}
+          />
+        )}
       </SectionCard>
     </>
   )

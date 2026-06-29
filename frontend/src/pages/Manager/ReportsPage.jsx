@@ -68,8 +68,9 @@ function ReportsPage() {
 
   const loadAnalytics = useCallback(async () => {
     setLoading(true)
-    try { setAnalytics(await fetchAnalytics()) }
-    catch { /* silent */ }
+    try {
+      setAnalytics(await fetchAnalytics({ drivers_page: 1, drivers_per_page: 100 }))
+    } catch { /* silent */ }
     finally { setLoading(false) }
   }, [])
 
@@ -107,8 +108,10 @@ function ReportsPage() {
         report: 'Driver Performance',
         filters: 'None',
         rows: rows.length,
-        total: rows.length,
-        dateRange: 'All records',
+        total: analytics?.drivers_pagination?.total ?? rows.length,
+        dateRange: analytics?.driver_performance?.period
+          ? `${analytics.driver_performance.period.from} – ${analytics.driver_performance.period.to}`
+          : 'All records',
       }
     }
     return {
@@ -138,8 +141,18 @@ function ReportsPage() {
     } else if (tab === 'driver_perf') {
       const rows = analytics?.drivers ?? []
       downloadCsv(`driver-performance-${new Date().toISOString().slice(0, 10)}.csv`,
-        ['Driver', 'Total Jobs', 'Completed', 'On-Time Rate', 'Availability'],
-        rows.map((d) => [d.name, d.total, d.completed, d.on_time_pct != null ? `${d.on_time_pct}%` : '—', d.availability])
+        ['Driver', 'Score', 'Total Jobs', 'Completed', 'Completion %', 'On-Time Rate', 'Delay Rate', 'OCR Accuracy', 'Availability'],
+        rows.map((d) => [
+          d.name,
+          d.reliability_score ?? '—',
+          d.total,
+          d.completed,
+          d.completion_pct != null ? `${d.completion_pct}%` : '—',
+          d.on_time_pct != null ? `${d.on_time_pct}%` : '—',
+          d.delay_rate_pct != null ? `${d.delay_rate_pct}%` : '—',
+          d.ocr_accuracy_pct != null ? `${d.ocr_accuracy_pct}%` : '—',
+          d.availability,
+        ])
       )
     } else {
       downloadCsv(`assignment-audit-${new Date().toISOString().slice(0, 10)}.csv`,
