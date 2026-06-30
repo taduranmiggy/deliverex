@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Iso8601;
 use Illuminate\Database\Eloquent\Model;
 
 class DeliveryDocument extends Model
@@ -29,7 +30,7 @@ class DeliveryDocument extends Model
 
     public function getUploadedEventAtAttribute(): ?string
     {
-        return $this->created_at?->toIso8601String();
+        return Iso8601::from($this->created_at);
     }
 
     public function assignment()

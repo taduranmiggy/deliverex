@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AssignmentAuditTrail;
+use App\Support\Iso8601;
 use Illuminate\Http\Request;
 
 class AssignmentAuditController extends Controller
@@ -51,7 +52,7 @@ class AssignmentAuditController extends Controller
             'best_fit_reasons'          => $trail->best_fit_reasons ?? [],
             'customer_name'             => $trail->jobOrder?->display_name ?? $trail->jobOrder?->customer_name,
             'tracking_code'             => $trail->jobOrder?->tracking_code,
-            'created_at'                => $trail->created_at?->toIso8601String(),
+            'created_at'                => Iso8601::from($trail->created_at),
         ];
     }
 }

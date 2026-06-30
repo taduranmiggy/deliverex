@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DeliveryIssueReport;
+use App\Support\Iso8601;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -50,7 +51,7 @@ class IssueReportController extends Controller
             'reporter_name'   => $report->reporter?->name,
             'customer_name'   => $job?->display_name ?? $job?->customer_name,
             'tracking_code'   => $job?->tracking_code,
-            'created_at'      => $report->created_at?->toIso8601String(),
+            'created_at'      => Iso8601::from($report->created_at),
             'reported_event_at' => $report->reported_event_at,
         ];
     }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  deleteCompanyUser, fetchCompanyUsers, updateCompanyUser,
+  deleteCompanyUser, fetchCompanyUsers,
 } from '../../api/customerPortal'
 import useAuth from '../../hooks/useAuth'
 import useConfirmation from '../../hooks/useConfirmation'
@@ -33,15 +33,6 @@ function CustomerCompanyUsersPage() {
   }, [])
 
   useEffect(() => { if (isOwner) load() }, [isOwner, load])
-
-  const toggleActive = async (row) => {
-    try {
-      await updateCompanyUser(row.id, { is_active: !row.is_active })
-      load()
-    } catch (err) {
-      setError(err.message)
-    }
-  }
 
   const removeUser = (row) => {
     requestConfirmation({
@@ -94,9 +85,6 @@ function CustomerCompanyUsersPage() {
                 </div>
                 {row.role !== 'owner' && (
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" className="btn-dx-secondary btn-sm" onClick={() => toggleActive(row)}>
-                      {row.is_active ? 'Deactivate' : 'Activate'}
-                    </button>
                     <button type="button" className="btn-dx-secondary btn-sm" onClick={() => removeUser(row)}>Remove</button>
                   </div>
                 )}

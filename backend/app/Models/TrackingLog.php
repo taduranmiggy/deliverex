@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Iso8601;
 use Illuminate\Database\Eloquent\Model;
 
 class TrackingLog extends Model
@@ -25,7 +26,7 @@ class TrackingLog extends Model
 
     public function getEventAtAttribute(): ?string
     {
-        return $this->captured_at?->toIso8601String();
+        return Iso8601::from($this->captured_at);
     }
 
     public function assignment()

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Iso8601;
 use Illuminate\Database\Eloquent\Model;
 
 class DeliveryIssueReport extends Model
@@ -50,7 +51,7 @@ class DeliveryIssueReport extends Model
 
     public function getReportedEventAtAttribute(): ?string
     {
-        return $this->created_at?->toIso8601String();
+        return Iso8601::from($this->created_at);
     }
 
     public static function typeLabel(string $type): string

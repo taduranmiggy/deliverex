@@ -18,26 +18,49 @@ function DispatcherDashboard() {
 
   useEffect(() => {
     const load = async () => {
-      try {
-        const [orders, assignments] = await Promise.all([fetchJobOrders(1), fetchAssignments(1)])
-        const allOrders  = orders.data || []
-        const allAssign  = assignments.data || []
-        const active     = allAssign.filter((a) => !['completed', 'cancelled'].includes(a.status))
-        const now        = Date.now()
-        const delayed    = active.filter((a) => {
-          const end = a.job_order?.scheduled_end
-          return end && new Date(end).getTime() < now
-        }).length
-        const delivered  = allOrders.filter((o) => o.status === 'completed').length
-        setSummary({
-          orders:    orders.total ?? allOrders.length,
-          pending:   allOrders.filter((o) => o.status === 'pending').length,
-          active:    active.length,
-          delayed,
-          delivered,
-        })
-        setDeliveries(active.slice(0, 8))
-      } catch (err) { setError(err.message) }
+      const [ordersResult, assignmentsResult] = await Promise.allSettled([
+        fetchJobOrders(1, 100),
+        fetchAssignments(1),
+      ])
+
+      const errors = []
+      let allOrders = []
+      let ordersTotal = 0
+      let allAssign = []
+
+      if (ordersResult.status === 'fulfilled') {
+        allOrders = ordersResult.value.data || []
+        ordersTotal = ordersResult.value.total ?? allOrders.length
+      } else {
+        errors.push(ordersResult.reason?.message || 'Failed to load job orders')
+      }
+
+      if (assignmentsResult.status === 'fulfilled') {
+        allAssign = assignmentsResult.value.data || []
+      } else {
+        errors.push(assignmentsResult.reason?.message || 'Failed to load assignments')
+      }
+
+      if (errors.length > 0) {
+        setError(errors.join(' · '))
+      }
+
+      const active = allAssign.filter((a) => !['completed', 'cancelled'].includes(a.status))
+      const now = Date.now()
+      const delayed = active.filter((a) => {
+        const end = a.job_order?.scheduled_end
+        return end && new Date(end).getTime() < now
+      }).length
+      const delivered = allOrders.filter((o) => o.status === 'completed').length
+
+      setSummary({
+        orders: ordersTotal,
+        pending: allOrders.filter((o) => o.status === 'pending').length,
+        active: active.length,
+        delayed,
+        delivered,
+      })
+      setDeliveries(active.slice(0, 8))
     }
     load()
   }, [])

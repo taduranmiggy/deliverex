@@ -364,14 +364,6 @@ function UserManagementPage() {
     load()
   }
 
-  const handleToggle = async (user) => {
-    try {
-      await updateUser(user.id, { status: user.status === 'active' ? 'inactive' : 'active' })
-      flash('User status updated.')
-      load()
-    } catch (err) { setError(err.message) }
-  }
-
   const handleDelete = (user) => {
     requestConfirmation({
       title: 'Delete User Account',
@@ -557,9 +549,6 @@ function UserManagementPage() {
                 <td>
                   <div className="dx-text-actions">
                     <button type="button" onClick={() => setModal({ user })}>Edit</button>
-                    <button type="button" onClick={() => handleToggle(user)}>
-                      {user.status === 'active' ? 'Deactivate' : 'Activate'}
-                    </button>
                     {user.can_send_invite && (
                       <button type="button" onClick={() => handleSendInvite(user)}>
                         Send Invite

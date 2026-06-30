@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Iso8601;
 use Illuminate\Database\Eloquent\Model;
 
 class DispatchAssignment extends Model
@@ -35,22 +36,22 @@ class DispatchAssignment extends Model
 
     public function getAssignedEventAtAttribute(): ?string
     {
-        return $this->assigned_at?->toIso8601String();
+        return Iso8601::from($this->assigned_at);
     }
 
     public function getStartedEventAtAttribute(): ?string
     {
-        return $this->started_at?->toIso8601String();
+        return Iso8601::from($this->started_at);
     }
 
     public function getCompletedEventAtAttribute(): ?string
     {
-        return $this->completed_at?->toIso8601String();
+        return Iso8601::from($this->completed_at);
     }
 
     public function getPodVerifiedEventAtAttribute(): ?string
     {
-        return $this->pod_verified_at?->toIso8601String();
+        return Iso8601::from($this->pod_verified_at);
     }
 
     public function jobOrder()

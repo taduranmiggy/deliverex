@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Iso8601;
 use Illuminate\Database\Eloquent\Model;
 
 class DeliveryStatusHistory extends Model
@@ -35,6 +36,6 @@ class DeliveryStatusHistory extends Model
 
     public function getEventAtAttribute(): ?string
     {
-        return $this->updated_at?->toIso8601String();
+        return Iso8601::from($this->updated_at);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Iso8601;
 use Illuminate\Database\Eloquent\Model;
 
 class DeliveryStatusLog extends Model
@@ -34,7 +35,7 @@ class DeliveryStatusLog extends Model
 
     public function getEventAtAttribute(): ?string
     {
-        return $this->created_at?->toIso8601String();
+        return Iso8601::from($this->created_at);
     }
 
     public function getPerformedOfflineAttribute(): bool
