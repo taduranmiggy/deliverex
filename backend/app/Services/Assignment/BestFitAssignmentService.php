@@ -358,8 +358,8 @@ class BestFitAssignmentService
             $efficiencyDetail,
         );
 
-        // 4. Vehicle Type Match (max 10) — binary pass/fail on exact required type
-        $typeMax = 10;
+        // 4. Vehicle Type Match (max 20) — binary pass/fail on exact required type
+        $typeMax = 20;
         $typeContribution = 0;
         $typeMatched = false;
         $requiredTypeName = $jobOrder->preferredVehicleType?->name ?? $jobOrder->vehicle_type_required;
