@@ -1,15 +1,10 @@
 export const PAST_SCHEDULE_MESSAGE =
   'Cannot create a booking for a past date. Please select today or a future date.'
 
-export const SCHEDULE_START_REQUIRED = 'Start date and time is required.'
+export const SCHEDULE_START_REQUIRED = 'Scheduled date and time is required.'
 export const SCHEDULE_END_REQUIRED = 'End date and time is required.'
 export const SCHEDULE_END_AFTER_START =
   'End date and time must be after the start date and time.'
-
-export const MIN_DELIVERY_WINDOW_MINUTES = 60
-
-export const scheduleMinWindowMessage = (minutes = MIN_DELIVERY_WINDOW_MINUTES) =>
-  `Delivery window must be at least ${minutes} minutes.`
 
 /** True if datetime-local or ISO value is before now (minute precision). */
 export function isPastScheduleValue(value) {
@@ -55,24 +50,21 @@ export function validateJobSchedule(fields, options = {}) {
     const diffMs = new Date(end).getTime() - new Date(start).getTime()
     if (diffMs <= 0) {
       errors.scheduled_end = SCHEDULE_END_AFTER_START
-    } else if (diffMs < MIN_DELIVERY_WINDOW_MINUTES * 60 * 1000) {
-      errors.scheduled_end = scheduleMinWindowMessage()
     }
   }
 
   return errors
 }
 
-/** Minimum value for end datetime-local: start + minimum delivery window (or now). */
-export function minEndDatetimeLocalValue(start, minMinutes = MIN_DELIVERY_WINDOW_MINUTES) {
+/** Minimum value for end datetime-local: start or now (legacy forms with end time). */
+export function minEndDatetimeLocalValue(start) {
   const pad = (n) => String(n).padStart(2, '0')
   const toLocal = (d) =>
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 
   const now = new Date()
   const base = start ? new Date(start) : now
-  const withWindow = new Date(base.getTime() + minMinutes * 60 * 1000)
-  const effective = withWindow.getTime() < now.getTime() ? now : withWindow
+  const effective = base.getTime() < now.getTime() ? now : base
   return toLocal(effective)
 }
 

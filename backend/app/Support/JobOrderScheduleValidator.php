@@ -10,8 +10,6 @@ class JobOrderScheduleValidator
 {
     public const MESSAGE = 'Cannot create a booking for a past date. Please select today or a future date.';
 
-    public const MIN_WINDOW_MESSAGE = 'Delivery window must be at least %d minutes.';
-
     /**
      * @param  array<string, mixed>  $data
      */
@@ -31,27 +29,6 @@ class JobOrderScheduleValidator
 
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
-        }
-
-        if (
-            ! empty($data['scheduled_start'])
-            && ! empty($data['scheduled_end'])
-        ) {
-            $start = Carbon::parse($data['scheduled_start']);
-            $end = Carbon::parse($data['scheduled_end']);
-
-            if ($end->lte($start)) {
-                throw ValidationException::withMessages([
-                    'scheduled_end' => ['End date and time must be after the scheduled start.'],
-                ]);
-            }
-
-            $minMinutes = self::minDeliveryWindowMinutes();
-            if ($end->diffInMinutes($start) < $minMinutes) {
-                throw ValidationException::withMessages([
-                    'scheduled_end' => [sprintf(self::MIN_WINDOW_MESSAGE, $minMinutes)],
-                ]);
-            }
         }
     }
 
@@ -75,10 +52,5 @@ class JobOrderScheduleValidator
     public static function isPast(Carbon $value): bool
     {
         return $value->lt(now());
-    }
-
-    public static function minDeliveryWindowMinutes(): int
-    {
-        return max(1, (int) config('delivery.min_delivery_window_minutes', 60));
     }
 }

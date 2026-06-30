@@ -47,26 +47,22 @@ class JobOrderValidationRulesTest extends TestCase
         $this->assertTrue(true);
     }
 
-    public function test_rejects_delivery_window_shorter_than_minimum(): void
+    public function test_accepts_scheduled_start_without_end(): void
     {
-        $this->expectException(ValidationException::class);
+        JobOrderScheduleValidator::validatePayload([
+            'scheduled_start' => now()->addHour()->toIso8601String(),
+        ]);
 
-        $start = now()->addHour();
+        $this->assertTrue(true);
+    }
+
+    public function test_accepts_legacy_end_time_after_start_without_minimum_window(): void
+    {
+        $start = Carbon::now()->addHour();
 
         JobOrderScheduleValidator::validatePayload([
             'scheduled_start' => $start->toIso8601String(),
             'scheduled_end' => $start->copy()->addMinutes(15)->toIso8601String(),
-        ]);
-    }
-
-    public function test_accepts_delivery_window_at_minimum(): void
-    {
-        $start = Carbon::now()->addHour();
-        $min = JobOrderScheduleValidator::minDeliveryWindowMinutes();
-
-        JobOrderScheduleValidator::validatePayload([
-            'scheduled_start' => $start->toIso8601String(),
-            'scheduled_end' => $start->copy()->addMinutes($min)->toIso8601String(),
         ]);
 
         $this->assertTrue(true);

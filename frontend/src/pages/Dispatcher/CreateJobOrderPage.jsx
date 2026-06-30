@@ -285,7 +285,11 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       if (!isEdit) {
         try {
           const raw = sessionStorage.getItem(DRAFT_KEY)
-          if (raw) return JSON.parse(raw)
+          if (raw) {
+            const draft = JSON.parse(raw)
+            delete draft.scheduled_end
+            return { ...BLANK, ...draft }
+          }
         } catch { /* ignore */ }
       }
       return BLANK
@@ -640,6 +644,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     special_handling_instructions: routeDetails || null,
     job_requirements:         null,
     scheduled_start:          form.scheduled_start || null,
+    scheduled_end:            null,
     priority:                 form.priority,
   }
   }
