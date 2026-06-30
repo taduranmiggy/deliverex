@@ -7,6 +7,7 @@ import { Car, CheckCircle2, ExternalLink, MapPin, RefreshCw, ShieldCheck } from 
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { getDelayReasonLabel } from '../../utils/driverAssignment'
+import { formatEventAt } from '../../utils/deliveryTimestamps'
 
 function formatGpsTime(iso) {
   if (!iso) return null
@@ -262,9 +263,9 @@ function DeliveryMonitoringPage() {
                           <ShieldCheck size={14} />
                           <span>
                             Arrival GPS Verified
-                            {arrivedLog.created_at && (
+                            {formatEventAt(arrivedLog) && (
                               <span style={{ color: '#15803d', marginLeft: 6 }}>
-                                {new Date(arrivedLog.created_at).toLocaleString()}
+                                {formatEventAt(arrivedLog)}
                               </span>
                             )}
                           </span>
@@ -301,7 +302,7 @@ function DeliveryMonitoringPage() {
                                 <div style={{ marginTop: 4, fontSize: '0.8125rem', color: 'var(--muted)' }}>{delay.delay_notes}</div>
                               )}
                               <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--muted)' }}>
-                                Reported {delay.created_at ? new Date(delay.created_at).toLocaleString() : '—'}
+                                Reported {formatEventAt(delay) ?? '—'}
                               </div>
                               {delay.acknowledged_at ? (
                                 <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#166534', display: 'flex', alignItems: 'center', gap: 4 }}>

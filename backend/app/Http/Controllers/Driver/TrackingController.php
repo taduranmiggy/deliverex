@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Driver;
 use App\Http\Controllers\Controller;
 use App\Models\TrackingLog;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Support\ActionTimestamp;
 use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 
@@ -21,6 +22,8 @@ class TrackingController extends Controller
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'captured_at' => 'nullable|date',
+            'action_timestamp' => 'nullable|date',
+            'action_taken_at' => 'nullable|date',
         ]);
 
         $assignment = \App\Models\DispatchAssignment::findOrFail($data['assignment_id']);
@@ -30,13 +33,17 @@ class TrackingController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
+        $capturedAt = isset($data['captured_at'])
+            ? ActionTimestamp::resolve($data['captured_at'])
+            : ActionTimestamp::resolveFromRequest($request);
+
         $lastLog = $assignment->trackingLogs()->latest('captured_at')->first();
 
         // Use firstOrCreate so replaying a queued offline batch (same point + timestamp)
         // does not create duplicate GPS logs on reconnect/auto-sync.
         $log = TrackingLog::firstOrCreate([
             'assignment_id' => $assignment->id,
-            'captured_at'   => $data['captured_at'] ?? now(),
+            'captured_at'   => $capturedAt,
             'latitude'      => $data['latitude'],
             'longitude'     => $data['longitude'],
         ]);

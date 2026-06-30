@@ -68,4 +68,35 @@ class ActionTimestampTest extends TestCase
 
         $this->assertSame('2026-06-29 10:30:00', $resolved->format('Y-m-d H:i:s'));
     }
+
+    public function test_resolve_with_meta_marks_valid_client_timestamp(): void
+    {
+        Carbon::setTestNow('2026-06-29 10:30:00');
+
+        $meta = ActionTimestamp::resolveWithMeta('2026-06-29T10:15:00.000Z');
+
+        $this->assertTrue($meta['fromClient']);
+        $this->assertSame('2026-06-29 10:15:00', $meta['actionAt']->format('Y-m-d H:i:s'));
+    }
+
+    public function test_resolve_with_meta_marks_fallback_when_missing(): void
+    {
+        Carbon::setTestNow('2026-06-29 10:30:00');
+
+        $meta = ActionTimestamp::resolveWithMeta(null);
+
+        $this->assertFalse($meta['fromClient']);
+        $this->assertSame('2026-06-29 10:30:00', $meta['actionAt']->format('Y-m-d H:i:s'));
+    }
+
+    public function test_resolve_from_request_with_meta_uses_action_taken_at_alias(): void
+    {
+        Carbon::setTestNow('2026-06-29 10:30:00');
+
+        $request = request()->merge(['action_taken_at' => '2026-06-29T10:12:00Z']);
+        $meta = ActionTimestamp::resolveFromRequestWithMeta($request);
+
+        $this->assertTrue($meta['fromClient']);
+        $this->assertSame('2026-06-29 10:12:00', $meta['actionAt']->format('Y-m-d H:i:s'));
+    }
 }

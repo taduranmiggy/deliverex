@@ -3,6 +3,7 @@ import { fetchIssueReports } from '../api/issueReports'
 import { DataTable, EmptyState, SectionCard } from './ui'
 import { AlertTriangle, Camera } from 'lucide-react'
 import { formatJobPublicId } from '../utils/formatPhp'
+import { formatEventAt } from '../utils/deliveryTimestamps'
 
 function IssueReportsSection({ title = 'Driver Issue Reports', limit = 8 }) {
   const [reports, setReports] = useState([])
@@ -30,7 +31,7 @@ function IssueReportsSection({ title = 'Driver Issue Reports', limit = 8 }) {
         {reports.map((r) => (
           <tr key={r.id}>
             <td style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
-              {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
+              {formatEventAt(r) ?? '—'}
             </td>
             <td style={{ fontWeight: 600, fontSize: '0.875rem' }}>{r.driver_name ?? '—'}</td>
             <td style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>

@@ -6,6 +6,7 @@ import { DataTable, EmptyState, PageHeader, StatusBadge } from '../../components
 import { ClipboardList, Download, FileText, Users } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayName } from '../../utils/jobOrderHelpers'
+import { formatEventAt } from '../../utils/deliveryTimestamps'
 
 const STATUS_LABELS = {
   completed: 'Completed',
@@ -99,7 +100,7 @@ function ReportsPage() {
         filters: statusFilter ? STATUS_LABELS[statusFilter] ?? statusFilter : 'All statuses',
         rows: deliveries.length,
         total: meta.total,
-        dateRange: dateRangeFrom(deliveries, 'assigned_at') ?? 'All records',
+        dateRange: dateRangeFrom(deliveries, 'assigned_event_at') ?? dateRangeFrom(deliveries, 'assigned_at') ?? 'All records',
       }
     }
     if (tab === 'driver_perf') {
@@ -134,8 +135,9 @@ function ReportsPage() {
         ['Assignment', 'Client', 'Driver', 'Vehicle', 'Status', 'Assigned', 'Completed'],
         deliveries.map((d) => [
           d.id, buildDisplayName(d.job_order) || '—', d.driver?.user?.name ?? '—', d.vehicle?.plate_no ?? '—',
-          d.status, d.assigned_at ? new Date(d.assigned_at).toLocaleString() : '—',
-          d.completed_at ? new Date(d.completed_at).toLocaleString() : '—',
+          d.status,
+          formatEventAt({ assigned_event_at: d.assigned_event_at, assigned_at: d.assigned_at }) ?? '—',
+          formatEventAt({ completed_event_at: d.completed_event_at, completed_at: d.completed_at }) ?? '—',
         ])
       )
     } else if (tab === 'driver_perf') {
@@ -225,10 +227,10 @@ function ReportsPage() {
                   <td style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{d.vehicle?.plate_no ?? '—'}</td>
                   <td><StatusBadge status={d.status} /></td>
                   <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
-                    {d.assigned_at ? new Date(d.assigned_at).toLocaleDateString() : '—'}
+                    {formatEventAt({ assigned_event_at: d.assigned_event_at, assigned_at: d.assigned_at }) ?? '—'}
                   </td>
                   <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
-                    {d.completed_at ? new Date(d.completed_at).toLocaleDateString() : '—'}
+                    {formatEventAt({ completed_event_at: d.completed_event_at, completed_at: d.completed_at }) ?? '—'}
                   </td>
                 </tr>
               ))}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { fetchReports } from '../../api/manager'
 import { buildDisplayName } from '../../utils/jobOrderHelpers'
 import { DataTable, EmptyState, FilterSelect, PageHeader, SectionCard, StatusBadge } from '../../components/ui'
+import { formatEventAt } from '../../utils/deliveryTimestamps'
 import { History } from 'lucide-react'
 
 function ManagerDeliveryHistoryPage() {
@@ -50,10 +51,10 @@ function ManagerDeliveryHistoryPage() {
               <td style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{item.vehicle?.plate_no ?? '—'}</td>
               <td><StatusBadge status={item.status} /></td>
               <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
-                {item.assigned_at ? new Date(item.assigned_at).toLocaleDateString() : '—'}
+                {formatEventAt({ assigned_event_at: item.assigned_event_at, assigned_at: item.assigned_at }) ?? '—'}
               </td>
               <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
-                {item.completed_at ? new Date(item.completed_at).toLocaleDateString() : '—'}
+                {formatEventAt({ completed_event_at: item.completed_event_at, completed_at: item.completed_at }) ?? '—'}
               </td>
             </tr>
           ))}

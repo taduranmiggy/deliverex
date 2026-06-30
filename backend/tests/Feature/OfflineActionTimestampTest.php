@@ -42,12 +42,16 @@ class OfflineActionTimestampTest extends TestCase
         ]);
 
         $response->assertOk()
-            ->assertJsonPath('status', DeliveryStatus::ARRIVED);
+            ->assertJsonPath('status', DeliveryStatus::ARRIVED)
+            ->assertJsonPath('event_at', '2026-06-29T10:15:00+00:00')
+            ->assertJsonPath('synced_at', '2026-06-29T10:30:00+00:00')
+            ->assertJsonPath('performed_offline', true);
 
         $this->assertDatabaseHas('delivery_status_logs', [
             'assignment_id' => $assignment->id,
             'status'        => DeliveryStatus::ARRIVED,
             'created_at'    => '2026-06-29 10:15:00',
+            'synced_at'     => '2026-06-29 10:30:00',
         ]);
 
         $this->assertDatabaseHas('delivery_status_history', [
@@ -92,7 +96,36 @@ class OfflineActionTimestampTest extends TestCase
             'assignment_id' => $assignment->id,
             'status'        => DeliveryStatus::EN_ROUTE_TO_DESTINATION,
             'created_at'    => '2026-06-29 10:30:00',
+            'synced_at'     => null,
         ]);
+    }
+
+    public function test_tracking_api_exposes_event_at_and_synced_at_on_timeline(): void
+    {
+        Carbon::setTestNow('2026-06-29 10:30:00');
+
+        [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::EN_ROUTE_TO_DESTINATION);
+        $jobOrder = $assignment->jobOrder;
+
+        $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/status', [
+            'assignment_id'    => $assignment->id,
+            'status'           => DeliveryStatus::ARRIVED,
+            'latitude'         => 14.5995,
+            'longitude'        => 120.9842,
+            'action_timestamp' => '2026-06-29T10:15:00.000Z',
+        ])->assertOk();
+
+        $response = $this->getJson('/api/customer/track/'.$jobOrder->tracking_code);
+
+        $response->assertOk();
+
+        $arrivedEvent = collect($response->json('status_events'))
+            ->firstWhere('status', DeliveryStatus::ARRIVED);
+
+        $this->assertNotNull($arrivedEvent);
+        $this->assertSame('2026-06-29T10:15:00+00:00', $arrivedEvent['event_at']);
+        $this->assertSame('2026-06-29T10:30:00+00:00', $arrivedEvent['synced_at']);
+        $this->assertTrue($arrivedEvent['performed_offline']);
     }
 
     public function test_started_at_uses_action_timestamp_when_trip_starts_offline(): void

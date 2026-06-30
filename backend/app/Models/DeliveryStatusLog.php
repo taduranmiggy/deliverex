@@ -10,6 +10,7 @@ class DeliveryStatusLog extends Model
 
     protected $appends = [
         'event_at',
+        'performed_offline',
     ];
 
     protected $fillable = [
@@ -20,6 +21,7 @@ class DeliveryStatusLog extends Model
         'longitude',
         'arrival_verified',
         'created_at',
+        'synced_at',
     ];
 
     protected $casts = [
@@ -27,11 +29,17 @@ class DeliveryStatusLog extends Model
         'longitude'        => 'float',
         'arrival_verified'=> 'boolean',
         'created_at'       => 'datetime',
+        'synced_at'        => 'datetime',
     ];
 
     public function getEventAtAttribute(): ?string
     {
         return $this->created_at?->toIso8601String();
+    }
+
+    public function getPerformedOfflineAttribute(): bool
+    {
+        return $this->synced_at !== null;
     }
 
     public function assignment()

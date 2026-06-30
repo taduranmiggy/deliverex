@@ -17,6 +17,7 @@ import useOnlineStatus from '../../hooks/useOnlineStatus'
 import { enqueue } from '../../utils/offlineQueue'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
+import { formatEventAt, formatOfflineSyncLabel, getEventAt } from '../../utils/deliveryTimestamps'
 import {
   DELAY_REASONS,
   formatJobSchedule,
@@ -122,7 +123,7 @@ function DriverJobDetailsPage() {
 
   const job = assignment?.job_order
   const logs = [...(assignment?.delivery_status_logs ?? [])].sort(
-    (a, b) => new Date(a.event_at ?? a.created_at) - new Date(b.event_at ?? b.created_at),
+    (a, b) => new Date(getEventAt(a) ?? 0) - new Date(getEventAt(b) ?? 0),
   )
   const isActive = assignment && !['completed', 'cancelled'].includes(assignment.status)
   const latestGps = [...(assignment?.tracking_logs ?? [])].sort(
@@ -549,9 +550,14 @@ function DriverJobDetailsPage() {
               {logs.map((log, i) => (
                 <div key={i} className="da-kv" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                    <span>{(log.event_at || log.created_at) ? new Date(log.event_at || log.created_at).toLocaleString() : '—'}</span>
+                    <span>{formatEventAt(log) ?? '—'}</span>
                     <DriverStatusChip status={log.status} />
                   </div>
+                  {formatOfflineSyncLabel(log) && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--da-muted)' }}>
+                      {formatOfflineSyncLabel(log)}
+                    </span>
+                  )}
                   {log.status === 'arrived' && log.arrival_verified && (
                     <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600 }}>
                       GPS Verified

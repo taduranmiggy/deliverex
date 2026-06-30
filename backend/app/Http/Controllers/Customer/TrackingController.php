@@ -50,17 +50,8 @@ class TrackingController extends Controller
         if ($latestAssignment) {
             $timeline = $latestAssignment->deliveryStatusLogs()
                 ->orderBy('created_at')
-                ->get(['status', 'notes', 'created_at', 'latitude', 'longitude', 'arrival_verified'])
-                ->map(fn ($row) => [
-                    'status'            => DeliveryStatus::canonicalize((string) $row->status) ?? $row->status,
-                    'notes'             => $row->notes,
-                    'at'                => $row->created_at?->toIso8601String(),
-                    'event_at'          => $row->created_at?->toIso8601String(),
-                    'arrival_verified'  => (bool) $row->arrival_verified,
-                    'gps_verified_at'   => $row->arrival_verified
-                        ? $row->created_at?->toIso8601String()
-                        : null,
-                ])
+                ->get(['status', 'notes', 'created_at', 'synced_at', 'latitude', 'longitude', 'arrival_verified'])
+                ->map(fn ($row) => $this->formatStatusEvent($row))
                 ->values()
                 ->all();
         }
@@ -84,6 +75,8 @@ class TrackingController extends Controller
                 'label' => 'Pending',
                 'timestamp' => $jobOrder->created_at?->toIso8601String(),
                 'event_at' => $jobOrder->created_at?->toIso8601String(),
+                'synced_at' => null,
+                'performed_offline' => false,
             ],
             ...collect(DeliveryStatus::lifecycle())
                 ->map(fn (string $stage) => [
@@ -91,27 +84,36 @@ class TrackingController extends Controller
                     'label' => $stage === DeliveryStatus::ASSIGNED ? 'Dispatched' : DeliveryStatus::label($stage),
                     'timestamp' => null,
                     'event_at' => null,
+                    'synced_at' => null,
+                    'performed_offline' => false,
                 ])
                 ->values()
                 ->all(),
         ];
         if ($latestAssignment) {
-            $timelineMap = $latestAssignment->deliveryStatusLogs()
+            $timelineMetaMap = $latestAssignment->deliveryStatusLogs()
                 ->orderBy('created_at')
-                ->get(['status', 'created_at'])
+                ->get(['status', 'created_at', 'synced_at'])
                 ->mapWithKeys(function ($row) {
                     $normalized = DeliveryStatus::canonicalize((string) $row->status);
                     if (! $normalized) {
                         return [];
                     }
 
-                    return [$normalized => $row->created_at?->toIso8601String()];
+                    return [$normalized => [
+                        'event_at' => $row->created_at?->toIso8601String(),
+                        'synced_at' => $row->synced_at?->toIso8601String(),
+                        'performed_offline' => $row->synced_at !== null,
+                    ]];
                 });
 
             foreach ($orderedTimeline as $index => $item) {
                 $stage = $item['status'];
-                $orderedTimeline[$index]['timestamp'] = $timelineMap[$stage] ?? null;
-                $orderedTimeline[$index]['event_at'] = $timelineMap[$stage] ?? null;
+                $meta = $timelineMetaMap[$stage] ?? null;
+                $orderedTimeline[$index]['timestamp'] = $meta['event_at'] ?? null;
+                $orderedTimeline[$index]['event_at'] = $meta['event_at'] ?? null;
+                $orderedTimeline[$index]['synced_at'] = $meta['synced_at'] ?? null;
+                $orderedTimeline[$index]['performed_offline'] = $meta['performed_offline'] ?? false;
             }
         }
 
@@ -142,6 +144,22 @@ class TrackingController extends Controller
             'proof_documents'     => $proofDocuments,
             'delay_flag'          => $this->delayFlag($jobOrder, $latestAssignment, $latestStatus),
         ]);
+    }
+
+    private function formatStatusEvent($row): array
+    {
+        return [
+            'status'            => DeliveryStatus::canonicalize((string) $row->status) ?? $row->status,
+            'notes'             => $row->notes,
+            'at'                => $row->created_at?->toIso8601String(),
+            'event_at'          => $row->created_at?->toIso8601String(),
+            'synced_at'         => $row->synced_at?->toIso8601String(),
+            'performed_offline' => $row->synced_at !== null,
+            'arrival_verified'  => (bool) $row->arrival_verified,
+            'gps_verified_at'   => $row->arrival_verified
+                ? $row->created_at?->toIso8601String()
+                : null,
+        ];
     }
 
     private function etaLabel(JobOrder $jobOrder): string

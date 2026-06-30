@@ -8,6 +8,7 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Clock, ListOrdered, MapPin, Tr
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { getDelayReasonLabel } from '../../utils/driverAssignment'
+import { formatEventAt } from '../../utils/deliveryTimestamps'
 
 function DispatcherDashboard() {
   const navigate = useNavigate()
@@ -138,7 +139,7 @@ function DispatcherDashboard() {
                       <td><StatusBadge status={item.status} /></td>
                       <td style={{ fontSize: '0.8125rem', color: arrivedLog?.arrival_verified ? '#166534' : 'var(--muted)' }}>
                         {arrivedLog?.arrival_verified
-                          ? `GPS Verified${arrivedLog.created_at ? ` · ${new Date(arrivedLog.created_at).toLocaleTimeString()}` : ''}`
+                          ? `GPS Verified${formatEventAt(arrivedLog, undefined, { hour: 'numeric', minute: '2-digit' }) ? ` · ${formatEventAt(arrivedLog, undefined, { hour: 'numeric', minute: '2-digit' })}` : ''}`
                           : item.status === 'arrived' || item.status === 'completed' ? 'Not verified' : '—'}
                       </td>
                       <td style={{ fontSize: '0.8125rem', color: delay ? '#991b1b' : isPastDue ? 'var(--color-warning)' : 'var(--muted)' }}>

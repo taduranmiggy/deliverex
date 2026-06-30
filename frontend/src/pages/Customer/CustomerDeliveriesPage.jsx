@@ -225,7 +225,7 @@ function CustomerDeliveriesPage() {
         </td>
         <td data-label="Status"><StatusBadge status={r.status} /></td>
         <td data-label="Last Update" style={{ color: 'var(--muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
-          {formatDate(r.completed_event_at || r.status_event_at || r.status_at || r.updated_at)}
+          {formatDate(r.completed_event_at || r.status_event_at || r.status_at)}
         </td>
         <td data-label="Route" style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
           {buildDisplayAddress('pickup', r)} → {buildDisplayAddress('dropoff', r)}

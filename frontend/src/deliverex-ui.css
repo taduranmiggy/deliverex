@@ -1705,8 +1705,33 @@
 .dx-chart-card h4 { margin: 0 0 12px; font-size: 0.9375rem; }
 .dx-train-phrases { margin-top: 14px; }
 .dx-train-phrases h4 { margin: 0 0 8px; font-size: 0.9375rem; }
-.dx-train-phrases ul { margin: 0; padding-left: 16px; color: var(--muted); font-size: 0.875rem; }
+.dx-train-phrases ul {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  max-height: 180px;
+  overflow-y: auto;
+}
 .dx-train-phrases li { margin-bottom: 4px; }
+.dx-chatbot-table-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.dx-chatbot-table-wrap {
+  max-height: min(420px, 52vh);
+  overflow: auto;
+}
+.dx-chatbot-table-wrap .dx-data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--slate-50);
+}
+.dx-chatbot-page .dx-panel + .dx-panel {
+  margin-top: 0;
+}
 .dx-train-phrases__preview {
   margin: 0;
   padding: 12px 14px;

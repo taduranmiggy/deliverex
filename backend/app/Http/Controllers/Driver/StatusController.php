@@ -41,7 +41,10 @@ class StatusController extends Controller
             'action_taken_at'   => 'nullable|date',
         ]);
 
-        $actionAt = ActionTimestamp::resolveFromRequest($request);
+        $timestampMeta = ActionTimestamp::resolveFromRequestWithMeta($request);
+        $actionAt = $timestampMeta['actionAt'];
+        $fromClient = $timestampMeta['fromClient'];
+        $syncedAt = $fromClient ? now() : null;
 
         $assignment = DispatchAssignment::findOrFail($data['assignment_id']);
         $driver     = DriverAccount::require($request->user());
@@ -113,7 +116,7 @@ class StatusController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($assignment, $status, $data, $latitude, $longitude, $arrivalVerified, $request, $actionAt) {
+        DB::transaction(function () use ($assignment, $status, $data, $latitude, $longitude, $arrivalVerified, $request, $actionAt, $syncedAt) {
             DeliveryStatusLog::create([
                 'assignment_id'    => $assignment->id,
                 'status'           => $status,
@@ -122,6 +125,7 @@ class StatusController extends Controller
                 'longitude'        => $longitude,
                 'arrival_verified' => $arrivalVerified,
                 'created_at'       => $actionAt,
+                'synced_at'        => $syncedAt,
             ]);
 
             $this->logStatusHistory(
@@ -208,6 +212,8 @@ class StatusController extends Controller
             'message'          => 'Status updated',
             'status'           => $status,
             'event_at'         => $actionAt->toIso8601String(),
+            'synced_at'        => $syncedAt?->toIso8601String(),
+            'performed_offline'=> $syncedAt !== null,
             'arrival_verified' => $arrivalVerified,
             'next_status'      => $nextAction['next_status'],
             'allowed_action'   => $nextAction['label'],

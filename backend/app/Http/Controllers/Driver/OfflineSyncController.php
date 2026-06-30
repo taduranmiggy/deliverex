@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
 use App\Models\OfflineSyncQueue;
+use App\Support\ActionTimestamp;
 use Illuminate\Http\Request;
 
 /**
@@ -20,6 +21,7 @@ class OfflineSyncController extends Controller
             'items.*.action_type' => 'required|string|max:40',
             'items.*.payload' => 'required|array',
             'items.*.action_timestamp' => 'nullable|date',
+            'items.*.action_taken_at' => 'nullable|date',
         ]);
 
         $user = $request->user();
@@ -35,7 +37,9 @@ class OfflineSyncController extends Controller
                     'device_id' => $data['device_id'] ?? null,
                     'action_type' => $item['action_type'],
                     'payload' => $item['payload'],
-                    'action_timestamp' => $item['action_timestamp'] ?? now(),
+                    'action_timestamp' => ActionTimestamp::resolve(
+                        $item['action_timestamp'] ?? $item['action_taken_at'] ?? null
+                    ),
                     'status' => 'pending',
                 ],
             );

@@ -42,6 +42,7 @@ class PortalController extends Controller
                 : null;
             $status = $latestStatus?->status ?? $job->status;
             $statusAt = $latestStatus?->created_at?->toIso8601String();
+            $statusSyncedAt = $latestStatus?->synced_at?->toIso8601String();
             $completedAt = $assignment?->completed_at?->toIso8601String();
 
             $documents = $assignment
@@ -54,6 +55,8 @@ class PortalController extends Controller
                 'status' => $status,
                 'status_at' => $statusAt,
                 'status_event_at' => $statusAt,
+                'status_synced_at' => $statusSyncedAt,
+                'status_performed_offline' => $statusSyncedAt !== null,
                 'completed_event_at' => $completedAt,
                 'pickup_location' => $job->pickup_location,
                 'dropoff_location' => $job->dropoff_location,

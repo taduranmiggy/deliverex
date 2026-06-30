@@ -9,6 +9,7 @@ import CustomerPageShell, { CustomerPageHeader } from '../../components/customer
 import DeliveryProgressBar from '../../components/customer/DeliveryProgressBar'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { StatusBadge } from '../../components/ui'
+import { formatEventAt, formatOfflineSyncLabel, getEventAt } from '../../utils/deliveryTimestamps'
 import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, MessageSquare, RefreshCw, Search } from 'lucide-react'
 
 function TrackingPage() {
@@ -22,9 +23,10 @@ function TrackingPage() {
   const [chatOpen, setChatOpen] = useState(false)
   const [pollKey, setPollKey]   = useState(null)
 
-  const lastUpdate = Array.isArray(result?.timeline) && result.timeline.length > 0
-    ? (result.timeline[result.timeline.length - 1]?.event_at ?? result.timeline[result.timeline.length - 1]?.timestamp ?? result.timeline[result.timeline.length - 1]?.at)
+  const lastTimelineRow = Array.isArray(result?.timeline) && result.timeline.length > 0
+    ? result.timeline.filter((row) => getEventAt(row)).at(-1)
     : null
+  const lastUpdate = lastTimelineRow ? getEventAt(lastTimelineRow) : null
 
   const loadTrack = useCallback(async (trackingCode) => {
     const res = await trackDelivery(trackingCode)
@@ -332,13 +334,18 @@ function TrackingPage() {
                   <ul className="tracking-timeline">
                     {result.timeline.map((row, i) => (
                       <li key={i}>
-                        <div className="tracking-time">{(row.event_at || row.timestamp || row.at) ? new Date(row.event_at || row.timestamp || row.at).toLocaleString() : '—'}</div>
+                        <div className="tracking-time">{formatEventAt(row) ?? '—'}</div>
                         <div>
                           <StatusBadge status={row.status} />
                           {row.status === 'arrived' && row.arrival_verified && (
                             <span className="badge-dx badge-dx--completed" style={{ marginLeft: 8, fontSize: '0.7rem' }}>
                               GPS Verified
                             </span>
+                          )}
+                          {formatOfflineSyncLabel(row) && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 4 }}>
+                              {formatOfflineSyncLabel(row)}
+                            </div>
                           )}
                           {row.gps_verified_at && row.status === 'arrived' && (
                             <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 4 }}>

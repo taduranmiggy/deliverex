@@ -11,7 +11,6 @@ export function getAssignmentLastUpdated(assignment) {
     if (t) times.push(new Date(t).getTime())
   }
   if (assignment.completed_event_at) times.push(new Date(assignment.completed_event_at).getTime())
-  if (!times.length && assignment.updated_at) times.push(new Date(assignment.updated_at).getTime())
   if (!times.length) return null
   return new Date(Math.max(...times))
 }

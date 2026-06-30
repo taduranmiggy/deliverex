@@ -11,6 +11,7 @@ import { fetchJobOrders } from '../../api/dispatcher'
 import { EmptyState, FilterSelect, LoadingSpinner, PageHeader, PaginationBar, ProofImageModal, SearchInput } from '../../components/ui'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { formatJobSchedule } from '../../utils/driverAssignment'
+import { formatEventAt } from '../../utils/deliveryTimestamps'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
 import { ClipboardList, Info, Loader2 } from 'lucide-react'
@@ -98,7 +99,7 @@ function DetailPanel({ order }) {
             <>
               {kv('Driver',  assignment.driver?.user?.name ?? '—')}
               {kv('Vehicle', assignment.vehicle?.plate_no ?? '—')}
-              {kv('Assigned at', assignment.assigned_at ? new Date(assignment.assigned_at).toLocaleString() : '—')}
+              {kv('Assigned at', formatEventAt({ assigned_event_at: assignment.assigned_event_at, assigned_at: assignment.assigned_at }) ?? '—')}
             </>
           ) : (
             <p style={{ fontSize: '0.875rem', color: 'var(--muted)', margin: 0 }}>

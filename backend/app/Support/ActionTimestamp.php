@@ -19,42 +19,74 @@ class ActionTimestamp
 
     public static function resolveFromRequest(Request $request, ?Carbon $fallback = null): Carbon
     {
+        return self::resolveFromRequestWithMeta($request, $fallback)['actionAt'];
+    }
+
+    /**
+     * @return array{actionAt: Carbon, fromClient: bool}
+     */
+    public static function resolveFromRequestWithMeta(Request $request, ?Carbon $fallback = null): array
+    {
         $raw = $request->input('action_timestamp') ?? $request->input('action_taken_at');
 
-        return self::resolve($raw, $fallback);
+        return self::resolveWithMeta($raw, $fallback);
     }
 
     public static function resolve(mixed $raw, ?Carbon $fallback = null): Carbon
     {
-        $fallback ??= now();
+        return self::resolveWithMeta($raw, $fallback)['actionAt'];
+    }
 
+    /**
+     * @return array{actionAt: Carbon, fromClient: bool}
+     */
+    public static function resolveWithMeta(mixed $raw, ?Carbon $fallback = null): array
+    {
+        $fallback ??= now();
+        $parsed = self::tryParseClientTimestamp($raw);
+
+        if ($parsed !== null) {
+            return [
+                'actionAt' => $parsed,
+                'fromClient' => true,
+            ];
+        }
+
+        return [
+            'actionAt' => $fallback->copy(),
+            'fromClient' => false,
+        ];
+    }
+
+    private static function tryParseClientTimestamp(mixed $raw): ?Carbon
+    {
         if ($raw === null || $raw === '') {
-            return $fallback->copy();
+            return null;
         }
 
         if (! is_string($raw)) {
-            return $fallback->copy();
+            return null;
         }
 
         $trimmed = trim($raw);
         if ($trimmed === '' || ! self::looksLikeIso8601DateTime($trimmed)) {
-            return $fallback->copy();
+            return null;
         }
 
         try {
             $parsed = Carbon::parse($trimmed);
         } catch (\Throwable) {
-            return $fallback->copy();
+            return null;
         }
 
         $now = now();
 
         if ($parsed->gt($now->copy()->addMinutes(self::FUTURE_SKEW_MINUTES))) {
-            return $fallback->copy();
+            return null;
         }
 
         if ($parsed->lt($now->copy()->subDays(self::MAX_AGE_DAYS))) {
-            return $fallback->copy();
+            return null;
         }
 
         return $parsed;

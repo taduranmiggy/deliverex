@@ -8,6 +8,7 @@ import {
   updateChatbotIntent,
 } from '../../api/admin'
 import ChatbotIntentModal from './ChatbotIntentModal'
+import ChatbotPaginatedTable from './ChatbotPaginatedTable'
 import useConfirmation from '../../hooks/useConfirmation'
 
 export default function AdminChatbotIntentsPanel() {
@@ -138,76 +139,56 @@ export default function AdminChatbotIntentsPanel() {
         </button>
       </div>
 
-      <div className="dx-data-table-wrap">
-        <table className="dx-data-table">
-          <thead>
-            <tr>
-              <th>Intent Name</th>
-              <th>Description</th>
-              <th>Hits (7 days)</th>
-              <th>Resolution Rate</th>
-              <th>Owner</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={6} style={{ color: 'var(--muted)', padding: 24 }}>Loading intents…</td>
-              </tr>
-            ) : filteredIntents.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ color: 'var(--muted)', padding: 24 }}>
-                  No intents found. Create one to train the live assistant.
-                </td>
-              </tr>
-            ) : (
-              filteredIntents.map((row) => (
-                <tr
-                  key={row.id}
-                  onClick={() => setSelectedSlug(row.slug)}
-                  style={{
-                    cursor: 'pointer',
-                    outline: selectedSlug === row.slug ? '2px solid rgba(45,84,183,0.35)' : 'none',
-                    outlineOffset: -2,
-                  }}
-                >
-                  <td>
-                    {row.name}
-                    {!row.is_active ? (
-                      <span className="badge-dx badge-dx--draft" style={{ marginLeft: 8 }}>Inactive</span>
-                    ) : null}
-                  </td>
-                  <td style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>{row.description || '—'}</td>
-                  <td>{row.hits ?? 0}</td>
-                  <td>{row.rate ?? 0}%</td>
-                  <td>{row.owner || '—'}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="dx-icon-btn"
-                      aria-label={`Edit ${row.name}`}
-                      title="Edit"
-                      onClick={(e) => openEdit(row, e)}
-                    >
-                      <IconPencil />
-                    </button>
-                    <button
-                      type="button"
-                      className="dx-icon-btn"
-                      aria-label={`Delete ${row.name}`}
-                      title="Delete"
-                      onClick={(e) => handleDelete(row, e)}
-                    >
-                      <IconTrash />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ChatbotPaginatedTable
+        columns={['Intent Name', 'Description', 'Hits (7 days)', 'Resolution Rate', 'Owner', 'Actions']}
+        rows={filteredIntents}
+        pageResetKey={intentSearch}
+        loading={loading}
+        loadingMessage="Loading intents…"
+        emptyMessage="No intents found. Create one to train the live assistant."
+        renderRow={(row) => (
+          <tr
+            key={row.id}
+            onClick={() => setSelectedSlug(row.slug)}
+            style={{
+              cursor: 'pointer',
+              outline: selectedSlug === row.slug ? '2px solid rgba(45,84,183,0.35)' : 'none',
+              outlineOffset: -2,
+            }}
+          >
+            <td>
+              {row.name}
+              {!row.is_active ? (
+                <span className="badge-dx badge-dx--draft" style={{ marginLeft: 8 }}>Inactive</span>
+              ) : null}
+            </td>
+            <td style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>{row.description || '—'}</td>
+            <td>{row.hits ?? 0}</td>
+            <td>{row.rate ?? 0}%</td>
+            <td>{row.owner || '—'}</td>
+            <td>
+              <button
+                type="button"
+                className="dx-icon-btn"
+                aria-label={`Edit ${row.name}`}
+                title="Edit"
+                onClick={(e) => openEdit(row, e)}
+              >
+                <IconPencil />
+              </button>
+              <button
+                type="button"
+                className="dx-icon-btn"
+                aria-label={`Delete ${row.name}`}
+                title="Delete"
+                onClick={(e) => handleDelete(row, e)}
+              >
+                <IconTrash />
+              </button>
+            </td>
+          </tr>
+        )}
+      />
 
       <div className="dx-train-phrases">
         <h4>Training phrases — {selectedIntent?.name ?? 'Select an intent'}</h4>

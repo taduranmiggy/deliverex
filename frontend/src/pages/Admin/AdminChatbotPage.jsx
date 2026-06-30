@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { IconEyeOutline, IconPencil, IconTrash } from '../../components/DxIcons'
 import AdminChatbotIntentsPanel from '../../components/admin/AdminChatbotIntentsPanel'
+import ChatbotPaginatedTable from '../../components/admin/ChatbotPaginatedTable'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -298,7 +299,7 @@ function AdminChatbotPage() {
   }, [faqSearch])
 
   return (
-    <section>
+    <section className="dx-chatbot-page">
       <header className="page-header">
         <div className="header-stack">
           <h1>Chatbot Management</h1>
@@ -393,30 +394,19 @@ function AdminChatbotPage() {
 
           <div className="dx-panel">
             <h3 className="dx-panel-title">Top Intents</h3>
-            <div className="dx-data-table-wrap">
-              <table className="dx-data-table">
-                <thead>
-                  <tr>
-                    <th>Intent</th>
-                    <th>Volume</th>
-                    <th>Resolution Rate</th>
-                    <th>Avg Confidence</th>
-                    <th>Last Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {TOP_INTENTS.map((row) => (
-                    <tr key={row.intent}>
-                      <td>{row.intent}</td>
-                      <td>{row.volume}</td>
-                      <td>{row.rate}%</td>
-                      <td>{row.confidence}%</td>
-                      <td>{row.updated}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ChatbotPaginatedTable
+              columns={['Intent', 'Volume', 'Resolution Rate', 'Avg Confidence', 'Last Updated']}
+              rows={TOP_INTENTS}
+              renderRow={(row) => (
+                <tr key={row.intent}>
+                  <td>{row.intent}</td>
+                  <td>{row.volume}</td>
+                  <td>{row.rate}%</td>
+                  <td>{row.confidence}%</td>
+                  <td>{row.updated}</td>
+                </tr>
+              )}
+            />
           </div>
         </>
       )}
@@ -442,44 +432,31 @@ function AdminChatbotPage() {
               Export
             </button>
           </div>
-          <div className="dx-data-table-wrap">
-            <table className="dx-data-table">
-              <thead>
-                <tr>
-                  <th>Session ID</th>
-                  <th>User</th>
-                  <th>Top Intent</th>
-                  <th>Status</th>
-                  <th>Duration</th>
-                  <th>Date / Time</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {CONVERSATIONS.map((row) => (
-                  <tr key={row.id}>
-                    <td>{row.id}</td>
-                    <td>{row.userLabel}</td>
-                    <td>{row.intent}</td>
-                    <td>
-                      <span
-                        className={`badge-dx ${row.resolved ? 'badge-dx--resolved' : 'badge-dx--unresolved'}`}
-                      >
-                        {row.resolved ? 'Resolved' : 'Unresolved'}
-                      </span>
-                    </td>
-                    <td>{row.duration}</td>
-                    <td>{row.at}</td>
-                    <td>
-                      <button type="button" className="dx-icon-btn" aria-label="View transcript" title="View">
-                        <IconEyeOutline />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ChatbotPaginatedTable
+            columns={['Session ID', 'User', 'Top Intent', 'Status', 'Duration', 'Date / Time', 'Actions']}
+            rows={CONVERSATIONS}
+            renderRow={(row) => (
+              <tr key={row.id}>
+                <td>{row.id}</td>
+                <td>{row.userLabel}</td>
+                <td>{row.intent}</td>
+                <td>
+                  <span
+                    className={`badge-dx ${row.resolved ? 'badge-dx--resolved' : 'badge-dx--unresolved'}`}
+                  >
+                    {row.resolved ? 'Resolved' : 'Unresolved'}
+                  </span>
+                </td>
+                <td>{row.duration}</td>
+                <td>{row.at}</td>
+                <td>
+                  <button type="button" className="dx-icon-btn" aria-label="View transcript" title="View">
+                    <IconEyeOutline />
+                  </button>
+                </td>
+              </tr>
+            )}
+          />
         </div>
       )}
 
@@ -500,43 +477,34 @@ function AdminChatbotPage() {
                 + New Article
               </button>
             </div>
-            <div className="dx-data-table-wrap" style={{ marginTop: 16 }}>
-              <table className="dx-data-table">
-                <thead>
-                  <tr>
-                    <th>Title</th>
-                    <th>Category</th>
-                    <th>Last Updated</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredFaq.map((row) => (
-                    <tr key={row.id}>
-                      <td>{row.title}</td>
-                      <td>{row.category}</td>
-                      <td>{row.updated}</td>
-                      <td>
-                        <span
-                          className={`badge-dx ${row.published ? 'badge-dx--published' : 'badge-dx--draft'}`}
-                        >
-                          {row.published ? 'Published' : 'Draft'}
-                        </span>
-                      </td>
-                      <td>
-                        <button type="button" className="dx-icon-btn" aria-label="Edit article" title="Edit">
-                          <IconPencil />
-                        </button>
-                        <button type="button" className="dx-icon-btn" aria-label="Delete article" title="Delete">
-                          <IconTrash />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ChatbotPaginatedTable
+              columns={['Title', 'Category', 'Last Updated', 'Status', 'Actions']}
+              rows={filteredFaq}
+              pageResetKey={faqSearch}
+              emptyMessage="No FAQ articles match your search."
+              renderRow={(row) => (
+                <tr key={row.id}>
+                  <td>{row.title}</td>
+                  <td>{row.category}</td>
+                  <td>{row.updated}</td>
+                  <td>
+                    <span
+                      className={`badge-dx ${row.published ? 'badge-dx--published' : 'badge-dx--draft'}`}
+                    >
+                      {row.published ? 'Published' : 'Draft'}
+                    </span>
+                  </td>
+                  <td>
+                    <button type="button" className="dx-icon-btn" aria-label="Edit article" title="Edit">
+                      <IconPencil />
+                    </button>
+                    <button type="button" className="dx-icon-btn" aria-label="Delete article" title="Delete">
+                      <IconTrash />
+                    </button>
+                  </td>
+                </tr>
+              )}
+            />
           </div>
 
           <div className="dx-panel">
@@ -575,39 +543,28 @@ function AdminChatbotPage() {
                 + New Template
               </button>
             </div>
-            <div className="dx-data-table-wrap">
-              <table className="dx-data-table">
-                <thead>
-                  <tr>
-                    <th>Template Name</th>
-                    <th>Type</th>
-                    <th>Last Updated</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {MESSAGE_TEMPLATES.map((row) => (
-                    <tr key={row.id}>
-                      <td>{row.name}</td>
-                      <td>{row.type}</td>
-                      <td>{row.updated}</td>
-                      <td>
-                        <span className="badge-dx badge-dx--published">Active</span>
-                      </td>
-                      <td>
-                        <button type="button" className="dx-icon-btn" aria-label="Edit template" title="Edit">
-                          <IconPencil />
-                        </button>
-                        <button type="button" className="dx-icon-btn" aria-label="Delete template" title="Delete">
-                          <IconTrash />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ChatbotPaginatedTable
+              columns={['Template Name', 'Type', 'Last Updated', 'Status', 'Actions']}
+              rows={MESSAGE_TEMPLATES}
+              renderRow={(row) => (
+                <tr key={row.id}>
+                  <td>{row.name}</td>
+                  <td>{row.type}</td>
+                  <td>{row.updated}</td>
+                  <td>
+                    <span className="badge-dx badge-dx--published">Active</span>
+                  </td>
+                  <td>
+                    <button type="button" className="dx-icon-btn" aria-label="Edit template" title="Edit">
+                      <IconPencil />
+                    </button>
+                    <button type="button" className="dx-icon-btn" aria-label="Delete template" title="Delete">
+                      <IconTrash />
+                    </button>
+                  </td>
+                </tr>
+              )}
+            />
           </div>
 
           <div className="dx-panel">
@@ -647,45 +604,34 @@ function AdminChatbotPage() {
                 + New Rule
               </button>
             </div>
-            <div className="dx-data-table-wrap">
-              <table className="dx-data-table">
-                <thead>
-                  <tr>
-                    <th>Condition</th>
-                    <th>Action</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ROUTING_RULES.map((row) => (
-                    <tr key={row.id}>
-                      <td>{row.condition}</td>
-                      <td>{row.action}</td>
-                      <td>
-                        <span
-                          className={`badge-dx ${row.priority === 'High' ? 'badge-dx--prio-high' : 'badge-dx--prio-medium'}`}
-                        >
-                          {row.priority}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="badge-dx badge-dx--published">Active</span>
-                      </td>
-                      <td>
-                        <button type="button" className="dx-icon-btn" aria-label="Edit rule" title="Edit">
-                          <IconPencil />
-                        </button>
-                        <button type="button" className="dx-icon-btn" aria-label="Delete rule" title="Delete">
-                          <IconTrash />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ChatbotPaginatedTable
+              columns={['Condition', 'Action', 'Priority', 'Status', 'Actions']}
+              rows={ROUTING_RULES}
+              renderRow={(row) => (
+                <tr key={row.id}>
+                  <td>{row.condition}</td>
+                  <td>{row.action}</td>
+                  <td>
+                    <span
+                      className={`badge-dx ${row.priority === 'High' ? 'badge-dx--prio-high' : 'badge-dx--prio-medium'}`}
+                    >
+                      {row.priority}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="badge-dx badge-dx--published">Active</span>
+                  </td>
+                  <td>
+                    <button type="button" className="dx-icon-btn" aria-label="Edit rule" title="Edit">
+                      <IconPencil />
+                    </button>
+                    <button type="button" className="dx-icon-btn" aria-label="Delete rule" title="Delete">
+                      <IconTrash />
+                    </button>
+                  </td>
+                </tr>
+              )}
+            />
           </div>
 
           <div className="dx-panel">
