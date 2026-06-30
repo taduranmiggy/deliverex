@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { fetchPasswordResetContext, resetPassword } from '../../api/auth'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { fetchAccountActivationContext, resetPassword } from '../../api/auth'
 import PasswordFieldsForm, { allPasswordRulesPassed } from '../../components/auth/PasswordFieldsForm'
 import { isStandalonePwa } from '../../utils/pwaUtils'
 import './LoginPage.css'
@@ -32,6 +32,8 @@ function AccountActivationPage() {
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
 
+  const needsCompanyAddress = Boolean(context?.needs_company_address)
+
   useEffect(() => {
     if (!token || !email) {
       setLoadingContext(false)
@@ -41,7 +43,7 @@ function AccountActivationPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const data = await fetchPasswordResetContext({ email, token })
+        const data = await fetchAccountActivationContext({ email, token })
         if (!cancelled) setContext(data)
       } catch (err) {
         if (!cancelled) setError(err.message)
@@ -74,26 +76,32 @@ function AccountActivationPage() {
       return
     }
 
-    const missing = ['street', 'barangay', 'city', 'province'].filter((k) => !companyAddress[k]?.trim())
-    if (missing.length) {
-      setError('Complete company address is required before activating your account.')
-      return
+    if (needsCompanyAddress) {
+      const missing = ['street', 'barangay', 'city', 'province'].filter((k) => !companyAddress[k]?.trim())
+      if (missing.length) {
+        setError('Complete company address is required before activating your account.')
+        return
+      }
     }
 
     setSubmitting(true)
     try {
-      await resetPassword({
+      const payload = {
         token,
         email,
         password,
         password_confirmation: passwordConfirmation,
-        company_address: {
+      }
+      if (needsCompanyAddress) {
+        payload.company_address = {
           street: companyAddress.street.trim(),
           barangay: companyAddress.barangay.trim(),
           city: companyAddress.city.trim(),
           province: companyAddress.province.trim(),
-        },
-      })
+        }
+      }
+
+      await resetPassword(payload)
       setSuccess(true)
     } catch (err) {
       setError(err.message)
@@ -138,11 +146,6 @@ function AccountActivationPage() {
     )
   }
 
-  if (context && !context.needs_company_address) {
-    const params = new URLSearchParams({ token, email })
-    return <Navigate to={`/reset-password?${params.toString()}`} replace />
-  }
-
   if (success) {
     return (
       <div className="auth-page auth-page--dx">
@@ -168,28 +171,34 @@ function AccountActivationPage() {
       <div className="auth-card auth-card--dx auth-card--signup">
         <h1>Activate your account</h1>
         <p className="auth-welcome auth-welcome--sub">
-          Set your password and company address for <strong>{context?.company_name}</strong>.
+          {needsCompanyAddress ? (
+            <>Set your password and company address for <strong>{context?.company_name}</strong>.</>
+          ) : (
+            <>Set your password to activate your Deliverex account for <strong>{email}</strong>.</>
+          )}
         </p>
         <form onSubmit={handleSubmit} className="auth-form-dx auth-activation-form" noValidate>
-          <div className="auth-form-section">
-            <p className="auth-form-section__title">Company address</p>
-            <label>
-              Street / building / site
-              <input required value={companyAddress.street} onChange={setAddress('street')} />
-            </label>
-            <label>
-              Barangay
-              <input required value={companyAddress.barangay} onChange={setAddress('barangay')} />
-            </label>
-            <label>
-              City / municipality
-              <input required value={companyAddress.city} onChange={setAddress('city')} />
-            </label>
-            <label>
-              Province
-              <input required value={companyAddress.province} onChange={setAddress('province')} />
-            </label>
-          </div>
+          {needsCompanyAddress ? (
+            <div className="auth-form-section">
+              <p className="auth-form-section__title">Company address</p>
+              <label>
+                Street / building / site
+                <input required value={companyAddress.street} onChange={setAddress('street')} />
+              </label>
+              <label>
+                Barangay
+                <input required value={companyAddress.barangay} onChange={setAddress('barangay')} />
+              </label>
+              <label>
+                City / municipality
+                <input required value={companyAddress.city} onChange={setAddress('city')} />
+              </label>
+              <label>
+                Province
+                <input required value={companyAddress.province} onChange={setAddress('province')} />
+              </label>
+            </div>
+          ) : null}
 
           <PasswordFieldsForm
             idPrefix="activation-password"

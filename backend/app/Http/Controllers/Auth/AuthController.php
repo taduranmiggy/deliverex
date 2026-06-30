@@ -297,6 +297,30 @@ class AuthController extends Controller
 
     public function passwordResetContext(Request $request)
     {
+        $user = $this->resolvePasswordBrokerUser($request);
+
+        return response()->json([
+            'email' => $user->email,
+        ]);
+    }
+
+    public function accountActivationContext(Request $request)
+    {
+        $user = $this->resolvePasswordBrokerUser($request);
+        $user->load(['role', 'companyUser.company']);
+        $company = $user->companyUser?->company;
+
+        return response()->json([
+            'email' => $user->email,
+            'needs_company_address' => $user->role?->name === 'customer'
+                && $company
+                && ! CompanyAddressHelper::hasStructuredAddress($company),
+            'company_name' => $company?->company_name,
+        ]);
+    }
+
+    private function resolvePasswordBrokerUser(Request $request): User
+    {
         $payload = $request->validate([
             'email' => 'required|email',
             'token' => 'required|string',
@@ -309,16 +333,7 @@ class AuthController extends Controller
             ]);
         }
 
-        $user->load(['role', 'companyUser.company']);
-        $company = $user->companyUser?->company;
-
-        return response()->json([
-            'email' => $user->email,
-            'needs_company_address' => $user->role?->name === 'customer'
-                && $company
-                && ! CompanyAddressHelper::hasStructuredAddress($company),
-            'company_name' => $company?->company_name,
-        ]);
+        return $user;
     }
 
     public function resetPassword(Request $request)

@@ -13,11 +13,11 @@ class UserInvitationService
     public function sendInvitation(User $user): void
     {
         $token = Password::broker()->createToken($user);
-        $resetUrl = rtrim(config('app.frontend_url', config('app.url')), '/')
-            .'/reset-password?token='.urlencode($token)
+        $activationUrl = rtrim(config('app.frontend_url', config('app.url')), '/')
+            .'/activate-account?token='.urlencode($token)
             .'&email='.urlencode($user->email);
 
-        $this->email->sendUserInvitation($user, $resetUrl);
+        $this->email->sendUserInvitation($user, $activationUrl);
 
         $user->forceFill([
             'invited_at' => now(),

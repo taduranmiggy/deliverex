@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { fetchPasswordResetContext, resetPassword } from '../../api/auth'
 import PasswordFieldsForm, { allPasswordRulesPassed } from '../../components/auth/PasswordFieldsForm'
 import { isStandalonePwa } from '../../utils/pwaUtils'
@@ -136,11 +136,6 @@ function ResetPasswordPage() {
         </div>
       </div>
     )
-  }
-
-  if (context?.needs_company_address) {
-    const params = new URLSearchParams({ token, email })
-    return <Navigate to={`/activate-account?${params.toString()}`} replace />
   }
 
   return (

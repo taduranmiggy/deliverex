@@ -64,6 +64,8 @@ Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
     ->middleware('throttle:6,1');
 Route::get('/auth/reset-password/context', [AuthController::class, 'passwordResetContext'])
     ->middleware('throttle:12,1');
+Route::get('/auth/activate-account/context', [AuthController::class, 'accountActivationContext'])
+    ->middleware('throttle:12,1');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
     ->middleware('throttle:6,1');
 
