@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class DeliveryCompletionProof extends Model
 {
+    public $timestamps = false;
+
     public const TYPE_RECEIPT_PHOTO = 'receipt_photo';
     public const TYPE_OCR_DOCUMENT  = 'ocr_document';
 
@@ -29,6 +31,8 @@ class DeliveryCompletionProof extends Model
         'receiver_contact',
         'receiver_signature_path',
         'delivery_notes',
+        'created_at',
+        'updated_at',
     ];
 
     public function getSubmittedEventAtAttribute(): ?string

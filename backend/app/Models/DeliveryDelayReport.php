@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class DeliveryDelayReport extends Model
 {
+    public $timestamps = false;
+
     protected $appends = [
         'reported_event_at',
     ];
@@ -19,6 +21,8 @@ class DeliveryDelayReport extends Model
         'delay_notes',
         'acknowledged_at',
         'acknowledged_by',
+        'created_at',
+        'updated_at',
     ];
 
     protected $casts = [

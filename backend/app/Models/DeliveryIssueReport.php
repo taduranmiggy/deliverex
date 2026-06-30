@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class DeliveryIssueReport extends Model
 {
+    public $timestamps = false;
+
     protected $appends = [
         'reported_event_at',
     ];
@@ -17,6 +19,8 @@ class DeliveryIssueReport extends Model
         'issue_type',
         'notes',
         'photo_path',
+        'created_at',
+        'updated_at',
     ];
 
     public const TYPES = [

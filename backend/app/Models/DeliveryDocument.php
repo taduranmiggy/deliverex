@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class DeliveryDocument extends Model
 {
+    public $timestamps = false;
+
     protected $appends = [
         'uploaded_event_at',
     ];
@@ -16,6 +18,8 @@ class DeliveryDocument extends Model
         'type',
         'uploaded_by',
         'notes',
+        'created_at',
+        'updated_at',
     ];
 
     public function getUploadedEventAtAttribute(): ?string
