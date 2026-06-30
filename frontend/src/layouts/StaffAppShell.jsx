@@ -1,21 +1,30 @@
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import LogoutButton from '../components/LogoutButton'
+import StaffSidebar from '../components/layout/StaffSidebar'
 import PageTransition from '../components/PageTransition'
 import RouteFallback from '../components/RouteFallback'
 import UserAccountMenu from '../components/UserAccountMenu'
 import useAuth from '../hooks/useAuth'
-import { Bell, Menu, X } from 'lucide-react'
+import { Bell, Menu } from 'lucide-react'
 
-const navCls = ({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`
+function normalizeNavSections(navItems, navSections) {
+  if (Array.isArray(navSections) && navSections.length > 0) {
+    return navSections
+  }
+  if (Array.isArray(navItems) && navItems.length > 0) {
+    return [{ label: 'Menu', items: navItems }]
+  }
+  return []
+}
 
 /**
  * Shared admin / dispatcher / manager shell with mobile slide-in navigation.
  */
 function StaffAppShell({
   roleLabel,
-  brandIcon: BrandIcon,
+  brandIcon,
   navItems,
+  navSections,
   notificationPath,
   profilePath,
 }) {
@@ -23,9 +32,10 @@ function StaffAppShell({
   const location = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
-  const initials = user?.name
-    ? user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
-    : roleLabel.slice(0, 2).toUpperCase()
+  const sections = useMemo(
+    () => normalizeNavSections(navItems, navSections),
+    [navItems, navSections],
+  )
 
   useEffect(() => {
     setMobileNavOpen(false)
@@ -45,55 +55,15 @@ function StaffAppShell({
         onClick={() => setMobileNavOpen(false)}
       />
 
-      <aside className={`sidebar sidebar--deliverex${mobileNavOpen ? ' sidebar--open' : ''}`}>
-        <div className="sidebar-brand-block">
-          <div className="sidebar-brand-wrap">
-            <div className="sidebar-brand-icon" aria-hidden>
-              <BrandIcon size={18} color="#fff" />
-            </div>
-            <div>
-              <div className="brand">Deliverex</div>
-              <div className="sidebar-role-label">{roleLabel}</div>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="sidebar-close-btn"
-            aria-label="Close menu"
-            onClick={() => setMobileNavOpen(false)}
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <nav aria-label={`${roleLabel} navigation`}>
-          {navItems.map(({ to, label, Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={navCls}
-              onClick={() => setMobileNavOpen(false)}
-            >
-              <Icon size={17} aria-hidden />
-              <span>{label}</span>
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="profile">
-          <div className="sidebar-user">
-            <div className="topbar-avatar" style={{ flexShrink: 0 }}>{initials}</div>
-            <div className="sidebar-user__info">
-              <span className="sidebar-user__name">{user?.name ?? roleLabel}</span>
-              <span className="sidebar-user__email" title={user?.email ?? ''}>
-                {user?.email ?? ''}
-              </span>
-            </div>
-          </div>
-          <LogoutButton />
-        </div>
-      </aside>
+      <StaffSidebar
+        roleLabel={roleLabel}
+        brandIcon={brandIcon}
+        navSections={sections}
+        user={user}
+        profilePath={profilePath}
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+      />
 
       <div className="app-shell__main">
         <header className="topbar">

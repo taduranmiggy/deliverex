@@ -201,7 +201,7 @@ function TrackingPage() {
                 transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               >
               {/* Progress bar */}
-              <DeliveryProgressBar status={result.status} layout="stacked" />
+              <DeliveryProgressBar status={result.status} />
 
               {/* Delay alert */}
               {result.delay_flag && (

@@ -1,11 +1,12 @@
-.app-shell {
+/* Legacy shell — staff roles use dx-staff-sidebar via staff-sidebar.css */
+.app-shell:not(:has(.dx-staff-sidebar)) {
   display: grid;
   grid-template-columns: 160px 1fr;
   min-height: 100vh;
   background: var(--bg);
 }
 
-.sidebar {
+.sidebar:not(.dx-staff-sidebar) {
   background: var(--surface);
   border-right: 1px solid var(--stroke);
   display: flex;
@@ -14,24 +15,18 @@
   gap: 24px;
 }
 
-.sidebar .brand {
+.sidebar:not(.dx-staff-sidebar) .brand {
   font-weight: 700;
   color: var(--primary);
   font-size: 16px;
 }
 
-.brand {
-  font-weight: 700;
-  color: var(--primary);
-  font-size: 16px;
-}
-
-.sidebar nav {
+.sidebar:not(.dx-staff-sidebar) nav {
   display: grid;
   gap: 8px;
 }
 
-.sidebar a {
+.sidebar:not(.dx-staff-sidebar) a {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -40,13 +35,13 @@
   color: var(--muted);
 }
 
-.sidebar a.active,
-.sidebar a:hover {
+.sidebar:not(.dx-staff-sidebar) a.active,
+.sidebar:not(.dx-staff-sidebar) a:hover {
   color: var(--primary);
   background: rgba(47, 91, 231, 0.1);
 }
 
-.sidebar .profile {
+.sidebar:not(.dx-staff-sidebar) .profile {
   margin-top: auto;
   border-top: 1px solid var(--stroke);
   padding-top: 16px;

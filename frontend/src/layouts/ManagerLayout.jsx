@@ -3,14 +3,29 @@ import {
 } from 'lucide-react'
 import StaffAppShell from './StaffAppShell'
 
-const NAV = [
-  { to: '/manager', label: 'Dashboard', Icon: LayoutDashboard, end: true },
-  { to: '/manager/analytics', label: 'Analytics', Icon: BarChart3 },
-  { to: '/manager/delivery-history', label: 'History', Icon: History },
-  { to: '/manager/reports', label: 'Reports', Icon: TrendingUp },
-  { to: '/manager/delivery-documentation', label: 'OCR Review', Icon: FileSearch },
-  { to: '/manager/fleet-tracking', label: 'Fleet Tracking', Icon: MapPin },
-  { to: '/manager/notifications', label: 'Notifications', Icon: Bell },
+const NAV_SECTIONS = [
+  {
+    label: 'Overview',
+    items: [
+      { to: '/manager', label: 'Dashboard', Icon: LayoutDashboard, end: true },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [
+      { to: '/manager/analytics', label: 'Analytics', Icon: BarChart3 },
+      { to: '/manager/delivery-history', label: 'Delivery History', Icon: History },
+      { to: '/manager/reports', label: 'Reports', Icon: TrendingUp },
+    ],
+  },
+  {
+    label: 'Fleet',
+    items: [
+      { to: '/manager/delivery-documentation', label: 'OCR Review', Icon: FileSearch },
+      { to: '/manager/fleet-tracking', label: 'Fleet Tracking', Icon: MapPin },
+      { to: '/manager/notifications', label: 'Notifications', Icon: Bell },
+    ],
+  },
 ]
 
 function ManagerLayout() {
@@ -18,7 +33,7 @@ function ManagerLayout() {
     <StaffAppShell
       roleLabel="Manager"
       brandIcon={BarChart3}
-      navItems={NAV}
+      navSections={NAV_SECTIONS}
       notificationPath="/manager/notifications"
       profilePath="/manager/profile"
     />

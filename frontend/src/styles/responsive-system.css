@@ -63,11 +63,11 @@ body.dx-nav-locked {
 }
 
 @media (max-width: 1024px) {
-  .app-shell {
+  .app-shell:not(:has(.dx-staff-sidebar)) {
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
+  .sidebar:not(.dx-staff-sidebar) {
     position: fixed;
     top: 0;
     left: 0;
@@ -81,7 +81,7 @@ body.dx-nav-locked {
     box-shadow: 8px 0 32px rgba(15, 23, 42, 0.2);
   }
 
-  .sidebar.sidebar--deliverex {
+  .sidebar.sidebar--deliverex:not(.dx-staff-sidebar) {
     display: flex;
     flex-direction: column;
     flex-wrap: nowrap;
@@ -92,7 +92,7 @@ body.dx-nav-locked {
     border-bottom: none;
   }
 
-  .sidebar--deliverex nav {
+  .sidebar--deliverex:not(.dx-staff-sidebar) nav {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -102,7 +102,7 @@ body.dx-nav-locked {
     overflow-y: auto;
   }
 
-  .sidebar--deliverex .profile {
+  .sidebar--deliverex:not(.dx-staff-sidebar) .profile {
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
@@ -144,7 +144,7 @@ body.dx-nav-locked {
     display: none !important;
   }
 
-  .sidebar {
+  .sidebar:not(.dx-staff-sidebar) {
     align-self: stretch;
     min-height: 100%;
     height: auto;
@@ -157,6 +157,7 @@ body.dx-nav-locked {
 .btn-dx-login,
 .btn-sm,
 .topbar-icon-btn,
+.dx-staff-sidebar__link,
 .sidebar-link,
 .customer-bottom-nav-item,
 .dx-msg-quick,

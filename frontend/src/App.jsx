@@ -1,5 +1,6 @@
 import './App.css'
 import './deliverex-ui.css'
+import './styles/staff-sidebar.css'
 import './styles/customer-pwa.css'
 import './styles/responsive-system.css'
 import './styles/pwa-mobile-audit.css'
