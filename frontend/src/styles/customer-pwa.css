@@ -1026,7 +1026,7 @@
 .pwa-faq-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .pwa-faq-item {
@@ -1034,6 +1034,16 @@
   border-radius: 12px;
   overflow: hidden;
   background: var(--surface);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pwa-faq-item:hover {
+  border-color: var(--blue-200);
+}
+
+.pwa-faq-item--open {
+  border-color: var(--blue-300);
+  box-shadow: 0 2px 12px rgba(45, 84, 183, 0.08);
 }
 
 .pwa-faq-item__trigger {
@@ -1042,42 +1052,54 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 48px;
+  min-height: 52px;
   padding: 14px 16px;
   border: none;
   background: none;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 600;
+  line-height: 1.4;
   text-align: left;
   cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s ease;
+}
+
+.pwa-faq-item__trigger:hover {
+  background: var(--slate-50);
 }
 
 .pwa-faq-item__chevron {
-  transition: transform 0.2s ease;
+  transition: transform 0.25s ease;
   flex-shrink: 0;
   color: var(--muted);
 }
 
 .pwa-faq-item--open .pwa-faq-item__chevron {
   transform: rotate(180deg);
+  color: var(--color-primary);
 }
 
 .pwa-faq-item__panel {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.25s ease;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s ease;
 }
 
 .pwa-faq-item--open .pwa-faq-item__panel {
-  max-height: 200px;
+  grid-template-rows: 1fr;
+}
+
+.pwa-faq-item__panel-inner {
+  overflow: hidden;
 }
 
 .pwa-faq-item__panel p {
   margin: 0;
-  padding: 0 16px 14px;
-  font-size: 0.8125rem;
+  padding: 0 16px 16px;
+  font-size: 0.875rem;
+  line-height: 1.65;
   color: var(--muted);
-  line-height: 1.55;
 }
 
 /* Forms */

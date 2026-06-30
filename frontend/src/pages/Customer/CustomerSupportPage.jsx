@@ -5,6 +5,7 @@ import CustomerActionCard from '../../components/customer/CustomerActionCard'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
 import InquiryForm from '../../components/customer/InquiryForm'
 import PublicFaqSection from '../../components/customer/PublicFaqSection'
+import { SUPPORT_PAGE_FAQS } from '../../data/publicFaqs'
 import { sendInquiry } from '../../api/customer'
 import { SUPPORT_EMAIL, SUPPORT_PHONE_HREF } from '../../config/support'
 import useAuth from '../../hooks/useAuth'
@@ -71,8 +72,27 @@ function CustomerSupportPage() {
           <section className="pwa-section customer-support-faq-inquiry__col">
             <PublicFaqSection
               variant="support"
+              items={SUPPORT_PAGE_FAQS}
+              showSearch={false}
+              showCategories={false}
+              singleOpen
               title="Frequently Asked Questions"
-              description="Filter by topic or search for quick answers before submitting an inquiry."
+              description="Quick answers to the most common questions. For anything else, chat with the Deliverex Assistant."
+              footer={(
+                <>
+                  <p className="dx-public-faq__chat-text">
+                    Can&apos;t find what you&apos;re looking for? Chat with the Deliverex Assistant for instant help.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-dx-primary btn-sm dx-public-faq__chat-btn"
+                    onClick={() => setChatOpen(true)}
+                  >
+                    <MessageSquare size={16} aria-hidden />
+                    Open Chat Assistant
+                  </button>
+                </>
+              )}
             />
           </section>
 

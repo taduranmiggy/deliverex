@@ -4,6 +4,7 @@ import { roleRoutes } from './roleRoutes'
 import ResetPasswordPage from '../pages/Auth/ResetPasswordPage'
 import CompanyActivationPage from '../pages/Auth/CompanyActivationPage'
 import LoginPage from '../pages/Auth/LoginPage'
+import ForgotPasswordPage from '../pages/Auth/ForgotPasswordPage'
 import DriverLoginPage from '../pages/Auth/DriverLoginPage'
 import DriverChangePasswordPage from '../pages/Driver/DriverChangePasswordPage'
 import DriverSignupPage from '../pages/Auth/DriverSignupPage'
@@ -38,6 +39,7 @@ function AppRouter() {
           <Route path="/track/:trackingCode" element={<TrackCodeRedirect />} />
 
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/activate-company/:token" element={<CompanyActivationPage />} />
           <Route path="/driver/login" element={<DriverLoginPage />} />

@@ -32,13 +32,15 @@ function CustomerForgotPasswordPage() {
         </Link>
         <h1>Forgot password?</h1>
         <p className="auth-welcome auth-welcome--sub">
-          Enter the email on your customer account. If it exists, we will send a password reset link.
+          Enter the email address on your customer account. If an account with this email exists,
+          a password reset link will be sent.
         </p>
 
         {sent ? (
           <div>
             <p className="auth-success-dx">
-              If an account exists for that email, a reset link has been sent. Check your inbox and spam folder.
+              If an account with this email exists, a password reset link has been sent.
+              Check your inbox and spam folder.
             </p>
             <p className="auth-alt-link" style={{ marginTop: 16 }}>
               <Link to="/customer/login">Return to customer login</Link>
@@ -47,7 +49,7 @@ function CustomerForgotPasswordPage() {
         ) : (
           <form onSubmit={handleSubmit} className="auth-form-dx">
             <label>
-              Email
+              Email address
               <input
                 name="email"
                 type="email"
@@ -60,7 +62,7 @@ function CustomerForgotPasswordPage() {
             </label>
             {error ? <p className="auth-error-dx">{error}</p> : null}
             <button className="btn-dx-login" type="submit" disabled={submitting}>
-              {submitting ? 'Sending…' : 'Send reset link'}
+              {submitting ? 'Sending…' : 'Send Reset Link'}
             </button>
           </form>
         )}

@@ -7,22 +7,35 @@ import {
   searchPublicFaqs,
 } from '../../data/publicFaqs'
 
-function FaqItem({ question, answer }) {
-  const [open, setOpen] = useState(false)
+function FaqItem({ id, question, answer, open, onToggle, singleOpen }) {
+  const isOpen = singleOpen ? open : undefined
+
+  const [localOpen, setLocalOpen] = useState(false)
+  const expanded = singleOpen ? isOpen : localOpen
+
+  const handleClick = () => {
+    if (singleOpen) {
+      onToggle(id)
+      return
+    }
+    setLocalOpen((v) => !v)
+  }
 
   return (
-    <div className={`pwa-faq-item${open ? ' pwa-faq-item--open' : ''}`}>
+    <div className={`pwa-faq-item${expanded ? ' pwa-faq-item--open' : ''}`}>
       <button
         type="button"
         className="pwa-faq-item__trigger"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
+        onClick={handleClick}
+        aria-expanded={expanded}
       >
         <span>{question}</span>
-        <ChevronDown size={18} className="pwa-faq-item__chevron" />
+        <ChevronDown size={18} className="pwa-faq-item__chevron" aria-hidden />
       </button>
       <div className="pwa-faq-item__panel">
-        <p>{answer}</p>
+        <div className="pwa-faq-item__panel-inner">
+          <p>{answer}</p>
+        </div>
       </div>
     </div>
   )
@@ -31,12 +44,18 @@ function FaqItem({ question, answer }) {
 export default function PublicFaqSection({
   title = 'Frequently Asked Questions',
   description = 'Quick answers about tracking, accounts, concerns, and how Deliverex works.',
+  items,
   showSearch = true,
   showCategories = true,
+  singleOpen = false,
   variant = 'default',
+  footer = null,
 }) {
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
+  const [openId, setOpenId] = useState(null)
+
+  const sourceFaqs = items ?? PUBLIC_FAQS
 
   const categories = useMemo(
     () => (showCategories ? PUBLIC_FAQ_CATEGORIES : [{ id: 'all', label: 'All' }]),
@@ -44,9 +63,13 @@ export default function PublicFaqSection({
   )
 
   const visibleFaqs = useMemo(() => {
-    const byCategory = filterPublicFaqs(PUBLIC_FAQS, category)
+    const byCategory = filterPublicFaqs(sourceFaqs, category)
     return searchPublicFaqs(byCategory, search)
-  }, [category, search])
+  }, [sourceFaqs, category, search])
+
+  const handleToggle = (id) => {
+    setOpenId((prev) => (prev === id ? null : id))
+  }
 
   return (
     <section className={`dx-public-faq dx-public-faq--${variant}`} aria-labelledby="public-faq-heading">
@@ -97,10 +120,20 @@ export default function PublicFaqSection({
           <p className="dx-public-faq__empty">No questions match your search. Try another keyword or contact support.</p>
         ) : (
           visibleFaqs.map((item) => (
-            <FaqItem key={item.id} question={item.q} answer={item.a} />
+            <FaqItem
+              key={item.id}
+              id={item.id}
+              question={item.q}
+              answer={item.a}
+              singleOpen={singleOpen}
+              open={openId === item.id}
+              onToggle={handleToggle}
+            />
           ))
         )}
       </div>
+
+      {footer ? <div className="dx-public-faq__footer">{footer}</div> : null}
     </section>
   )
 }

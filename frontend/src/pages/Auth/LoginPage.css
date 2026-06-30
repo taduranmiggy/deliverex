@@ -589,6 +589,17 @@
   background: #f3f4f6;
 }
 
+.auth-page--forgot {
+  flex: 1;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.auth-success-split {
+  margin: 0 0 18px;
+}
+
 .auth-back-home {
   display: inline-flex;
   align-items: center;

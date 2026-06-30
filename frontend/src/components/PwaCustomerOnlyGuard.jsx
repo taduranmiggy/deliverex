@@ -15,6 +15,10 @@ function PwaCustomerOnlyGuard({ children }) {
     return <Navigate to="/customer/login" replace />
   }
 
+  if (pathname === '/forgot-password' || pathname.startsWith('/forgot-password')) {
+    return <Navigate to="/customer/forgot-password" replace />
+  }
+
   if (pathname === '/reset-password' || pathname.startsWith('/reset-password')) {
     return children
   }

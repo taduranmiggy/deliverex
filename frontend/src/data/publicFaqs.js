@@ -101,6 +101,20 @@ export const PUBLIC_FAQS = [
   },
 ]
 
+/** Curated FAQs for the customer support page (quick reference only). */
+export const SUPPORT_PAGE_FAQ_IDS = [
+  'what-is-deliverex',
+  'services',
+  'privacy-location',
+  'track-delivery',
+  'find-tracking-id',
+  'contact-support',
+]
+
+export const SUPPORT_PAGE_FAQS = SUPPORT_PAGE_FAQ_IDS
+  .map((id) => PUBLIC_FAQS.find((item) => item.id === id))
+  .filter(Boolean)
+
 /** Flat list for chat FAQ panel (most common questions). */
 export const CHAT_FAQ_ITEMS = PUBLIC_FAQS.filter((item) => [
   'track-delivery',

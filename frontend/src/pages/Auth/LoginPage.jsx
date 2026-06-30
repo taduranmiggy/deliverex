@@ -64,6 +64,7 @@ function LoginPage() {
   const location = useLocation()
   const emailId = useId()
   const passwordId = useId()
+  const notice = location.state?.notice
 
   useEffect(() => {
     const t = window.setInterval(() => {
@@ -118,6 +119,8 @@ function LoginPage() {
 
             <h1 className="auth-split-title">Sign in</h1>
             <p className="auth-split-lead">Admin, manager, dispatcher, and customer accounts use this page.</p>
+
+            {notice ? <p className="auth-success-dx auth-success-split">{notice}</p> : null}
 
             <form onSubmit={handleSubmit} className="auth-form-split" noValidate>
               <div className="auth-field-split">
@@ -177,9 +180,9 @@ function LoginPage() {
                   <input type="checkbox" name="remember" />
                   <span>Remember me</span>
                 </label>
-                <button type="button" className="auth-forgot-plain">
+                <Link to="/forgot-password" className="auth-forgot-plain">
                   Forgot Password?
-                </button>
+                </Link>
               </div>
 
               {error ? <p className="auth-error-dx auth-error-split">{error}</p> : null}

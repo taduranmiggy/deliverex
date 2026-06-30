@@ -5554,3 +5554,34 @@
   border-radius: 12px;
   margin: 0;
 }
+.dx-public-faq__footer {
+  margin-top: 24px;
+  padding: 18px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--blue-200);
+  background: linear-gradient(135deg, var(--blue-50, #eff6ff), var(--surface));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.dx-public-faq__chat-text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.dx-public-faq__chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .dx-public-faq__footer {
+    padding: 16px 14px;
+  }
+  .dx-public-faq__chat-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
