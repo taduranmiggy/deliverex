@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { IconEyeOutline, IconPencil, IconTrash } from '../../components/DxIcons'
 import AdminChatbotIntentsPanel from '../../components/admin/AdminChatbotIntentsPanel'
 import ChatbotPaginatedTable from '../../components/admin/ChatbotPaginatedTable'
+import { PUBLIC_FAQS } from '../../data/publicFaqs'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -48,36 +49,13 @@ const CONVERSATIONS = [
   },
 ]
 
-const FAQ_ARTICLES = [
-  {
-    id: 1,
-    title: 'How to track my delivery?',
-    category: 'Tracking',
-    updated: '2024-02-22',
-    published: true,
-  },
-  {
-    id: 2,
-    title: 'Accepted payment methods',
-    category: 'Payments',
-    updated: '2024-02-20',
-    published: false,
-  },
-  {
-    id: 3,
-    title: 'Site preparation delivery zones',
-    category: 'Delivery',
-    updated: '2024-02-18',
-    published: true,
-  },
-  {
-    id: 4,
-    title: 'Contact support after-hours',
-    category: 'Support',
-    updated: '2024-02-15',
-    published: true,
-  },
-]
+const FAQ_ARTICLES = PUBLIC_FAQS.map((faq, index) => ({
+  id: index + 1,
+  title: faq.q,
+  category: 'Public FAQ',
+  updated: '2026-06-30',
+  published: true,
+}))
 
 const MESSAGE_TEMPLATES = [
   {
@@ -282,21 +260,11 @@ function ResolvedBarChart() {
 
 function AdminChatbotPage() {
   const [tab, setTab] = useState('dashboard')
-  const [faqSearch, setFaqSearch] = useState('')
   const [redactPhone, setRedactPhone] = useState(true)
   const [redactEmail, setRedactEmail] = useState(true)
   const [redactTracking, setRedactTracking] = useState(false)
   const [retentionDays, setRetentionDays] = useState('90')
   const [webhookSecretVisible, setWebhookSecretVisible] = useState(false)
-
-  const filteredFaq = useMemo(() => {
-    const q = faqSearch.trim().toLowerCase()
-    if (!q) return FAQ_ARTICLES
-    return FAQ_ARTICLES.filter(
-      (a) =>
-        a.title.toLowerCase().includes(q) || a.category.toLowerCase().includes(q),
-    )
-  }, [faqSearch])
 
   return (
     <section className="dx-chatbot-page">
@@ -465,23 +433,16 @@ function AdminChatbotPage() {
       {tab === 'faq' && (
         <>
           <div className="dx-panel" style={{ marginBottom: 20 }}>
-            <div className="dx-intents-toolbar" style={{ marginBottom: 0 }}>
-              <input
-                type="search"
-                placeholder="Search articles..."
-                value={faqSearch}
-                onChange={(e) => setFaqSearch(e.target.value)}
-                aria-label="Search FAQ articles"
-              />
+            <div className="dx-intents-toolbar" style={{ marginBottom: 16, justifyContent: 'flex-end' }}>
               <button type="button" className="btn-dx-primary">
                 + New Article
               </button>
             </div>
             <ChatbotPaginatedTable
               columns={['Title', 'Category', 'Last Updated', 'Status', 'Actions']}
-              rows={filteredFaq}
-              pageResetKey={faqSearch}
-              emptyMessage="No FAQ articles match your search."
+              rows={FAQ_ARTICLES}
+              pageResetKey="faq"
+              emptyMessage="No FAQ articles yet."
               renderRow={(row) => (
                 <tr key={row.id}>
                   <td>{row.title}</td>

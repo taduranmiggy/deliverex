@@ -95,7 +95,9 @@ function LandingPage() {
 
       <PublicFaqSection
         variant="landing"
-        description="Browse by topic or search — answers for tracking, accounts, concerns, and how Deliverex works."
+        description="Quick reference answers about Deliverex tracking and deliveries."
+        singleOpen
+        onOpenChat={() => setChatOpen(true)}
       />
 
       <DeliverexSiteFooter />

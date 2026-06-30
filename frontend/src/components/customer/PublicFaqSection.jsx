@@ -1,38 +1,20 @@
-import { useMemo, useState } from 'react'
-import { ChevronDown, HelpCircle, Search } from 'lucide-react'
-import {
-  PUBLIC_FAQ_CATEGORIES,
-  PUBLIC_FAQS,
-  filterPublicFaqs,
-  searchPublicFaqs,
-} from '../../data/publicFaqs'
+import { useState } from 'react'
+import { ChevronDown, HelpCircle, MessageSquare } from 'lucide-react'
+import { PUBLIC_FAQS } from '../../data/publicFaqs'
 
-function FaqItem({ id, question, answer, open, onToggle, singleOpen }) {
-  const isOpen = singleOpen ? open : undefined
-
-  const [localOpen, setLocalOpen] = useState(false)
-  const expanded = singleOpen ? isOpen : localOpen
-
-  const handleClick = () => {
-    if (singleOpen) {
-      onToggle(id)
-      return
-    }
-    setLocalOpen((v) => !v)
-  }
-
+function FaqItem({ id, question, answer, open, onToggle }) {
   return (
-    <div className={`pwa-faq-item${expanded ? ' pwa-faq-item--open' : ''}`}>
+    <div className={`pwa-faq-item${open ? ' pwa-faq-item--open' : ''}`}>
       <button
         type="button"
         className="pwa-faq-item__trigger"
-        onClick={handleClick}
-        aria-expanded={expanded}
+        onClick={() => onToggle(id)}
+        aria-expanded={open}
       >
         <span>{question}</span>
         <ChevronDown size={18} className="pwa-faq-item__chevron" aria-hidden />
       </button>
-      <div className="pwa-faq-item__panel">
+      <div className="pwa-faq-item__panel" aria-hidden={!open}>
         <div className="pwa-faq-item__panel-inner">
           <p>{answer}</p>
         </div>
@@ -43,33 +25,36 @@ function FaqItem({ id, question, answer, open, onToggle, singleOpen }) {
 
 export default function PublicFaqSection({
   title = 'Frequently Asked Questions',
-  description = 'Quick answers about tracking, accounts, concerns, and how Deliverex works.',
+  description = 'Quick answers about tracking, deliveries, and how Deliverex works.',
   items,
-  showSearch = true,
-  showCategories = true,
-  singleOpen = false,
+  singleOpen = true,
   variant = 'default',
+  onOpenChat = null,
   footer = null,
 }) {
-  const [category, setCategory] = useState('all')
-  const [search, setSearch] = useState('')
   const [openId, setOpenId] = useState(null)
-
   const sourceFaqs = items ?? PUBLIC_FAQS
 
-  const categories = useMemo(
-    () => (showCategories ? PUBLIC_FAQ_CATEGORIES : [{ id: 'all', label: 'All' }]),
-    [showCategories],
-  )
-
-  const visibleFaqs = useMemo(() => {
-    const byCategory = filterPublicFaqs(sourceFaqs, category)
-    return searchPublicFaqs(byCategory, search)
-  }, [sourceFaqs, category, search])
-
   const handleToggle = (id) => {
+    if (!singleOpen) return
     setOpenId((prev) => (prev === id ? null : id))
   }
+
+  const chatFooter = onOpenChat ? (
+    <>
+      <p className="dx-public-faq__chat-text">Can&apos;t find what you&apos;re looking for?</p>
+      <button
+        type="button"
+        className="btn-dx-primary btn-sm dx-public-faq__chat-btn"
+        onClick={onOpenChat}
+      >
+        <MessageSquare size={16} aria-hidden />
+        Chat with Deliverex Assistant
+      </button>
+    </>
+  ) : null
+
+  const resolvedFooter = footer ?? chatFooter
 
   return (
     <section className={`dx-public-faq dx-public-faq--${variant}`} aria-labelledby="public-faq-heading">
@@ -81,59 +66,20 @@ export default function PublicFaqSection({
         {description ? <p className="dx-public-faq__desc">{description}</p> : null}
       </div>
 
-      {(showSearch || showCategories) ? (
-        <div className="dx-public-faq__toolbar">
-          {showCategories ? (
-            <div className="dx-public-faq__chips" role="tablist" aria-label="FAQ categories">
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={category === cat.id}
-                  className={`dx-public-faq__chip${category === cat.id ? ' dx-public-faq__chip--active' : ''}`}
-                  onClick={() => setCategory(cat.id)}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {showSearch ? (
-            <label className="dx-public-faq__search">
-              <Search size={16} aria-hidden />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search questions…"
-                aria-label="Search FAQs"
-              />
-            </label>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="pwa-faq-list">
-        {visibleFaqs.length === 0 ? (
-          <p className="dx-public-faq__empty">No questions match your search. Try another keyword or contact support.</p>
-        ) : (
-          visibleFaqs.map((item) => (
-            <FaqItem
-              key={item.id}
-              id={item.id}
-              question={item.q}
-              answer={item.a}
-              singleOpen={singleOpen}
-              open={openId === item.id}
-              onToggle={handleToggle}
-            />
-          ))
-        )}
+        {sourceFaqs.map((item) => (
+          <FaqItem
+            key={item.id}
+            id={item.id}
+            question={item.q}
+            answer={item.a}
+            open={singleOpen ? openId === item.id : false}
+            onToggle={handleToggle}
+          />
+        ))}
       </div>
 
-      {footer ? <div className="dx-public-faq__footer">{footer}</div> : null}
+      {resolvedFooter ? <div className="dx-public-faq__footer">{resolvedFooter}</div> : null}
     </section>
   )
 }

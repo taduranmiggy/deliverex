@@ -5463,11 +5463,11 @@
 }
 .dx-public-faq__header {
   text-align: center;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 .dx-public-faq--support .dx-public-faq__header {
   text-align: left;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 .dx-public-faq__title {
   display: inline-flex;
@@ -5476,7 +5476,7 @@
   font-size: clamp(1.35rem, 3vw, 1.75rem);
   font-weight: 800;
   letter-spacing: -0.03em;
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   color: var(--text);
 }
 .dx-public-faq__desc {
@@ -5484,78 +5484,14 @@
   max-width: 560px;
   color: var(--muted);
   font-size: 0.9375rem;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 .dx-public-faq--support .dx-public-faq__desc {
   margin: 0;
   max-width: none;
 }
-.dx-public-faq__toolbar {
-  display: grid;
-  gap: 14px;
-  margin-bottom: 20px;
-}
-.dx-public-faq__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-.dx-public-faq--support .dx-public-faq__chips {
-  justify-content: flex-start;
-}
-.dx-public-faq__chip {
-  padding: 7px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--stroke);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.dx-public-faq__chip:hover {
-  border-color: var(--blue-300);
-  color: var(--color-primary);
-}
-.dx-public-faq__chip--active {
-  background: var(--color-primary-light);
-  border-color: var(--blue-300);
-  color: var(--color-primary);
-}
-.dx-public-faq__search {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  min-height: 44px;
-  border-radius: 12px;
-  border: 1.5px solid var(--stroke);
-  background: var(--surface);
-  color: var(--muted);
-}
-.dx-public-faq__search input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  font: inherit;
-  font-size: 0.9375rem;
-  color: var(--text);
-  outline: none;
-}
-.dx-public-faq__empty {
-  padding: 20px 16px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.875rem;
-  border: 1px dashed var(--stroke);
-  border-radius: 12px;
-  margin: 0;
-}
 .dx-public-faq__footer {
-  margin-top: 24px;
+  margin-top: 28px;
   padding: 18px 16px;
   border-radius: 14px;
   border: 1px solid var(--blue-200);
