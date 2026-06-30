@@ -36,7 +36,6 @@ if [ -f "$DEPLOY_BUNDLE" ]; then
   echo "Extracting frontend build to backend/public ..."
   mkdir -p backend/public/assets
   tar -xzf "$DEPLOY_BUNDLE" -C backend/public frontend-dist --strip-components=1
-  rm -f "$DEPLOY_BUNDLE"
   if [ ! -f backend/public/index.html ]; then
     echo "ERROR: frontend index.html missing after extract" >&2
     exit 1
@@ -70,4 +69,9 @@ export SKIP_SERVER_FRONTEND_BUILD=1
 export SKIP_ROLLBACK=1
 export DEPLOY_PREVIOUS_SHA=none
 
-exec bash "$SCRIPT_DIR/deployment.sh"
+if bash "$SCRIPT_DIR/deployment.sh"; then
+  rm -f "$DEPLOY_BUNDLE"
+  exit 0
+fi
+
+exit 1

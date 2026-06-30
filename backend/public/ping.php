@@ -70,6 +70,15 @@ if (is_readable($pendingFile)) {
     }
 }
 
+$errorFile = $sharedRoot . '/deploy-state/last-deploy-error.txt';
+if (is_readable($errorFile)) {
+    $errorLines = file($errorFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    $lastLine = is_array($errorLines) ? trim((string) end($errorLines)) : '';
+    if ($lastLine !== '') {
+        echo 'deploy_error=' . substr($lastLine, 0, 200) . "\n";
+    }
+}
+
 if ($deploySha !== '') {
     echo 'version=' . substr($deploySha, 0, 7) . "\n";
     echo 'deploy=' . substr($deploySha, 0, 7) . "\n";

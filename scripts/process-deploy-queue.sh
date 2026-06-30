@@ -15,6 +15,7 @@ VARS_TMP="/tmp/deliverex-deploy-vars.$$"
 RUNS_LIST_TMP="/tmp/deliverex-deploy-runs.$$"
 LAST_QUEUED_RUN_FILE="$SHARED_STATE/last-queued-run-id"
 LAST_DEPLOYED_SHA_FILE="$SHARED_STATE/last-deployed-sha"
+LAST_ERROR_FILE="$SHARED_STATE/last-deploy-error.txt"
 
 mkdir -p "$LOG_DIR" "$SHARED_STATE" 2>/dev/null || true
 
@@ -194,6 +195,27 @@ EOF
   log "Queued deploy from GitHub artifact run_id=$run_id sha=${sha:0:7}"
 }
 
+recover_stale_pending() {
+  if [ ! -f "$PENDING" ]; then
+    return 0
+  fi
+
+  local bundle_path=""
+  bundle_path="$(PENDING_FILE="$PENDING" php -r '
+    $j = json_decode(@file_get_contents(getenv("PENDING_FILE")), true);
+    echo is_array($j) ? (string)($j["bundle"] ?? "") : "";
+  ' 2>/dev/null || true)"
+
+  if [ -n "$bundle_path" ] && [ -f "$bundle_path" ]; then
+    return 0
+  fi
+
+  log "WARN: pending deploy bundle missing — clearing stale queue entry"
+  rm -f "$PENDING" "$LOCK" "$LAST_QUEUED_RUN_FILE"
+}
+
+recover_stale_pending
+
 if [ ! -f "$PENDING" ]; then
   queue_latest_from_github_if_needed
 fi
@@ -230,6 +252,7 @@ APP_URL_QUEUED="$(sed -n '3p' "$VARS_TMP")"
 
 if [ -z "$DEPLOY_BUNDLE" ] || [ ! -f "$DEPLOY_BUNDLE" ]; then
   log "ERROR: pending deploy bundle missing: $DEPLOY_BUNDLE"
+  rm -f "$PENDING" "$LOCK" "$LAST_QUEUED_RUN_FILE"
   exit 1
 fi
 
@@ -245,13 +268,19 @@ export DEPLOY_PREVIOUS_SHA=none
 log "Applying deploy sha=${DEPLOY_SHA:0:7} bundle=$DEPLOY_BUNDLE"
 
 if bash "$SCRIPT_DIR/deploy-from-ci.sh" >>"$LOG_FILE" 2>&1; then
-  rm -f "$PENDING"
+  rm -f "$PENDING" "$LAST_ERROR_FILE"
   if [ -n "$DEPLOY_SHA" ] && [ "$DEPLOY_SHA" != "unknown" ]; then
     echo "$DEPLOY_SHA" >"$LAST_DEPLOYED_SHA_FILE"
   fi
   log "Deploy complete sha=${DEPLOY_SHA:0:7}"
 else
-  rm -f "$LAST_QUEUED_RUN_FILE"
-  log "ERROR: deploy-from-ci.sh failed — pending file kept for retry"
+  {
+    echo "failed_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    echo "sha=${DEPLOY_SHA}"
+    echo "bundle=${DEPLOY_BUNDLE}"
+    tail -20 "$LOG_FILE" 2>/dev/null || true
+  } >"$LAST_ERROR_FILE" 2>/dev/null || true
+  rm -f "$PENDING" "$LOCK" "$LAST_QUEUED_RUN_FILE"
+  log "ERROR: deploy-from-ci.sh failed — queue cleared for retry on next cron run"
   exit 1
 fi
