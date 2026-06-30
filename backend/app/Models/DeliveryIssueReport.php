@@ -23,6 +23,11 @@ class DeliveryIssueReport extends Model
         'updated_at',
     ];
 
+    protected $casts = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
     public const TYPES = [
         'vehicle_breakdown'  => 'Vehicle Breakdown',
         'flat_tire'          => 'Flat Tire',

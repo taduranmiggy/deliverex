@@ -30,4 +30,26 @@ class DeliveryDocumentTimestampCastTest extends TestCase
         $this->assertIsString($proof->submitted_event_at);
         $this->assertStringContainsString('2026-06-30', $proof->submitted_event_at);
     }
+
+    public function test_issue_report_reported_event_at_uses_datetime_cast(): void
+    {
+        $report = new \App\Models\DeliveryIssueReport([
+            'created_at' => '2026-06-30 08:00:00',
+        ]);
+
+        $this->assertInstanceOf(Carbon::class, $report->created_at);
+        $this->assertIsString($report->reported_event_at);
+        $this->assertStringContainsString('2026-06-30', $report->reported_event_at);
+    }
+
+    public function test_delay_report_reported_event_at_uses_datetime_cast(): void
+    {
+        $report = new \App\Models\DeliveryDelayReport([
+            'created_at' => '2026-06-30 09:45:00',
+        ]);
+
+        $this->assertInstanceOf(Carbon::class, $report->created_at);
+        $this->assertIsString($report->reported_event_at);
+        $this->assertStringContainsString('2026-06-30', $report->reported_event_at);
+    }
 }

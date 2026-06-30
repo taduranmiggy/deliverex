@@ -27,6 +27,8 @@ class DeliveryDelayReport extends Model
 
     protected $casts = [
         'acknowledged_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     public function getReportedEventAtAttribute(): ?string
