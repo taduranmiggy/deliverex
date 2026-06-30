@@ -14,7 +14,7 @@ import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
 import {
   formatScheduleReviewParts,
   minDatetimeLocalValue,
-  SCHEDULE_START_REQUIRED,
+  minEndDatetimeLocalValue,
   toDatetimeLocalValue,
   validateJobSchedule,
 } from '../../utils/scheduleValidation'
@@ -39,7 +39,7 @@ const BLANK = {
   pickup_province: '', pickup_city: '', pickup_barangay: '', pickup_street: '', pickup_landmark: '',
   dropoff_province: '', dropoff_city: '', dropoff_barangay: '', dropoff_street: '', dropoff_landmark: '',
   material_type_id: '', material_specification_id: '', load_volume_m3: '',
-  scheduled_start: '',
+  scheduled_start: '', scheduled_end: '',
   priority: 'normal', special_handling_instructions: '', notes: '',
   route_additional_details: '',
 }
@@ -48,7 +48,7 @@ const STEPS = [
   { id: 1, label: 'Client Information', hint: 'Company & contacts' },
   { id: 2, label: 'Material Information', hint: 'Type, spec, vehicle & volume' },
   { id: 3, label: 'Route', hint: 'Pickup & delivery' },
-  { id: 4, label: 'Schedule', hint: 'Date, time & priority' },
+  { id: 4, label: 'Schedule', hint: 'Start, end & priority' },
   { id: 5, label: 'Review & Confirm', hint: 'Check and submit' },
 ]
 
@@ -228,20 +228,33 @@ function RR({ label, value }) {
   )
 }
 
-function ScheduledReviewRow({ start }) {
-  const part = formatScheduleReviewParts(start, null)?.start
-  if (!part) {
-    return <RR label="Scheduled" value={null} />
+function ScheduleReviewRows({ start, end }) {
+  const parts = formatScheduleReviewParts(start, end)
+  if (!parts?.start && !parts?.end) {
+    return <RR label="Schedule" value={null} />
   }
 
   return (
-    <div className="dx-review-row">
-      <span className="dx-review-row__label">Scheduled</span>
-      <span className="dx-review-row__value" style={{ display: 'grid', gap: 2 }}>
-        <span>{part.date}</span>
-        <span style={{ color: 'var(--muted)', fontSize: '0.875rem', fontWeight: 500 }}>{part.time}</span>
-      </span>
-    </div>
+    <>
+      {parts.start && (
+        <div className="dx-review-row">
+          <span className="dx-review-row__label">Start</span>
+          <span className="dx-review-row__value" style={{ display: 'grid', gap: 2 }}>
+            <span>{parts.start.date}</span>
+            <span style={{ color: 'var(--muted)', fontSize: '0.875rem', fontWeight: 500 }}>{parts.start.time}</span>
+          </span>
+        </div>
+      )}
+      {parts.end && (
+        <div className="dx-review-row">
+          <span className="dx-review-row__label">End</span>
+          <span className="dx-review-row__value" style={{ display: 'grid', gap: 2 }}>
+            <span>{parts.end.date}</span>
+            <span style={{ color: 'var(--muted)', fontSize: '0.875rem', fontWeight: 500 }}>{parts.end.time}</span>
+          </span>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -287,7 +300,6 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
           const raw = sessionStorage.getItem(DRAFT_KEY)
           if (raw) {
             const draft = JSON.parse(raw)
-            delete draft.scheduled_end
             return { ...BLANK, ...draft }
           }
         } catch { /* ignore */ }
@@ -325,6 +337,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       material_specification_id: String(initialSpecificationId),
       load_volume_m3: initial.load_volume_m3 ?? initial.volume_m3 ?? '',
       scheduled_start: toDatetimeLocalValue(initial.scheduled_start),
+      scheduled_end: toDatetimeLocalValue(initial.scheduled_end),
       priority: initial.priority ?? 'normal',
       special_handling_instructions: '',
       route_additional_details: initial.special_handling_instructions
@@ -361,6 +374,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
 
   const pickupFromQuarry = Boolean(form.quarry_id)
   const scheduleMin = minDatetimeLocalValue()
+  const scheduleEndMin = minEndDatetimeLocalValue(form.scheduled_start)
 
   const stepPanelRef  = useRef(null)
   // Tracks every field the dispatcher has manually typed into.
@@ -577,11 +591,11 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       Object.assign(errs, validateSimpleRouteStep(form, { pickupFromQuarry }))
     }
     if (step === 4) {
-      if (!form.scheduled_start) {
-        errs.scheduled_start = SCHEDULE_START_REQUIRED
-      } else {
-        Object.assign(errs, validateJobSchedule({ scheduled_start: form.scheduled_start }))
-      }
+      const schedErrs = validateJobSchedule(
+        { scheduled_start: form.scheduled_start, scheduled_end: form.scheduled_end },
+        { requireBoth: true },
+      )
+      Object.assign(errs, schedErrs)
     }
     setFE(errs)
     return Object.keys(errs).length === 0
@@ -644,7 +658,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     special_handling_instructions: routeDetails || null,
     job_requirements:         null,
     scheduled_start:          form.scheduled_start || null,
-    scheduled_end:            null,
+    scheduled_end:            form.scheduled_end || null,
     priority:                 form.priority,
   }
   }
@@ -900,13 +914,22 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
             </p>
 
             <div className="dx-wiz-grid" style={{ marginBottom: 16 }}>
-              <FieldWrap label="Scheduled Date & Time" required error={fieldErrors.scheduled_start}>
+              <FieldWrap label="Start Date & Time" required error={fieldErrors.scheduled_start}>
                 <WizInput
                   type="datetime-local"
                   min={scheduleMin}
                   value={form.scheduled_start}
                   onChange={set('scheduled_start')}
                   error={fieldErrors.scheduled_start}
+                />
+              </FieldWrap>
+              <FieldWrap label="End Date & Time" required error={fieldErrors.scheduled_end}>
+                <WizInput
+                  type="datetime-local"
+                  min={scheduleEndMin}
+                  value={form.scheduled_end}
+                  onChange={set('scheduled_end')}
+                  error={fieldErrors.scheduled_end}
                 />
               </FieldWrap>
               <FieldWrap label="Priority">
@@ -950,7 +973,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
             </ReviewBlock>
 
             <ReviewBlock title="Schedule" onEdit={goToStep} stepNum={4} cols={2}>
-              <ScheduledReviewRow start={form.scheduled_start} />
+              <ScheduleReviewRows start={form.scheduled_start} end={form.scheduled_end} />
               <RR label="Priority" value={PRIORITY_LABELS[form.priority] ?? form.priority} />
             </ReviewBlock>
 
