@@ -16,7 +16,7 @@ const NAV_SECTIONS = [
       { to: '/dispatcher/job-orders', label: 'Job Orders', Icon: Truck },
       { to: '/dispatcher/dispatch', label: 'Fleet Dispatch', Icon: Route },
       { to: '/dispatcher/calendar', label: 'Calendar', Icon: Calendar },
-      { to: '/dispatcher/live-tracking', label: 'Live Tracking', Icon: Map },
+      { to: '/dispatcher/live-tracking', label: 'Tracking', Icon: Map },
     ],
   },
   {
