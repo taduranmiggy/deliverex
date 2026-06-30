@@ -3,8 +3,13 @@
    Isolated from legacy App.css .sidebar rules
 ═══════════════════════════════════════════════════════════ */
 
-.app-shell {
+.app-shell:has(.dx-staff-sidebar) {
   grid-template-columns: 268px 1fr;
+}
+
+.app-shell:has(.dx-staff-sidebar) .app-shell__main {
+  min-height: 100dvh;
+  min-width: 0;
 }
 
 .dx-staff-sidebar {
@@ -20,11 +25,7 @@
   flex-direction: column;
   width: 268px;
   min-width: 268px;
-  height: 100vh;
-  height: 100dvh;
-  position: sticky;
-  top: 0;
-  align-self: stretch;
+  max-height: 100dvh;
   z-index: 50;
   overflow: hidden;
   color: #fff;
@@ -74,7 +75,7 @@
   font-size: 1.0625rem;
   font-weight: 800;
   letter-spacing: -0.03em;
-  color: #fff;
+  color: #fff !important;
   line-height: 1.2;
 }
 
@@ -264,7 +265,7 @@ a.dx-staff-sidebar__user:hover {
 
 /* Mobile drawer */
 @media (max-width: 1024px) {
-  .app-shell {
+  .app-shell:has(.dx-staff-sidebar) {
     grid-template-columns: 1fr;
   }
 
@@ -273,6 +274,7 @@ a.dx-staff-sidebar__user:hover {
     top: 0;
     left: 0;
     bottom: 0;
+    height: 100dvh;
     width: min(300px, 88vw);
     min-width: 0;
     transform: translateX(-105%);
@@ -290,7 +292,18 @@ a.dx-staff-sidebar__user:hover {
   }
 }
 
+/* Desktop — pin sidebar to viewport; only nav scrolls */
 @media (min-width: 1025px) {
+  .dx-staff-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    align-self: start;
+  }
+
   .dx-staff-sidebar__close {
     display: none !important;
   }

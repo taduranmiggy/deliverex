@@ -2965,7 +2965,7 @@
 @media (max-width: 1200px) and (min-width: 901px) {
   .dx-ocr-grid { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(0, 1fr); }
   .dx-split-bestfit { grid-template-columns: 1fr; }
-  .app-shell { grid-template-columns: minmax(200px, 220px) minmax(0, 1fr); }
+  .app-shell:not(:has(.dx-staff-sidebar)) { grid-template-columns: minmax(200px, 220px) minmax(0, 1fr); }
 }
 
 @media (max-width: 1024px) {
@@ -2974,7 +2974,7 @@
 }
 
 @media (max-width: 768px) {
-  .app-shell { grid-template-columns: 1fr; }
+  .app-shell:not(:has(.dx-staff-sidebar)) { grid-template-columns: 1fr; }
   .dx-ocr-grid { grid-template-columns: 1fr; }
   .dx-split-bestfit { grid-template-columns: 1fr; }
   .dx-stat-row { grid-template-columns: repeat(2, 1fr); }
