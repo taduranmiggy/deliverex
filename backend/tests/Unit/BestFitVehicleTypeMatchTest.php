@@ -22,8 +22,8 @@ class BestFitVehicleTypeMatchTest extends TestCase
         $factor = $this->vehicleTypeFactor($jobOrder, $vehicle);
 
         $this->assertTrue($factor['matched']);
-        $this->assertSame(20, $factor['contribution']);
-        $this->assertSame(20, $factor['max']);
+        $this->assertSame(10, $factor['contribution']);
+        $this->assertSame(10, $factor['max']);
         $this->assertStringContainsString('exactly matches', $factor['detail']);
     }
 
@@ -34,7 +34,7 @@ class BestFitVehicleTypeMatchTest extends TestCase
         $factor = $this->vehicleTypeFactor($jobOrder, $vehicle);
 
         $this->assertTrue($factor['matched']);
-        $this->assertSame(20, $factor['contribution']);
+        $this->assertSame(10, $factor['contribution']);
     }
 
     public function test_vehicle_type_match_awards_zero_for_mismatched_types(): void
@@ -45,7 +45,7 @@ class BestFitVehicleTypeMatchTest extends TestCase
 
         $this->assertFalse($factor['matched']);
         $this->assertSame(0, $factor['contribution']);
-        $this->assertSame(20, $factor['max']);
+        $this->assertSame(10, $factor['max']);
         $this->assertStringContainsString('does not match', $factor['detail']);
     }
 
