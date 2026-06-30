@@ -22,6 +22,11 @@ class DeliveryDocument extends Model
         'updated_at',
     ];
 
+    protected $casts = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
     public function getUploadedEventAtAttribute(): ?string
     {
         return $this->created_at?->toIso8601String();
