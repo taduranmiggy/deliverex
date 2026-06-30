@@ -69,6 +69,7 @@ function ManagerFleetTrackingPage() {
           lat: dropoffLat,
           lng: dropoffLng,
           jobId: jobPublicId,
+          trackingId: r.job_order?.tracking_code ?? null,
           customerName: buildDisplayName(r.job_order) || '—',
           address: destinationAddress,
           mapsUrl: buildOsmCoordinateUrl(dropoffLat, dropoffLng),
@@ -84,6 +85,7 @@ function ManagerFleetTrackingPage() {
           label: r.driver ?? 'Driver',
           sublabel: jobPublicId,
           jobId: jobPublicId,
+          trackingId: r.job_order?.tracking_code ?? null,
           vehicle: r.vehicle ?? '—',
           status: r.status,
           gpsAt: r.gps.at,
@@ -121,7 +123,7 @@ function ManagerFleetTrackingPage() {
 
       <div className="dx-panel" style={{ marginBottom: 20 }}>
         <h3 className="dx-panel-title">Last Known Locations</h3>
-        <LiveFleetMap markers={markers} routeLines={routeLines} unavailableMessage={unavailableMessage} />
+        <LiveFleetMap markers={markers} routeLines={routeLines} unavailableMessage={unavailableMessage} loading={refreshing && rows.length === 0} />
       </div>
 
       <div className="dx-panel">

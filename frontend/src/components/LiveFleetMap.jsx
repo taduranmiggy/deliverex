@@ -5,55 +5,130 @@
  *   markers    — array of marker data (see shape below)
  *   selectedId — id of the currently selected marker (controlled by parent)
  *   onSelect   — callback(id) when a pin is clicked
+ *   routeLines — driver → destination polylines
+ *   loading    — show skeleton while map data is loading
+ *   unavailableMessage — banner when driver GPS is missing but destination exists
  *
  * Marker shape:
- *   { id, lat, lng, label, sublabel,
- *     jobId, vehicle, status, gpsAt, mapsUrl,
- *     onViewDetails }   ← optional callback for popup "View Details"
+ *   { id, lat, lng, kind: 'driver' | 'destination', label, sublabel,
+ *     jobId, trackingId, vehicle, status, gpsAt, gpsSyncedAt, gpsPerformedOffline,
+ *     customerName, address, mapsUrl, onViewDetails }
  */
-import { useEffect, useRef, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-
-// Fix default marker icons in Vite
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIcon   from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, shadowUrl: markerShadow })
+import './LiveFleetMap.css'
+import { formatEventAt, formatOfflineSyncLabel, formatSyncedAt } from '../utils/deliveryTimestamps'
+import { Crosshair, Minus, Plus, RotateCcw } from 'lucide-react'
 
 const DEFAULT_CENTER = [14.5995, 120.9842]
-const NORMAL_SIZE = 26
-const SELECTED_SIZE = 34
+const DELIVEREX_BLUE = '#2563eb'
+const TRUCK_SIZE = 34
+const TRUCK_SIZE_SELECTED = 40
+const DEST_SIZE = 30
+const DEST_SIZE_SELECTED = 36
 
-// ── Custom icon factory ────────────────────────────────────────────────────
-function makeIcon(isSelected, kind = 'driver') {
-  const size = isSelected ? SELECTED_SIZE : NORMAL_SIZE
-  const pinClass = [
-    'dx-map-pin',
-    kind === 'destination' ? 'dx-map-pin--destination' : '',
-    isSelected ? 'dx-map-pin--selected' : '',
-  ].filter(Boolean).join(' ')
+const TRUCK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 13.52 9H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>`
 
+const DEST_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`
+
+function makeTruckIcon(isSelected) {
+  const size = isSelected ? TRUCK_SIZE_SELECTED : TRUCK_SIZE
   return L.divIcon({
-    className: '',
-    html: `<div class="${pinClass}"></div>`,
-    iconSize:   [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -(size / 2 + 6)],
+    className: 'dx-map-icon-wrap',
+    html: `<div class="dx-map-truck${isSelected ? ' dx-map-truck--selected' : ''}" style="width:${size}px;height:${size}px;color:${DELIVEREX_BLUE}">${TRUCK_SVG}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size],
+    popupAnchor: [0, -size - 4],
   })
 }
 
-// ── Status label helper ────────────────────────────────────────────────────
+function makeDestinationIcon(isSelected) {
+  const size = isSelected ? DEST_SIZE_SELECTED : DEST_SIZE
+  return L.divIcon({
+    className: 'dx-map-icon-wrap',
+    html: `<div class="dx-map-destination${isSelected ? ' dx-map-destination--selected' : ''}" style="width:${size}px;height:${size}px;color:#dc2626">${DEST_SVG}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size],
+    popupAnchor: [0, -size - 4],
+  })
+}
+
+function makeIcon(isSelected, kind = 'driver') {
+  return kind === 'destination'
+    ? makeDestinationIcon(isSelected)
+    : makeTruckIcon(isSelected)
+}
+
 function fmtStatus(s) {
   if (!s) return '—'
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-// ── MapController: lives inside MapContainer, handles flyTo ──────────────
-function MapController({ markers, selectedId, markerRefs }) {
+function resolveTrackingContext(markers, selectedId) {
+  let driver = null
+  let destination = null
+
+  if (selectedId) {
+    const selected = markers.find((m) => m.id === selectedId)
+    if (selected?.kind === 'driver') driver = selected
+    if (selected?.kind === 'destination') {
+      destination = selected
+      const assignmentId = String(selectedId).replace(/^destination-/, '')
+      driver = markers.find((m) => m.kind === 'driver' && String(m.id) === assignmentId) ?? null
+    } else if (driver) {
+      destination = markers.find((m) => m.id === `destination-${driver.id}`) ?? null
+    }
+  } else {
+    const drivers = markers.filter((m) => m.kind === 'driver')
+    const destinations = markers.filter((m) => m.kind === 'destination')
+    if (drivers.length === 1) {
+      driver = drivers[0]
+      destination = destinations.find((d) => d.id === `destination-${driver.id}`) ?? destinations[0] ?? null
+    } else if (drivers.length === 0 && destinations.length === 1) {
+      destination = destinations[0]
+    }
+  }
+
+  return {
+    driver,
+    destination,
+    visible: Boolean(driver || destination),
+  }
+}
+
+function formatLastGpsUpdate(marker) {
+  if (!marker?.gpsAt) return null
+  const row = {
+    event_at: marker.gpsAt,
+    synced_at: marker.gpsSyncedAt ?? null,
+    performed_offline: marker.gpsPerformedOffline ?? false,
+  }
+  const timeOpts = { hour: 'numeric', minute: '2-digit' }
+  const eventLabel = formatEventAt(row, undefined, timeOpts)
+  const offlineLabel = formatOfflineSyncLabel(row, undefined, timeOpts)
+  const syncedOnly = formatSyncedAt(row, undefined, timeOpts)
+
+  return {
+    eventLabel,
+    offlineLabel,
+    syncedOnly,
+    isOffline: Boolean(marker.gpsPerformedOffline || marker.gpsSyncedAt),
+  }
+}
+
+function MapController({ markers, selectedId, markerRefs, initialViewRef }) {
   const map = useMap()
+
+  useEffect(() => {
+    if (!initialViewRef.current) {
+      initialViewRef.current = {
+        center: map.getCenter(),
+        zoom: map.getZoom(),
+      }
+    }
+  }, [map, initialViewRef])
 
   useEffect(() => {
     if (!selectedId) return
@@ -62,7 +137,6 @@ function MapController({ markers, selectedId, markerRefs }) {
 
     map.flyTo([m.lat, m.lng], Math.max(map.getZoom(), 14), { duration: 0.7, easeLinearity: 0.5 })
 
-    // Open the popup a beat after flyTo starts so Leaflet has positioned it
     const timer = setTimeout(() => {
       const ref = markerRefs.current[selectedId]
       if (ref) ref.openPopup()
@@ -74,9 +148,157 @@ function MapController({ markers, selectedId, markerRefs }) {
   return null
 }
 
-// ── Main component ─────────────────────────────────────────────────────────
-function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = [] }) {
+function MapToolbar({ markers, routeLines, initialViewRef }) {
+  const map = useMap()
+
+  const fitRoute = () => {
+    const bounds = L.latLngBounds([])
+    markers.forEach((m) => bounds.extend([m.lat, m.lng]))
+    routeLines.forEach((line) => {
+      bounds.extend([line.from.lat, line.from.lng])
+      bounds.extend([line.to.lat, line.to.lng])
+    })
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [48, 48], maxZoom: 15 })
+    }
+  }
+
+  const resetView = () => {
+    const initial = initialViewRef.current
+    if (initial) {
+      map.setView(initial.center, initial.zoom)
+      return
+    }
+    map.setView(DEFAULT_CENTER, 11)
+  }
+
+  return (
+    <div className="dx-fleet-map-controls" aria-label="Map controls">
+      <button type="button" className="dx-fleet-map-controls__btn dx-fleet-map-controls__btn--wide" onClick={fitRoute} title="Fit to route">
+        <Crosshair size={16} aria-hidden />
+        <span>Fit</span>
+      </button>
+      <button type="button" className="dx-fleet-map-controls__btn" onClick={() => map.zoomIn()} title="Zoom in" aria-label="Zoom in">
+        <Plus size={16} aria-hidden />
+      </button>
+      <button type="button" className="dx-fleet-map-controls__btn" onClick={() => map.zoomOut()} title="Zoom out" aria-label="Zoom out">
+        <Minus size={16} aria-hidden />
+      </button>
+      <button type="button" className="dx-fleet-map-controls__btn" onClick={resetView} title="Reset view" aria-label="Reset view">
+        <RotateCcw size={15} aria-hidden />
+      </button>
+    </div>
+  )
+}
+
+function MapLegend() {
+  return (
+    <div className="dx-fleet-map-legend" aria-label="Map legend">
+      <div className="dx-fleet-map-legend__item">
+        <span className="dx-fleet-map-legend__swatch" style={{ color: DELIVEREX_BLUE }} aria-hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+        </span>
+        <span>Driver</span>
+      </div>
+      <div className="dx-fleet-map-legend__item">
+        <span className="dx-fleet-map-legend__swatch" style={{ color: '#dc2626' }} aria-hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/></svg>
+        </span>
+        <span>Destination</span>
+      </div>
+      <div className="dx-fleet-map-legend__item">
+        <span className="dx-fleet-map-legend__swatch dx-fleet-map-legend__swatch--route" aria-hidden />
+        <span>Route</span>
+      </div>
+    </div>
+  )
+}
+
+function DriverInfoPanel({ marker, destinationMarker }) {
+  if (!marker && !destinationMarker) return null
+
+  const gpsUpdate = marker ? formatLastGpsUpdate(marker) : null
+
+  return (
+    <aside className="dx-fleet-map-info" aria-label="Delivery tracking details">
+      <h4 className="dx-fleet-map-info__title">Tracking Details</h4>
+
+      {marker ? (
+        <>
+          <div className="dx-fleet-map-info__row">
+            <span className="dx-fleet-map-info__label">Driver</span>
+            <span className="dx-fleet-map-info__value">{marker.label ?? '—'}</span>
+          </div>
+          <div className="dx-fleet-map-info__row">
+            <span className="dx-fleet-map-info__label">Vehicle</span>
+            <span className="dx-fleet-map-info__value">{marker.vehicle ?? '—'}</span>
+          </div>
+          <div className="dx-fleet-map-info__row">
+            <span className="dx-fleet-map-info__label">Current Status</span>
+            <span className="dx-fleet-map-info__value">{fmtStatus(marker.status)}</span>
+          </div>
+        </>
+      ) : (
+        <div className="dx-fleet-map-info__row">
+          <span className="dx-fleet-map-info__label">Driver</span>
+          <span className="dx-fleet-map-info__value dx-fleet-map-info__value--muted">Location unavailable</span>
+        </div>
+      )}
+
+      <div className="dx-fleet-map-info__row">
+        <span className="dx-fleet-map-info__label">Tracking ID</span>
+        <span className="dx-fleet-map-info__value">{marker?.trackingId ?? destinationMarker?.trackingId ?? '—'}</span>
+      </div>
+
+      {marker?.jobId || destinationMarker?.jobId ? (
+        <div className="dx-fleet-map-info__row">
+          <span className="dx-fleet-map-info__label">Job Order</span>
+          <span className="dx-fleet-map-info__value">{marker?.jobId ?? destinationMarker?.jobId}</span>
+        </div>
+      ) : null}
+
+      <div className="dx-fleet-map-info__row">
+        <span className="dx-fleet-map-info__label">Last Updated</span>
+        {gpsUpdate?.eventLabel ? (
+          <>
+            <span className="dx-fleet-map-info__value">{gpsUpdate.eventLabel}</span>
+            {gpsUpdate.isOffline && (
+              <span className="dx-fleet-map-info__offline">
+                Performed offline
+                {gpsUpdate.syncedOnly ? ` · Synced ${gpsUpdate.syncedOnly}` : ''}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="dx-fleet-map-info__value dx-fleet-map-info__value--muted">—</span>
+        )}
+      </div>
+
+      {marker && Number.isFinite(marker.lat) && Number.isFinite(marker.lng) ? (
+        <div className="dx-fleet-map-info__row">
+          <span className="dx-fleet-map-info__label">Coordinates</span>
+          <span className="dx-fleet-map-info__value dx-fleet-map-info__value--muted">
+            {marker.lat.toFixed(5)}, {marker.lng.toFixed(5)}
+          </span>
+        </div>
+      ) : null}
+    </aside>
+  )
+}
+
+function MapSkeleton() {
+  return (
+    <div className="dx-fleet-map-skeleton" aria-busy="true" aria-label="Loading map">
+      <div className="dx-fleet-map-skeleton__bar dx-fleet-map-skeleton__bar--short" />
+      <div className="dx-fleet-map-skeleton__bar dx-fleet-map-skeleton__bar--mid" />
+      <div className="dx-fleet-map-skeleton__map" />
+    </div>
+  )
+}
+
+function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = [], loading = false }) {
   const markerRefs = useRef({})
+  const initialViewRef = useRef(null)
 
   const valid = useMemo(
     () => markers.filter((m) => Number.isFinite(m.lat) && Number.isFinite(m.lng)),
@@ -90,6 +312,8 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
     return [lat, lng]
   }, [valid])
 
+  const initialZoom = valid.length <= 1 ? 13 : 11
+
   const validRouteLines = useMemo(
     () =>
       routeLines.filter((line) =>
@@ -101,144 +325,173 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
     [routeLines],
   )
 
+  const trackingContext = useMemo(
+    () => resolveTrackingContext(valid, selectedId),
+    [valid, selectedId],
+  )
+
+  const { driver: driverMarker, destination: destinationMarker, visible: showInfoPanel } = trackingContext
+
+  if (loading && valid.length === 0) {
+    return <MapSkeleton />
+  }
+
   if (valid.length === 0) {
     return (
-      <div style={{
-        minHeight: 380, display: 'grid', placeItems: 'center',
-        color: 'var(--muted)', fontSize: '0.875rem',
-        background: 'var(--slate-50)', borderRadius: 12,
-        textAlign: 'center', padding: '0 24px',
-        lineHeight: 1.6,
-      }}>
-        No GPS coordinates yet.<br />
-        <span style={{ fontSize: '0.8125rem' }}>Drivers will appear on the map after their first location update.</span>
+      <div className="dx-fleet-map-empty">
+        No GPS coordinates yet.
+        <br />
+        <span style={{ fontSize: '0.8125rem' }}>
+          Drivers will appear on the map after their first location update.
+        </span>
       </div>
     )
   }
 
   return (
-    <MapContainer
-      center={center}
-      zoom={valid.length === 1 ? 13 : 11}
-      style={{ height: 420, width: '100%', borderRadius: 12, zIndex: 0 }}
-      scrollWheelZoom
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+    <div className={`dx-fleet-map-layout${showInfoPanel ? ' dx-fleet-map-layout--with-panel' : ''}`}>
+      <div className="dx-fleet-map-stage">
+        <MapContainer
+          center={center}
+          zoom={initialZoom}
+          scrollWheelZoom
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
 
-      <MapController markers={valid} selectedId={selectedId} markerRefs={markerRefs} />
+          <MapController
+            markers={valid}
+            selectedId={selectedId}
+            markerRefs={markerRefs}
+            initialViewRef={initialViewRef}
+          />
+          <MapToolbar markers={valid} routeLines={validRouteLines} initialViewRef={initialViewRef} />
 
-      {validRouteLines.map((line) => (
-        <Polyline
-          key={line.id}
-          positions={[
-            [line.from.lat, line.from.lng],
-            [line.to.lat, line.to.lng],
-          ]}
-          pathOptions={{
-            color: '#2563eb',
-            weight: 3,
-            opacity: 0.75,
-            dashArray: '6 8',
-          }}
-        />
-      ))}
+          {validRouteLines.map((line) => (
+            <Polyline
+              key={line.id}
+              positions={[
+                [line.from.lat, line.from.lng],
+                [line.to.lat, line.to.lng],
+              ]}
+              pathOptions={{
+                color: DELIVEREX_BLUE,
+                weight: 4.5,
+                opacity: 0.88,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+          ))}
 
-      {valid.map((m) => {
-        const isSelected = m.id === selectedId
-        const markerKind = m.kind ?? 'driver'
-        const popupTitle = markerKind === 'destination' ? (m.jobId ?? 'Delivery Destination') : (m.jobId ?? m.label)
-        return (
-          <Marker
-            key={m.id}
-            position={[m.lat, m.lng]}
-            icon={makeIcon(isSelected, markerKind)}
-            zIndexOffset={isSelected ? 1000 : 0}
-            ref={(ref) => { if (ref) markerRefs.current[m.id] = ref }}
-            eventHandlers={{
-              click: () => { if (onSelect) onSelect(m.id) },
-            }}
-          >
-            <Popup>
-              <div className="dx-map-popup">
-                {/* Header */}
-                <div className="dx-map-popup__title">
-                  {popupTitle}
-                </div>
+          {valid.map((m) => {
+            const isSelected = m.id === selectedId
+            const markerKind = m.kind ?? 'driver'
+            const popupTitle = markerKind === 'destination' ? 'Delivery Destination' : (m.label ?? 'Driver')
+            return (
+              <Marker
+                key={m.id}
+                position={[m.lat, m.lng]}
+                icon={makeIcon(isSelected, markerKind)}
+                zIndexOffset={isSelected ? 1000 : markerKind === 'destination' ? 100 : 500}
+                ref={(ref) => { if (ref) markerRefs.current[m.id] = ref }}
+                eventHandlers={{
+                  click: () => { if (onSelect) onSelect(m.id) },
+                }}
+              >
+                <Popup>
+                  <div className={`dx-map-popup${markerKind === 'destination' ? ' dx-map-popup--destination' : ''}`}>
+                    <div className="dx-map-popup__title">{popupTitle}</div>
 
-                {markerKind === 'destination' ? (
-                  <>
-                    <div className="dx-map-popup__row">
-                      <span className="dx-map-popup__label">Customer</span>
-                      <span>{m.customerName ?? '—'}</span>
-                    </div>
-                    <div className="dx-map-popup__row">
-                      <span className="dx-map-popup__label">Address</span>
-                      <span>{m.address ?? '—'}</span>
-                    </div>
-                    <div className="dx-map-popup__row">
-                      <span className="dx-map-popup__label">Job Order</span>
-                      <span>{m.jobId ?? '—'}</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="dx-map-popup__row">
-                      <span className="dx-map-popup__label">Driver</span>
-                      <span>{m.label ?? '—'}</span>
-                    </div>
-                    <div className="dx-map-popup__row">
-                      <span className="dx-map-popup__label">Vehicle</span>
-                      <span>{m.vehicle ?? '—'}</span>
-                    </div>
-                    <div className="dx-map-popup__row">
-                      <span className="dx-map-popup__label">Status</span>
-                      <span>{fmtStatus(m.status)}</span>
-                    </div>
-                    {m.gpsAt && (
-                      <div className="dx-map-popup__row">
-                        <span className="dx-map-popup__label">Last GPS</span>
-                        <span style={{ fontSize: '0.75rem' }}>
-                          {new Date(m.gpsAt).toLocaleString(undefined, {
-                            month: 'short', day: 'numeric',
-                            hour: '2-digit', minute: '2-digit',
-                          })}
-                        </span>
-                      </div>
+                    {markerKind === 'destination' ? (
+                      <>
+                        <div className="dx-map-popup__row">
+                          <span className="dx-map-popup__label">Customer</span>
+                          <span>{m.customerName ?? '—'}</span>
+                        </div>
+                        <div className="dx-map-popup__row">
+                          <span className="dx-map-popup__label">Address</span>
+                          <span>{m.address ?? '—'}</span>
+                        </div>
+                        <div className="dx-map-popup__row">
+                          <span className="dx-map-popup__label">Tracking ID</span>
+                          <span>{m.trackingId ?? '—'}</span>
+                        </div>
+                        <div className="dx-map-popup__row">
+                          <span className="dx-map-popup__label">Job Order</span>
+                          <span>{m.jobId ?? '—'}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="dx-map-popup__row">
+                          <span className="dx-map-popup__label">Driver</span>
+                          <span>{m.label ?? '—'}</span>
+                        </div>
+                        <div className="dx-map-popup__row">
+                          <span className="dx-map-popup__label">Vehicle</span>
+                          <span>{m.vehicle ?? '—'}</span>
+                        </div>
+                        <div className="dx-map-popup__row">
+                          <span className="dx-map-popup__label">Status</span>
+                          <span>{fmtStatus(m.status)}</span>
+                        </div>
+                        {m.trackingId && (
+                          <div className="dx-map-popup__row">
+                            <span className="dx-map-popup__label">Tracking ID</span>
+                            <span>{m.trackingId}</span>
+                          </div>
+                        )}
+                        {m.gpsAt && (
+                          <div className="dx-map-popup__row">
+                            <span className="dx-map-popup__label">Last GPS</span>
+                            <span style={{ fontSize: '0.75rem' }}>
+                              {formatEventAt({ event_at: m.gpsAt }, undefined, {
+                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                              })}
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
-                  </>
-                )}
 
-                {/* Actions */}
-                <div className="dx-map-popup__actions">
-                  {m.onViewDetails && (
-                    <button
-                      type="button"
-                      className="dx-map-popup__btn dx-map-popup__btn--primary"
-                      onClick={() => m.onViewDetails(m.id)}
-                    >
-                      View Details
-                    </button>
-                  )}
-                  {m.mapsUrl && (
-                    <a
-                      href={m.mapsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="dx-map-popup__btn dx-map-popup__btn--secondary"
-                    >
-                      ↗ OpenStreetMap
-                    </a>
-                  )}
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        )
-      })}
-    </MapContainer>
+                    <div className="dx-map-popup__actions">
+                      {m.onViewDetails && (
+                        <button
+                          type="button"
+                          className="dx-map-popup__btn dx-map-popup__btn--primary"
+                          onClick={() => m.onViewDetails(m.id)}
+                        >
+                          View Details
+                        </button>
+                      )}
+                      {m.mapsUrl && (
+                        <a
+                          href={m.mapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="dx-map-popup__btn dx-map-popup__btn--secondary"
+                        >
+                          ↗ OpenStreetMap
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            )
+          })}
+        </MapContainer>
+
+        <MapLegend />
+      </div>
+
+      {showInfoPanel ? (
+        <DriverInfoPanel marker={driverMarker} destinationMarker={destinationMarker} />
+      ) : null}
+    </div>
   )
 }
 
@@ -248,7 +501,7 @@ function LiveFleetMapWithUnavailableMessage(props) {
     <>
       <LiveFleetMap {...props} />
       {unavailableMessage ? (
-        <p style={{ marginTop: 10, marginBottom: 0, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+        <p className="dx-fleet-map-unavailable" role="status">
           {unavailableMessage}
         </p>
       ) : null}

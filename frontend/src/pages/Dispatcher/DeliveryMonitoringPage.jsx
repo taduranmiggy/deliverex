@@ -128,6 +128,7 @@ function DeliveryMonitoringPage() {
           lat: dropoffLat,
           lng: dropoffLng,
           jobId: jobPublicId,
+          trackingId: a.job_order?.tracking_code ?? null,
           customerName: buildDisplayName(a.job_order) || '—',
           address: destinationAddress,
           mapsUrl: buildOsmCoordinateUrl(dropoffLat, dropoffLng),
@@ -143,6 +144,7 @@ function DeliveryMonitoringPage() {
           label: a.driver?.user?.name ?? 'Driver',
           sublabel: `${jobPublicId} · ${a.status}`,
           jobId: jobPublicId,
+          trackingId: a.job_order?.tracking_code ?? null,
           vehicle: a.vehicle?.plate_no ?? '—',
           status: a.status,
           gpsAt: gps.at,
@@ -196,6 +198,7 @@ function DeliveryMonitoringPage() {
             unavailableMessage={unavailableMessage}
             selectedId={selectedId}
             onSelect={handleSelect}
+            loading={refreshing && assignments.length === 0}
           />
         </div>
 
