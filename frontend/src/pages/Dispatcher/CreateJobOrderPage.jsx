@@ -910,7 +910,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
           <>
             <p className="dx-wizard-step-title">Schedule</p>
             <p className="dx-wizard-step-subtitle">
-              Set when this delivery should take place and how urgent it is.
+              Set the delivery start and end time, then choose how urgent it is.
             </p>
 
             <div className="dx-wiz-grid" style={{ marginBottom: 16 }}>
