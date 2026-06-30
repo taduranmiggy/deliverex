@@ -21,7 +21,11 @@ import {
   validateJobSchedule,
 } from '../../utils/scheduleValidation'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
-import { composeStructuredAddress, validateJobOrderAddresses } from '../../utils/jobOrderAddressValidation'
+import {
+  composeStructuredAddress,
+  parseFullAddressToStructured,
+  validateSimpleRouteStep,
+} from '../../utils/jobOrderAddressValidation'
 import { companyDropoffFields } from '../../utils/companyAddress'
 import { formatJobSchedule } from '../../utils/driverAssignment'
 import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
@@ -39,6 +43,7 @@ const BLANK = {
   material_type_id: '', material_specification_id: '', load_volume_m3: '',
   scheduled_start: '', scheduled_end: '',
   priority: 'normal', special_handling_instructions: '', notes: '',
+  route_additional_details: '',
 }
 
 const STEPS = [
@@ -146,6 +151,20 @@ function WizInput({ value, onChange, placeholder, type = 'text', min, step, erro
       min={min}
       step={step}
       className={`dx-wiz-input${error ? ' dx-wiz-input--error' : ''}`}
+      {...rest}
+    />
+  )
+}
+
+function WizTextarea({ value, onChange, placeholder, rows = 3, error, ...rest }) {
+  return (
+    <textarea
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      rows={rows}
+      className={`dx-wiz-input${error ? ' dx-wiz-input--error' : ''}`}
+      style={{ resize: 'vertical', minHeight: 72 }}
       {...rest}
     />
   )
@@ -320,6 +339,9 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       scheduled_end: toDatetimeLocalValue(initial.scheduled_end),
       priority: initial.priority ?? 'normal',
       special_handling_instructions: '',
+      route_additional_details: initial.special_handling_instructions
+        ?? initial.job_requirements
+        ?? [initial.pickup_landmark, initial.dropoff_landmark].filter(Boolean).join('\n'),
       notes: '',
     }
   }
@@ -344,6 +366,9 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
   const [autoFilled, setAutoFilled]                         = useState({})
   const [pickupLocationSelection, setPickupLocationSelection] = useState(
     form.pickup_location ? { type: 'custom', label: form.pickup_location } : null,
+  )
+  const [showRouteDetails, setShowRouteDetails] = useState(
+    () => Boolean(String(form.route_additional_details ?? '').trim()),
   )
 
   const scheduleMin = minDatetimeLocalValue()
@@ -497,10 +522,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       }
       if (canAutoFillPickup) filled.pickup_location = true
       if (canAutoFillDropoff) {
-        filled.dropoff_street = true
-        filled.dropoff_barangay = true
-        filled.dropoff_city = true
-        filled.dropoff_province = true
+        filled.dropoff_location = true
       }
       if (pref?.vehicle_type_id) filled.preferred_vehicle_type_id = true
       setAutoFilled(filled)
@@ -565,16 +587,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
         errs.load_volume_m3 = 'Load volume is required.'
     }
     if (step === 3) {
-      if (pickupFromQuarry) {
-        if (!form.pickup_location?.trim())
-          errs.pickup_location = 'Select a quarry or supplier for pickup.'
-      } else if (!form.pickup_location?.trim() && !form.pickup_street?.trim()) {
-        errs.pickup_location = 'Pickup source or complete pickup address is required.'
-      }
-      Object.assign(
-        errs,
-        validateJobOrderAddresses(form, { requirePickup: !pickupFromQuarry }),
-      )
+      Object.assign(errs, validateSimpleRouteStep(form, { pickupFromQuarry }))
     }
     if (step === 4) {
       const schedErrs = validateJobSchedule(
@@ -604,7 +617,16 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
   const goToStep = (n) => { setFE({}); setError(''); setStep(n) }
 
   // ── Final payload + submit ─────────────────────────────────────────────────
-  const buildPayload = () => ({
+  const buildPayload = () => {
+    const pickupLine = String(form.pickup_location ?? '').trim()
+      || composeStructuredAddress('pickup', form)
+    const destinationLine = String(form.dropoff_location ?? '').trim()
+      || composeStructuredAddress('dropoff', form)
+    const pickupParsed = pickupFromQuarry ? null : parseFullAddressToStructured(pickupLine)
+    const dropParsed = parseFullAddressToStructured(destinationLine)
+    const routeDetails = String(form.route_additional_details ?? '').trim()
+
+    return {
     company_id:               form.company_id || form.client_id ? Number(form.company_id || form.client_id) : null,
     client_id:                form.company_id || form.client_id ? Number(form.company_id || form.client_id) : null,
     contact_person:           form.contact_person || null,
@@ -612,20 +634,18 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     customer_contact:         form.customer_contact || null,
     quarry_id:                form.quarry_id ? Number(form.quarry_id) : null,
     preferred_vehicle_type_id: form.preferred_vehicle_type_id ? Number(form.preferred_vehicle_type_id) : null,
-    pickup_location:          pickupFromQuarry
-      ? (form.pickup_location || null)
-      : (composeStructuredAddress('pickup', form) || form.pickup_location || null),
-    dropoff_location:         composeStructuredAddress('dropoff', form) || null,
-    pickup_province:          form.pickup_province || null,
-    pickup_city:              form.pickup_city || null,
-    pickup_barangay:          form.pickup_barangay || null,
-    pickup_street:            form.pickup_street || null,
-    pickup_landmark:          form.pickup_landmark || null,
-    dropoff_province:         form.dropoff_province || null,
-    dropoff_city:             form.dropoff_city || null,
-    dropoff_barangay:         form.dropoff_barangay || null,
-    dropoff_street:           form.dropoff_street || null,
-    dropoff_landmark:         form.dropoff_landmark || null,
+    pickup_location:          pickupLine || null,
+    dropoff_location:         destinationLine || null,
+    pickup_province:          pickupFromQuarry ? null : (pickupParsed?.province || null),
+    pickup_city:              pickupFromQuarry ? null : (pickupParsed?.city || null),
+    pickup_barangay:          pickupFromQuarry ? null : (pickupParsed?.barangay || null),
+    pickup_street:            pickupFromQuarry ? (pickupLine || null) : (pickupParsed?.street || null),
+    pickup_landmark:          null,
+    dropoff_province:         dropParsed.province || null,
+    dropoff_city:             dropParsed.city || null,
+    dropoff_barangay:         dropParsed.barangay || null,
+    dropoff_street:           dropParsed.street || null,
+    dropoff_landmark:         null,
     material_type_id:         form.material_type_id ? Number(form.material_type_id) : null,
     material_specification_id: form.material_specification_id ? Number(form.material_specification_id) : null,
     custom_material_type_name: !form.material_type_id && materialTypeSelection?.type === 'custom' ? materialTypeSelection.label : null,
@@ -634,12 +654,13 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     specification_size:       specSelection?.label ?? null,
     load_volume_m3:           form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
     volume_m3:                form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
-    special_handling_instructions: null,
+    special_handling_instructions: routeDetails || null,
     job_requirements:         null,
     scheduled_start:          form.scheduled_start || null,
     scheduled_end:            form.scheduled_end || null,
     priority:                 form.priority,
-  })
+  }
+  }
 
   const submit = async () => {
     // Final guard — run all step validations
@@ -664,10 +685,8 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
   }
 
   // ── Lookup helpers for review ──────────────────────────────────────────────
-  const pickupAddr = pickupFromQuarry
-    ? form.pickup_location
-    : (composeStructuredAddress('pickup', form) || buildDisplayAddress('pickup', form))
-  const dropAddr   = composeStructuredAddress('dropoff', form) || buildDisplayAddress('dropoff', form)
+  const pickupAddr = form.pickup_location || buildDisplayAddress('pickup', form)
+  const dropAddr   = form.dropoff_location || buildDisplayAddress('dropoff', form)
   const clientLabel = clientSelection?.label || '—'
 
   // ─ PRIORITY label
@@ -834,12 +853,11 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
           <>
             <p className="dx-wizard-step-title">Route</p>
             <p className="dx-wizard-step-subtitle">
-              Enter complete pickup and delivery addresses. Vague locations (e.g. &quot;near mall&quot;, &quot;site only&quot;) are not accepted.
+              Enter pickup and destination addresses. Use the full address in each field.
             </p>
 
-            <p className="dx-wizard-section-label">Pickup</p>
             <div className="dx-wiz-grid" style={{ marginBottom: 16 }}>
-              <FieldWrap label={<>Pickup source {autoFilled.pickup_location && <AutoFilledTag />}</>} required error={fieldErrors.pickup_location} full>
+              <FieldWrap label={<>Pickup Location {autoFilled.pickup_location && <AutoFilledTag />}</>} required error={fieldErrors.pickup_location} full>
                 <CreatableCombobox
                   items={pickupLocationItems}
                   getItemId={(item) => item.id}
@@ -847,51 +865,42 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
                   value={pickupLocationSelection}
                   onChange={handlePickupLocationChange}
                   error={fieldErrors.pickup_location || null}
-                  placeholder="Search quarry or supplier..."
+                  placeholder="Search quarry, supplier, or enter pickup address…"
                   customOptionLabel={(q) => `Use custom pickup: ${q}`}
                   emptyMessage="No saved pickup locations."
                 />
               </FieldWrap>
+
+              <FieldWrap label={<>Destination {autoFilled.dropoff_location && <AutoFilledTag />}</>} required error={fieldErrors.dropoff_location} full>
+                <WizTextarea
+                  value={form.dropoff_location}
+                  onChange={set('dropoff_location')}
+                  placeholder="e.g. #43 Ninang Lydia St., B.F. Homes Phase 1, Caloocan City"
+                  error={fieldErrors.dropoff_location}
+                  rows={2}
+                />
+              </FieldWrap>
             </div>
 
-            {!pickupFromQuarry && (
-              <div className="dx-wiz-grid" style={{ marginBottom: 20 }}>
-                <FieldWrap label="Street / Building / Site" required error={fieldErrors.pickup_street} full>
-                  <WizInput value={form.pickup_street} onChange={set('pickup_street')} placeholder="e.g. Lot 12, Industrial Ave." error={fieldErrors.pickup_street} />
-                </FieldWrap>
-                <FieldWrap label="Barangay" required error={fieldErrors.pickup_barangay}>
-                  <WizInput value={form.pickup_barangay} onChange={set('pickup_barangay')} placeholder="e.g. San Roque" error={fieldErrors.pickup_barangay} />
-                </FieldWrap>
-                <FieldWrap label="City / Municipality" required error={fieldErrors.pickup_city}>
-                  <WizInput value={form.pickup_city} onChange={set('pickup_city')} placeholder="e.g. Antipolo" error={fieldErrors.pickup_city} />
-                </FieldWrap>
-                <FieldWrap label="Province" required error={fieldErrors.pickup_province}>
-                  <WizInput value={form.pickup_province} onChange={set('pickup_province')} placeholder="e.g. Rizal" error={fieldErrors.pickup_province} />
-                </FieldWrap>
-                <FieldWrap label="Landmark" full>
-                  <WizInput value={form.pickup_landmark} onChange={set('pickup_landmark')} placeholder="Optional — gate color, guard post, etc." />
-                </FieldWrap>
-              </div>
+            {!showRouteDetails ? (
+              <button
+                type="button"
+                className="btn-dx-secondary btn-sm"
+                style={{ marginBottom: 4 }}
+                onClick={() => setShowRouteDetails(true)}
+              >
+                + Add details (optional)
+              </button>
+            ) : (
+              <FieldWrap label="Additional Details (Optional)" full>
+                <WizTextarea
+                  value={form.route_additional_details}
+                  onChange={set('route_additional_details')}
+                  placeholder="Landmarks, gate instructions, loading notes, contact instructions, special handling…"
+                  rows={3}
+                />
+              </FieldWrap>
             )}
-
-            <p className="dx-wizard-section-label">Delivery</p>
-            <div className="dx-wiz-grid" style={{ marginBottom: 0 }}>
-              <FieldWrap label="Street / Building / Site" required error={fieldErrors.dropoff_street} full>
-                <WizInput value={form.dropoff_street} onChange={set('dropoff_street')} placeholder="e.g. Phase 2 construction site, Block 5" error={fieldErrors.dropoff_street} />
-              </FieldWrap>
-              <FieldWrap label="Barangay" required error={fieldErrors.dropoff_barangay}>
-                <WizInput value={form.dropoff_barangay} onChange={set('dropoff_barangay')} placeholder="e.g. Batasan Hills" error={fieldErrors.dropoff_barangay} />
-              </FieldWrap>
-              <FieldWrap label="City / Municipality" required error={fieldErrors.dropoff_city}>
-                <WizInput value={form.dropoff_city} onChange={set('dropoff_city')} placeholder="e.g. Quezon City" error={fieldErrors.dropoff_city} />
-              </FieldWrap>
-              <FieldWrap label="Province" required error={fieldErrors.dropoff_province}>
-                <WizInput value={form.dropoff_province} onChange={set('dropoff_province')} placeholder="e.g. Metro Manila" error={fieldErrors.dropoff_province} />
-              </FieldWrap>
-              <FieldWrap label="Landmark" full>
-                <WizInput value={form.dropoff_landmark} onChange={set('dropoff_landmark')} placeholder="Optional — nearest landmark for drivers" />
-              </FieldWrap>
-            </div>
           </>
         )}
 
@@ -956,7 +965,10 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
 
             <ReviewBlock title="Route" onEdit={goToStep} stepNum={3} cols={2}>
               <RR label="Pickup Location" value={pickupAddr} />
-              <RR label="Delivery Location" value={dropAddr} />
+              <RR label="Destination" value={dropAddr} />
+              {form.route_additional_details?.trim() ? (
+                <RR label="Additional Details" value={form.route_additional_details} />
+              ) : null}
             </ReviewBlock>
 
             <ReviewBlock title="Schedule" onEdit={goToStep} stepNum={4} cols={2}>
