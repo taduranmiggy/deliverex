@@ -11,15 +11,6 @@ import { useToast } from '../../context/ToastContext'
 import useConfirmation from '../../hooks/useConfirmation'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
-import {
-  firstScheduleError,
-  formatScheduleReviewParts,
-  minDatetimeLocalValue,
-  minEndDatetimeLocalValue,
-  MIN_DELIVERY_WINDOW_MINUTES,
-  toDatetimeLocalValue,
-  validateJobSchedule,
-} from '../../utils/scheduleValidation'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import {
   composeStructuredAddress,
@@ -27,7 +18,6 @@ import {
   validateSimpleRouteStep,
 } from '../../utils/jobOrderAddressValidation'
 import { companyDropoffFields } from '../../utils/companyAddress'
-import { formatJobSchedule } from '../../utils/driverAssignment'
 import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
 import { FilterSelect } from '../../components/ui'
 
@@ -41,7 +31,6 @@ const BLANK = {
   pickup_province: '', pickup_city: '', pickup_barangay: '', pickup_street: '', pickup_landmark: '',
   dropoff_province: '', dropoff_city: '', dropoff_barangay: '', dropoff_street: '', dropoff_landmark: '',
   material_type_id: '', material_specification_id: '', load_volume_m3: '',
-  scheduled_start: '', scheduled_end: '',
   priority: 'normal', special_handling_instructions: '', notes: '',
   route_additional_details: '',
 }
@@ -50,7 +39,7 @@ const STEPS = [
   { id: 1, label: 'Client Information', hint: 'Company & contacts' },
   { id: 2, label: 'Material Information', hint: 'Type, spec, vehicle & volume' },
   { id: 3, label: 'Route', hint: 'Pickup & delivery' },
-  { id: 4, label: 'Schedule', hint: 'Start, end & priority' },
+  { id: 4, label: 'Priority', hint: 'Urgency level' },
   { id: 5, label: 'Review & Confirm', hint: 'Check and submit' },
 ]
 
@@ -230,36 +219,6 @@ function RR({ label, value }) {
   )
 }
 
-function ScheduleReviewRows({ start, end }) {
-  const parts = formatScheduleReviewParts(start, end)
-  if (!parts?.start && !parts?.end) {
-    return <RR label="Schedule" value={null} />
-  }
-
-  return (
-    <>
-      {parts.start && (
-        <div className="dx-review-row">
-          <span className="dx-review-row__label">Start</span>
-          <span className="dx-review-row__value" style={{ display: 'grid', gap: 2 }}>
-            <span>{parts.start.date}</span>
-            <span style={{ color: 'var(--muted)', fontSize: '0.875rem', fontWeight: 500 }}>{parts.start.time}</span>
-          </span>
-        </div>
-      )}
-      {parts.end && (
-        <div className="dx-review-row">
-          <span className="dx-review-row__label">End</span>
-          <span className="dx-review-row__value" style={{ display: 'grid', gap: 2 }}>
-            <span>{parts.end.date}</span>
-            <span style={{ color: 'var(--muted)', fontSize: '0.875rem', fontWeight: 500 }}>{parts.end.time}</span>
-          </span>
-        </div>
-      )}
-    </>
-  )
-}
-
 // ─── Job Order Wizard Form ─────────────────────────────────────────────────────
 
 function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading, onSaved, onCancel, onRefreshOptions }) {
@@ -335,8 +294,6 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       material_type_id: String(initialMaterialTypeId),
       material_specification_id: String(initialSpecificationId),
       load_volume_m3: initial.load_volume_m3 ?? initial.volume_m3 ?? '',
-      scheduled_start: toDatetimeLocalValue(initial.scheduled_start),
-      scheduled_end: toDatetimeLocalValue(initial.scheduled_end),
       priority: initial.priority ?? 'normal',
       special_handling_instructions: '',
       route_additional_details: initial.special_handling_instructions
@@ -371,8 +328,6 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     () => Boolean(String(form.route_additional_details ?? '').trim()),
   )
 
-  const scheduleMin = minDatetimeLocalValue()
-  const scheduleEndMin = minEndDatetimeLocalValue(form.scheduled_start)
   const pickupFromQuarry = Boolean(form.quarry_id)
 
   const stepPanelRef  = useRef(null)
@@ -589,13 +544,6 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     if (step === 3) {
       Object.assign(errs, validateSimpleRouteStep(form, { pickupFromQuarry }))
     }
-    if (step === 4) {
-      const schedErrs = validateJobSchedule(
-        { scheduled_start: form.scheduled_start, scheduled_end: form.scheduled_end },
-        { requireBoth: true },
-      )
-      Object.assign(errs, schedErrs)
-    }
     setFE(errs)
     return Object.keys(errs).length === 0
   }
@@ -656,8 +604,6 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     volume_m3:                form.load_volume_m3 !== '' ? Number(form.load_volume_m3) : null,
     special_handling_instructions: routeDetails || null,
     job_requirements:         null,
-    scheduled_start:          form.scheduled_start || null,
-    scheduled_end:            form.scheduled_end || null,
     priority:                 form.priority,
   }
   }
@@ -904,33 +850,15 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
           </>
         )}
 
-        {/* ── STEP 4: Schedule ── */}
+        {/* ── STEP 4: Priority ── */}
         {currentStep === 4 && (
           <>
-            <p className="dx-wizard-step-title">Schedule</p>
+            <p className="dx-wizard-step-title">Priority</p>
             <p className="dx-wizard-step-subtitle">
-              Set the expected delivery window. End time must be at least {MIN_DELIVERY_WINDOW_MINUTES} minutes after start.
+              Set how urgent this delivery is for dispatch planning.
             </p>
 
-            <div className="dx-wiz-grid" style={{ marginBottom: 16 }}>
-              <FieldWrap label="Start Date & Time" required error={fieldErrors.scheduled_start}>
-                <WizInput
-                  type="datetime-local"
-                  min={scheduleMin}
-                  value={form.scheduled_start}
-                  onChange={set('scheduled_start')}
-                  error={fieldErrors.scheduled_start}
-                />
-              </FieldWrap>
-              <FieldWrap label="End Date & Time" required error={fieldErrors.scheduled_end}>
-                <WizInput
-                  type="datetime-local"
-                  min={scheduleEndMin}
-                  value={form.scheduled_end}
-                  onChange={set('scheduled_end')}
-                  error={fieldErrors.scheduled_end}
-                />
-              </FieldWrap>
+            <div className="dx-wiz-grid" style={{ marginBottom: 16, maxWidth: 320 }}>
               <FieldWrap label="Priority">
                 <select value={form.priority} onChange={set('priority')} className="dx-wiz-input" style={{ cursor: 'pointer' }}>
                   <option value="low">Low</option>
@@ -971,8 +899,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
               ) : null}
             </ReviewBlock>
 
-            <ReviewBlock title="Schedule" onEdit={goToStep} stepNum={4} cols={2}>
-              <ScheduleReviewRows start={form.scheduled_start} end={form.scheduled_end} />
+            <ReviewBlock title="Priority" onEdit={goToStep} stepNum={4} cols={1}>
               <RR label="Priority" value={PRIORITY_LABELS[form.priority] ?? form.priority} />
             </ReviewBlock>
 
@@ -1279,21 +1206,20 @@ function CreateJobOrderPage() {
             <table className="dx-data-table">
               <thead>
                 <tr>
-                  <th>Job ID</th><th>Client</th><th>Route</th><th>Priority</th>
-                  <th>Schedule</th><th>Status</th>
+                  <th>Job ID</th><th>Client</th><th>Route</th><th>Priority</th><th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {clientsLoading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 6 }).map((_, j) => (
+                      {Array.from({ length: 5 }).map((_, j) => (
                         <td key={j}><div style={{ height: 14, borderRadius: 6, background: 'var(--slate-200)', width: j === 0 ? '70%' : '55%', animation: 'shimmer 1.4s infinite' }} /></td>
                       ))}
                     </tr>
                   ))
                 ) : filteredOrders.length === 0 ? (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0' }}>
+                  <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0' }}>
                     {orders.length === 0
                       ? <>No job orders yet.{' '}
                           <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline', padding: 0 }}
@@ -1318,9 +1244,6 @@ function CreateJobOrderPage() {
                         {buildDisplayAddress('pickup', order)} → {buildDisplayAddress('dropoff', order)}
                       </td>
                       <td style={{ textTransform: 'capitalize', fontSize: '0.875rem' }}>{order.priority}</td>
-                      <td style={{ fontSize: '0.8125rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                        {formatJobSchedule(order)}
-                      </td>
                       <td><span className={jobStatusBadgeClass(order.status)}>{formatJobStatus(order.status)}</span></td>
                     </tr>
                   ))
@@ -1365,9 +1288,6 @@ function CreateJobOrderPage() {
                 )}
                 <div className="dx-kv"><span>Load</span>
                   <strong>{selected.load_volume_m3 || selected.volume_m3 ? `${selected.load_volume_m3 ?? selected.volume_m3} m³` : '—'}</strong>
-                </div>
-                <div className="dx-kv"><span>Schedule</span>
-                  <strong>{formatJobSchedule(selected)}</strong>
                 </div>
                 <div className="dx-kv"><span>Priority</span><strong style={{ textTransform: 'capitalize' }}>{selected.priority}</strong></div>
                 <div style={{ marginBottom: 4 }}><span className={jobStatusBadgeClass(selected.status)}>{formatJobStatus(selected.status)}</span></div>
