@@ -23,6 +23,10 @@ function PwaCustomerOnlyGuard({ children }) {
     return children
   }
 
+  if (pathname === '/activate-account' || pathname.startsWith('/activate-account')) {
+    return children
+  }
+
   if (pathname.startsWith('/driver')) {
     return <Navigate to="/customer/login" replace />
   }

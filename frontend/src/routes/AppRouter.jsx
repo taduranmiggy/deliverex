@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-
 import ProtectedRoutes from './ProtectedRoutes'
 import { roleRoutes } from './roleRoutes'
 import ResetPasswordPage from '../pages/Auth/ResetPasswordPage'
+import AccountActivationPage from '../pages/Auth/AccountActivationPage'
 import CompanyActivationPage from '../pages/Auth/CompanyActivationPage'
 import LoginPage from '../pages/Auth/LoginPage'
 import ForgotPasswordPage from '../pages/Auth/ForgotPasswordPage'
@@ -41,6 +42,7 @@ function AppRouter() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/activate-account" element={<AccountActivationPage />} />
           <Route path="/activate-company/:token" element={<CompanyActivationPage />} />
           <Route path="/driver/login" element={<DriverLoginPage />} />
           <Route

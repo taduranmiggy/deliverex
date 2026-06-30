@@ -5,7 +5,14 @@ import PasswordFieldsForm, { allPasswordRulesPassed } from '../../components/aut
 import { isStandalonePwa } from '../../utils/pwaUtils'
 import './LoginPage.css'
 
-function ResetPasswordPage() {
+const BLANK_ADDRESS = {
+  street: '',
+  barangay: '',
+  city: '',
+  province: '',
+}
+
+function AccountActivationPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const token = searchParams.get('token') ?? ''
@@ -15,13 +22,10 @@ function ResetPasswordPage() {
     () => (isStandalonePwa() ? '/customer/login' : '/login'),
     [],
   )
-  const forgotPath = useMemo(
-    () => (isStandalonePwa() ? '/customer/forgot-password' : '/forgot-password'),
-    [],
-  )
 
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
+  const [companyAddress, setCompanyAddress] = useState(BLANK_ADDRESS)
   const [context, setContext] = useState(null)
   const [loadingContext, setLoadingContext] = useState(true)
   const [error, setError] = useState('')
@@ -49,6 +53,10 @@ function ResetPasswordPage() {
     return () => { cancelled = true }
   }, [email, token])
 
+  const setAddress = (key) => (e) => {
+    setCompanyAddress((prev) => ({ ...prev, [key]: e.target.value }))
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
@@ -62,7 +70,13 @@ function ResetPasswordPage() {
       return
     }
     if (!token || !email) {
-      setError('Invalid or expired reset link.')
+      setError('Invalid or expired activation link.')
+      return
+    }
+
+    const missing = ['street', 'barangay', 'city', 'province'].filter((k) => !companyAddress[k]?.trim())
+    if (missing.length) {
+      setError('Complete company address is required before activating your account.')
       return
     }
 
@@ -73,6 +87,12 @@ function ResetPasswordPage() {
         email,
         password,
         password_confirmation: passwordConfirmation,
+        company_address: {
+          street: companyAddress.street.trim(),
+          barangay: companyAddress.barangay.trim(),
+          city: companyAddress.city.trim(),
+          province: companyAddress.province.trim(),
+        },
       })
       setSuccess(true)
     } catch (err) {
@@ -82,13 +102,54 @@ function ResetPasswordPage() {
     }
   }
 
+  if (!token || !email) {
+    return (
+      <div className="auth-page auth-page--dx">
+        <div className="auth-card auth-card--dx">
+          <h1>Activation link invalid</h1>
+          <p className="auth-error-dx">This activation link is missing required information or has expired.</p>
+          <p className="auth-alt-link">
+            <Link to={loginPath}>Back to sign in</Link>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadingContext) {
+    return (
+      <div className="auth-page auth-page--dx">
+        <div className="auth-card auth-card--dx"><p>Validating activation link…</p></div>
+      </div>
+    )
+  }
+
+  if (error && !context) {
+    return (
+      <div className="auth-page auth-page--dx">
+        <div className="auth-card auth-card--dx">
+          <h1>Activation unavailable</h1>
+          <p className="auth-error-dx">{error}</p>
+          <p className="auth-alt-link" style={{ marginTop: 16 }}>
+            Need help? Contact your administrator to request a new activation link.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (context && !context.needs_company_address) {
+    const params = new URLSearchParams({ token, email })
+    return <Navigate to={`/reset-password?${params.toString()}`} replace />
+  }
+
   if (success) {
     return (
       <div className="auth-page auth-page--dx">
         <div className="auth-card auth-card--dx">
-          <h1>Password updated successfully</h1>
+          <h1>Account activated</h1>
           <p className="auth-success-dx">
-            Your password has been updated. You can now sign in with your new password.
+            Your account has been activated. You can now sign in.
           </p>
           <button
             type="button"
@@ -102,66 +163,47 @@ function ResetPasswordPage() {
     )
   }
 
-  if (!token || !email) {
-    return (
-      <div className="auth-page auth-page--dx">
-        <div className="auth-card auth-card--dx">
-          <h1>Reset link invalid</h1>
-          <p className="auth-error-dx">This password reset link is missing required information or has expired.</p>
-          <p className="auth-alt-link">
-            <Link to={forgotPath}>Request a new reset link</Link>
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  if (loadingContext) {
-    return (
-      <div className="auth-page auth-page--dx">
-        <div className="auth-card auth-card--dx"><p>Validating reset link…</p></div>
-      </div>
-    )
-  }
-
-  if (error && !context) {
-    return (
-      <div className="auth-page auth-page--dx">
-        <div className="auth-card auth-card--dx">
-          <h1>Reset unavailable</h1>
-          <p className="auth-error-dx">{error}</p>
-          <p className="auth-alt-link" style={{ marginTop: 16 }}>
-            <Link to={forgotPath}>Request a new reset link</Link>
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  if (context?.needs_company_address) {
-    const params = new URLSearchParams({ token, email })
-    return <Navigate to={`/activate-account?${params.toString()}`} replace />
-  }
-
   return (
     <div className="auth-page auth-page--dx">
       <div className="auth-card auth-card--dx auth-card--signup">
-        <h1>Reset your password</h1>
+        <h1>Activate your account</h1>
         <p className="auth-welcome auth-welcome--sub">
-          Create a new password for your Deliverex account.
+          Set your password and company address for <strong>{context?.company_name}</strong>.
         </p>
         <form onSubmit={handleSubmit} className="auth-form-dx auth-activation-form" noValidate>
+          <div className="auth-form-section">
+            <p className="auth-form-section__title">Company address</p>
+            <label>
+              Street / building / site
+              <input required value={companyAddress.street} onChange={setAddress('street')} />
+            </label>
+            <label>
+              Barangay
+              <input required value={companyAddress.barangay} onChange={setAddress('barangay')} />
+            </label>
+            <label>
+              City / municipality
+              <input required value={companyAddress.city} onChange={setAddress('city')} />
+            </label>
+            <label>
+              Province
+              <input required value={companyAddress.province} onChange={setAddress('province')} />
+            </label>
+          </div>
+
           <PasswordFieldsForm
-            idPrefix="reset-password"
+            idPrefix="activation-password"
             password={password}
             passwordConfirmation={passwordConfirmation}
             onPasswordChange={setPassword}
             onPasswordConfirmationChange={setPasswordConfirmation}
+            newPasswordLabel="Password"
+            confirmLabel="Confirm password"
           />
 
           {error ? <p className="auth-error-dx">{error}</p> : null}
           <button className="btn-dx-login" type="submit" disabled={submitting}>
-            {submitting ? 'Saving…' : 'Reset Password'}
+            {submitting ? 'Activating…' : 'Activate account'}
           </button>
         </form>
         <p className="auth-alt-link" style={{ marginTop: 16 }}>
@@ -172,4 +214,4 @@ function ResetPasswordPage() {
   )
 }
 
-export default ResetPasswordPage
+export default AccountActivationPage
