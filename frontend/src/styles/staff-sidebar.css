@@ -4,12 +4,30 @@
 ═══════════════════════════════════════════════════════════ */
 
 .app-shell:has(.dx-staff-sidebar) {
-  grid-template-columns: 268px 1fr;
+  /* Single column — fixed sidebar is out of flow; main owns the shell width */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app-shell:has(.dx-staff-sidebar) > .sidebar-backdrop,
+.app-shell:has(.dx-staff-sidebar) > .dx-staff-sidebar {
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .app-shell:has(.dx-staff-sidebar) .app-shell__main {
+  grid-column: 1;
+  grid-row: 1;
   min-height: 100dvh;
   min-width: 0;
+  width: 100%;
+}
+
+@media (min-width: 1025px) {
+  .app-shell:has(.dx-staff-sidebar) .app-shell__main {
+    margin-left: 268px;
+    width: auto;
+  }
 }
 
 .dx-staff-sidebar {
@@ -265,8 +283,8 @@ a.dx-staff-sidebar__user:hover {
 
 /* Mobile drawer */
 @media (max-width: 1024px) {
-  .app-shell:has(.dx-staff-sidebar) {
-    grid-template-columns: 1fr;
+  .app-shell:has(.dx-staff-sidebar) .app-shell__main {
+    margin-left: 0;
   }
 
   .dx-staff-sidebar {
