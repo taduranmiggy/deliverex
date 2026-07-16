@@ -316,6 +316,7 @@ function AssignDriverVehiclePage() {
   const [altPage, setAltPage] = useState(1)
   const [altPerPage] = useState(6)
   const [diagnostics, setDiagnostics] = useState(null)
+  const [fleetMeta, setFleetMeta] = useState(null)
 
   const location = useLocation()
   const preselectJobId = location.state?.jobOrderId ?? null
@@ -360,12 +361,14 @@ function AssignDriverVehiclePage() {
     setOverrideTab('suggested')
     setAltPage(1)
     setDiagnostics(null)
+    setFleetMeta(null)
     getBestFit(selected.id)
       .then((res) => {
         setRecommended(res.recommended || null)
         setRecommendations(res.recommendations || [])
         setOverrideOptions(res.override_options || { drivers: [], vehicles: [] })
         setDiagnostics(res.diagnostics || null)
+        setFleetMeta(res.meta || null)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
@@ -438,6 +441,10 @@ function AssignDriverVehiclePage() {
   const top = recommended || recommendations[0]
   const alternatives = recommendations.filter((r) =>
     !(top && r.driver_id === top.driver_id && r.vehicle_id === top.vehicle_id)
+  )
+  const uniqueRecommendedDrivers = useMemo(
+    () => new Set(recommendations.map((r) => r.driver_id)).size,
+    [recommendations],
   )
 
   const altTotalPages = Math.max(1, Math.ceil(alternatives.length / altPerPage))
@@ -598,6 +605,15 @@ function AssignDriverVehiclePage() {
             <p style={{ margin: 0, fontSize: '0.8125rem', fontWeight: 700 }}>
               {alternatives.length > 0 ? `${alternatives.length} alternative ${alternatives.length === 1 ? 'match' : 'matches'}` : 'Alternative Matches'}
             </p>
+            {fleetMeta && (
+              <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>
+                {fleetMeta.eligible_drivers} of {fleetMeta.total_drivers} drivers eligible
+                {' · '}
+                {uniqueRecommendedDrivers} shown in Best-Fit
+                {' · '}
+                {fleetMeta.override_driver_count ?? overrideOptions.drivers.length} in All Drivers
+              </p>
+            )}
             {alternatives.length > 0 && (
               <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>Override the recommendation by assigning any match below</p>
             )}

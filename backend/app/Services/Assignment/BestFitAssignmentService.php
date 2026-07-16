@@ -122,7 +122,32 @@ class BestFitAssignmentService
             return $aLast <=> $bLast;
         });
 
-        return array_slice($this->diversifyByDriver($recommendations), 0, 10);
+        return $this->diversifyByDriver($recommendations);
+    }
+
+    /**
+     * Lightweight eligibility counts for Fleet Dispatch UI (no scoring).
+     *
+     * @return array{total_drivers:int,eligible_drivers:int,total_vehicles:int,eligible_vehicles:int}
+     */
+    public function eligibilitySummary(JobOrder $jobOrder): array
+    {
+        $jobOrder->loadMissing('preferredVehicleType', 'quarry');
+
+        $requiredVolume = $this->requiredVolume($jobOrder);
+        $requiredTypeNormalized = $this->normalizeVehicleTypeName(
+            $jobOrder->preferredVehicleType?->name ?? $jobOrder->vehicle_type_required
+        );
+
+        $eligibleDrivers = $this->eligibleDrivers($jobOrder);
+        $eligibleVehicles = $this->eligibleVehicles($jobOrder, $requiredTypeNormalized, $requiredVolume);
+
+        return [
+            'total_drivers'     => Driver::query()->count(),
+            'eligible_drivers'  => $eligibleDrivers->count(),
+            'total_vehicles'    => Vehicle::query()->count(),
+            'eligible_vehicles' => $eligibleVehicles->count(),
+        ];
     }
 
     public function overrideOptions(JobOrder $jobOrder): array

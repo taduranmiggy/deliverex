@@ -166,6 +166,104 @@ class BestFitPipelineDiagnosticTest extends TestCase
         $this->assertSame('No Expiry Driver', $report['drivers']['removed']['license_incomplete'][0]['name']);
     }
 
+    public function test_recommendations_are_not_capped_at_ten_drivers(): void
+    {
+        $driverRole = Role::create(['name' => 'driver']);
+        $type = VehicleType::create([
+            'name' => 'Dump Truck',
+            'wheel_type' => '10 Wheeler',
+            'min_cbm' => 10,
+            'max_cbm' => 20,
+            'status' => 'active',
+        ]);
+
+        $vehicle = Vehicle::create([
+            'plate_no' => 'FLEET-SHARED',
+            'type' => 'Dump Truck',
+            'vehicle_type_id' => $type->id,
+            'cbm_capacity' => 15,
+            'status' => 'available',
+        ]);
+
+        for ($i = 1; $i <= 12; $i++) {
+            $user = User::factory()->create(['role_id' => $driverRole->id, 'email_verified_at' => now()]);
+            Driver::create([
+                'user_id' => $user->id,
+                'full_name' => "Eligible Driver {$i}",
+                'license_no' => "LIC-FLEET-{$i}",
+                'license_expiry' => now()->addYear(),
+                'availability' => 'available',
+                'status' => 'available',
+            ]);
+        }
+
+        $jobOrder = JobOrder::factory()->create([
+            'created_by' => $this->dispatcher->id,
+            'preferred_vehicle_type_id' => $type->id,
+            'vehicle_type_required' => 'Dump Truck',
+            'load_volume_m3' => 10,
+            'status' => 'pending',
+            'scheduled_start' => now()->addDay(),
+            'scheduled_end' => now()->addDay()->addHours(4),
+        ]);
+
+        $service = app(BestFitAssignmentService::class);
+        $recommendations = $service->recommend($jobOrder);
+        $uniqueDrivers = count(array_unique(array_column($recommendations, 'driver_id')));
+
+        $this->assertGreaterThan(10, count($recommendations));
+        $this->assertSame(12, $uniqueDrivers);
+
+        $override = $service->overrideOptions($jobOrder);
+        $this->assertCount(12, $override['drivers']);
+        $this->assertSame($vehicle->id, $recommendations[0]['vehicle_id']);
+    }
+
+    public function test_best_fit_api_includes_eligibility_meta(): void
+    {
+        $driverRole = Role::create(['name' => 'driver']);
+        $type = VehicleType::create([
+            'name' => 'Dump Truck',
+            'wheel_type' => '10 Wheeler',
+            'min_cbm' => 10,
+            'max_cbm' => 20,
+            'status' => 'active',
+        ]);
+
+        $user = User::factory()->create(['role_id' => $driverRole->id, 'email_verified_at' => now()]);
+        Driver::create([
+            'user_id' => $user->id,
+            'full_name' => 'Meta Driver',
+            'license_no' => 'LIC-META-1',
+            'license_expiry' => now()->addYear(),
+            'availability' => 'available',
+            'status' => 'available',
+        ]);
+
+        Vehicle::create([
+            'plate_no' => 'META-001',
+            'type' => 'Dump Truck',
+            'vehicle_type_id' => $type->id,
+            'cbm_capacity' => 15,
+            'status' => 'available',
+        ]);
+
+        $jobOrder = JobOrder::factory()->create([
+            'created_by' => $this->dispatcher->id,
+            'preferred_vehicle_type_id' => $type->id,
+            'vehicle_type_required' => 'Dump Truck',
+            'load_volume_m3' => 10,
+            'status' => 'pending',
+        ]);
+
+        $this->apiAs($this->dispatcher)
+            ->getJson("/api/dispatch/best-fit/{$jobOrder->id}")
+            ->assertOk()
+            ->assertJsonPath('meta.eligible_drivers', 1)
+            ->assertJsonPath('meta.override_driver_count', 1)
+            ->assertJsonPath('meta.recommendation_count', 1);
+    }
+
     public function test_best_fit_api_includes_diagnostics_when_empty(): void
     {
         $jobOrder = JobOrder::factory()->create([
