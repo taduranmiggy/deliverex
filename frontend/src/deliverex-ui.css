@@ -2282,13 +2282,9 @@
 }
 
 .customer-info-hero {
-  background: linear-gradient(160deg, #0f172a 0%, #1e3a8a 58%, #1d4ed8 100%);
+  background: linear-gradient(160deg, var(--navy-deep, #0b1220) 0%, var(--navy, #1d3557) 52%, var(--primary, #2563eb) 100%);
   color: #fff;
   padding: 56px 24px 72px;
-}
-
-.customer-info-hero--services {
-  background: linear-gradient(160deg, #0f172a 0%, #134e4a 55%, #0d9488 100%);
 }
 
 .customer-info-hero__inner {
@@ -2448,6 +2444,9 @@
   display: grid;
   place-items: center;
   margin-bottom: 16px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary-mid);
 }
 
 .customer-service-card h2 {
@@ -2470,8 +2469,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
-  border-color: #bfdbfe;
+  background: var(--brand-gradient-soft, linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%));
+  border-color: var(--color-primary-mid);
 }
 
 .customer-contact-card__kicker {

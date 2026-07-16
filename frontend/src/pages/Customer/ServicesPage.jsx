@@ -8,31 +8,25 @@ const SERVICES = [
     description:
       'Transportation of construction materials such as aggregates, sand, gravel, and related resources.',
     icon: Truck,
-    color: '#2563eb',
-    bg: '#dbeafe',
   },
   {
     title: 'Delivery and Transport',
     description:
       'Coordination and execution of deliveries using company drivers and vehicles.',
     icon: Workflow,
-    color: '#0891b2',
-    bg: '#cffafe',
   },
   {
     title: 'Site Preparation Support',
     description:
       'Logistics support for site preparation and construction activities.',
     icon: Wrench,
-    color: '#7c3aed',
-    bg: '#ede9fe',
   },
 ]
 
 function ServicesPage() {
   return (
     <div className="customer-info-page">
-      <section className="customer-info-hero customer-info-hero--services">
+      <section className="customer-info-hero">
         <div className="customer-info-hero__inner">
           <p className="tracking-eyebrow" style={{ color: 'rgba(255,255,255,0.75)' }}>Services</p>
           <h1>Construction logistics you can coordinate and track</h1>
@@ -51,13 +45,13 @@ function ServicesPage() {
 
       <div className="customer-info-body">
         <div className="customer-service-grid">
-          {SERVICES.map(({ title, description, icon: Icon, color, bg }, index) => (
+          {SERVICES.map(({ title, description, icon: Icon }, index) => (
             <article
               key={title}
               className="customer-service-card"
               style={{ animationDelay: `${index * 80}ms` }}
             >
-              <div className="customer-service-card__icon" style={{ background: bg, color }}>
+              <div className="customer-service-card__icon">
                 <Icon size={22} aria-hidden />
               </div>
               <h2>{title}</h2>
