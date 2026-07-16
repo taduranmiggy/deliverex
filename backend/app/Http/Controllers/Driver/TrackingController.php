@@ -30,6 +30,7 @@ class TrackingController extends Controller
             'action_timestamp' => 'nullable|string',
             'action_taken_at' => 'nullable|string',
             'source' => 'nullable|string|max:40',
+            'battery_level' => 'nullable|integer|min:0|max:100',
             'force' => 'nullable|boolean',
         ]);
 
@@ -60,6 +61,7 @@ class TrackingController extends Controller
             'synced_at' => $syncedAt,
             'source' => $data['source'] ?? 'driver_ping',
             'force' => (bool) ($data['force'] ?? false),
+            'battery_level' => $data['battery_level'] ?? null,
         ], $driverId);
 
         if ($result['skipped'] && $result['log'] === null) {

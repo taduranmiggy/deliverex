@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
+import useLogoutConfirmation from '../../hooks/useLogoutConfirmation'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import CustomerBrandMark from './CustomerBrandMark'
 import {
@@ -25,9 +26,9 @@ const PRIMARY_NAV = [
 ]
 
 function CustomerWebsiteNavBar() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const { paths } = useCustomerSurface()
-  const navigate = useNavigate()
+  const { openLogoutConfirm, logoutConfirmModal } = useLogoutConfirmation({ redirectTo: paths.signIn })
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
 
@@ -59,10 +60,9 @@ function CustomerWebsiteNavBar() {
     }
   }, [menuOpen])
 
-  const handleLogout = async () => {
+  const handleLogoutClick = (event) => {
     setMenuOpen(false)
-    await logout()
-    navigate(paths.signIn, { replace: true })
+    openLogoutConfirm(event)
   }
 
   const closeMenu = () => setMenuOpen(false)
@@ -121,7 +121,7 @@ function CustomerWebsiteNavBar() {
                   Support
                 </NavLink>
                 <div className="customer-web-account-menu__divider" role="separator" />
-                <button type="button" className="customer-web-account-menu__item customer-web-account-menu__item--danger" role="menuitem" onClick={handleLogout}>
+                <button type="button" className="customer-web-account-menu__item customer-web-account-menu__item--danger" role="menuitem" onClick={handleLogoutClick}>
                   <LogOut size={15} aria-hidden />
                   Sign out
                 </button>
@@ -130,6 +130,8 @@ function CustomerWebsiteNavBar() {
           </div>
         </div>
       </div>
+
+      {logoutConfirmModal}
     </nav>
   )
 }

@@ -24,6 +24,7 @@ function isVaguePart(value, minLength = 3) {
 /**
  * Map a single full-address line into structured parts for the existing API.
  * Comma-separated values are split as street, barangay, city, province when possible.
+ * Never copies the same value into multiple fields.
  */
 export function parseFullAddressToStructured(fullAddress) {
   const trimmed = String(fullAddress ?? '').trim()
@@ -31,41 +32,59 @@ export function parseFullAddressToStructured(fullAddress) {
     return { street: '', barangay: '', city: '', province: '' }
   }
 
-  const parts = trimmed.split(',').map((p) => p.trim()).filter(Boolean)
+  const segments = uniqueAddressParts(
+    trimmed.split(',').map((p) => p.trim()).filter(Boolean),
+  )
 
-  if (parts.length >= 4) {
+  if (segments.length >= 4) {
     return {
-      street: parts.slice(0, -3).join(', '),
-      barangay: parts[parts.length - 3],
-      city: parts[parts.length - 2],
-      province: parts[parts.length - 1],
+      street: segments.slice(0, -3).join(', '),
+      barangay: segments[segments.length - 3],
+      city: segments[segments.length - 2],
+      province: segments[segments.length - 1],
     }
   }
 
-  if (parts.length === 3) {
+  if (segments.length === 3) {
     return {
-      street: parts[0],
-      barangay: parts[1],
-      city: parts[2],
-      province: parts[2],
+      street: segments[0],
+      barangay: segments[1],
+      city: segments[2],
+      province: '',
     }
   }
 
-  if (parts.length === 2) {
+  if (segments.length === 2) {
     return {
-      street: parts[0],
-      barangay: parts[0],
-      city: parts[1],
-      province: parts[1],
+      street: segments[0],
+      barangay: '',
+      city: segments[1],
+      province: '',
     }
   }
 
   return {
-    street: trimmed,
-    barangay: trimmed,
-    city: trimmed,
-    province: trimmed,
+    street: segments[0] ?? trimmed,
+    barangay: '',
+    city: '',
+    province: '',
   }
+}
+
+/** Remove duplicate segments before joining or parsing. */
+export function uniqueAddressParts(parts) {
+  const unique = []
+  for (const part of parts) {
+    const value = String(part ?? '').trim()
+    if (!value) continue
+    if (!unique.includes(value)) unique.push(value)
+  }
+  return unique
+}
+
+/** Format structured parts for display, skipping duplicate segments. */
+export function formatAddressParts(parts) {
+  return uniqueAddressParts(parts).join(', ')
 }
 
 /**
@@ -140,10 +159,10 @@ export function composeStructuredAddress(prefix, form) {
     form[`${prefix}_barangay`],
     form[`${prefix}_city`],
     form[`${prefix}_province`],
-  ].map((p) => String(p ?? '').trim()).filter(Boolean)
+  ]
 
   const landmark = String(form[`${prefix}_landmark`] ?? '').trim()
-  if (landmark) parts.push(`Near ${landmark}`)
-
-  return parts.join(', ')
+  const formatted = formatAddressParts(parts)
+  if (!landmark) return formatted
+  return formatted ? `${formatted}, Near ${landmark}` : `Near ${landmark}`
 }

@@ -1,36 +1,34 @@
-import { useNavigate } from 'react-router-dom'
-import useAuth from '../hooks/useAuth'
+import useLogoutConfirmation from '../hooks/useLogoutConfirmation'
 import { IconLogout } from './DxIcons'
 
 function LogoutButton({ compact = false }) {
-  const { logout, role } = useAuth()
-  const navigate = useNavigate()
-
-  const handleLogout = async () => {
-    const loginPath = role === 'driver' ? '/driver/login' : '/login'
-    await logout()
-    navigate(loginPath, { replace: true })
-  }
+  const { openLogoutConfirm, logoutConfirmModal } = useLogoutConfirmation()
 
   if (compact) {
     return (
-      <button
-        type="button"
-        className="driver-nav-logout-btn"
-        onClick={handleLogout}
-        aria-label="Log out"
-        title="Log out"
-      >
-        <IconLogout />
-      </button>
+      <>
+        <button
+          type="button"
+          className="driver-nav-logout-btn"
+          onClick={openLogoutConfirm}
+          aria-label="Log out"
+          title="Log out"
+        >
+          <IconLogout />
+        </button>
+        {logoutConfirmModal}
+      </>
     )
   }
 
   return (
-    <button type="button" className="btn-dx-logout" onClick={handleLogout}>
-      <IconLogout />
-      Log Out
-    </button>
+    <>
+      <button type="button" className="btn-dx-logout" onClick={openLogoutConfirm}>
+        <IconLogout />
+        Log Out
+      </button>
+      {logoutConfirmModal}
+    </>
   )
 }
 

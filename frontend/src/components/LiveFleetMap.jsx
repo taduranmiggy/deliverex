@@ -19,11 +19,14 @@ import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './LiveFleetMap.css'
+import AnimatedDriverMarker from './AnimatedDriverMarker'
 import { formatEventAt, formatOfflineSyncLabel, formatSyncedAt } from '../utils/deliveryTimestamps'
+import { gpsColorForStatus, gpsOfflineLabel, GPS_STATUS_COLORS } from '../utils/gpsStatusColors'
 import { Crosshair, Minus, Plus, RotateCcw } from 'lucide-react'
 
 const DEFAULT_CENTER = [14.5995, 120.9842]
-const DELIVEREX_BLUE = '#2563eb'
+const PICKUP_COLOR = '#059669'
+const DEST_COLOR = '#dc2626'
 const TRUCK_SIZE = 34
 const TRUCK_SIZE_SELECTED = 40
 const DEST_SIZE = 30
@@ -33,11 +36,11 @@ const TRUCK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" f
 
 const DEST_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`
 
-function makeTruckIcon(isSelected) {
+function makeTruckIcon(isSelected, color = GPS_STATUS_COLORS.en_route_to_destination) {
   const size = isSelected ? TRUCK_SIZE_SELECTED : TRUCK_SIZE
   return L.divIcon({
     className: 'dx-map-icon-wrap',
-    html: `<div class="dx-map-truck${isSelected ? ' dx-map-truck--selected' : ''}" style="width:${size}px;height:${size}px;color:${DELIVEREX_BLUE}">${TRUCK_SVG}</div>`,
+    html: `<div class="dx-map-truck${isSelected ? ' dx-map-truck--selected' : ''}" style="width:${size}px;height:${size}px;color:${color}">${TRUCK_SVG}</div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size],
     popupAnchor: [0, -size - 4],
@@ -48,17 +51,28 @@ function makeDestinationIcon(isSelected) {
   const size = isSelected ? DEST_SIZE_SELECTED : DEST_SIZE
   return L.divIcon({
     className: 'dx-map-icon-wrap',
-    html: `<div class="dx-map-destination${isSelected ? ' dx-map-destination--selected' : ''}" style="width:${size}px;height:${size}px;color:#dc2626">${DEST_SVG}</div>`,
+    html: `<div class="dx-map-destination${isSelected ? ' dx-map-destination--selected' : ''}" style="width:${size}px;height:${size}px;color:${DEST_COLOR}">${DEST_SVG}</div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size],
     popupAnchor: [0, -size - 4],
   })
 }
 
-function makeIcon(isSelected, kind = 'driver') {
-  return kind === 'destination'
-    ? makeDestinationIcon(isSelected)
-    : makeTruckIcon(isSelected)
+function makePickupIcon(isSelected) {
+  const size = isSelected ? DEST_SIZE_SELECTED : DEST_SIZE
+  return L.divIcon({
+    className: 'dx-map-icon-wrap',
+    html: `<div class="dx-map-destination${isSelected ? ' dx-map-destination--selected' : ''}" style="width:${size}px;height:${size}px;color:${PICKUP_COLOR}">${DEST_SVG}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size],
+    popupAnchor: [0, -size - 4],
+  })
+}
+
+function makeIcon(isSelected, kind = 'driver', status) {
+  if (kind === 'destination') return makeDestinationIcon(isSelected)
+  if (kind === 'pickup') return makePickupIcon(isSelected)
+  return makeTruckIcon(isSelected, gpsColorForStatus(status))
 }
 
 function fmtStatus(s) {
@@ -155,8 +169,12 @@ function MapToolbar({ markers, routeLines, initialViewRef }) {
     const bounds = L.latLngBounds([])
     markers.forEach((m) => bounds.extend([m.lat, m.lng]))
     routeLines.forEach((line) => {
-      bounds.extend([line.from.lat, line.from.lng])
-      bounds.extend([line.to.lat, line.to.lng])
+      if (Array.isArray(line.polyline) && line.polyline.length > 0) {
+        line.polyline.forEach((p) => bounds.extend(p))
+      } else {
+        bounds.extend([line.from.lat, line.from.lng])
+        bounds.extend([line.to.lat, line.to.lng])
+      }
     })
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [48, 48], maxZoom: 15 })
@@ -195,7 +213,7 @@ function MapLegend() {
   return (
     <div className="dx-fleet-map-legend" aria-label="Map legend">
       <div className="dx-fleet-map-legend__item">
-        <span className="dx-fleet-map-legend__swatch" style={{ color: DELIVEREX_BLUE }} aria-hidden>
+        <span className="dx-fleet-map-legend__swatch" style={{ color: GPS_STATUS_COLORS.en_route_to_destination }} aria-hidden>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
         </span>
         <span>Driver</span>
@@ -218,10 +236,15 @@ function DriverInfoPanel({ marker, destinationMarker }) {
   if (!marker && !destinationMarker) return null
 
   const gpsUpdate = marker ? formatLastGpsUpdate(marker) : null
+  const offlineLabel = marker ? gpsOfflineLabel(marker.offline) : null
 
   return (
     <aside className="dx-fleet-map-info" aria-label="Delivery tracking details">
       <h4 className="dx-fleet-map-info__title">Tracking Details</h4>
+
+      {offlineLabel && (
+        <p className="dx-fleet-map-info__offline" role="status">{offlineLabel}</p>
+      )}
 
       {marker ? (
         <>
@@ -338,10 +361,11 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
   const validRouteLines = useMemo(
     () =>
       routeLines.filter((line) =>
-        Number.isFinite(line?.from?.lat) &&
-        Number.isFinite(line?.from?.lng) &&
-        Number.isFinite(line?.to?.lat) &&
-        Number.isFinite(line?.to?.lng),
+        (Array.isArray(line?.polyline) && line.polyline.length > 1) ||
+        (Number.isFinite(line?.from?.lat) &&
+          Number.isFinite(line?.from?.lng) &&
+          Number.isFinite(line?.to?.lat) &&
+          Number.isFinite(line?.to?.lng)),
       ),
     [routeLines],
   )
@@ -403,38 +427,53 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
             />
           ))}
 
-          {validRouteLines.map((line) => (
-            <Polyline
-              key={line.id}
-              positions={[
-                [line.from.lat, line.from.lng],
-                [line.to.lat, line.to.lng],
-              ]}
-              pathOptions={{
-                color: DELIVEREX_BLUE,
-                weight: 4.5,
-                opacity: 0.88,
-                lineCap: 'round',
-                lineJoin: 'round',
-              }}
-            />
-          ))}
+          {validRouteLines.map((line) => {
+            const positions = Array.isArray(line.polyline) && line.polyline.length > 1
+              ? line.polyline
+              : [[line.from.lat, line.from.lng], [line.to.lat, line.to.lng]]
+            const color = line.color ?? gpsColorForStatus(line.status)
+
+            return (
+              <Polyline
+                key={line.id}
+                positions={positions}
+                pathOptions={{
+                  color,
+                  weight: 4.5,
+                  opacity: 0.88,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+            )
+          })}
 
           {valid.map((m) => {
             const isSelected = m.id === selectedId
             const markerKind = m.kind ?? 'driver'
-            const popupTitle = markerKind === 'destination' ? 'Delivery Destination' : (m.label ?? 'Driver')
+            const popupTitle = markerKind === 'destination'
+              ? 'Delivery Destination'
+              : markerKind === 'pickup'
+                ? 'Pickup Location'
+                : (m.label ?? 'Driver')
+            const MarkerComponent = markerKind === 'driver' ? AnimatedDriverMarker : Marker
+            const markerProps = {
+              key: m.id,
+              position: [m.lat, m.lng],
+              icon: makeIcon(isSelected, markerKind, m.status),
+              zIndexOffset: isSelected ? 1000 : markerKind === 'driver' ? 500 : markerKind === 'pickup' ? 80 : 100,
+              ref: markerKind !== 'driver'
+                ? (ref) => { if (ref) markerRefs.current[m.id] = ref }
+                : undefined,
+              markerRef: markerKind === 'driver' ? markerRefs : undefined,
+              id: m.id,
+              eventHandlers: {
+                click: () => { if (onSelect) onSelect(m.id) },
+              },
+            }
+
             return (
-              <Marker
-                key={m.id}
-                position={[m.lat, m.lng]}
-                icon={makeIcon(isSelected, markerKind)}
-                zIndexOffset={isSelected ? 1000 : markerKind === 'destination' ? 100 : 500}
-                ref={(ref) => { if (ref) markerRefs.current[m.id] = ref }}
-                eventHandlers={{
-                  click: () => { if (onSelect) onSelect(m.id) },
-                }}
-              >
+              <MarkerComponent {...markerProps}>
                 <Popup>
                   <div className={`dx-map-popup${markerKind === 'destination' ? ' dx-map-popup--destination' : ''}`}>
                     <div className="dx-map-popup__title">{popupTitle}</div>
@@ -514,7 +553,7 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
                     </div>
                   </div>
                 </Popup>
-              </Marker>
+              </MarkerComponent>
             )
           })}
         </MapContainer>

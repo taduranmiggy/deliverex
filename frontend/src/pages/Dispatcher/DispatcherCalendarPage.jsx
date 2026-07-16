@@ -388,13 +388,16 @@ function DispatcherCalendarPage() {
             <input type="date" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
           </label>
           <label className="dx-cal-search">
-            <Search size={16} aria-hidden />
-            <input
-              type="search"
-              placeholder="Job #, client, tracking code…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            Search
+            <span className="dx-cal-search__control">
+              <Search size={16} aria-hidden />
+              <input
+                type="search"
+                placeholder="Job #, client, tracking code…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </span>
           </label>
         </div>
         <div className="dx-cal-legend">

@@ -21,6 +21,7 @@ class TrackingLog extends Model
         'accuracy_m',
         'heading',
         'speed_kmh',
+        'battery_level',
         'source',
         'captured_at',
         'synced_at',
@@ -34,6 +35,7 @@ class TrackingLog extends Model
         'accuracy_m' => 'float',
         'heading' => 'float',
         'speed_kmh' => 'float',
+        'battery_level' => 'integer',
     ];
 
     public function getEventAtAttribute(): ?string

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiRequest } from '../../api/client'
 import LiveFleetMap from '../../components/LiveFleetMap'
+import TripHistoryReplay from '../../components/TripHistoryReplay'
 import { PageHeader, StatusBadge } from '../../components/ui'
 import { ExternalLink, RefreshCw } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
@@ -23,6 +24,7 @@ function ManagerFleetTrackingPage() {
   const [rows, setRows] = useState([])
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [selectedHistory, setSelectedHistory] = useState(null)
 
   const load = useCallback(async () => {
     setRefreshing(true)
@@ -58,10 +60,26 @@ function ManagerFleetTrackingPage() {
 
     rows.forEach((r) => {
       const jobPublicId = r.job_order ? formatJobPublicId(r.job_order.id) : `#${r.id}`
+      const pickupLat = parseCoordinate(r.job_order?.pickup_latitude)
+      const pickupLng = parseCoordinate(r.job_order?.pickup_longitude)
       const dropoffLat = parseCoordinate(r.job_order?.dropoff_latitude)
       const dropoffLng = parseCoordinate(r.job_order?.dropoff_longitude)
       const destinationAddress = buildDisplayAddress('dropoff', r.job_order) || r.job_order?.dropoff_location || '—'
       const destinationAvailable = Number.isFinite(dropoffLat) && Number.isFinite(dropoffLng)
+      const pickupAvailable = Number.isFinite(pickupLat) && Number.isFinite(pickupLng)
+
+      if (pickupAvailable) {
+        items.push({
+          id: `pickup-${r.id}`,
+          kind: 'pickup',
+          lat: pickupLat,
+          lng: pickupLng,
+          jobId: jobPublicId,
+          trackingId: r.job_order?.tracking_code ?? null,
+          address: buildDisplayAddress('pickup', r.job_order) || r.job_order?.pickup_location || '—',
+          mapsUrl: buildOsmCoordinateUrl(pickupLat, pickupLng),
+        })
+      }
 
       if (destinationAvailable) {
         items.push({
@@ -93,6 +111,7 @@ function ManagerFleetTrackingPage() {
           gpsSyncedAt: r.gps.synced_at,
           gpsPerformedOffline: r.gps.performed_offline,
           speedKmh: r.gps.speed_kmh,
+          offline: r.gps.offline,
           isOffline: r.gps.is_stale || r.gps.is_critical_stale,
           mapsUrl: buildOsmCoordinateUrl(r.gps.lat, r.gps.lng),
         })
@@ -101,14 +120,22 @@ function ManagerFleetTrackingPage() {
           histories.push({
             id: `history-${r.id}`,
             positions: r.route_history.map((point) => [point.lat, point.lng]),
+            points: r.route_history,
           })
         }
 
-        if (destinationAvailable) {
+        if (r.route?.polyline?.length > 1 && destinationAvailable) {
+          lines.push({
+            id: `line-${r.id}`,
+            polyline: r.route.polyline,
+            status: r.status,
+          })
+        } else if (destinationAvailable) {
           lines.push({
             id: `line-${r.id}`,
             from: { lat: r.gps.lat, lng: r.gps.lng },
             to: { lat: dropoffLat, lng: dropoffLng },
+            status: r.status,
           })
         }
       } else if (destinationAvailable) {
@@ -161,9 +188,21 @@ function ManagerFleetTrackingPage() {
                     </td>
                     <td>
                       {r.gps && (
-                        <a href={buildOsmCoordinateUrl(r.gps.lat, r.gps.lng)} target="_blank" rel="noopener noreferrer" className="btn-dx-secondary btn-sm">
-                          <ExternalLink size={12} /> OpenStreetMap
-                        </a>
+                        <>
+                          <a href={buildOsmCoordinateUrl(r.gps.lat, r.gps.lng)} target="_blank" rel="noopener noreferrer" className="btn-dx-secondary btn-sm">
+                            <ExternalLink size={12} /> OpenStreetMap
+                          </a>
+                          {Array.isArray(r.route_history) && r.route_history.length > 1 && (
+                            <button
+                              type="button"
+                              className="btn-dx-secondary btn-sm"
+                              style={{ marginLeft: 8 }}
+                              onClick={() => setSelectedHistory(selectedHistory?.id === r.id ? null : { id: r.id, history: r.route_history })}
+                            >
+                              Trip history
+                            </button>
+                          )}
+                        </>
                       )}
                     </td>
                   </tr>
@@ -173,6 +212,12 @@ function ManagerFleetTrackingPage() {
           </div>
         )}
       </div>
+
+      {selectedHistory && (
+        <div className="dx-panel" style={{ marginTop: 20 }}>
+          <TripHistoryReplay history={selectedHistory.history} title={`Trip replay — assignment #${selectedHistory.id}`} />
+        </div>
+      )}
     </>
   )
 }

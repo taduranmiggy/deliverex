@@ -152,25 +152,67 @@ export function MonthlyDelayTrendChart({ data }) {
 
 export function FleetStatusChart({ fleet }) {
   if (!fleet) return <ChartEmpty />
-  const data = [
-    { name: 'Available', value: fleet.available ?? 0 },
-    { name: 'Assigned', value: fleet.assigned ?? 0 },
-    { name: 'Maintenance', value: fleet.maintenance ?? 0 },
-  ].filter((d) => d.value > 0)
-  if (!data.length) return <ChartEmpty message="No fleet data available." />
-  const colors = [CHART_COLORS.success, CHART_COLORS.primary, CHART_COLORS.warning]
+
+  const breakdown = [
+    { name: 'Available', value: fleet.available ?? 0, color: CHART_COLORS.success },
+    { name: 'Assigned', value: fleet.assigned ?? 0, color: CHART_COLORS.primary },
+    { name: 'Maintenance', value: fleet.maintenance ?? 0, color: CHART_COLORS.warning },
+  ]
+  const data = breakdown.filter((d) => d.value > 0)
+  const total = breakdown.reduce((sum, row) => sum + row.value, 0)
+
+  if (!total) return <ChartEmpty message="No fleet data available." />
+
+  const singleSlice = data.length === 1
+  const plotHeight = singleSlice ? 168 : 210
+
   return (
-    <div style={{ width: '100%', height: 260 }}>
-      <ResponsiveContainer>
-        <PieChart>
-          <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={88} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-            {data.map((entry, index) => (
-              <Cell key={entry.name} fill={colors[index % colors.length]} />
-            ))}
-          </Pie>
-          <Tooltip content={<ChartTooltip />} />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="dx-fleet-status-chart">
+      <div className="dx-fleet-status-chart__plot" style={{ height: plotHeight }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy={singleSlice ? '46%' : '48%'}
+              innerRadius={singleSlice ? 0 : 46}
+              outerRadius={singleSlice ? 64 : 78}
+              paddingAngle={data.length > 1 ? 2 : 0}
+              label={data.length > 1
+                ? ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`
+                : false}
+              labelLine={data.length > 1}
+            >
+              {data.map((entry) => (
+                <Cell key={entry.name} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip content={<ChartTooltip />} />
+            <Legend
+              verticalAlign="bottom"
+              height={32}
+              iconType="circle"
+              wrapperStyle={{ fontSize: '0.8125rem', paddingTop: 4 }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="dx-fleet-status-chart__stats">
+        {breakdown.map((row) => {
+          const pct = total > 0 ? Math.round((row.value / total) * 100) : 0
+          return (
+            <div key={row.name} className="dx-fleet-status-chart__stat">
+              <span className="dx-fleet-status-chart__dot" style={{ background: row.color }} aria-hidden />
+              <span className="dx-fleet-status-chart__stat-label">{row.name}</span>
+              <strong className="dx-fleet-status-chart__stat-value">{row.value}</strong>
+              <span className="dx-fleet-status-chart__stat-pct">{pct}%</span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

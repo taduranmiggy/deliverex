@@ -35,6 +35,14 @@ export function postTrackingUpdate(payload) {
   })
 }
 
+/** Mobile PWA alias — same ingest pipeline as /driver/tracking */
+export function postMobileLocationUpdate(payload) {
+  return apiRequest('/mobile/location/update', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function uploadDocument(formData) {
   return apiRequest('/driver/documents', {
     method: 'POST',

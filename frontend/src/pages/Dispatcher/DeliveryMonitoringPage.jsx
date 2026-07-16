@@ -64,8 +64,17 @@ function DeliveryMonitoringPage() {
         active.map((a) =>
           fetchTrackingLogs(a.id, 1)
             .then((r) => {
-              const last = r.data?.[0]
-              return last ? [a.id, { lat: Number(last.latitude), lng: Number(last.longitude), at: last.captured_at }] : null
+              const latest = r.latest
+              if (!latest?.lat || !latest?.lng) return null
+              return [a.id, {
+                lat: Number(latest.lat),
+                lng: Number(latest.lng),
+                at: latest.at,
+                speedKmh: latest.speed_kmh,
+                offline: latest.offline,
+                syncedAt: latest.synced_at,
+                performedOffline: latest.performed_offline,
+              }]
             })
             .catch(() => null),
         ),
@@ -115,11 +124,27 @@ function DeliveryMonitoringPage() {
 
     assignments.forEach((a) => {
       const gps = gpsMap[a.id]
+      const pickupLat = parseCoordinate(a.job_order?.pickup_latitude)
+      const pickupLng = parseCoordinate(a.job_order?.pickup_longitude)
       const dropoffLat = parseCoordinate(a.job_order?.dropoff_latitude)
       const dropoffLng = parseCoordinate(a.job_order?.dropoff_longitude)
       const destinationAddress = buildDisplayAddress('dropoff', a.job_order) || a.job_order?.dropoff_location || '—'
       const destinationAvailable = Number.isFinite(dropoffLat) && Number.isFinite(dropoffLng)
+      const pickupAvailable = Number.isFinite(pickupLat) && Number.isFinite(pickupLng)
       const jobPublicId = formatJobPublicId(a.job_order_id)
+
+      if (pickupAvailable) {
+        markers.push({
+          id: `pickup-${a.id}`,
+          kind: 'pickup',
+          lat: pickupLat,
+          lng: pickupLng,
+          jobId: jobPublicId,
+          trackingId: a.job_order?.tracking_code ?? null,
+          address: buildDisplayAddress('pickup', a.job_order) || a.job_order?.pickup_location || '—',
+          mapsUrl: buildOsmCoordinateUrl(pickupLat, pickupLng),
+        })
+      }
 
       if (destinationAvailable) {
         markers.push({
@@ -148,6 +173,11 @@ function DeliveryMonitoringPage() {
           vehicle: a.vehicle?.plate_no ?? '—',
           status: a.status,
           gpsAt: gps.at,
+          speedKmh: gps.speedKmh,
+          offline: gps.offline,
+          gpsSyncedAt: gps.syncedAt,
+          gpsPerformedOffline: gps.performedOffline,
+          isOffline: gps.offline?.state && gps.offline.state !== 'online',
           mapsUrl: buildOsmCoordinateUrl(gps.lat, gps.lng),
           onViewDetails: handleSelect,
         })
@@ -157,6 +187,7 @@ function DeliveryMonitoringPage() {
             id: `line-${a.id}`,
             from: { lat: gps.lat, lng: gps.lng },
             to: { lat: dropoffLat, lng: dropoffLng },
+            status: a.status,
           })
         }
       } else if (destinationAvailable) {

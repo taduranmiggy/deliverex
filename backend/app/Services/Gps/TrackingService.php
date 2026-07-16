@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\Log;
 
 class TrackingService
 {
+    public function __construct(private DriverLocationService $driverLocationService)
+    {
+    }
+
     public function latestForAssignment(DispatchAssignment $assignment): ?TrackingLog
     {
         return $assignment->trackingLogs()->latest('captured_at')->first();
@@ -26,6 +30,7 @@ class TrackingService
      *   speed_kmh?: float|int|null,
      *   source?: string|null,
      *   synced_at?: \DateTimeInterface|string|null,
+     *   battery_level?: int|null,
      *   force?: bool
      * }  $payload
      * @return array{log: ?TrackingLog, skipped: bool, reason: ?string}
@@ -69,6 +74,8 @@ class TrackingService
             }
         }
 
+        $batteryLevel = isset($payload['battery_level']) ? (int) $payload['battery_level'] : null;
+
         $log = TrackingLog::create([
             'assignment_id' => $assignment->id,
             'driver_id' => $driverId ?? $assignment->driver_id,
@@ -77,10 +84,13 @@ class TrackingService
             'accuracy_m' => isset($payload['accuracy_m']) ? (float) $payload['accuracy_m'] : null,
             'heading' => isset($payload['heading']) ? (float) $payload['heading'] : null,
             'speed_kmh' => $this->normalizeSpeed($payload['speed_kmh'] ?? null),
+            'battery_level' => $batteryLevel,
             'source' => $payload['source'] ?? 'driver_ping',
             'captured_at' => $capturedAt,
             'synced_at' => isset($payload['synced_at']) ? Carbon::parse($payload['synced_at']) : null,
         ]);
+
+        $this->driverLocationService->syncFromTrackingLog($log, $batteryLevel);
 
         return ['log' => $log, 'skipped' => false, 'reason' => null];
     }
@@ -197,6 +207,44 @@ class TrackingService
         return $distance < $minMovement;
     }
 
+    /** @return array<string, mixed> */
+    public function offlineStatus(?TrackingLog $log): array
+    {
+        if (! $log || ! $log->captured_at) {
+            return [
+                'state' => 'unknown',
+                'label' => null,
+                'age_seconds' => null,
+            ];
+        }
+
+        $ageSeconds = max(0, $log->captured_at->diffInSeconds(now()));
+        $offlineAfter = (int) config('gps.offline_after_seconds', 120);
+        $lostAfter = (int) config('gps.gps_lost_after_seconds', 300);
+
+        if ($ageSeconds >= $lostAfter) {
+            return [
+                'state' => 'gps_lost',
+                'label' => 'GPS signal lost.',
+                'age_seconds' => $ageSeconds,
+            ];
+        }
+
+        if ($ageSeconds >= $offlineAfter) {
+            return [
+                'state' => 'temporarily_offline',
+                'label' => 'Driver temporarily offline.',
+                'age_seconds' => $ageSeconds,
+            ];
+        }
+
+        return [
+            'state' => 'online',
+            'label' => null,
+            'age_seconds' => $ageSeconds,
+        ];
+    }
+
     /** @return array<string, mixed>|null */
     public function formatForCustomer(?TrackingLog $log): ?array
     {
@@ -204,14 +252,14 @@ class TrackingService
             return null;
         }
 
-        $staleMinutes = (int) config('gps.stale_after_minutes', 15);
-        $ageMinutes = $log->captured_at ? now()->diffInMinutes($log->captured_at) : null;
+        $offline = $this->offlineStatus($log);
 
         return [
             'lat' => round((float) $log->latitude, 2),
             'lng' => round((float) $log->longitude, 2),
             'at' => $log->captured_at?->toIso8601String(),
-            'is_stale' => $ageMinutes !== null && $ageMinutes > $staleMinutes,
+            'is_stale' => in_array($offline['state'], ['temporarily_offline', 'gps_lost'], true),
+            'offline' => $offline,
         ];
     }
 
@@ -222,9 +270,7 @@ class TrackingService
             return null;
         }
 
-        $staleMinutes = (int) config('gps.stale_after_minutes', 15);
-        $criticalMinutes = (int) config('gps.critical_stale_after_minutes', 45);
-        $ageMinutes = $log->captured_at ? now()->diffInMinutes($log->captured_at) : null;
+        $offline = $this->offlineStatus($log);
 
         return [
             'lat' => (float) $log->latitude,
@@ -233,8 +279,10 @@ class TrackingService
             'accuracy_m' => $log->accuracy_m,
             'heading' => $log->heading,
             'speed_kmh' => $log->speed_kmh,
-            'is_stale' => $ageMinutes !== null && $ageMinutes > $staleMinutes,
-            'is_critical_stale' => $ageMinutes !== null && $ageMinutes > $criticalMinutes,
+            'battery_level' => $log->battery_level,
+            'is_stale' => in_array($offline['state'], ['temporarily_offline', 'gps_lost'], true),
+            'is_critical_stale' => $offline['state'] === 'gps_lost',
+            'offline' => $offline,
             'performed_offline' => $log->synced_at !== null,
             'synced_at' => $log->synced_at?->toIso8601String(),
         ];

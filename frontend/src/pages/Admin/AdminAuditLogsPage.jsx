@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { fetchAuditLogs } from '../../api/admin'
+import { fetchAuditLogs, exportAuditLogs } from '../../api/admin'
 import ExportConfirmModal from '../../components/ExportConfirmModal'
 import { EmptyState, FilterSelect, LoadingRows, PageHeader, SearchInput } from '../../components/ui'
 import { normalizeOcrModuleLabel } from '../../utils/displayLabels'
@@ -47,26 +47,7 @@ const MODULE_COLORS = {
 const PER_PAGE = 6
 
 /* ── Helpers ────────────────────────────────────────────────── */
-function escapeCsv(v) {
-  const s = String(v ?? '')
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
-
-function downloadCsv(rows) {
-  const headers = ['Timestamp', 'User', 'Email', 'Action', 'Module', 'Details', 'IP']
-  const lines = rows.map((r) => [
-    r.timestamp ? new Date(r.timestamp).toLocaleString() : '—',
-    r.user, r.user_email ?? '', r.action, r.module, r.details, r.ip_address ?? '',
-  ].map(escapeCsv).join(','))
-  const csv = `\uFEFF${[headers.join(','), ...lines].join('\r\n')}`
-  const a = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
-    download: `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`,
-  })
-  a.click()
-}
-
-/** Convert "auth.login_success" → "Login Success", keeps raw in title */
+/** Convert "auth.login_success" → "Login Success" */
 function formatAction(raw) {
   if (!raw) return '—'
   const parts = String(raw).split('.')
@@ -217,6 +198,8 @@ function AdminAuditLogsPage() {
   const [perPage]   = useState(PER_PAGE)
   const [selected, setSelected] = useState(null)
   const [showExportSummary, setShowExportSummary] = useState(false)
+  const [exportFormat, setExportFormat] = useState('pdf')
+  const [exporting, setExporting] = useState(false)
 
   const load = useCallback(async (params = {}) => {
     setLoading(true)
@@ -282,9 +265,28 @@ function AdminAuditLogsPage() {
     }
   }, [module, from, to, search, logs.length, total])
 
-  const handleConfirmExport = () => {
-    downloadCsv(logs)
-    setShowExportSummary(false)
+  const exportFilters = useMemo(() => ({
+    module: module !== 'all' ? module : undefined,
+    from: from || undefined,
+    to: to || undefined,
+    search: search || undefined,
+    sort,
+  }), [module, from, to, search, sort])
+
+  const handleConfirmExport = async () => {
+    setExporting(true)
+    try {
+      const { blob, filename } = await exportAuditLogs(exportFormat, exportFilters)
+      const url = URL.createObjectURL(blob)
+      const a = Object.assign(document.createElement('a'), { href: url, download: filename })
+      a.click()
+      URL.revokeObjectURL(url)
+      setShowExportSummary(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setExporting(false)
+    }
   }
 
   /* Input style reuse */
@@ -303,9 +305,9 @@ function AdminAuditLogsPage() {
           type="button"
           className="btn-dx-secondary"
           onClick={() => setShowExportSummary(true)}
-          disabled={logs.length === 0}
+          disabled={total === 0 && logs.length === 0}
         >
-          <Download size={15} /> Export CSV
+          <Download size={15} /> Export
         </button>
       </PageHeader>
 
@@ -492,9 +494,14 @@ function AdminAuditLogsPage() {
         reportName={exportSummary.report}
         dateRange={exportSummary.dateRange}
         filters={exportSummary.filters}
-        rows={exportSummary.rows}
+        rows={exportSummary.total || exportSummary.rows}
         total={exportSummary.total}
-        confirmLabel="Download CSV"
+        confirming={exporting}
+        formatValue={exportFormat}
+        onFormatChange={setExportFormat}
+        formatOptions={['csv', 'xlsx', 'pdf']}
+        infoNotice="Server export includes all matching audit records (up to 10,000 rows) with Deliverex report branding."
+        confirmLabel={`Download ${exportFormat.toUpperCase()}`}
       />
     </>
   )

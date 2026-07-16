@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\DeliveryCompletionProof;
 use App\Models\JobOrder;
 use App\Services\Delivery\EtaEstimationService;
+use App\Services\Delivery\JobOrderLocationService;
+use App\Services\Gps\RouteDirectionsService;
 use App\Services\Gps\TrackingService;
 use App\Support\CustomerProofDocuments;
 use App\Support\DeliveryStatus;
@@ -15,6 +17,8 @@ class TrackingController extends Controller
     public function __construct(
         private EtaEstimationService $etaEstimation,
         private TrackingService $trackingService,
+        private JobOrderLocationService $locationService,
+        private RouteDirectionsService $directions,
     ) {
     }
 
@@ -72,6 +76,25 @@ class TrackingController extends Controller
 
         $eta = $this->etaEstimation->estimate($jobOrder, $latestTracking, $currentStatus);
 
+        $jobOrder = $this->locationService->ensureCoordinates($jobOrder);
+        $pickup = is_numeric($jobOrder->pickup_latitude) && is_numeric($jobOrder->pickup_longitude)
+            ? ['lat' => round((float) $jobOrder->pickup_latitude, 2), 'lng' => round((float) $jobOrder->pickup_longitude, 2)]
+            : null;
+        $destination = is_numeric($jobOrder->dropoff_latitude) && is_numeric($jobOrder->dropoff_longitude)
+            ? ['lat' => round((float) $jobOrder->dropoff_latitude, 2), 'lng' => round((float) $jobOrder->dropoff_longitude, 2)]
+            : null;
+
+        $route = null;
+        if ($latestTracking && $destination) {
+            $route = $this->directions->route(
+                (float) $latestTracking->latitude,
+                (float) $latestTracking->longitude,
+                $destination['lat'],
+                $destination['lng'],
+            );
+            unset($route['source']);
+        }
+
         $orderedTimeline = [
             [
                 'status' => 'pending',
@@ -127,6 +150,15 @@ class TrackingController extends Controller
             'eta_window'          => $this->etaLabel($jobOrder),
             'eta'                 => $eta,
             'approximate_location'=> $this->trackingService->formatForCustomer($latestTracking),
+            'pickup'              => $pickup,
+            'destination'         => $destination,
+            'route'               => $route ? [
+                'polyline' => $route['polyline'] ?? null,
+                'distance_label' => $route['distance_label'] ?? null,
+                'duration_label' => $route['duration_label'] ?? null,
+            ] : null,
+            'last_updated'          => $latestTracking?->captured_at?->toIso8601String(),
+            'offline'               => $this->trackingService->offlineStatus($latestTracking),
             'timeline'            => $orderedTimeline,
             'status_events'       => $timeline,
             'proof_of_delivery_available' => $proofAvailable,

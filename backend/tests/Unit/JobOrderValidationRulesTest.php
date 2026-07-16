@@ -25,10 +25,22 @@ class JobOrderValidationRulesTest extends TestCase
     public function test_accepts_complete_dropoff_address(): void
     {
         JobOrderAddressValidator::validatePayload([
+            'quarry_id' => 1,
             'dropoff_street' => 'Lot 12, Phase 2 Construction Site',
             'dropoff_barangay' => 'Batasan Hills',
             'dropoff_city' => 'Quezon City',
             'dropoff_province' => 'Metro Manila',
+        ]);
+
+        $this->assertTrue(true);
+    }
+
+    public function test_accepts_single_line_dropoff_when_street_is_specific(): void
+    {
+        JobOrderAddressValidator::validatePayload([
+            'quarry_id' => 1,
+            'dropoff_street' => 'FEU Institute of Technology',
+            'dropoff_location' => 'FEU Institute of Technology',
         ]);
 
         $this->assertTrue(true);

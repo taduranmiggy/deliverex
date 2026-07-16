@@ -55,6 +55,20 @@ const STEPS = [
 
 const DRAFT_KEY = 'dx_jo_wizard_draft'
 
+/** Scroll the staff main pane so the job-order wizard is at the top. */
+function scrollJobOrderFormIntoView(el, { behavior = 'smooth' } = {}) {
+  if (!el) return
+  requestAnimationFrame(() => {
+    const main = document.getElementById('main-content')
+    if (main) {
+      const top = el.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop - 16
+      main.scrollTo({ top: Math.max(0, top), behavior })
+      return
+    }
+    el.scrollIntoView({ behavior, block: 'start' })
+  })
+}
+
 // ─── Tab filter groups ─────────────────────────────────────────────────────────
 const ACTIVE_STATUSES    = ['pending', 'assigned', 'in_progress', 'arrived']
 const COMPLETED_STATUSES = ['completed']
@@ -381,6 +395,10 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
   // Tracks every field the dispatcher has manually typed into.
   const userEditedRef = useRef(new Set())
 
+  useEffect(() => {
+    scrollJobOrderFormIntoView(stepPanelRef.current)
+  }, [initial?.id])
+
   // ── Draft auto-save ────────────────────────────────────────────────────────
   useEffect(() => {
     if (isEdit) return
@@ -606,14 +624,14 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
     if (validateStep(currentStep)) {
       setError('')
       setStep((s) => Math.min(s + 1, 5))
-      stepPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      scrollJobOrderFormIntoView(stepPanelRef.current)
     }
   }
 
   const goBack = () => {
     setFE({}); setError('')
     setStep((s) => Math.max(s - 1, 1))
-    stepPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    scrollJobOrderFormIntoView(stepPanelRef.current)
   }
 
   const goToStep = (n) => { setFE({}); setError(''); setStep(n) }
@@ -697,7 +715,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="dx-panel" style={{ padding: '22px 24px', marginTop: 16 }} ref={stepPanelRef}>
+    <div className="dx-panel dx-job-order-wizard" style={{ padding: '22px 24px', marginTop: 16 }} ref={stepPanelRef}>
 
       {/* Title row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -1032,6 +1050,7 @@ function CreateJobOrderPage() {
   const [clientsLoading, setClientsLoading] = useState(true)
   const [selected, setSelected]     = useState(null)
   const [formMode, setFormMode]     = useState(null)
+  const formScrollRef               = useRef(null)
   const [error, setError]           = useState('')
   // Allow dashboard KPI cards to pre-select a tab via navigation state
   const [activeTab, setActiveTab]   = useState(location.state?.initialTab || 'active')
@@ -1169,6 +1188,12 @@ function CreateJobOrderPage() {
   const firstAssignment = selected?.assignments?.[0]
   const isCreating = formMode === 'create'
   const isEditing  = Boolean(formMode?.order)
+  const formOpen   = isCreating || isEditing
+
+  useEffect(() => {
+    if (!formOpen) return
+    scrollJobOrderFormIntoView(formScrollRef.current)
+  }, [formOpen, formMode?.order?.id])
 
   return (
     <section>
@@ -1192,16 +1217,19 @@ function CreateJobOrderPage() {
       {error && <p className="notice error" style={{ marginBottom: 12 }}>{error}</p>}
 
       {/* ── Wizard form — slides in above the table ── */}
-      {(isCreating || isEditing) && (
-        <JobOrderForm
-          initial={isEditing ? formMode.order : null}
-          options={masterData}
-          pickupLocationOptions={masterData.pickup_locations || []}
-          clientsLoading={clientsLoading}
-          onRefreshOptions={refreshOptions}
-          onSaved={handleSaved}
-          onCancel={() => setFormMode(null)}
-        />
+      {formOpen && (
+        <div ref={formScrollRef} id="job-order-form">
+          <JobOrderForm
+            key={isEditing ? `edit-${formMode.order.id}` : 'create'}
+            initial={isEditing ? formMode.order : null}
+            options={masterData}
+            pickupLocationOptions={masterData.pickup_locations || []}
+            clientsLoading={clientsLoading}
+            onRefreshOptions={refreshOptions}
+            onSaved={handleSaved}
+            onCancel={() => setFormMode(null)}
+          />
+        </div>
       )}
 
       <div className="dx-split-bestfit" style={{ gridTemplateColumns: '1fr 360px', gap: 20, marginTop: 16 }}>

@@ -44,12 +44,31 @@ return [
 
     'critical_stale_after_minutes' => (int) env('GPS_CRITICAL_STALE_AFTER_MINUTES', 45),
 
+    /** Seconds without a ping before showing "Driver temporarily offline." */
+    'offline_after_seconds' => (int) env('GPS_OFFLINE_AFTER_SECONDS', 120),
+
+    /** Seconds without a ping before showing "GPS signal lost." */
+    'gps_lost_after_seconds' => (int) env('GPS_LOST_AFTER_SECONDS', 300),
+
+    /** Recommended polling interval for dispatcher/customer maps (seconds). */
+    'poll_interval_seconds' => (int) env('GPS_POLL_INTERVAL_SECONDS', 30),
+
     /*
     |--------------------------------------------------------------------------
     | Driver PWA update intervals (seconds) — used by frontend hook
     |--------------------------------------------------------------------------
     */
-    'interval_moving_seconds' => (int) env('GPS_INTERVAL_MOVING_SECONDS', 10),
-    'interval_stopped_seconds' => (int) env('GPS_INTERVAL_STOPPED_SECONDS', 45),
+    'interval_moving_seconds' => (int) env('GPS_INTERVAL_MOVING_SECONDS', 60),
+    'interval_stopped_seconds' => (int) env('GPS_INTERVAL_STOPPED_SECONDS', 60),
     'moving_speed_threshold_kmh' => (float) env('GPS_MOVING_SPEED_THRESHOLD_KMH', 3),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Road routing (OpenRouteService → OSRM → straight line fallback)
+    |--------------------------------------------------------------------------
+    */
+    'routing' => [
+        'openrouteservice_api_key' => env('OPENROUTESERVICE_API_KEY'),
+        'openrouteservice_url' => env('OPENROUTESERVICE_URL', 'https://api.openrouteservice.org/v2/directions/driving-car'),
+    ],
 ];

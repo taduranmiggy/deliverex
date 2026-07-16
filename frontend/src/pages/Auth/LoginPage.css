@@ -329,6 +329,25 @@
   transform: scale(0.992);
 }
 
+.auth-btn-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.auth-btn-submit--link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.auth-forgot-success {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .auth-create-account-wrap {
   margin-top: 22px;
   display: flex;

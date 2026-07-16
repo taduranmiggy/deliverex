@@ -1,3 +1,5 @@
+import { formatAddressParts } from './jobOrderAddressValidation'
+
 /** @param {Record<string, unknown>|null|undefined} company */
 export function companyHasStructuredAddress(company) {
   if (!company) return false
@@ -15,16 +17,16 @@ export function companyDropoffFields(company) {
     return null
   }
 
+  const street = String(company.address_street ?? '').trim()
+  const barangay = String(company.address_barangay ?? '').trim()
+  const city = String(company.address_city ?? '').trim()
+  const province = String(company.address_province ?? '').trim()
+
   return {
-    dropoff_street: String(company.address_street ?? '').trim(),
-    dropoff_barangay: String(company.address_barangay ?? '').trim(),
-    dropoff_city: String(company.address_city ?? '').trim(),
-    dropoff_province: String(company.address_province ?? '').trim(),
-    dropoff_location: [
-      company.address_street,
-      company.address_barangay,
-      company.address_city,
-      company.address_province,
-    ].filter(Boolean).join(', '),
+    dropoff_street: street,
+    dropoff_barangay: barangay,
+    dropoff_city: city,
+    dropoff_province: province,
+    dropoff_location: formatAddressParts([street, barangay, city, province]),
   }
 }

@@ -115,12 +115,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const logout = useCallback(async () => {
-    try {
-      if (SessionManager.getAccessToken()) {
-        await logoutApi()
-      }
-    } catch {
-      // Ignore network errors — still clear local session.
+    if (SessionManager.getAccessToken()) {
+      await logoutApi()
     }
     SessionManager.clear()
     setUser(null)

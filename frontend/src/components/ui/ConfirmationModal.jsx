@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import {
-  AlertTriangle, Archive, Loader2, RotateCcw, Trash2, X,
+  AlertTriangle, Archive, Loader2, LogOut, RotateCcw, Trash2, X,
 } from 'lucide-react'
 
 const VARIANT_DEFAULTS = {
@@ -10,6 +10,7 @@ const VARIANT_DEFAULTS = {
   restore: { Icon: RotateCcw, confirmClass: 'btn-dx-primary', tone: 'restore' },
   deactivate: { Icon: AlertTriangle, confirmClass: 'btn-dx-primary', tone: 'warning' },
   reject: { Icon: AlertTriangle, confirmClass: 'btn-dx-danger', tone: 'danger' },
+  logout: { Icon: LogOut, confirmClass: 'btn-dx-danger', tone: 'danger' },
   primary: { Icon: AlertTriangle, confirmClass: 'btn-dx-primary', tone: 'primary' },
 }
 
@@ -26,6 +27,8 @@ export function ConfirmationModal({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   loading = false,
+  loadingLabel,
+  returnFocusRef,
   onConfirm,
   onCancel,
 }) {
@@ -33,11 +36,13 @@ export function ConfirmationModal({
   const descId = useId()
   const panelRef = useRef(null)
   const cancelRef = useRef(null)
+  const returnFocusTargetRef = useRef(null)
 
   useEffect(() => {
     if (!open) return undefined
 
-    const previousFocus = document.activeElement
+    returnFocusTargetRef.current = returnFocusRef?.current ?? document.activeElement
+    document.body.classList.add('dx-nav-locked')
     requestAnimationFrame(() => cancelRef.current?.focus())
 
     const onKeyDown = (event) => {
@@ -70,16 +75,19 @@ export function ConfirmationModal({
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
-      if (previousFocus && typeof previousFocus.focus === 'function') {
-        previousFocus.focus()
+      document.body.classList.remove('dx-nav-locked')
+      const target = returnFocusRef?.current ?? returnFocusTargetRef.current
+      if (target && typeof target.focus === 'function') {
+        target.focus()
       }
     }
-  }, [open, loading, onCancel])
+  }, [open, loading, onCancel, returnFocusRef])
 
   if (!open) return null
 
   const preset = VARIANT_DEFAULTS[variant] ?? VARIANT_DEFAULTS.primary
   const Icon = IconProp ?? preset.Icon
+  const busyLabel = loadingLabel ?? confirmLabel
 
   return (
     <div
@@ -136,7 +144,7 @@ export function ConfirmationModal({
             aria-busy={loading}
           >
             {loading && <Loader2 size={16} className="dx-confirm-modal__spinner" aria-hidden />}
-            {loading ? `${confirmLabel}…` : confirmLabel}
+            {loading ? `${busyLabel}…` : confirmLabel}
           </button>
         </div>
       </div>

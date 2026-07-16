@@ -21,6 +21,7 @@ use App\Services\MasterData\MaterialMasterDataService;
 use App\Support\AuditChangeTracker;
 use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
+use App\Support\JobOrderAddressFormatter;
 use App\Support\JobOrderAddressValidator;
 use App\Support\JobOrderScheduleValidator;
 use Illuminate\Http\Request;
@@ -523,26 +524,22 @@ class JobOrderController extends Controller
      */
     private function resolveAddresses(array $data): array
     {
-        // Pickup
         if (! empty($data['pickup_street']) || ! empty($data['pickup_city'])) {
-            $parts = array_filter([
+            $data['pickup_location'] = JobOrderAddressFormatter::formatParts([
                 $data['pickup_street']   ?? null,
                 $data['pickup_barangay'] ?? null,
                 $data['pickup_city']     ?? null,
                 $data['pickup_province'] ?? null,
             ]);
-            $data['pickup_location'] = implode(', ', $parts);
         }
 
-        // Drop-off
         if (! empty($data['dropoff_street']) || ! empty($data['dropoff_city'])) {
-            $parts = array_filter([
+            $data['dropoff_location'] = JobOrderAddressFormatter::formatParts([
                 $data['dropoff_street']   ?? null,
                 $data['dropoff_barangay'] ?? null,
                 $data['dropoff_city']     ?? null,
                 $data['dropoff_province'] ?? null,
             ]);
-            $data['dropoff_location'] = implode(', ', $parts);
         }
 
         return $data;

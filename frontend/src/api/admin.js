@@ -64,6 +64,33 @@ export function fetchAuditLogs(params = {}) {
   return apiRequest(`/admin/audit-logs${qs ? '?' + qs : ''}`)
 }
 
+export async function exportAuditLogs(format, filters = {}) {
+  const qs = new URLSearchParams({
+    format,
+    ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v != null && v !== '')),
+  }).toString()
+
+  const token = localStorage.getItem('deliverex_token')
+  const response = await fetch(`${API_URL}/admin/audit-logs/export?${qs}`, {
+    headers: {
+      Accept: 'application/octet-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.message || 'Failed to export audit logs.')
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename="?([^";]+)"?/)
+  const filename = match?.[1] || `audit-logs_${new Date().toISOString().slice(0, 10)}.${format}`
+
+  return { blob, filename }
+}
+
 export function fetchEmailLogs(params = {}) {
   const qs = new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))

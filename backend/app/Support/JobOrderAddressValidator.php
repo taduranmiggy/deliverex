@@ -13,47 +13,21 @@ class JobOrderAddressValidator
     {
         $errors = [];
 
-        foreach (self::structuredFieldChecks('dropoff', true) as $field => $message) {
-            if (self::isMissingOrVague($data[$field] ?? null, $field === 'dropoff_street' ? 5 : 3)) {
-                $errors[$field] = [$message];
-            }
+        if (self::isMissingOrVague($data['dropoff_street'] ?? null, 5)
+            && self::isMissingOrVague($data['dropoff_location'] ?? null, 5)) {
+            $errors['dropoff_street'] = ['Destination street / site name is required with a specific, complete address.'];
         }
 
         if (empty($data['quarry_id'])) {
-            foreach (self::structuredFieldChecks('pickup', true) as $field => $message) {
-                if (self::isMissingOrVague($data[$field] ?? null, $field === 'pickup_street' ? 5 : 3)) {
-                    $errors[$field] = [$message];
-                }
+            if (self::isMissingOrVague($data['pickup_street'] ?? null, 5)
+                && self::isMissingOrVague($data['pickup_location'] ?? null, 5)) {
+                $errors['pickup_street'] = ['Pickup street / site name is required with a specific, complete address.'];
             }
         }
 
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private static function structuredFieldChecks(string $prefix, bool $required): array
-    {
-        if (! $required) {
-            return [];
-        }
-
-        $labels = [
-            'street' => 'Street / building / site name',
-            'barangay' => 'Barangay',
-            'city' => 'City / municipality',
-            'province' => 'Province',
-        ];
-
-        $fields = [];
-        foreach ($labels as $part => $label) {
-            $fields["{$prefix}_{$part}"] = "{$label} is required with a specific, complete address.";
-        }
-
-        return $fields;
     }
 
     private static function isMissingOrVague(mixed $value, int $minLength = 3): bool

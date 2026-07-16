@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\DocumentFileController;
 use App\Http\Controllers\Admin\DriverController as AdminDriverController;
 use App\Http\Controllers\Admin\MasterDataController as AdminMasterDataController;
 use App\Http\Controllers\Admin\OcrReviewController;
+use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\ResourceConsistencyController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VehicleController as AdminVehicleController;
@@ -32,10 +33,13 @@ use App\Http\Controllers\Dispatcher\MasterDataOptionsController;
 use App\Http\Controllers\Driver\AssignmentController as DriverAssignmentController;
 use App\Http\Controllers\Driver\SyncConflictController;
 use App\Http\Controllers\JobOrderMapController;
+use App\Http\Controllers\JobOrderTrackingController;
+use App\Http\Controllers\Mobile\LocationController as MobileLocationController;
 use App\Http\Controllers\Driver\ProfileController as DriverProfileController;
 use App\Http\Controllers\Driver\CompletionProofController as DriverCompletionProofController;
 use App\Http\Controllers\Driver\DelayController as DriverDelayController;
 use App\Http\Controllers\Driver\IssueController as DriverIssueController;
+use App\Http\Controllers\Driver\OfflineSyncController;
 use App\Http\Controllers\Driver\DocumentController as DriverDocumentController;
 use App\Http\Controllers\Driver\StatusController as DriverStatusController;
 use App\Http\Controllers\Driver\TrackingController as DriverTrackingController;
@@ -120,6 +124,7 @@ Route::middleware('auth.api')->group(function () {
 
         Route::get('/roles',                [RolesController::class, 'index']);
         Route::get('/audit-logs',           [AuditLogsController::class, 'index']);
+        Route::get('/audit-logs/export',    [AuditLogsController::class, 'export']);
         Route::get('/email-logs',           [EmailLogController::class, 'index']);
         Route::get('/email-logs/types',     [EmailLogController::class, 'types']);
         Route::get('/email-logs/stats',    [EmailLogController::class, 'stats']);
@@ -202,6 +207,11 @@ Route::middleware('auth.api')->group(function () {
         Route::put('/delays/{delayReport}/acknowledge', [DispatcherDelayController::class, 'acknowledge']);
     });
 
+    // ─── Mobile GPS (driver PWA) ──────────────────────────────────────────────
+    Route::middleware('role:driver')->prefix('mobile')->group(function () {
+        Route::post('/location/update', [MobileLocationController::class, 'update'])->middleware('throttle:120,1');
+    });
+
     // ─── Driver ───────────────────────────────────────────────────────────────
     Route::middleware('role:driver')->prefix('driver')->group(function () {
         Route::get('/profile',                             [DriverProfileController::class, 'show']);
@@ -246,8 +256,9 @@ Route::middleware('auth.api')->group(function () {
     });
 
     // ─── Admin + Dispatcher + Manager: GPS tracking view & OCR reprocess ─────
-    Route::middleware('role:admin|dispatcher|manager|driver')->group(function () {
+    Route::middleware('role:admin|dispatcher|manager|driver|customer')->group(function () {
         Route::get('/job-orders/{jobOrder}/map', [JobOrderMapController::class, 'show']);
+        Route::get('/job-orders/{jobOrder}/tracking', [JobOrderTrackingController::class, 'show']);
     });
 
     Route::middleware('role:admin|dispatcher|manager')->group(function () {

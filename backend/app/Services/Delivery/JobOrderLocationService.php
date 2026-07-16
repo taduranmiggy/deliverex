@@ -3,14 +3,14 @@
 namespace App\Services\Delivery;
 
 use App\Models\JobOrder;
-use App\Support\GpsCoordinateValidator;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use App\Services\Gps\RouteDirectionsService;
 
 class JobOrderLocationService
 {
-    public function __construct(private AddressGeocoder $geocoder)
-    {
+    public function __construct(
+        private AddressGeocoder $geocoder,
+        private RouteDirectionsService $directions,
+    ) {
     }
 
     public function ensureCoordinates(JobOrder $jobOrder): JobOrder
@@ -98,115 +98,11 @@ class JobOrderLocationService
             return null;
         }
 
-        $osrm = $this->fetchOsrmRoute(
-            (float) $pickup['lng'],
-            (float) $pickup['lat'],
-            (float) $destination['lng'],
-            (float) $destination['lat'],
-        );
-
-        if ($osrm) {
-            return $osrm;
-        }
-
-        $distanceM = GpsCoordinateValidator::distanceMeters(
+        return $this->directions->route(
             (float) $pickup['lat'],
             (float) $pickup['lng'],
             (float) $destination['lat'],
             (float) $destination['lng'],
         );
-
-        return [
-            'polyline' => [
-                [(float) $pickup['lat'], (float) $pickup['lng']],
-                [(float) $destination['lat'], (float) $destination['lng']],
-            ],
-            'distance_km' => round($distanceM / 1000, 2),
-            'distance_label' => $this->formatDistance($distanceM),
-            'duration_minutes' => $this->estimateDurationMinutes($distanceM),
-            'duration_label' => $this->formatDuration($this->estimateDurationMinutes($distanceM)),
-            'source' => 'straight_line',
-        ];
-    }
-
-    /** @return array<string, mixed>|null */
-    private function fetchOsrmRoute(float $fromLng, float $fromLat, float $toLng, float $toLat): ?array
-    {
-        try {
-            $url = sprintf(
-                'https://router.project-osrm.org/route/v1/driving/%F,%F;%F,%F',
-                $fromLng,
-                $fromLat,
-                $toLng,
-                $toLat,
-            );
-
-            $response = Http::timeout(8)->get($url, [
-                'overview' => 'full',
-                'geometries' => 'geojson',
-            ]);
-
-            if (! $response->successful()) {
-                return null;
-            }
-
-            $payload = $response->json();
-            $route = $payload['routes'][0] ?? null;
-            if (! $route) {
-                return null;
-            }
-
-            $polyline = [];
-            foreach ($route['geometry']['coordinates'] ?? [] as $coord) {
-                if (is_array($coord) && count($coord) >= 2) {
-                    $polyline[] = [(float) $coord[1], (float) $coord[0]];
-                }
-            }
-
-            $distanceM = (float) ($route['distance'] ?? 0);
-            $durationSec = (float) ($route['duration'] ?? 0);
-            $durationMin = max(1, (int) round($durationSec / 60));
-
-            return [
-                'polyline' => $polyline,
-                'distance_km' => round($distanceM / 1000, 2),
-                'distance_label' => $this->formatDistance($distanceM),
-                'duration_minutes' => $durationMin,
-                'duration_label' => $this->formatDuration($durationMin),
-                'source' => 'osrm',
-            ];
-        } catch (\Throwable $e) {
-            Log::warning('OSRM route lookup failed', ['error' => $e->getMessage()]);
-
-            return null;
-        }
-    }
-
-    private function estimateDurationMinutes(float $distanceMeters): int
-    {
-        $avgSpeedKmh = 35;
-
-        return max(1, (int) round(($distanceMeters / 1000) / $avgSpeedKmh * 60));
-    }
-
-    private function formatDistance(float $distanceMeters): string
-    {
-        if ($distanceMeters >= 1000) {
-            return number_format($distanceMeters / 1000, 1).' km';
-        }
-
-        return number_format($distanceMeters, 0).' m';
-    }
-
-    private function formatDuration(int $minutes): string
-    {
-        if ($minutes < 60) {
-            return $minutes.' min';
-        }
-
-        $hours = intdiv($minutes, 60);
-        $remaining = $minutes % 60;
-
-        return $remaining > 0 ? "{$hours} hr {$remaining} min" : "{$hours} hr";
     }
 }

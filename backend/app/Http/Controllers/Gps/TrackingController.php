@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Gps;
 
 use App\Http\Controllers\Controller;
 use App\Models\DispatchAssignment;
+use App\Services\Gps\DriverLocationService;
 use App\Services\Gps\TrackingService;
 
 class TrackingController extends Controller
 {
-    public function __construct(private TrackingService $trackingService)
-    {
+    public function __construct(
+        private TrackingService $trackingService,
+        private DriverLocationService $driverLocationService,
+    ) {
     }
 
     public function show(DispatchAssignment $assignment)
@@ -22,7 +25,7 @@ class TrackingController extends Controller
         return response()->json([
             'latest' => $this->trackingService->formatForFleet($latest),
             'history' => $includeHistory
-                ? $this->trackingService->historyForAssignment($assignment, $perPage)
+                ? $this->driverLocationService->tripHistoryForAssignment($assignment, $perPage)
                 : $assignment->trackingLogs()->latest('captured_at')->paginate($perPage),
         ]);
     }

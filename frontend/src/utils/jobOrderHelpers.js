@@ -4,6 +4,8 @@
  * for older records created before the migration.
  */
 
+import { formatAddressParts } from './jobOrderAddressValidation'
+
 /** Build a display-ready full name from structured parts or legacy field. */
 export function buildDisplayName(order) {
   if (order?.company?.company_name) return order.company.company_name
@@ -32,7 +34,7 @@ export function buildDisplayAddress(prefix, order) {
   const city = order?.[`${prefix}_city`]
   const province = order?.[`${prefix}_province`]
   if (street || city) {
-    return [street, barangay, city, province].filter(Boolean).join(', ')
+    return formatAddressParts([street, barangay, city, province])
   }
   return order?.[`${prefix}_location`] || ''
 }

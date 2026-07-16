@@ -3,6 +3,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { trackDelivery } from '../../api/customer'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
+import CustomerLiveMap from '../../components/CustomerLiveMap'
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
@@ -89,7 +90,7 @@ function TrackingPage() {
 
   useEffect(() => {
     if (!pollKey) return
-    const iv = setInterval(() => loadTrack(pollKey).catch(() => {}), 15000)
+    const iv = setInterval(() => loadTrack(pollKey).catch(() => {}), 30000)
     return () => clearInterval(iv)
   }, [pollKey, loadTrack])
 
@@ -243,6 +244,23 @@ function TrackingPage() {
                 )}
               </div>
 
+              {/* Live map */}
+              {result.approximate_location && result.status !== 'completed' && result.status !== 'cancelled' && (
+                <div className="tracking-section">
+                  <h3>Live delivery map</h3>
+                  <CustomerLiveMap
+                    driverLocation={result.approximate_location}
+                    pickup={result.pickup}
+                    destination={result.destination}
+                    route={result.route}
+                    status={result.status}
+                    offline={result.offline ?? result.approximate_location?.offline}
+                    lastUpdated={result.last_updated ?? result.approximate_location?.at}
+                    eta={result.eta}
+                  />
+                </div>
+              )}
+
               {/* Metrics */}
               <div className="tracking-metrics">
                 <div>
@@ -251,7 +269,7 @@ function TrackingPage() {
                     {result.approximate_location ? (
                       <>
                         <a
-                          href={`https://maps.google.com/?q=${result.approximate_location.lat},${result.approximate_location.lng}`}
+                          href={`https://www.openstreetmap.org/?mlat=${result.approximate_location.lat}&mlon=${result.approximate_location.lng}#map=16/${result.approximate_location.lat}/${result.approximate_location.lng}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700 }}
@@ -259,6 +277,11 @@ function TrackingPage() {
                           View on Map
                           <ExternalLink size={11} />
                         </a>
+                        {result.offline?.label && (
+                          <span style={{ color: '#b45309', fontWeight: 600, fontSize: '0.8125rem' }}>
+                            {result.offline.label}
+                          </span>
+                        )}
                         <span style={{ color: 'var(--muted)', fontWeight: 500, fontSize: '0.8125rem' }}>
                           {result.approximate_location.lat}, {result.approximate_location.lng}
                         </span>

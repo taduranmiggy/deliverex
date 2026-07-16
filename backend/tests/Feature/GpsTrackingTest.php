@@ -134,7 +134,7 @@ class GpsTrackingTest extends TestCase
             'driver_id' => $this->driver->id,
             'latitude' => 14.5995,
             'longitude' => 120.9842,
-            'captured_at' => now()->subMinutes(2),
+            'captured_at' => now()->subSeconds(45),
         ]);
 
         $jobOrder = $this->assignment->jobOrder;
@@ -203,5 +203,70 @@ class GpsTrackingTest extends TestCase
             'longitude' => 120.9860,
             'source' => 'status_update:'.DeliveryStatus::EN_ROUTE_TO_DESTINATION,
         ]);
+    }
+
+    public function test_mobile_location_update_syncs_driver_tables(): void
+    {
+        $response = $this->apiAs($this->driverUser)->postJson('/api/mobile/location/update', [
+            'driver_id' => $this->driver->id,
+            'assignment_id' => $this->assignment->id,
+            'job_order_id' => $this->assignment->job_order_id,
+            'latitude' => 14.5995,
+            'longitude' => 120.9842,
+            'speed' => 25,
+            'heading' => 90,
+            'accuracy' => 8.5,
+            'battery_level' => 72,
+            'timestamp' => now()->toIso8601String(),
+        ]);
+
+        $response->assertCreated();
+
+        $this->assertDatabaseHas('driver_location_history', [
+            'driver_id' => $this->driver->id,
+            'assignment_id' => $this->assignment->id,
+            'latitude' => 14.5995,
+            'longitude' => 120.9842,
+        ]);
+
+        $this->assertDatabaseHas('driver_current_locations', [
+            'driver_id' => $this->driver->id,
+            'assignment_id' => $this->assignment->id,
+            'battery_level' => 72,
+        ]);
+    }
+
+    public function test_offline_status_after_two_minutes(): void
+    {
+        TrackingLog::create([
+            'assignment_id' => $this->assignment->id,
+            'driver_id' => $this->driver->id,
+            'latitude' => 14.5995,
+            'longitude' => 120.9842,
+            'captured_at' => now()->subMinutes(3),
+        ]);
+
+        $log = TrackingLog::query()->where('assignment_id', $this->assignment->id)->first();
+        $offline = app(\App\Services\Gps\TrackingService::class)->offlineStatus($log);
+
+        $this->assertSame('temporarily_offline', $offline['state']);
+        $this->assertSame('Driver temporarily offline.', $offline['label']);
+    }
+
+    public function test_gps_lost_status_after_five_minutes(): void
+    {
+        TrackingLog::create([
+            'assignment_id' => $this->assignment->id,
+            'driver_id' => $this->driver->id,
+            'latitude' => 14.5995,
+            'longitude' => 120.9842,
+            'captured_at' => now()->subMinutes(6),
+        ]);
+
+        $log = TrackingLog::query()->where('assignment_id', $this->assignment->id)->first();
+        $offline = app(\App\Services\Gps\TrackingService::class)->offlineStatus($log);
+
+        $this->assertSame('gps_lost', $offline['state']);
+        $this->assertSame('GPS signal lost.', $offline['label']);
     }
 }

@@ -74,16 +74,14 @@ function ManagerDashboard() {
         <StatCard label="Delayed"            value={s.delayed_today        ?? '—'} icon={AlertTriangle} iconVariant={s.delayed_today > 0 ? 'red' : 'green'} />
       </div>
 
-      <div style={{ marginBottom: 20 }}>
       <SectionCard title="Performance KPIs" className="dx-manager-kpi-section">
-        <p style={{ color: 'var(--muted)', fontSize: '0.8125rem', margin: '0 0 16px' }}>{periodLabel}</p>
-        <div className="dx-stat-row">
+        <p className="dx-manager-kpi-section__period">{periodLabel}</p>
+        <div className="dx-manager-kpi-grid">
           {performanceKpis.map(({ label, value, icon, iconVariant, hint }) => (
-            <StatCard key={label} label={label} value={value} icon={icon} iconVariant={iconVariant} hint={hint} />
+            <StatCard key={label} label={label} value={value} icon={icon} iconVariant={iconVariant} hint={hint} secondary />
           ))}
         </div>
       </SectionCard>
-      </div>
 
       <div className="dx-grid-2" style={{ marginBottom: 20 }}>
         <SectionCard title="Completed Deliveries — Last 7 days">

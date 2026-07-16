@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { changePassword, updateProfile } from '../../api/auth'
 import { PhonePhInput } from '../../components/PhonePhInput'
 import useAuth from '../../hooks/useAuth'
@@ -7,13 +7,14 @@ import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import CustomerPageShell, { CustomerPageHeader } from '../../components/customer/CustomerPageShell'
 import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { useToast } from '../../context/ToastContext'
+import useLogoutConfirmation from '../../hooks/useLogoutConfirmation'
 import { Link2, Lock, LogOut, Package, Save, Settings, User, Users } from 'lucide-react'
 
 function CustomerAccountPage() {
-  const { user, isAuthenticated, role, logout, updateUser } = useAuth()
+  const { user, isAuthenticated, role, updateUser } = useAuth()
   const toast = useToast()
-  const navigate = useNavigate()
   const { paths } = useCustomerSurface()
+  const { openLogoutConfirm, logoutConfirmModal } = useLogoutConfirmation({ redirectTo: paths.signIn })
   const isCustomer = isAuthenticated && role === 'customer'
   const signInPath = paths.signIn
 
@@ -85,11 +86,6 @@ function CustomerAccountPage() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const handleLogout = async () => {
-    await logout()
-    navigate(paths.signIn, { replace: true })
   }
 
   if (!isCustomer) {
@@ -190,9 +186,11 @@ function CustomerAccountPage() {
         </form>
       </section>
 
-      <button type="button" className="pwa-account-logout" onClick={handleLogout}>
+      <button type="button" className="pwa-account-logout" onClick={openLogoutConfirm}>
         <LogOut size={18} /> Sign out
       </button>
+
+      {logoutConfirmModal}
 
       <LoadingOverlay open={submitting || savingProfile} message="Saving changes" submessage="Please wait." />
     </CustomerPageShell>

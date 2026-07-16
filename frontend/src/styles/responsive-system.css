@@ -284,6 +284,7 @@ body.dx-nav-locked {
 .dx-grid-2--12 { gap: 12px; }
 .dx-grid-2--10 { gap: 10px; }
 .dx-grid-2--8 { gap: 8px; }
+.dx-grid-2--start { align-items: start; }
 
 .dx-grid-3 {
   display: grid;

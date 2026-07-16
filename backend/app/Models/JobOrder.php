@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\JobOrderAddressFormatter;
 use App\Support\JobOrderScheduleValidator;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -123,16 +124,13 @@ class JobOrder extends Model
      */
     public function getDisplayPickupAttribute(): string
     {
-        if ($this->pickup_street || $this->pickup_city) {
-            $parts = array_filter([
-                $this->pickup_street,
-                $this->pickup_barangay,
-                $this->pickup_city,
-                $this->pickup_province,
-            ]);
-            return implode(', ', $parts);
-        }
-        return $this->pickup_location ?? '';
+        return JobOrderAddressFormatter::displayFromStructured(
+            $this->pickup_street,
+            $this->pickup_barangay,
+            $this->pickup_city,
+            $this->pickup_province,
+            $this->pickup_location,
+        );
     }
 
     /**
@@ -141,16 +139,13 @@ class JobOrder extends Model
      */
     public function getDisplayDropoffAttribute(): string
     {
-        if ($this->dropoff_street || $this->dropoff_city) {
-            $parts = array_filter([
-                $this->dropoff_street,
-                $this->dropoff_barangay,
-                $this->dropoff_city,
-                $this->dropoff_province,
-            ]);
-            return implode(', ', $parts);
-        }
-        return $this->dropoff_location ?? '';
+        return JobOrderAddressFormatter::displayFromStructured(
+            $this->dropoff_street,
+            $this->dropoff_barangay,
+            $this->dropoff_city,
+            $this->dropoff_province,
+            $this->dropoff_location,
+        );
     }
 
     protected $casts = [

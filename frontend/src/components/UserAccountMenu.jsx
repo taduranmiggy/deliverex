@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { LogOut, User } from 'lucide-react'
 import useAuth from '../hooks/useAuth'
+import useLogoutConfirmation from '../hooks/useLogoutConfirmation'
 
 function UserAccountMenu({ profilePath, className = '' }) {
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
+  const { user } = useAuth()
+  const { openLogoutConfirm, logoutConfirmModal } = useLogoutConfirmation()
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
 
@@ -34,10 +35,9 @@ function UserAccountMenu({ profilePath, className = '' }) {
     }
   }, [open])
 
-  const handleLogout = async () => {
+  const handleLogoutClick = (event) => {
     setOpen(false)
-    await logout()
-    navigate('/login', { replace: true })
+    openLogoutConfirm(event)
   }
 
   const close = () => setOpen(false)
@@ -69,12 +69,14 @@ function UserAccountMenu({ profilePath, className = '' }) {
             </NavLink>
           ) : null}
           <div className="dropdown-divider" />
-          <button type="button" className="dx-account-menu__item dropdown-logout" role="menuitem" onClick={handleLogout}>
+          <button type="button" className="dx-account-menu__item dropdown-logout" role="menuitem" onClick={handleLogoutClick}>
             <LogOut size={15} aria-hidden />
             Log out
           </button>
         </div>
       )}
+
+      {logoutConfirmModal}
     </div>
   )
 }

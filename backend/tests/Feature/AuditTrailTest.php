@@ -258,4 +258,26 @@ class AuditTrailTest extends TestCase
         $this->apiAs($this->dispatcher)->getJson('/api/admin/audit-logs')->assertForbidden();
         $this->apiAs($this->admin)->getJson('/api/admin/audit-logs')->assertOk();
     }
+
+    public function test_audit_logs_export_pdf_is_admin_only(): void
+    {
+        AuditLog::query()->create([
+            'user_id' => $this->admin->id,
+            'action' => 'auth.login_success',
+            'module' => 'Auth',
+            'role_name' => 'admin',
+            'ip_address' => '127.0.0.1',
+        ]);
+
+        $this->apiAs($this->dispatcher)->get('/api/admin/audit-logs/export?format=pdf')->assertForbidden();
+
+        $response = $this->apiAs($this->admin)->get('/api/admin/audit-logs/export?format=pdf');
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $response->headers->get('Content-Type'));
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'reports.export_pdf',
+            'user_id' => $this->admin->id,
+        ]);
+    }
 }

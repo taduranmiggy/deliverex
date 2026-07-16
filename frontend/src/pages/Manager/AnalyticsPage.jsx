@@ -136,7 +136,7 @@ function AnalyticsPage() {
         <StatCard label="Fleet Util." value={fleet.utilization_pct != null ? `${fleet.utilization_pct}%` : '—'} icon={Car} iconVariant="orange" />
       </div>
 
-      <div className="dx-grid-2" style={{ marginBottom: 20 }}>
+      <div className="dx-grid-2 dx-grid-2--start" style={{ marginBottom: 20 }}>
         <SectionCard title="Daily Completed Deliveries">
           <DailyDeliveriesChart data={data?.daily_stats} />
         </SectionCard>
@@ -145,8 +145,8 @@ function AnalyticsPage() {
         </SectionCard>
       </div>
 
-      <div className="dx-grid-2" style={{ marginBottom: 20 }}>
-        <SectionCard title="Fleet Status">
+      <div className="dx-grid-2 dx-grid-2--start" style={{ marginBottom: 20 }}>
+        <SectionCard title="Fleet Status" className="dx-fleet-status-panel">
           <FleetStatusChart fleet={fleet} />
         </SectionCard>
         <SectionCard title="Top & Lowest Performers">
@@ -192,7 +192,7 @@ function AnalyticsPage() {
         <StatCard label="Delay Reports" value={delays.total_reports ?? '—'} icon={AlertTriangle} iconVariant={delays.total_reports > 0 ? 'red' : 'green'} />
       </div>
 
-      <div className="dx-grid-2" style={{ marginBottom: 20 }}>
+      <div className="dx-grid-2 dx-grid-2--start" style={{ marginBottom: 20 }}>
         <SectionCard title="Most Common Delay Reasons">
           <DelayReasonsChart items={delays.common_reasons} />
         </SectionCard>
@@ -201,7 +201,7 @@ function AnalyticsPage() {
         </SectionCard>
       </div>
 
-      <div className="dx-grid-2" style={{ marginBottom: 20 }}>
+      <div className="dx-grid-2 dx-grid-2--start" style={{ marginBottom: 20 }}>
         <SectionCard title="Delay Rate per Driver">
           <DataTable
             headers={['Driver', 'Assignments', 'Delay Reports', 'Delay Rate']}

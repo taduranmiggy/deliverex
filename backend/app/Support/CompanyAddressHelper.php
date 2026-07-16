@@ -20,7 +20,7 @@ class CompanyAddressHelper
             'address_barangay' => $barangay !== '' ? $barangay : null,
             'address_city' => $city !== '' ? $city : null,
             'address_province' => $province !== '' ? $province : null,
-            'address' => implode(', ', array_filter([$street, $barangay, $city, $province])) ?: null,
+            'address' => JobOrderAddressFormatter::formatParts([$street, $barangay, $city, $province]) ?: null,
         ];
     }
 
