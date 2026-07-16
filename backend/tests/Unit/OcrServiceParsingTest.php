@@ -250,4 +250,48 @@ class OcrServiceParsingTest extends TestCase
         $this->assertEqualsWithDelta(230, (float) $parsed['width'], 0.01);
         $this->assertEqualsWithDelta(215, (float) $parsed['height'], 0.01);
     }
+
+    public function test_per_field_merge_fills_missing_dimension_from_alternate_candidate(): void
+    {
+        $text = <<<TXT
+        DELIVERY RECEIPT DR-5551234
+        length: 730
+        width: 230
+        height: 215
+        reference batch 829 lane 1
+        TXT;
+
+        $parsed = $this->parse($text);
+
+        $this->assertEqualsWithDelta(730, (float) $parsed['length'], 0.01);
+        $this->assertEqualsWithDelta(230, (float) $parsed['width'], 0.01);
+        $this->assertEqualsWithDelta(215, (float) $parsed['height'], 0.01);
+        $this->assertSame('DR-5551234', $parsed['delivery_receipt_number']);
+    }
+
+    public function test_extracts_auxiliary_truck_and_driver_fields(): void
+    {
+        $service = app(\App\Services\Ocr\OcrService::class);
+        $method = new ReflectionMethod($service, 'extractStructuredFieldsWithDebug');
+        $method->setAccessible(true);
+
+        $text = <<<TXT
+        truck no: ABC 1234
+        driver name: Pedro Santos
+        customer: CRBC Site A
+        material: Crushed Aggregate
+        delivery date: 2026-06-27
+        length: 730
+        width: 230
+        height: 215
+        dr no: 8887776
+        TXT;
+
+        /** @var array{auxiliary:array<string,?string>} $result */
+        $result = $method->invoke($service, $text, []);
+
+        $this->assertStringContainsString('abc', strtolower((string) ($result['auxiliary']['vehicle_plate'] ?? '')));
+        $this->assertStringContainsString('pedro', strtolower((string) ($result['auxiliary']['driver_name'] ?? '')));
+        $this->assertStringContainsString('crbc', strtolower((string) ($result['auxiliary']['customer'] ?? '')));
+    }
 }

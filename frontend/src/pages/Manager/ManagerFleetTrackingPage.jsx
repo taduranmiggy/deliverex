@@ -50,9 +50,10 @@ function ManagerFleetTrackingPage() {
     return () => clearInterval(timer)
   }, [load])
 
-  const { markers, routeLines, unavailableMessage } = useMemo(() => {
+  const { markers, routeLines, historyPolylines, unavailableMessage } = useMemo(() => {
     const items = []
     const lines = []
+    const histories = []
     let missingDriverGps = false
 
     rows.forEach((r) => {
@@ -89,8 +90,19 @@ function ManagerFleetTrackingPage() {
           vehicle: r.vehicle ?? '—',
           status: r.status,
           gpsAt: r.gps.at,
+          gpsSyncedAt: r.gps.synced_at,
+          gpsPerformedOffline: r.gps.performed_offline,
+          speedKmh: r.gps.speed_kmh,
+          isOffline: r.gps.is_stale || r.gps.is_critical_stale,
           mapsUrl: buildOsmCoordinateUrl(r.gps.lat, r.gps.lng),
         })
+
+        if (Array.isArray(r.route_history) && r.route_history.length > 1) {
+          histories.push({
+            id: `history-${r.id}`,
+            positions: r.route_history.map((point) => [point.lat, point.lng]),
+          })
+        }
 
         if (destinationAvailable) {
           lines.push({
@@ -107,6 +119,7 @@ function ManagerFleetTrackingPage() {
     return {
       markers: items,
       routeLines: lines,
+      historyPolylines: histories,
       unavailableMessage: missingDriverGps ? 'Driver location is currently unavailable.' : '',
     }
   }, [rows])
@@ -123,7 +136,7 @@ function ManagerFleetTrackingPage() {
 
       <div className="dx-panel" style={{ marginBottom: 20 }}>
         <h3 className="dx-panel-title">Last Known Locations</h3>
-        <LiveFleetMap markers={markers} routeLines={routeLines} unavailableMessage={unavailableMessage} loading={refreshing && rows.length === 0} />
+        <LiveFleetMap markers={markers} routeLines={routeLines} historyPolylines={historyPolylines} unavailableMessage={unavailableMessage} loading={refreshing && rows.length === 0} />
       </div>
 
       <div className="dx-panel">

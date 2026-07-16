@@ -57,9 +57,9 @@ class CompletionProofController extends Controller
         }
 
         $status = DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
-        if (! in_array($status, [DeliveryStatus::ARRIVED, DeliveryStatus::COMPLETED], true)) {
+        if (! DeliveryStatus::allowsOcrUpload((string) $status)) {
             return response()->json([
-                'message' => 'Completion proof can only be submitted when the delivery status is Arrived or Completed.',
+                'message' => 'Completion proof can only be submitted when the delivery status is Arrived at Destination or Completed.',
             ], 422);
         }
 

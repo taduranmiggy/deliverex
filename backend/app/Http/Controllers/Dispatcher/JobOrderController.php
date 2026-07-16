@@ -8,15 +8,17 @@ use App\Models\Client;
 use App\Models\CompanyQuarryVehiclePreference;
 use App\Models\ClientQuarryVehiclePreference;
 use App\Services\Company\CompanyService;
-use App\Models\Driver;
+use App\Services\Driver\DriverAvailabilityService;
+use App\Services\Fleet\AssignmentResourceSyncService;
 use App\Models\JobOrder;
 use App\Models\MaterialSpecification;
 use App\Models\MaterialType;
 use App\Models\Quarry;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\Delivery\DropoffGeocoder;
+use App\Services\Delivery\JobOrderLocationService;
 use App\Services\MasterData\MaterialMasterDataService;
+use App\Support\AuditChangeTracker;
 use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
 use App\Support\JobOrderAddressValidator;
@@ -29,6 +31,9 @@ class JobOrderController extends Controller
     public function __construct(
         private MaterialMasterDataService $materialMasterData,
         private CompanyService $companyService,
+        private DriverAvailabilityService $driverAvailability,
+        private AssignmentResourceSyncService $resourceSync,
+        private JobOrderLocationService $locationService,
     ) {
     }
 
@@ -189,7 +194,7 @@ class JobOrderController extends Controller
         unset($data['client_mode'], $data['save_as_client'], $data['contact_person'], $data['client_id']);
 
         $jobOrder = JobOrder::create($data);
-        $this->geocodeDropoff($jobOrder);
+        $this->locationService->ensureCoordinates($jobOrder);
 
         AuditLogger::record($request->user(), 'job_order.created', JobOrder::class, $jobOrder->id, [
             'tracking_code' => $jobOrder->tracking_code,
@@ -327,9 +332,12 @@ class JobOrderController extends Controller
         }
 
         // Keep structured address fields in sync with legacy combined fields
-        $addrFields = ['pickup_province', 'pickup_city', 'pickup_barangay', 'pickup_street', 'pickup_landmark', 'pickup_location',
-                        'dropoff_province', 'dropoff_city', 'dropoff_barangay', 'dropoff_street', 'dropoff_landmark', 'dropoff_location'];
-        if (count(array_intersect(array_keys($data), $addrFields)) > 0) {
+        $pickupFields = ['pickup_province', 'pickup_city', 'pickup_barangay', 'pickup_street', 'pickup_landmark', 'pickup_location'];
+        $dropoffFields = ['dropoff_province', 'dropoff_city', 'dropoff_barangay', 'dropoff_street', 'dropoff_landmark', 'dropoff_location'];
+        $addrFields = array_merge($pickupFields, $dropoffFields);
+        $pickupChanged = count(array_intersect(array_keys($data), $pickupFields)) > 0;
+        $dropoffChanged = count(array_intersect(array_keys($data), $dropoffFields)) > 0;
+        if ($pickupChanged || $dropoffChanged) {
             $merged = array_merge($jobOrder->only($addrFields), $data);
             $data = array_merge($data, $this->resolveAddresses($merged));
             JobOrderAddressValidator::validatePayload(array_merge(
@@ -358,16 +366,51 @@ class JobOrderController extends Controller
             $data['job_requirements'] = $data['special_handling_instructions'];
         }
 
-        $dropoffChanged = count(array_intersect(array_keys($data), $addrFields)) > 0;
+        $trackFields = ['status', 'priority', 'scheduled_start', 'scheduled_end', 'customer_name', 'company_id'];
+        $before = $jobOrder->only($trackFields);
 
+        $previousStatus = $jobOrder->status;
         $jobOrder->update($data);
+
+        if (($data['status'] ?? null) === 'cancelled' && $previousStatus !== 'cancelled') {
+            $this->driverAvailability->cancelActiveAssignmentsForJobOrder(
+                $jobOrder->id,
+                'job_order_cancelled',
+                $request->user()?->id,
+            );
+        }
+
+        if ($pickupChanged) {
+            $jobOrder->update(['pickup_latitude' => null, 'pickup_longitude' => null]);
+        }
 
         if ($dropoffChanged) {
             $jobOrder->update(['dropoff_latitude' => null, 'dropoff_longitude' => null]);
-            $this->geocodeDropoff($jobOrder->fresh());
         }
 
-        AuditLogger::record($request->user(), 'job_order.updated', JobOrder::class, $jobOrder->id, [], $request);
+        if ($pickupChanged || $dropoffChanged) {
+            $this->locationService->ensureCoordinates($jobOrder->fresh());
+        }
+
+        $after = $jobOrder->fresh()->only($trackFields);
+        $changes = AuditChangeTracker::diffArrays($before, $after, $trackFields);
+
+        if (($data['status'] ?? null) === 'cancelled' && $previousStatus !== 'cancelled') {
+            AuditLogger::record($request->user(), 'job_order.cancelled', JobOrder::class, $jobOrder->id, [
+                'tracking_code' => $jobOrder->tracking_code,
+                'changes' => ['status' => ['old' => $previousStatus, 'new' => 'cancelled']],
+            ], $request);
+        } else {
+            AuditLogger::recordChanges(
+                $request->user(),
+                'job_order.updated',
+                JobOrder::class,
+                $jobOrder->id,
+                $changes,
+                ['tracking_code' => $jobOrder->tracking_code],
+                $request,
+            );
+        }
 
         return response()->json($jobOrder->fresh()->load([
             'creator',
@@ -396,17 +439,13 @@ class JobOrderController extends Controller
         }
 
         // Free any driver/vehicle that was assigned to this job order
-        foreach ($jobOrder->assignments()->whereIn('status', [
-            DeliveryStatus::ASSIGNED,
-            DeliveryStatus::EN_ROUTE_TO_PICKUP,
-            DeliveryStatus::ARRIVED_AT_PICKUP,
-            DeliveryStatus::EN_ROUTE_TO_DESTINATION,
-            DeliveryStatus::ARRIVED,
-        ])->get() as $assignment) {
-            Driver::where('id', $assignment->driver_id)
-                ->update(['availability' => 'available', 'current_assignment_id' => null]);
-            Vehicle::where('id', $assignment->vehicle_id)
-                ->update(['status' => 'available']);
+        foreach ($jobOrder->assignments()->whereIn('status', DeliveryStatus::availabilityBlocking())->get() as $assignment) {
+            $assignment->update(['status' => DeliveryStatus::CANCELLED]);
+            $this->resourceSync->syncForAssignment(
+                $assignment,
+                'job_order_deleted',
+                $request->user()?->id,
+            );
         }
 
         AuditLogger::record($request->user(), 'job_order.deleted', JobOrder::class, $jobOrder->id, [
@@ -507,25 +546,5 @@ class JobOrderController extends Controller
         }
 
         return $data;
-    }
-
-    private function geocodeDropoff(JobOrder $jobOrder): void
-    {
-        if ($jobOrder->dropoff_latitude !== null && $jobOrder->dropoff_longitude !== null) {
-            return;
-        }
-
-        $address = $jobOrder->display_dropoff;
-        if ($address === '') {
-            return;
-        }
-
-        $coords = app(DropoffGeocoder::class)->geocode($address);
-        if ($coords) {
-            $jobOrder->update([
-                'dropoff_latitude'  => $coords['lat'],
-                'dropoff_longitude' => $coords['lng'],
-            ]);
-        }
     }
 }

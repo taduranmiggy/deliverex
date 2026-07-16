@@ -81,6 +81,17 @@ export function postDelayReport(payload) {
   })
 }
 
+export function fetchSyncConflicts(page = 1) {
+  return apiRequest(`/driver/sync-conflicts?page=${page}`)
+}
+
+export function resolveSyncConflict(payload) {
+  return apiRequest('/driver/sync-conflicts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function uploadCompletionProof(formData) {
   return apiRequest('/driver/completion-proof', {
     method: 'POST',

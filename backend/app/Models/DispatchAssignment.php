@@ -112,8 +112,13 @@ class DispatchAssignment extends Model
     public function latestArrivedStatusLog()
     {
         return $this->hasOne(DeliveryStatusLog::class, 'assignment_id')
-            ->where('status', 'arrived')
+            ->whereIn('status', ['arrived_at_destination', 'arrived'])
             ->latestOfMany('created_at');
+    }
+
+    public function statusHistory()
+    {
+        return $this->hasMany(DeliveryStatusHistory::class, 'assignment_id')->orderBy('updated_at');
     }
 
     public function completionProof()

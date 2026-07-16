@@ -38,10 +38,10 @@ export async function offlineSyncWithRefresh() {
     }
   }
 
-  const sync = queue.length > 0 ? await syncQueue() : { remaining: 0, synced: 0 }
+  const sync = queue.length > 0 ? await syncQueue() : { remaining: 0, processed: 0 }
 
-  if (sync.synced > 0 && queue.length > 0) {
-    const ids = queue.slice(0, sync.synced).map((i) => i.id)
+  if ((sync.processed ?? 0) > 0 && queue.length > 0) {
+    const ids = queue.slice(0, sync.processed).map((i) => i.id)
     try {
       await apiRequest('/driver/offline-queue/synced', {
         method: 'POST',

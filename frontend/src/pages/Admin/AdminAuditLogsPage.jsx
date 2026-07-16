@@ -12,10 +12,17 @@ import {
 const MODULES = [
   { value: 'all',       label: 'All Modules' },
   { value: 'auth',      label: 'Auth' },
+  { value: 'user',      label: 'User Management' },
+  { value: 'company',   label: 'Companies' },
   { value: 'job_order', label: 'Job Orders' },
   { value: 'dispatch',  label: 'Dispatch' },
   { value: 'delivery',  label: 'Delivery' },
-  { value: 'ocr',       label: 'OCR Review' },
+  { value: 'document',  label: 'Documents' },
+  { value: 'ocr',       label: 'OCR' },
+  { value: 'gps',       label: 'GPS' },
+  { value: 'offline',   label: 'Offline Sync' },
+  { value: 'reports',   label: 'Reports' },
+  { value: 'settings',  label: 'Settings' },
   { value: 'inquiry',   label: 'Inquiries' },
 ]
 
@@ -28,6 +35,13 @@ const MODULE_COLORS = {
   'OCR Validation': '#7c3aed',
   Inquiries:      '#ea580c',
   System:         '#64748b',
+  'User Management': '#0f766e',
+  'Company Management': '#0369a1',
+  Documents:      '#9333ea',
+  GPS:            '#059669',
+  'Offline Sync': '#b45309',
+  Reports:        '#4f46e5',
+  Settings:       '#57534e',
 }
 
 const PER_PAGE = 6
@@ -74,11 +88,17 @@ function LogDetailModal({ log, onClose }) {
     { label: 'Timestamp',  value: log.timestamp ? new Date(log.timestamp).toLocaleString() : '—' },
     { label: 'User',       value: log.user ?? '—' },
     { label: 'Email',      value: log.user_email ?? '—' },
+    { label: 'Role',       value: log.role ?? '—' },
     { label: 'Action',     value: log.action ?? '—' },
     { label: 'Readable',   value: formatAction(log.action) },
     { label: 'Module',     value: normalizeOcrModuleLabel(log.module ?? '—') },
     { label: 'IP Address', value: log.ip_address ?? '—' },
     { label: 'Details',    value: log.details ?? '—' },
+    ...(log.changes && Object.keys(log.changes).length > 0
+      ? [{ label: 'Changes', value: log.details ?? JSON.stringify(log.changes, null, 2) }]
+      : []),
+    ...(log.user_agent ? [{ label: 'User Agent', value: log.user_agent }] : []),
+    ...(log.session_id ? [{ label: 'Session', value: log.session_id }] : []),
   ]
 
   return (

@@ -8,11 +8,12 @@ function formatScore(candidate) {
 }
 
 const VISIBLE_FACTOR_KEYS = new Set([
-  'vehicle_capacity_match',
-  'driver_available',
-  'load_efficiency',
-  'vehicle_type_match',
-  'schedule_match',
+  'vehicle_compatibility',
+  'capacity_efficiency',
+  'driver_availability',
+  'schedule_compatibility',
+  'distance_to_pickup',
+  'workload_distribution',
 ])
 
 function visibleFactors(candidate) {

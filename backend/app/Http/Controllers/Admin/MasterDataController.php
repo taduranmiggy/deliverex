@@ -15,7 +15,10 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
 use App\Support\DriverAccount;
+use App\Services\Driver\DriverAvailabilityService;
+use App\Services\Fleet\VehicleAvailabilityService;
 use App\Services\Email\EmailService;
+use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Hash;
@@ -25,6 +28,12 @@ use Illuminate\Validation\Rule;
 
 class MasterDataController extends Controller
 {
+    public function __construct(
+        private DriverAvailabilityService $driverAvailability,
+        private VehicleAvailabilityService $vehicleAvailability,
+    ) {
+    }
+
     public function index()
     {
         return response()->json([
@@ -68,7 +77,7 @@ class MasterDataController extends Controller
 
     public function upsert(Request $request, string $resource, ?int $id = null)
     {
-        return match ($resource) {
+        $response = match ($resource) {
             'material-types' => $this->saveMaterialType($request, $id),
             'material-specifications' => $this->saveMaterialSpecification($request, $id),
             'clients' => $this->saveClient($request, $id),
@@ -80,9 +89,25 @@ class MasterDataController extends Controller
             'client-preferences' => $this->saveClientPreference($request, $id),
             default => response()->json(['message' => 'Unsupported master data resource.'], 404),
         };
+
+        if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
+            AuditLogger::record(
+                $request->user(),
+                $id ? 'settings.master_data_updated' : 'settings.master_data_created',
+                null,
+                $id,
+                [
+                    'resource' => $resource,
+                    'payload_keys' => array_keys($request->all()),
+                ],
+                $request,
+            );
+        }
+
+        return $response;
     }
 
-    public function archive(string $resource, int $id)
+    public function archive(Request $request, string $resource, int $id)
     {
         $model = $this->resolveArchiveModel($resource, $id);
         if (! $model) {
@@ -90,6 +115,11 @@ class MasterDataController extends Controller
         }
 
         $model->update(['status' => 'inactive']);
+
+        AuditLogger::record($request->user(), 'settings.master_data_archived', null, $id, [
+            'resource' => $resource,
+        ], $request);
+
         return response()->json(['message' => 'Record archived successfully.']);
     }
 
@@ -196,7 +226,7 @@ class MasterDataController extends Controller
             'rounded_cbm_capacity' => ['nullable', 'integer', 'min:0'],
             'max_weight_kg' => ['nullable', 'numeric', 'min:0'],
             'max_volume_m3' => ['nullable', 'numeric', 'min:0'],
-            'status' => ['nullable', Rule::in(['available', 'assigned', 'in_use', 'maintenance', 'inactive', 'unavailable'])],
+            'status' => ['nullable', Rule::in(['available', 'assigned', 'in_operation', 'in_use', 'maintenance', 'inactive', 'unavailable'])],
         ]);
 
         $data['plate_no'] = strtoupper(trim($data['plate_no']));
@@ -205,6 +235,11 @@ class MasterDataController extends Controller
 
         $model = $id ? Vehicle::query()->findOrFail($id) : new Vehicle();
         $model->fill($data)->save();
+        if (! in_array($model->status, ['maintenance', 'unavailable', 'inactive'], true)) {
+            $this->vehicleAvailability->sync($model, 'admin_master_data_save', $request->user()?->id);
+            $model->refresh();
+        }
+
         return response()->json($model->fresh()->load('vehicleType:id,name,wheel_type'));
     }
 
@@ -227,6 +262,8 @@ class MasterDataController extends Controller
 
         $model = $id ? Driver::query()->findOrFail($id) : new Driver();
         $model->fill($data)->save();
+        $this->driverAvailability->sync($model, 'admin_master_data_save', $request->user()?->id);
+        $model->refresh();
 
         if (! $model->user_id && $model->status !== 'inactive') {
             $accountResponse = $this->generateDriverAccount($model);

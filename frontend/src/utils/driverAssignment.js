@@ -66,16 +66,16 @@ export const DRIVER_STATUS_STEPS = [
     allowedFrom: ['arrived_at_pickup'],
   },
   {
-    value: 'arrived',
+    value: 'arrived_at_destination',
     label: 'Arrived at Destination',
     description: 'Arrived at destination',
-    allowedFrom: ['en_route_to_destination'],
+    allowedFrom: ['en_route_to_destination', 'arrived'],
   },
   {
     value: 'completed',
     label: 'Delivered / Completed',
     description: 'Delivery successfully completed',
-    allowedFrom: ['arrived'],
+    allowedFrom: ['arrived_at_destination', 'arrived'],
   },
 ]
 

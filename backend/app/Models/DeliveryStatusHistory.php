@@ -18,7 +18,9 @@ class DeliveryStatusHistory extends Model
     protected $fillable = [
         'job_order_id',
         'assignment_id',
+        'driver_id',
         'status',
+        'previous_status',
         'updated_by',
         'updated_at',
         'latitude',

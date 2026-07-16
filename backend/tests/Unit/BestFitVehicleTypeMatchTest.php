@@ -19,11 +19,11 @@ class BestFitVehicleTypeMatchTest extends TestCase
     {
         [$jobOrder, $vehicle] = $this->seedPair('10 Wheeler', '10 Wheeler');
 
-        $factor = $this->vehicleTypeFactor($jobOrder, $vehicle);
+        $factor = $this->factorFor($jobOrder, $vehicle, 'vehicle_compatibility');
 
         $this->assertTrue($factor['matched']);
-        $this->assertSame(20, $factor['contribution']);
-        $this->assertSame(20, $factor['max']);
+        $this->assertSame(40, $factor['contribution']);
+        $this->assertSame(40, $factor['max']);
         $this->assertStringContainsString('exactly matches', $factor['detail']);
     }
 
@@ -31,25 +31,23 @@ class BestFitVehicleTypeMatchTest extends TestCase
     {
         [$jobOrder, $vehicle] = $this->seedPair('Mini Dump', '  mini dump  ');
 
-        $factor = $this->vehicleTypeFactor($jobOrder, $vehicle);
+        $factor = $this->factorFor($jobOrder, $vehicle, 'vehicle_compatibility');
 
         $this->assertTrue($factor['matched']);
-        $this->assertSame(20, $factor['contribution']);
+        $this->assertSame(40, $factor['contribution']);
     }
 
-    public function test_vehicle_type_match_awards_zero_for_mismatched_types(): void
+    public function test_vehicle_type_mismatch_is_rejected_from_recommendations(): void
     {
         [$jobOrder, $vehicle] = $this->seedPair('Dump Truck', '10 Wheeler');
 
-        $factor = $this->vehicleTypeFactor($jobOrder, $vehicle);
+        $recommendations = app(BestFitAssignmentService::class)->recommend($jobOrder);
+        $match = collect($recommendations)->firstWhere('vehicle_id', $vehicle->id);
 
-        $this->assertFalse($factor['matched']);
-        $this->assertSame(0, $factor['contribution']);
-        $this->assertSame(20, $factor['max']);
-        $this->assertStringContainsString('does not match', $factor['detail']);
+        $this->assertNull($match, 'Mismatched vehicle type must be rejected entirely.');
     }
 
-    public function test_recommendations_do_not_include_distance_factor(): void
+    public function test_recommendations_include_distance_factor(): void
     {
         [$jobOrder, $vehicle] = $this->seedPair('10 Wheeler', '10 Wheeler');
 
@@ -58,7 +56,19 @@ class BestFitVehicleTypeMatchTest extends TestCase
 
         $this->assertNotNull($match);
         $this->assertSame(100, $match['score_max']);
-        $this->assertFalse(collect($match['factors'])->contains(fn ($f) => ($f['key'] ?? null) === 'distance'));
+        $this->assertTrue(collect($match['factors'])->contains(fn ($f) => ($f['key'] ?? null) === 'distance_to_pickup'));
+    }
+
+    public function test_factor_contributions_sum_to_reported_score(): void
+    {
+        [$jobOrder, $vehicle] = $this->seedPair('10 Wheeler', '10 Wheeler');
+
+        $recommendations = app(BestFitAssignmentService::class)->recommend($jobOrder);
+        $match = collect($recommendations)->firstWhere('vehicle_id', $vehicle->id);
+
+        $this->assertNotNull($match);
+        $sum = collect($match['factors'])->sum('contribution');
+        $this->assertSame($match['score'], $sum);
     }
 
     /**
@@ -84,11 +94,12 @@ class BestFitVehicleTypeMatchTest extends TestCase
             'status' => 'active',
         ]);
 
-        $driver = Driver::create([
+        Driver::create([
             'user_id' => $user->id,
+            'full_name' => 'Best Fit Driver',
             'license_no' => 'LIC-BF-001',
             'availability' => 'available',
-            'status' => 'active',
+            'status' => 'available',
         ]);
 
         $vehicle = Vehicle::create([
@@ -108,16 +119,13 @@ class BestFitVehicleTypeMatchTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->assertNotNull($driver);
-        $this->assertNotNull($vehicle);
-
         return [$jobOrder, $vehicle];
     }
 
     /**
      * @return array{matched: bool, contribution: int, max: int, detail: string}
      */
-    private function vehicleTypeFactor(JobOrder $jobOrder, Vehicle $vehicle): array
+    private function factorFor(JobOrder $jobOrder, Vehicle $vehicle, string $key): array
     {
         $vehicle->load('vehicleType');
         $recommendations = app(BestFitAssignmentService::class)->recommend($jobOrder);
@@ -125,7 +133,7 @@ class BestFitVehicleTypeMatchTest extends TestCase
 
         $this->assertNotNull($match, 'Expected a recommendation for the seeded vehicle.');
 
-        $factor = collect($match['factors'])->firstWhere('key', 'vehicle_type_match');
+        $factor = collect($match['factors'])->firstWhere('key', $key);
         $this->assertIsArray($factor);
 
         return $factor;

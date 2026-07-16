@@ -10,23 +10,22 @@ import { addConflict, getQueue, replaceQueue } from './offlineQueue'
 
 // ─── Constants ────────────────────────────────────────────────────
 const MAX_ATTEMPTS = 3
+let pendingConflict = null
 
-// ─── Conflict detection ───────────────────────────────────────────
+export function getPendingConflict() {
+  return pendingConflict
+}
 
-/**
- * Returns true for server-side rejections that will never succeed on retry
- * (4xx responses, invalid state transitions, duplicate submissions).
- */
+export function clearPendingConflict() {
+  pendingConflict = null
+}
+
 function isConflictError(err) {
+  if (err?.status === 409 || err?.conflict) return true
   const msg = (err?.message ?? '').toLowerCase()
   return (
     msg.includes('409') ||
-    msg.includes('422') ||
-    msg.includes('400')  ||
-    msg.includes('invalid') ||
-    msg.includes('already') ||
-    msg.includes('not allowed') ||
-    msg.includes('cannot')
+    msg.includes('sync conflict')
   )
 }
 
@@ -115,11 +114,16 @@ export async function syncQueue() {
         case 'status':
           await postStatusUpdate({
             ...item.payload,
+            expected_current_status: item.payload.expected_current_status ?? item.payload.previous_status,
             action_timestamp: item.action_timestamp ?? item.queued_at,
           })
           break
         case 'tracking':
-          await postTrackingUpdate(item.payload)
+          await postTrackingUpdate({
+            ...item.payload,
+            captured_at: item.action_timestamp ?? item.payload?.captured_at ?? item.queued_at,
+            action_timestamp: item.action_timestamp ?? item.queued_at,
+          })
           break
         case 'document':
           await syncDocumentItem(item)
@@ -144,7 +148,27 @@ export async function syncQueue() {
       processed++
     } catch (err) {
       const attempts = (item.attempt_count ?? 0) + 1
-      const shouldDrop = isConflictError(err) || attempts >= MAX_ATTEMPTS
+
+      if (isConflictError(err)) {
+        pendingConflict = {
+          queue_item: item,
+          conflict: err.conflict ?? {
+            server_version: {},
+            client_version: {
+              status: item.payload?.status,
+              action_timestamp: item.action_timestamp,
+            },
+            changed_fields: ['status'],
+            assignment_id: item.payload?.assignment_id,
+          },
+          server_error: err.message,
+        }
+        remaining.push(item)
+        conflicts++
+        break
+      }
+
+      const shouldDrop = (err?.status >= 400 && err?.status < 500 && err?.status !== 409) || attempts >= MAX_ATTEMPTS
 
       if (shouldDrop) {
         // Log the conflict for audit purposes
@@ -161,7 +185,7 @@ export async function syncQueue() {
           queued_at:        item.queued_at,
           attempt_count:    attempts,
           server_error:     err.message,
-          resolution:       isConflictError(err) ? 'server_wins' : 'max_retries_exceeded',
+          resolution:       err?.status === 409 ? 'pending_resolution' : 'max_retries_exceeded',
           synced_at:        syncedAt,
         })
         conflicts++
@@ -179,5 +203,5 @@ export async function syncQueue() {
 
   replaceQueue(remaining)
 
-  return { processed, remaining: remaining.length, conflicts, synced_at: syncedAt }
+  return { processed, remaining: remaining.length, conflicts, synced_at: syncedAt, pendingConflict: getPendingConflict() }
 }

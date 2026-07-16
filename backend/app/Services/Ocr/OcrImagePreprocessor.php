@@ -17,7 +17,7 @@ class OcrImagePreprocessor
   /**
    * @return array{path:string, diagnostics:array<string,mixed>}
    */
-  public function preprocess(string $sourcePath): array
+  public function preprocess(string $sourcePath, ?int $documentId = null): array
   {
     if (! config('ocr.preprocess_enabled', true)) {
       return [
@@ -54,12 +54,18 @@ class OcrImagePreprocessor
       }
 
       $image = $this->normalizeResolution($image, $steps);
+      $image = $this->toGrayscale($image, $steps);
       $image = $this->cropBorders($image, $steps);
       $image = $this->adjustContrastBrightness($image, $steps);
       $image = $this->reduceNoise($image, $steps);
+      $image = $this->sharpen($image, $steps);
       $image = $this->deskew($image, $steps);
 
       $tempPath = $this->writeTempImage($image, $sourcePath);
+      $debugArtifacts = [];
+      if (config('ocr.debug_save_artifacts', true) && $documentId !== null) {
+        $debugArtifacts = $this->saveDebugArtifacts($image, $documentId, $steps);
+      }
       imagedestroy($image);
 
       if ($workingPath !== $sourcePath && is_file($workingPath)) {
@@ -79,6 +85,7 @@ class OcrImagePreprocessor
           'preprocessed' => true,
           'preprocess_steps' => $steps,
           'preprocessed_path' => $tempPath,
+          'debug_artifacts' => $debugArtifacts,
         ],
       ];
     } catch (Throwable $e) {
@@ -189,6 +196,57 @@ class OcrImagePreprocessor
     $steps[] = 'resolution_normalize';
 
     return $resized;
+  }
+
+  /**
+   * @param  list<string>  $steps
+   */
+  private function toGrayscale(\GdImage $image, array &$steps): \GdImage
+  {
+    if (@imagefilter($image, IMG_FILTER_GRAYSCALE) === false) {
+      return $image;
+    }
+    $steps[] = 'grayscale';
+
+    return $image;
+  }
+
+  /**
+   * @param  list<string>  $steps
+   */
+  private function sharpen(\GdImage $image, array &$steps): \GdImage
+  {
+    $matrix = [
+      [-1, -1, -1],
+      [-1, 16, -1],
+      [-1, -1, -1],
+    ];
+    if (@imageconvolution($image, $matrix, 8, 0) === false) {
+      return $image;
+    }
+    $steps[] = 'sharpen';
+
+    return $image;
+  }
+
+  /**
+   * @param  list<string>  $steps
+   * @return list<string>
+   */
+  private function saveDebugArtifacts(\GdImage $image, int $documentId, array $steps): array
+  {
+    $dir = storage_path('app/ocr-debug/'.$documentId);
+    if (! is_dir($dir) && ! @mkdir($dir, 0755, true) && ! is_dir($dir)) {
+      return [];
+    }
+
+    $saved = [];
+    $final = $dir.'/preprocessed.jpg';
+    if (@imagejpeg($image, $final, 92)) {
+      $saved[] = $final;
+    }
+
+    return $saved;
   }
 
   /**

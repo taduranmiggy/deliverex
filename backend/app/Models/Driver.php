@@ -39,4 +39,15 @@ class Driver extends Model
     {
         return $this->belongsTo(DispatchAssignment::class, 'current_assignment_id');
     }
+
+    public function isLicenseEligible(): bool
+    {
+        return \App\Support\DriverLicenseValidator::isEligible($this);
+    }
+
+    /** @return array{eligible:bool,license_status:string,license_no:?string,license_expiry:?string,message:?string} */
+    public function licenseSummary(): array
+    {
+        return \App\Support\DriverLicenseValidator::summary($this);
+    }
 }

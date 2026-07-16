@@ -17,6 +17,9 @@ function ExportConfirmModal({
   infoNotice = null,
   confirmLabel = 'Download',
   confirming = false,
+  formatValue,
+  onFormatChange,
+  formatOptions = ['csv', 'xlsx', 'pdf'],
 }) {
   if (!open) return null
 
@@ -69,6 +72,32 @@ function ExportConfirmModal({
               )}
             </dd>
           </dl>
+          {formatValue && onFormatChange && (
+            <div className="dx-export-format-row" style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              {formatOptions.map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  className={formatValue === fmt ? 'active' : ''}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: formatValue === fmt ? '1px solid #2563eb' : '1px solid var(--stroke)',
+                    background: formatValue === fmt ? '#eff6ff' : '#fff',
+                    color: formatValue === fmt ? '#1d4ed8' : 'inherit',
+                    fontWeight: formatValue === fmt ? 700 : 500,
+                    cursor: 'pointer',
+                    font: 'inherit',
+                    fontSize: '0.8125rem',
+                    textTransform: 'uppercase',
+                  }}
+                  onClick={() => onFormatChange(fmt)}
+                >
+                  {fmt}
+                </button>
+              ))}
+            </div>
+          )}
           {infoNotice && (
             <p style={{ color: 'var(--muted)', fontSize: '0.75rem', margin: '14px 0 0', lineHeight: 1.5 }}>
               {infoNotice}

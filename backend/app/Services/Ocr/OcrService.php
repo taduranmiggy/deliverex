@@ -27,6 +27,9 @@ class OcrService
         private readonly GoogleDocumentAiService $googleDocumentAiService,
         private readonly OcrImagePreprocessor $imagePreprocessor,
         private readonly OcrConfidenceScorer $confidenceScorer,
+        private readonly TesseractMultipassEngine $tesseractMultipass,
+        private readonly OcrValidationEngine $validationEngine,
+        private readonly OcrDebugLogger $debugLogger,
     ) {
     }
 
@@ -139,12 +142,45 @@ class OcrService
             return $this->fail($result, $message, $debugContext);
         }
 
+        $preprocess = $this->imagePreprocessor->preprocess($diskPath, $document->id);
+        $ocrPath = $preprocess['path'];
+        $preprocessDiagnostics = is_array($preprocess['diagnostics'] ?? null) ? $preprocess['diagnostics'] : [];
+        $debugContext['preprocessed_path'] = (string) ($preprocessDiagnostics['preprocessed_path'] ?? $ocrPath);
+        $debugContext['preprocess_steps'] = $preprocessDiagnostics['preprocess_steps'] ?? [];
+        $debugContext['debug_artifacts'] = $preprocessDiagnostics['debug_artifacts'] ?? [];
+        $debugContext = array_merge($debugContext, $this->imageMeta($ocrPath));
+
         try {
-            $cmd = [$tesseract, $diskPath, 'stdout', '--oem', '3', '-l', 'eng', '--psm', '6'];
+            if (config('ocr.tesseract_multipass', true)) {
+                $multipass = $this->tesseractMultipass->run($ocrPath, $tesseract);
+                if ($multipass !== null) {
+                    $debugContext['tesseract_command'] = $multipass['command'];
+                    $debugContext['tesseract_oem'] = $multipass['oem'];
+                    $debugContext['tesseract_psm'] = $multipass['psm'];
+                    $debugContext['execution_time_ms'] = $multipass['execution_time_ms'];
+                    $debugContext['multipass_report'] = $multipass['multipass_report'];
+
+                    return $this->persistExtraction(
+                        $result,
+                        $document,
+                        $multipass['text'],
+                        $multipass['confidence'],
+                        'tesseract-multipass',
+                        ['multipass_report' => $multipass['multipass_report'], 'best_oem' => $multipass['oem'], 'best_psm' => $multipass['psm']],
+                        $debugContext,
+                        [],
+                        ['provider_ocr' => $multipass['confidence']]
+                    );
+                }
+            }
+
+            $cmd = [$tesseract, $ocrPath, 'stdout', '--oem', '3', '-l', 'eng', '--psm', '6'];
             $process = new Process($cmd);
             $process->setTimeout(120);
             $process->run();
             $debugContext['tesseract_command'] = implode(' ', $cmd);
+            $debugContext['tesseract_oem'] = 3;
+            $debugContext['tesseract_psm'] = 6;
 
             if (! $process->isSuccessful()) {
                 $err = trim($process->getErrorOutput() ?: $process->getOutput() ?: 'Tesseract failed.');
@@ -158,7 +194,7 @@ class OcrService
                 trim($process->getOutput()),
                 null,
                 'tesseract',
-                [],
+                $preprocessDiagnostics,
                 $debugContext,
                 [],
                 []
@@ -167,6 +203,10 @@ class OcrService
             Log::error('OCR processing exception', ['document_id' => $document->id, 'error' => $e->getMessage()]);
 
             return $this->fail($result, $e->getMessage(), $debugContext);
+        } finally {
+            if ($ocrPath !== $diskPath && is_file($ocrPath)) {
+                @unlink($ocrPath);
+            }
         }
     }
 
@@ -187,7 +227,7 @@ class OcrService
 
     private function processWithGoogleDocumentAi(OcrResult $result, DeliveryDocument $document, string $diskPath, array $debugContext): ?OcrResult
     {
-        $preprocess = $this->imagePreprocessor->preprocess($diskPath);
+        $preprocess = $this->imagePreprocessor->preprocess($diskPath, $document->id);
         $ocrPath = $preprocess['path'];
         $preprocessDiagnostics = is_array($preprocess['diagnostics'] ?? null) ? $preprocess['diagnostics'] : [];
 
@@ -278,7 +318,7 @@ class OcrService
                 ->attach('file', $handle, basename($diskPath))
                 ->withHeaders([
                     'X-OCR-PSM-Candidates' => implode(',', (array) config('ocr.remote_psm_candidates', [])),
-                    'X-OCR-OEM-Candidates' => '3',
+                    'X-OCR-OEM-Candidates' => implode(',', (array) config('ocr.tesseract_oem_candidates', ['3'])),
                     'X-OCR-Max-Variants' => (string) config('ocr.remote_max_variants', 4),
                     'X-OCR-Enable-Deskew' => config('ocr.remote_enable_deskew', true) ? 'true' : 'false',
                     'X-OCR-Enable-Morph' => config('ocr.remote_enable_morph', true) ? 'true' : 'false',
@@ -395,13 +435,19 @@ class OcrService
         $parserMeta = $parsed['meta'] ?? [];
         $parserMeta['confidence_model'] = $confidenceModel;
 
+        $validation = $this->validationEngine->validate($result, array_merge($structured, $parsed['auxiliary'] ?? []));
+
         $diagnostics = $this->buildDiagnostics(
             $diagnostics,
             $text,
             $confidence,
             $structured,
             $parsed['matches'],
-            $parserMeta
+            array_merge($parserMeta, [
+                'validation' => $validation,
+                'field_confidence' => $parsed['field_confidence'] ?? [],
+                'auxiliary_fields' => $parsed['auxiliary'] ?? [],
+            ])
         );
 
         $result->forceFill([
@@ -426,9 +472,10 @@ class OcrService
             'error_message'      => null,
         ])->save();
 
-        $this->writeDebugReport($result->fresh(), $debugContext, $text, $confidence, $parsed['matches'], $structured);
+        $fresh = $result->fresh();
+        $this->writeDebugReport($fresh, $debugContext, $text, $confidence, $parsed, $structured, $validation);
 
-        return $result->fresh();
+        return $fresh;
     }
 
     /**
@@ -587,7 +634,7 @@ class OcrService
             'height' => null,
             'volume' => null,
             'delivery_receipt_number' => null,
-        ], $message);
+        ], null, $message);
 
         return $result->fresh();
     }
@@ -655,7 +702,7 @@ class OcrService
         $dimensionCandidates = $this->extractDimensionCandidates($normalized);
         $dimensionCandidates = $this->injectEntityDimensionHints($dimensionCandidates, $hints);
         $dimensionPick = $this->pickBestDimensionCandidate($dimensionCandidates);
-        $best = $dimensionPick['candidate'];
+        $best = $this->fillMissingDimensionsFromCandidates($dimensionPick['candidate'], $dimensionCandidates);
         $bestScore = $dimensionPick['score'];
         $matchSource = $dimensionPick['source'];
 
@@ -673,6 +720,8 @@ class OcrService
         $drParsed = $this->pickBestReceiptCandidate($drCandidates);
         $reviewSuggestions = $this->buildReviewSuggestions($normalized, $dimensionCandidates, $drCandidates);
         $this->injectNeighborSuggestions($reviewSuggestions, $hints);
+        $auxiliary = $this->extractAuxiliaryFields($normalized);
+        $fieldConfidence = $this->buildFieldConfidence($best, $drParsed, $dimensionCandidates, $bestScore);
 
         return [
             'values' => [
@@ -682,6 +731,8 @@ class OcrService
                 'volume' => $volume,
                 'delivery_receipt_number' => $drParsed['value'],
             ],
+            'auxiliary' => $auxiliary,
+            'field_confidence' => $fieldConfidence,
             'matches' => [
                 'length_match' => $matchSource,
                 'width_match' => $matchSource,
@@ -692,7 +743,7 @@ class OcrService
                 'parser_score' => $bestScore >= 0 ? round($bestScore, 4) : null,
             ],
             'meta' => [
-                'parser_version' => 'adaptive-v1',
+                'parser_version' => 'adaptive-v2',
                 'parser_candidates' => $this->summarizeParserCandidates($dimensionCandidates),
                 'review_suggestions' => $reviewSuggestions,
                 'confidence_breakdown' => [
@@ -1572,15 +1623,184 @@ class OcrService
         ];
     }
 
-    private function newDebugContext(DeliveryDocument $document, string $diskPath): array
+    /**
+     * Fill missing L/W/H/V from other parser candidates (per-field best pick).
+     *
+     * @param  array{length:?float,width:?float,height:?float,volume:?float}  $best
+     * @param  list<array{source:string,stage:string,score:float,confidence:float,candidate:array{length:?float,width:?float,height:?float,volume:?float}}>  $candidates
+     * @return array{length:?float,width:?float,height:?float,volume:?float}
+     */
+    private function fillMissingDimensionsFromCandidates(array $best, array $candidates): array
+    {
+        foreach (['length', 'width', 'height', 'volume'] as $field) {
+            if (($best[$field] ?? null) !== null) {
+                continue;
+            }
+
+            $fieldBest = null;
+            $fieldScore = -1.0;
+
+            foreach ($candidates as $entry) {
+                $value = $entry['candidate'][$field] ?? null;
+                if ($value === null) {
+                    continue;
+                }
+
+                $score = $this->scoreIndividualDimensionField($field, (float) $value);
+                if ($score > $fieldScore) {
+                    $fieldScore = $score;
+                    $fieldBest = (float) $value;
+                }
+            }
+
+            if ($fieldBest !== null) {
+                $best[$field] = $fieldBest;
+            }
+        }
+
+        return $this->normalizeDimensionUnits($best);
+    }
+
+    private function scoreIndividualDimensionField(string $field, float $value): float
+    {
+        if ($value <= 0) {
+            return -1.0;
+        }
+
+        if ($field === 'volume') {
+            return ($value >= 0.01 && $value <= 500) ? 1.5 : -1.0;
+        }
+
+        $asMeters = $value > 50 ? $value / 100 : $value;
+        if ($asMeters < 0.05 || $asMeters > 35) {
+            return -1.0;
+        }
+
+        return 1.0 + min(0.5, $asMeters / 10);
+    }
+
+    /**
+     * @return array<string, ?string>
+     */
+    private function extractAuxiliaryFields(string $text): array
     {
         return [
+            'vehicle_plate' => $this->extractLabeledValue($text, [
+                'truck no', 'truck number', 'plate no', 'plate number', 'vehicle plate', 'plate #',
+            ]),
+            'driver_name' => $this->extractLabeledValue($text, [
+                'driver', 'driver name', 'operator', 'delivered by',
+            ]),
+            'customer' => $this->extractLabeledValue($text, [
+                'customer', 'client', 'sold to', 'bill to', 'deliver to',
+            ]),
+            'company' => $this->extractLabeledValue($text, [
+                'company', 'supplier', 'vendor', 'quarry', 'plant',
+            ]),
+            'destination' => $this->extractLabeledValue($text, [
+                'destination', 'delivery address', 'drop off', 'dropoff', 'site',
+            ]),
+            'material' => $this->extractLabeledValue($text, [
+                'material', 'product', 'description', 'item', 'aggregate',
+            ]),
+            'delivery_date' => $this->extractLabeledValue($text, [
+                'delivery date', 'date', 'invoice date', 'receipt date',
+            ]),
+            'delivery_time' => $this->extractLabeledValue($text, [
+                'time', 'delivery time',
+            ]),
+        ];
+    }
+
+    /**
+     * @param  list<string>  $labels
+     */
+    private function extractLabeledValue(string $text, array $labels): ?string
+    {
+        foreach ($labels as $label) {
+            $pattern = '/(?:^|\n)\s*'.preg_quote($label, '/').'\s*[:#.\-]?\s*([^\n]{2,80})/i';
+            if (preg_match($pattern, $text, $m)) {
+                $value = trim((string) ($m[1] ?? ''));
+                if ($value !== '') {
+                    return $value;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{length:?float,width:?float,height:?float,volume:?float}  $dims
+     * @param  array{value:?string,match:?string,confidence:?float}  $drParsed
+     * @param  list<array<string,mixed>>  $candidates
+     * @return array<string, float|null>
+     */
+    private function buildFieldConfidence(array $dims, array $drParsed, array $candidates, float $bestScore): array
+    {
+        $fieldConfidence = [];
+        foreach (['length', 'width', 'height', 'volume'] as $field) {
+            if (($dims[$field] ?? null) === null) {
+                $fieldConfidence[$field] = null;
+                continue;
+            }
+
+            $conf = $bestScore >= 0 ? min(0.99, max(0.35, $bestScore / 8.0)) : 0.5;
+            foreach ($candidates as $entry) {
+                if (($entry['candidate'][$field] ?? null) !== null) {
+                    $conf = max($conf, (float) ($entry['confidence'] ?? 0.5));
+                    break;
+                }
+            }
+            $fieldConfidence[$field] = round($conf, 4);
+        }
+
+        $fieldConfidence['delivery_receipt_number'] = $drParsed['confidence'] ?? null;
+
+        return $fieldConfidence;
+    }
+
+    /** @return array<string, mixed> */
+    private function imageMeta(string $path): array
+    {
+        $meta = [
+            'file_size_bytes' => @filesize($path) ?: null,
+            'image_width' => null,
+            'image_height' => null,
+            'image_dpi' => null,
+            'mime_type' => null,
+        ];
+
+        if (function_exists('getimagesize')) {
+            $info = @getimagesize($path);
+            if (is_array($info)) {
+                $meta['image_width'] = $info[0] ?? null;
+                $meta['image_height'] = $info[1] ?? null;
+                $meta['mime_type'] = $info['mime'] ?? null;
+                if (isset($info[0], $info[1]) && $info[0] > 0) {
+                    $meta['image_dpi'] = round(min($info[0], $info[1]) / 8.5);
+                }
+            }
+        }
+
+        return $meta;
+    }
+
+    private function newDebugContext(DeliveryDocument $document, string $diskPath): array
+    {
+        return array_merge([
             'document_id' => $document->id,
             'filename' => basename($diskPath),
             'disk_path' => $diskPath,
             'preprocessed_path' => null,
+            'preprocess_steps' => [],
+            'debug_artifacts' => [],
             'tesseract_command' => null,
-        ];
+            'tesseract_oem' => null,
+            'tesseract_psm' => null,
+            'execution_time_ms' => null,
+            'multipass_report' => [],
+        ], $this->imageMeta($diskPath));
     }
 
     private function writeDebugReport(
@@ -1588,63 +1808,70 @@ class OcrService
         array $debugContext,
         string $rawText,
         ?float $confidence,
-        array $regexMatches,
+        array $parsed,
         array $dataset,
+        ?array $validation = null,
         ?string $errorMessage = null
     ): void {
-        if (! config('ocr.debug_mode', true)) {
-            return;
+        $hasStructured = collect($dataset)->filter(static fn ($v) => $v !== null && $v !== '')->isNotEmpty();
+        $textExtracted = trim($rawText) !== '';
+        $parserStatus = $result->ocr_diagnostics['parser_status'] ?? 'unknown';
+
+        $failureStage = 'none';
+        if ($errorMessage || $result->processing_status === self::STATUS_FAILED) {
+            $failureStage = 'ocr_execution';
+        } elseif (! $textExtracted) {
+            $failureStage = 'raw_text_extraction';
+        } elseif ($parserStatus === 'parser_miss') {
+            $failureStage = 'parser';
+        } elseif (! $hasStructured) {
+            $failureStage = 'dataset_mapping';
         }
 
-        $statusReport = [
+        $this->debugLogger->log([
+            'timestamp' => now()->toDateTimeString(),
+            'document_id' => $debugContext['document_id'] ?? $result->document_id,
+            'ocr_result_id' => $result->id,
+            'filename' => $debugContext['filename'] ?? 'unknown',
+            'file_size_bytes' => $debugContext['file_size_bytes'] ?? null,
+            'image_width' => $debugContext['image_width'] ?? null,
+            'image_height' => $debugContext['image_height'] ?? null,
+            'image_dpi' => $debugContext['image_dpi'] ?? null,
+            'mime_type' => $debugContext['mime_type'] ?? null,
+            'preprocess_steps' => $debugContext['preprocess_steps'] ?? [],
+            'preprocessed_path' => $debugContext['preprocessed_path'] ?? null,
+            'debug_artifacts' => $debugContext['debug_artifacts'] ?? [],
+            'engine' => $result->engine,
+            'tesseract_oem' => $debugContext['tesseract_oem'] ?? null,
+            'tesseract_psm' => $debugContext['tesseract_psm'] ?? null,
+            'tesseract_command' => $debugContext['tesseract_command'] ?? null,
+            'execution_time_ms' => $debugContext['execution_time_ms'] ?? null,
+            'ocr_confidence' => $confidence !== null ? number_format($confidence * 100, 2).'%' : 'n/a',
+            'multipass_report' => $debugContext['multipass_report'] ?? [],
+            'text_length' => strlen(trim($rawText)),
+            'raw_ocr_output' => $textExtracted ? $rawText : '[empty]',
+            'parser_version' => $parsed['meta']['parser_version'] ?? 'adaptive-v2',
+            'parser_status' => $parserStatus,
+            'regex_matches' => $parsed['matches'] ?? [],
+            'parsed_fields' => array_merge($dataset, $parsed['auxiliary'] ?? []),
+            'field_confidence' => $parsed['field_confidence'] ?? [],
+            'review_suggestions' => $parsed['meta']['review_suggestions'] ?? [],
+            'mapped_dataset' => $dataset,
+            'database_values' => [
+                'extracted_length' => $result->extracted_length,
+                'extracted_width' => $result->extracted_width,
+                'extracted_height' => $result->extracted_height,
+                'extracted_volume' => $result->extracted_volume,
+                'delivery_receipt_number' => $result->delivery_receipt_number,
+            ],
+            'validation_results' => $validation ?? ($result->ocr_diagnostics['validation'] ?? []),
             'ocr_executed' => $result->processing_status !== self::STATUS_PENDING,
-            'text_extracted' => trim($rawText) !== '',
+            'text_extracted' => $textExtracted,
             'parser_executed' => true,
-            'dataset_mapping_ok' => collect($dataset)->filter(static fn ($v) => $v !== null && $v !== '')->isNotEmpty(),
-        ];
-
-        $content = implode(PHP_EOL, [
-            '====================',
-            'OCR DEBUG REPORT',
-            '====================',
-            'timestamp: '.now()->toDateTimeString(),
-            'document_id: '.($debugContext['document_id'] ?? $result->document_id),
-            '1. Uploaded file: '.($debugContext['filename'] ?? 'unknown'),
-            '2. Preprocessed image path: '.($debugContext['preprocessed_path'] ?: 'n/a'),
-            '3. Tesseract command executed: '.($debugContext['tesseract_command'] ?: 'n/a'),
-            '4. Raw OCR output:',
-            trim($rawText) !== '' ? $rawText : '[empty]',
-            '5. OCR confidence: '.($confidence !== null ? number_format($confidence * 100, 2).'%' : 'n/a'),
-            '6. Parsed values:',
-            '   Length: '.($dataset['length'] ?? '—'),
-            '   Width: '.($dataset['width'] ?? '—'),
-            '   Height: '.($dataset['height'] ?? '—'),
-            '   Volume: '.($dataset['volume'] ?? '—'),
-            '   DR Number: '.($dataset['delivery_receipt_number'] ?? '—'),
-            '7. Regex matches:',
-            '   length_match: '.($regexMatches['length_match'] ?? '—'),
-            '   width_match: '.($regexMatches['width_match'] ?? '—'),
-            '   height_match: '.($regexMatches['height_match'] ?? '—'),
-            '   volume_match: '.($regexMatches['volume_match'] ?? '—'),
-            '   dr_match: '.($regexMatches['dr_match'] ?? '—'),
-            '8. Final dataset:',
-            json_encode([
-                'length' => $dataset['length'] ?? null,
-                'width' => $dataset['width'] ?? null,
-                'height' => $dataset['height'] ?? null,
-                'volume' => $dataset['volume'] ?? null,
-                'dr_no' => $dataset['delivery_receipt_number'] ?? null,
-            ], JSON_UNESCAPED_SLASHES),
-            'OCR STATUS:',
-            ($statusReport['ocr_executed'] ? '✓' : '✗').' OCR executed',
-            ($statusReport['text_extracted'] ? '✓' : '✗').' Text extracted',
-            ($statusReport['parser_executed'] ? '✓' : '✗').' Parser executed',
-            ($statusReport['dataset_mapping_ok'] ? '✓' : '✗').' Dataset mapping',
-            'processing_status: '.$result->processing_status,
-            'error_message: '.($errorMessage ?: $result->error_message ?: 'none'),
-            '',
+            'dataset_mapping_ok' => $hasStructured,
+            'processing_status' => $result->processing_status,
+            'failure_stage' => $failureStage,
+            'error_message' => $errorMessage ?: $result->error_message,
         ]);
-
-        @file_put_contents(storage_path('logs/ocr-debug.log'), $content.PHP_EOL, FILE_APPEND);
     }
 }

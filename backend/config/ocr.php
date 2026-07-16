@@ -58,6 +58,20 @@ return [
 
     'diagnostics_enabled' => filter_var(env('OCR_DIAGNOSTICS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
     'debug_mode' => filter_var(env('OCR_DEBUG_MODE', true), FILTER_VALIDATE_BOOLEAN),
+    'debug_save_artifacts' => filter_var(env('OCR_DEBUG_SAVE_ARTIFACTS', true), FILTER_VALIDATE_BOOLEAN),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Local Tesseract multipass
+    |--------------------------------------------------------------------------
+    */
+    'tesseract_multipass' => filter_var(env('OCR_TESSERACT_MULTIPASS', true), FILTER_VALIDATE_BOOLEAN),
+    'tesseract_oem_candidates' => array_values(array_filter(array_map('trim', explode(',', (string) env('OCR_TESSERACT_OEM_CANDIDATES', '3,1,0'))))),
+    'tesseract_psm_candidates' => array_values(array_filter(array_map('trim', explode(',', (string) env('OCR_TESSERACT_PSM_CANDIDATES', '6,4,3,11,12'))))),
+    'tesseract_max_passes' => (int) env('OCR_TESSERACT_MAX_PASSES', 15),
+    'tesseract_early_exit_score' => (float) env('OCR_TESSERACT_EARLY_EXIT_SCORE', 0.72),
+    'tesseract_timeout' => (int) env('OCR_TESSERACT_TIMEOUT', 120),
+    'tesseract_lang' => env('OCR_TESSERACT_LANG', 'eng'),
 
     /*
     |--------------------------------------------------------------------------

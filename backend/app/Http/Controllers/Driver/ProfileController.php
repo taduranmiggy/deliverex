@@ -4,12 +4,17 @@ namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
 use App\Models\DispatchAssignment;
+use App\Services\Driver\DriverAvailabilityService;
 use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
 use Illuminate\Http\Request;
 
 class ProfileController extends Controller
 {
+    public function __construct(
+        private DriverAvailabilityService $driverAvailability,
+    ) {
+    }
     /**
      * Authenticated driver may only view their own profile (derived from auth user).
      */
@@ -17,6 +22,8 @@ class ProfileController extends Controller
     {
         $user   = $request->user();
         $driver = DriverAccount::require($user);
+        $this->driverAvailability->sync($driver, 'driver_profile_read', $user->id);
+        $driver->refresh();
 
         $driver->load([
             'currentAssignment.jobOrder',

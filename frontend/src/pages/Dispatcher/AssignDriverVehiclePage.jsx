@@ -12,7 +12,7 @@ import { PaginationBar } from '../../components/ui'
 import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-react'
 
 // ─── Priority helpers ──────────────────────────────────────────────────────────
-const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 }
+const LICENSE_WARNING = "This driver cannot be assigned because the driver's license information is incomplete or expired."
 
 const PRIORITY_BADGE = {
   urgent: { label: 'URGENT', color: '#7f1d1d', bg: '#fee2e2', border: '#fca5a5' },
@@ -330,6 +330,11 @@ function AssignDriverVehiclePage() {
       return
     }
 
+    if (driver.eligible === false) {
+      setError(driver.message || LICENSE_WARNING)
+      return
+    }
+
     const candidate = {
       driver_id: driver.id,
       driver_name: driver.name,
@@ -552,8 +557,10 @@ function AssignDriverVehiclePage() {
                 >
                   <option value="">Select available driver…</option>
                   {overrideOptions.drivers.map((d) => (
-                    <option key={d.id} value={d.id} disabled={!d.has_login_account}>
-                      {d.name}{!d.has_login_account ? ' (no account)' : ''}
+                    <option key={d.id} value={d.id} disabled={!d.has_login_account || d.eligible === false}>
+                      {d.name}
+                      {!d.has_login_account ? ' (no account)' : ''}
+                      {d.eligible === false ? ' (license ineligible)' : ''}
                     </option>
                   ))}
                 </select>

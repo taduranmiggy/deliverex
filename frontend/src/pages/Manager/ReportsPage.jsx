@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchAssignmentAuditTrails } from '../../api/assignmentAudit'
-import { fetchAnalytics, fetchReports } from '../../api/manager'
+import { exportManagerReport, fetchAnalytics, fetchReports } from '../../api/manager'
 import ExportConfirmModal from '../../components/ExportConfirmModal'
 import { DataTable, EmptyState, PageHeader, StatusBadge } from '../../components/ui'
-import { ClipboardList, Download, FileText, Users } from 'lucide-react'
+import { downloadBlob, printReportPanel } from '../../utils/export/download'
+import { ClipboardList, Download, FileText, Printer, Users } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayName } from '../../utils/jobOrderHelpers'
 import { formatEventAt } from '../../utils/deliveryTimestamps'
@@ -15,27 +16,10 @@ const STATUS_LABELS = {
   cancelled: 'Cancelled',
 }
 
-/** Derives a "earliest – latest" range from a date field across rows (read-only). */
-function dateRangeFrom(items, key) {
-  const dates = (items ?? [])
-    .map((i) => i?.[key])
-    .filter(Boolean)
-    .map((d) => new Date(d))
-    .filter((d) => !Number.isNaN(d.getTime()))
-  if (dates.length === 0) return null
-  const min = new Date(Math.min(...dates))
-  const max = new Date(Math.max(...dates))
-  return `${min.toLocaleDateString()} – ${max.toLocaleDateString()}`
-}
-
-function escapeCsv(v) {
-  const s = String(v ?? '')
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
-function downloadCsv(filename, headers, rows) {
-  const csv = `\uFEFF${[headers.join(','), ...rows.map((r) => r.map(escapeCsv).join(','))].join('\r\n')}`
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: filename })
-  a.click()
+const EXPORT_TYPES = {
+  deliveries: 'deliveries',
+  driver_perf: 'driver_performance',
+  assignment_audit: 'assignment_audit',
 }
 
 const TABS = [
@@ -45,145 +29,195 @@ const TABS = [
 ]
 
 function ReportsPage() {
-  const [tab, setTab]         = useState('deliveries')
+  const [tab, setTab] = useState('deliveries')
   const [deliveries, setDeliveries] = useState([])
-  const [analytics, setAnalytics]   = useState(null)
+  const [analytics, setAnalytics] = useState(null)
   const [auditTrails, setAuditTrails] = useState([])
   const [auditMeta, setAuditMeta] = useState({ last_page: 1, total: 0 })
   const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [page, setPage]       = useState(1)
-  const [meta, setMeta]       = useState({ last_page: 1, total: 0 })
+  const [exporting, setExporting] = useState(false)
+  const [error, setError] = useState('')
+  const [page, setPage] = useState(1)
+  const [meta, setMeta] = useState({ last_page: 1, total: 0 })
   const [statusFilter, setStatusFilter] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [dateField, setDateField] = useState('assigned_at')
+  const [sortDir, setSortDir] = useState('desc')
+  const [exportFormat, setExportFormat] = useState('csv')
   const [showExportSummary, setShowExportSummary] = useState(false)
 
-  const loadDeliveries = useCallback(async (p = 1, s = '') => {
-    setLoading(true); setError('')
+  const deliveryFilters = useMemo(() => ({
+    page,
+    per_page: 6,
+    status: statusFilter || undefined,
+    from: fromDate || undefined,
+    to: toDate || undefined,
+    date_field: dateField,
+    sort: dateField,
+    sort_dir: sortDir,
+  }), [page, statusFilter, fromDate, toDate, dateField, sortDir])
+
+  const loadDeliveries = useCallback(async () => {
+    setLoading(true)
+    setError('')
     try {
-      const res = await fetchReports(p, s)
+      const res = await fetchReports(deliveryFilters)
       setDeliveries(res.data || [])
       setMeta({ last_page: res.last_page ?? 1, total: res.total ?? 0 })
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
-  }, [])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [deliveryFilters])
 
   const loadAnalytics = useCallback(async () => {
     setLoading(true)
     try {
-      setAnalytics(await fetchAnalytics({ drivers_page: 1, drivers_per_page: 6 }))
-    } catch { /* silent */ }
-    finally { setLoading(false) }
-  }, [])
+      setAnalytics(await fetchAnalytics({
+        drivers_page: 1,
+        drivers_per_page: 6,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+      }))
+    } catch {
+      /* silent */
+    } finally {
+      setLoading(false)
+    }
+  }, [fromDate, toDate])
 
   const loadAuditTrails = useCallback(async (p = 1) => {
-    setLoading(true); setError('')
+    setLoading(true)
+    setError('')
     try {
-      const res = await fetchAssignmentAuditTrails({ page: p, per_page: 6 })
+      const res = await fetchAssignmentAuditTrails({
+        page: p,
+        per_page: 6,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        sort_dir: sortDir,
+      })
       setAuditTrails(res.data || [])
       setAuditMeta({ last_page: res.last_page ?? 1, total: res.total ?? 0 })
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
-  }, [])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [fromDate, toDate, sortDir])
 
   useEffect(() => {
-    if (tab === 'deliveries') loadDeliveries(page, statusFilter)
+    if (tab === 'deliveries') loadDeliveries()
     else if (tab === 'driver_perf') loadAnalytics()
     else loadAuditTrails(page)
-  }, [tab, page]) // eslint-disable-line
+  }, [tab, page, loadDeliveries, loadAnalytics, loadAuditTrails])
 
-  // Pre-export summary reflects exactly what the CSV download will contain
-  // (the export serializes the currently-loaded rows).
+  const filterSummary = useMemo(() => {
+    const parts = []
+    if (statusFilter) parts.push(STATUS_LABELS[statusFilter] ?? statusFilter)
+    if (fromDate) parts.push(`From ${fromDate}`)
+    if (toDate) parts.push(`To ${toDate}`)
+    if (dateField && tab === 'deliveries') parts.push(`Date: ${dateField.replace('_', ' ')}`)
+    return parts.length ? parts.join(' · ') : 'All records'
+  }, [statusFilter, fromDate, toDate, dateField, tab])
+
   const exportSummary = useMemo(() => {
     if (tab === 'deliveries') {
       return {
         report: 'Deliveries',
-        filters: statusFilter ? STATUS_LABELS[statusFilter] ?? statusFilter : 'All statuses',
-        rows: deliveries.length,
+        filters: filterSummary,
+        rows: meta.total,
         total: meta.total,
-        dateRange: dateRangeFrom(deliveries, 'assigned_event_at') ?? dateRangeFrom(deliveries, 'assigned_at') ?? 'All records',
+        dateRange: fromDate && toDate ? `${fromDate} – ${toDate}` : fromDate ? `From ${fromDate}` : toDate ? `Until ${toDate}` : 'All records',
       }
     }
     if (tab === 'driver_perf') {
       const rows = analytics?.drivers ?? []
       return {
         report: 'Driver Performance',
-        filters: 'None',
-        rows: rows.length,
+        filters: filterSummary,
+        rows: analytics?.drivers_pagination?.total ?? rows.length,
         total: analytics?.drivers_pagination?.total ?? rows.length,
-        dateRange: analytics?.driver_performance?.period
-          ? `${analytics.driver_performance.period.from} – ${analytics.driver_performance.period.to}`
-          : 'All records',
+        dateRange: analytics?.filters?.from && analytics?.filters?.to
+          ? `${analytics.filters.from} – ${analytics.filters.to}`
+          : filterSummary,
       }
     }
     return {
       report: 'Assignment Audit',
-      filters: 'None',
-      rows: auditTrails.length,
+      filters: filterSummary,
+      rows: auditMeta.total,
       total: auditMeta.total,
-      dateRange: dateRangeFrom(auditTrails, 'created_at') ?? 'All records',
+      dateRange: fromDate && toDate ? `${fromDate} – ${toDate}` : 'Last 90 days (default)',
     }
-  }, [tab, statusFilter, deliveries, analytics, auditTrails, meta.total, auditMeta.total])
+  }, [tab, filterSummary, meta.total, analytics, auditMeta.total, fromDate, toDate])
 
-  const handleConfirmExport = () => {
-    handleExport()
-    setShowExportSummary(false)
+  const buildExportFilters = () => {
+    if (tab === 'deliveries') {
+      return {
+        status: statusFilter || undefined,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        date_field: dateField,
+        sort: dateField,
+        sort_dir: sortDir,
+      }
+    }
+    if (tab === 'driver_perf') {
+      return {
+        from: fromDate || analytics?.filters?.from,
+        to: toDate || analytics?.filters?.to,
+        sort: 'reliability_score',
+        sort_dir: sortDir,
+      }
+    }
+    return {
+      from: fromDate || undefined,
+      to: toDate || undefined,
+      sort_dir: sortDir,
+    }
   }
 
-  const handleExport = () => {
-    if (tab === 'deliveries') {
-      downloadCsv(`deliveries-${new Date().toISOString().slice(0, 10)}.csv`,
-        ['Assignment', 'Client', 'Driver', 'Vehicle', 'Status', 'Assigned', 'Completed'],
-        deliveries.map((d) => [
-          d.id, buildDisplayName(d.job_order) || '—', d.driver?.user?.name ?? '—', d.vehicle?.plate_no ?? '—',
-          d.status,
-          formatEventAt({ assigned_event_at: d.assigned_event_at, assigned_at: d.assigned_at }) ?? '—',
-          formatEventAt({ completed_event_at: d.completed_event_at, completed_at: d.completed_at }) ?? '—',
-        ])
+  const handleConfirmExport = async () => {
+    setExporting(true)
+    try {
+      const { blob, filename } = await exportManagerReport(
+        EXPORT_TYPES[tab],
+        exportFormat,
+        buildExportFilters(),
       )
-    } else if (tab === 'driver_perf') {
-      const rows = analytics?.drivers ?? []
-      downloadCsv(`driver-performance-${new Date().toISOString().slice(0, 10)}.csv`,
-        ['Driver', 'Score', 'Total Jobs', 'Completed', 'Completion %', 'On-Time Rate', 'Delay Rate', 'OCR Accuracy', 'Availability'],
-        rows.map((d) => [
-          d.name,
-          d.reliability_score ?? '—',
-          d.total,
-          d.completed,
-          d.completion_pct != null ? `${d.completion_pct}%` : '—',
-          d.on_time_pct != null ? `${d.on_time_pct}%` : '—',
-          d.delay_rate_pct != null ? `${d.delay_rate_pct}%` : '—',
-          d.ocr_accuracy_pct != null ? `${d.ocr_accuracy_pct}%` : '—',
-          d.availability,
-        ])
-      )
-    } else {
-      downloadCsv(`assignment-audit-${new Date().toISOString().slice(0, 10)}.csv`,
-        ['When', 'Dispatcher', 'Job', 'Best-Fit Driver', 'Best-Fit Vehicle', 'Assigned Driver', 'Assigned Vehicle', 'Override', 'Reason'],
-        auditTrails.map((t) => [
-          t.created_at ? new Date(t.created_at).toLocaleString() : '—',
-          t.dispatcher_name ?? '—',
-          t.job_order_id ? formatJobPublicId(t.job_order_id) : '—',
-          t.recommended_driver_name ?? '—',
-          t.recommended_vehicle_plate ?? '—',
-          t.assigned_driver_name ?? '—',
-          t.assigned_vehicle_plate ?? '—',
-          t.is_override ? 'Yes' : 'No',
-          t.override_reason ?? (t.is_override ? '—' : 'Matched Best-Fit'),
-        ])
-      )
+      downloadBlob(blob, filename)
+      setShowExportSummary(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setExporting(false)
     }
+  }
+
+  const applyFilters = () => {
+    setPage(1)
+    if (tab === 'deliveries') loadDeliveries()
+    else if (tab === 'driver_perf') loadAnalytics()
+    else loadAuditTrails(1)
   }
 
   return (
     <>
       <PageHeader title="Reports" subtitle="Generate and export operational reports">
-        <button type="button" className="btn-dx-primary" onClick={() => setShowExportSummary(true)} disabled={loading || exportSummary.rows === 0}>
-          <Download size={15} /> Export CSV
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" className="btn-dx-secondary" onClick={() => printReportPanel()} disabled={loading}>
+            <Printer size={15} /> Print
+          </button>
+          <button type="button" className="btn-dx-primary" onClick={() => setShowExportSummary(true)} disabled={loading || exportSummary.total === 0}>
+            <Download size={15} /> Export
+          </button>
+        </div>
       </PageHeader>
       {error && <p className="notice error">{error}</p>}
 
-      {/* Tab selector */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 20 }}>
         {TABS.map(({ key, label, Icon, desc }) => (
           <button key={key} type="button"
@@ -196,23 +230,54 @@ function ReportsPage() {
         ))}
       </div>
 
-      <div className="dx-panel">
-        {tab === 'deliveries' && (
-          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <div className="dx-panel dx-report-print-area">
+        <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          {tab === 'deliveries' && (
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600, fontSize: '0.875rem' }}>
-              Filter:
+              Status
               <select value={statusFilter} style={{ padding: '9px 12px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }}
-                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); loadDeliveries(1, e.target.value) }}>
-                <option value="">All statuses</option>
+                onChange={(e) => setStatusFilter(e.target.value)}>
+                <option value="">All</option>
                 <option value="completed">Completed</option>
                 <option value="in_progress">In Progress</option>
                 <option value="assigned">Assigned</option>
                 <option value="cancelled">Cancelled</option>
               </select>
             </label>
-            <span style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>{meta.total} records</span>
-          </div>
-        )}
+          )}
+          {tab === 'deliveries' && (
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600, fontSize: '0.875rem' }}>
+              Date field
+              <select value={dateField} style={{ padding: '9px 12px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }}
+                onChange={(e) => setDateField(e.target.value)}>
+                <option value="assigned_at">Assigned</option>
+                <option value="started_at">Started</option>
+                <option value="completed_at">Completed</option>
+                <option value="created_at">Created</option>
+              </select>
+            </label>
+          )}
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600, fontSize: '0.875rem' }}>
+            From
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} style={{ padding: '8px 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit' }} />
+          </label>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600, fontSize: '0.875rem' }}>
+            To
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} style={{ padding: '8px 10px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit' }} />
+          </label>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600, fontSize: '0.875rem' }}>
+            Sort
+            <select value={sortDir} style={{ padding: '9px 12px', border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem' }}
+              onChange={(e) => setSortDir(e.target.value)}>
+              <option value="desc">Newest first</option>
+              <option value="asc">Oldest first</option>
+            </select>
+          </label>
+          <button type="button" className="btn-dx-secondary" onClick={applyFilters}>Apply</button>
+          <span style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
+            {tab === 'deliveries' ? meta.total : tab === 'assignment_audit' ? auditMeta.total : (analytics?.drivers_pagination?.total ?? 0)} records
+          </span>
+        </div>
 
         {tab === 'deliveries' ? (
           <>
@@ -244,12 +309,13 @@ function ReportsPage() {
             )}
           </>
         ) : tab === 'driver_perf' ? (
-          <DataTable headers={['Driver', 'Total Jobs', 'Completed', 'On-Time Rate', 'Availability']} loading={loading}
+          <DataTable headers={['Driver', 'Score', 'Total Jobs', 'Completed', 'On-Time Rate', 'Availability']} loading={loading}
             empty={<EmptyState icon={Users} title="No driver data" />}
           >
             {(analytics?.drivers ?? []).map((d) => (
               <tr key={d.id}>
                 <td style={{ fontWeight: 600 }}>{d.name}</td>
+                <td>{d.reliability_score ?? '—'}</td>
                 <td>{d.total}</td>
                 <td>{d.completed}</td>
                 <td>
@@ -263,7 +329,6 @@ function ReportsPage() {
           </DataTable>
         ) : (
           <>
-            <p style={{ color: 'var(--muted)', fontSize: '0.8125rem', marginBottom: 16 }}>{auditMeta.total} assignment decisions recorded</p>
             <DataTable
               headers={['When', 'Dispatcher', 'Job', 'Best-Fit', 'Assigned', 'Override Reason']}
               loading={loading}
@@ -313,7 +378,11 @@ function ReportsPage() {
         filters={exportSummary.filters}
         rows={exportSummary.rows}
         total={exportSummary.total}
-        confirmLabel="Download CSV"
+        confirming={exporting}
+        formatValue={exportFormat}
+        onFormatChange={setExportFormat}
+        infoNotice="Server export includes all matching records (up to 10,000 rows) with Deliverex report branding."
+        confirmLabel={`Download ${exportFormat.toUpperCase()}`}
       />
     </>
   )

@@ -1,6 +1,6 @@
 export function vehicleFleetBadge(vehicle) {
   const s = String(vehicle?.status ?? '').toLowerCase()
-  if (s === 'assigned' || s === 'in_use') {
+  if (s === 'assigned' || s === 'in_use' || s === 'in_operation') {
     return { label: 'In Use', className: 'badge-dx badge-dx--vehicle-inuse' }
   }
   if (s === 'maintenance') {

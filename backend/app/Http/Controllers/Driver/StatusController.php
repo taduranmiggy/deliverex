@@ -7,10 +7,11 @@ use App\Models\DeliveryCompletionProof;
 use App\Models\DeliveryStatusHistory;
 use App\Models\DeliveryStatusLog;
 use App\Models\DispatchAssignment;
-use App\Models\Driver;
-use App\Models\TrackingLog;
-use App\Models\Vehicle;
+use App\Models\SyncConflict;
 use App\Services\Delivery\ArrivalVerificationService;
+use App\Services\Driver\DriverAvailabilityService;
+use App\Services\Fleet\AssignmentResourceSyncService;
+use App\Services\Gps\TrackingService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Support\ActionTimestamp;
 use App\Support\AuditLogger;
@@ -26,6 +27,8 @@ class StatusController extends Controller
     public function __construct(
         private NotificationDispatcher $notificationDispatcher,
         private ArrivalVerificationService $arrivalVerification,
+        private AssignmentResourceSyncService $resourceSync,
+        private TrackingService $trackingService,
     ) {
     }
 
@@ -37,8 +40,9 @@ class StatusController extends Controller
             'notes'             => 'nullable|string',
             'latitude'          => 'nullable|numeric',
             'longitude'         => 'nullable|numeric',
-            'action_timestamp'  => 'nullable|date',
-            'action_taken_at'   => 'nullable|date',
+            'action_timestamp'  => 'nullable|string',
+            'action_taken_at'   => 'nullable|string',
+            'expected_current_status' => 'nullable|string|max:80',
         ]);
 
         $timestampMeta = ActionTimestamp::resolveFromRequestWithMeta($request);
@@ -54,6 +58,14 @@ class StatusController extends Controller
         }
 
         $currentStatus = DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
+        $expectedCurrent = isset($data['expected_current_status'])
+            ? DeliveryStatus::canonicalize($data['expected_current_status'])
+            : null;
+
+        if ($expectedCurrent && $expectedCurrent !== $currentStatus) {
+            return $this->conflictResponse($assignment, $currentStatus, $data, $request);
+        }
+
         $status = $this->normalizeStatus($data['status'], $currentStatus);
         if (! $status) {
             return response()->json(['message' => 'Invalid status stage'], 422);
@@ -61,10 +73,16 @@ class StatusController extends Controller
 
         // Prevent backwards transitions
         if (! $this->isValidTransition($currentStatus, $status)) {
+            if ($syncedAt !== null || $expectedCurrent) {
+                return $this->conflictResponse($assignment, $currentStatus, $data, $request, $status);
+            }
+
             return response()->json([
                 'message' => "Cannot transition from '{$currentStatus}' to '{$status}'.",
             ], 422);
         }
+
+        $previousStatus = $currentStatus;
 
         $latitude  = $data['latitude'] ?? null;
         $longitude = $data['longitude'] ?? null;
@@ -80,7 +98,8 @@ class StatusController extends Controller
         }
 
         // Arrival Verification: require GPS within radius of drop-off destination.
-        $isArrivalVerify = $status === DeliveryStatus::ARRIVED && $currentStatus === DeliveryStatus::EN_ROUTE_TO_DESTINATION;
+        $isArrivalVerify = $status === DeliveryStatus::ARRIVED_AT_DESTINATION
+            && $currentStatus === DeliveryStatus::EN_ROUTE_TO_DESTINATION;
         $arrivalVerified = null;
 
         if ($isArrivalVerify) {
@@ -109,14 +128,15 @@ class StatusController extends Controller
         }
 
         // Completion proof required before marking delivery as completed.
-        $isComplete = $status === DeliveryStatus::COMPLETED && $currentStatus === DeliveryStatus::ARRIVED;
+        $isComplete = $status === DeliveryStatus::COMPLETED
+            && $currentStatus === DeliveryStatus::ARRIVED_AT_DESTINATION;
         if ($isComplete && ! DeliveryCompletionProof::where('assignment_id', $assignment->id)->exists()) {
             return response()->json([
                 'message' => 'Delivery completion proof is required. Upload a receipt photo or OCR document before completing.',
             ], 422);
         }
 
-        DB::transaction(function () use ($assignment, $status, $data, $latitude, $longitude, $arrivalVerified, $request, $actionAt, $syncedAt) {
+        DB::transaction(function () use ($assignment, $status, $data, $latitude, $longitude, $arrivalVerified, $request, $actionAt, $syncedAt, $previousStatus) {
             DeliveryStatusLog::create([
                 'assignment_id'    => $assignment->id,
                 'status'           => $status,
@@ -131,6 +151,7 @@ class StatusController extends Controller
             $this->logStatusHistory(
                 assignment: $assignment,
                 status: $status,
+                previousStatus: $previousStatus,
                 updatedBy: $request->user()?->id,
                 latitude: $latitude,
                 longitude: $longitude,
@@ -138,35 +159,71 @@ class StatusController extends Controller
                 actionAt: $actionAt,
             );
 
-            $assignment->update(['status' => $status]);
+            $assignmentUpdates = ['status' => $status];
+
+            if ($status === DeliveryStatus::EN_ROUTE_TO_PICKUP) {
+                $assignmentUpdates['started_at'] = $actionAt;
+            }
+
+            if ($status === DeliveryStatus::COMPLETED) {
+                $assignmentUpdates['completed_at'] = $actionAt;
+            }
+
+            $assignment->update($assignmentUpdates);
+
+            $this->resourceSync->syncForAssignment(
+                $assignment,
+                'driver_status_update:'.$status,
+                $request->user()?->id,
+            );
         });
 
         $assignment->refresh();
         $this->notificationDispatcher->statusUpdated($assignment, $status);
 
+        AuditLogger::recordChanges(
+            $request->user(),
+            'delivery.status_changed',
+            DispatchAssignment::class,
+            $assignment->id,
+            ['status' => ['old' => $previousStatus, 'new' => $status]],
+            [
+                'job_order_id' => $assignment->job_order_id,
+                'performed_offline' => $syncedAt !== null,
+            ],
+            $request,
+        );
+
+        if ($status === DeliveryStatus::EN_ROUTE_TO_PICKUP && $previousStatus === DeliveryStatus::ASSIGNED) {
+            AuditLogger::record($request->user(), 'gps.started', DispatchAssignment::class, $assignment->id, [
+                'job_order_id' => $assignment->job_order_id,
+            ], $request);
+        }
+
+        if (in_array($status, [DeliveryStatus::COMPLETED, DeliveryStatus::CANCELLED], true)) {
+            AuditLogger::record($request->user(), 'gps.stopped', DispatchAssignment::class, $assignment->id, [
+                'job_order_id' => $assignment->job_order_id,
+                'reason' => $status,
+            ], $request);
+        }
+
         if ($latitude !== null && $longitude !== null) {
-            TrackingLog::create([
-                'assignment_id' => $assignment->id,
-                'latitude'      => $latitude,
-                'longitude'     => $longitude,
-                'captured_at'   => $actionAt,
-            ]);
+            $this->trackingService->record($assignment, [
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'captured_at' => $actionAt,
+                'synced_at' => $syncedAt,
+                'source' => 'status_update:'.$status,
+                'force' => true,
+            ], $assignment->driver_id);
         }
 
         if ($status === DeliveryStatus::EN_ROUTE_TO_PICKUP) {
-            $assignment->update(['started_at' => $actionAt]);
             $assignment->jobOrder?->update(['status' => DeliveryStatus::toJobOrderStatus($status)]);
-            $driver = Driver::find($assignment->driver_id);
-            $vehicle = Vehicle::find($assignment->vehicle_id);
-            $driver?->update([
-                'availability'          => 'busy',
-                'current_assignment_id' => $assignment->id,
-            ]);
-            $vehicle?->update(['status' => 'assigned']);
         }
 
         // Propagate arrived to job order
-        if ($status === DeliveryStatus::ARRIVED) {
+        if ($status === DeliveryStatus::ARRIVED_AT_DESTINATION) {
             $assignment->jobOrder?->update(['status' => DeliveryStatus::toJobOrderStatus($status)]);
         }
 
@@ -175,16 +232,6 @@ class StatusController extends Controller
         }
 
         if (in_array($status, [DeliveryStatus::COMPLETED, DeliveryStatus::CANCELLED], true)) {
-            if ($status === DeliveryStatus::COMPLETED) {
-                $assignment->update(['completed_at' => $actionAt]);
-            }
-            $driver  = Driver::find($assignment->driver_id);
-            $vehicle = Vehicle::find($assignment->vehicle_id);
-            $driver?->update([
-                'availability'          => 'available',
-                'current_assignment_id' => null,
-            ]);
-            $vehicle?->update(['status' => 'available']);
             $assignment->jobOrder?->update(['status' => $status]);
 
             if ($status === DeliveryStatus::COMPLETED) {
@@ -207,16 +254,22 @@ class StatusController extends Controller
         }
 
         $nextAction = DeliveryStatus::nextAction($status);
+        $lifecycleIndex = array_search($status, DeliveryStatus::lifecycle(), true);
 
         return response()->json([
-            'message'          => 'Status updated',
-            'status'           => $status,
-            'event_at'         => $actionAt->toIso8601String(),
-            'synced_at'        => $syncedAt?->toIso8601String(),
-            'performed_offline'=> $syncedAt !== null,
-            'arrival_verified' => $arrivalVerified,
-            'next_status'      => $nextAction['next_status'],
-            'allowed_action'   => $nextAction['label'],
+            'message'           => 'Status updated',
+            'status'            => $status,
+            'current_status'    => $status,
+            'previous_status'   => $previousStatus,
+            'current_step'      => $lifecycleIndex !== false ? $lifecycleIndex + 1 : null,
+            'dispatcher_phase'  => DeliveryStatus::dispatcherPhase($status),
+            'event_at'          => $actionAt->toIso8601String(),
+            'synced_at'         => $syncedAt?->toIso8601String(),
+            'performed_offline' => $syncedAt !== null,
+            'arrival_verified'  => $arrivalVerified,
+            'next_status'       => $nextAction['next_status'],
+            'allowed_action'    => $nextAction['label'],
+            'timeline'          => $this->formatTimeline($assignment),
         ]);
     }
 
@@ -266,6 +319,7 @@ class StatusController extends Controller
     private function logStatusHistory(
         DispatchAssignment $assignment,
         string $status,
+        ?string $previousStatus = null,
         ?int $updatedBy = null,
         ?float $latitude = null,
         ?float $longitude = null,
@@ -278,7 +332,9 @@ class StatusController extends Controller
             DeliveryStatusHistory::create([
                 'job_order_id' => $assignment->job_order_id,
                 'assignment_id' => $assignment->id,
+                'driver_id' => $assignment->driver_id,
                 'status' => $status,
+                'previous_status' => $previousStatus,
                 'updated_by' => $updatedBy,
                 'updated_at' => $actionAt,
                 'latitude' => $latitude,
@@ -294,5 +350,84 @@ class StatusController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function conflictResponse(
+        DispatchAssignment $assignment,
+        string $serverStatus,
+        array $data,
+        Request $request,
+        ?string $requestedStatus = null,
+    ) {
+        $clientStatus = DeliveryStatus::canonicalize($data['expected_current_status'] ?? $serverStatus) ?? $serverStatus;
+        $requested = $requestedStatus
+            ? DeliveryStatus::canonicalize($requestedStatus)
+            : DeliveryStatus::canonicalize($data['status']);
+
+        $serverVersion = [
+            'status' => $serverStatus,
+            'label' => DeliveryStatus::label($serverStatus),
+            'updated_at' => $assignment->updated_at?->toIso8601String(),
+        ];
+
+        $clientVersion = [
+            'status' => $requested ?? $data['status'],
+            'label' => DeliveryStatus::label($requested ?? $data['status']),
+            'expected_current_status' => $clientStatus,
+            'action_timestamp' => $data['action_timestamp'] ?? $data['action_taken_at'] ?? null,
+            'notes' => $data['notes'] ?? null,
+        ];
+
+        $changedFields = ['status'];
+        if (($data['notes'] ?? null) !== null) {
+            $changedFields[] = 'notes';
+        }
+
+        SyncConflict::create([
+            'user_id' => $request->user()->id,
+            'action_type' => 'status',
+            'entity_type' => DispatchAssignment::class,
+            'entity_id' => $assignment->id,
+            'server_version' => $serverVersion,
+            'client_version' => $clientVersion,
+            'changed_fields' => $changedFields,
+            'client_action_at' => ActionTimestamp::resolve($data['action_timestamp'] ?? $data['action_taken_at'] ?? null),
+        ]);
+
+        AuditLogger::record($request->user(), 'offline.conflict_detected', DispatchAssignment::class, $assignment->id, [
+            'server_status' => $serverStatus,
+            'client_status' => $clientVersion['status'],
+        ], $request);
+
+        return response()->json([
+            'message' => 'Sync conflict detected. The server record changed while you were offline.',
+            'conflict' => [
+                'server_version' => $serverVersion,
+                'client_version' => $clientVersion,
+                'changed_fields' => $changedFields,
+                'assignment_id' => $assignment->id,
+            ],
+        ], 409);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function formatTimeline(DispatchAssignment $assignment): array
+    {
+        return DeliveryStatusHistory::query()
+            ->where('assignment_id', $assignment->id)
+            ->orderBy('updated_at')
+            ->get()
+            ->map(fn (DeliveryStatusHistory $row) => [
+                'status' => DeliveryStatus::canonicalize($row->status) ?? $row->status,
+                'label' => DeliveryStatus::label(DeliveryStatus::canonicalize($row->status) ?? $row->status),
+                'previous_status' => $row->previous_status
+                    ? (DeliveryStatus::canonicalize($row->previous_status) ?? $row->previous_status)
+                    : null,
+                'event_at' => $row->updated_at?->toIso8601String(),
+                'latitude' => $row->latitude,
+                'longitude' => $row->longitude,
+            ])
+            ->values()
+            ->all();
     }
 }

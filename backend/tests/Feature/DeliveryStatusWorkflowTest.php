@@ -24,7 +24,7 @@ class DeliveryStatusWorkflowTest extends TestCase
     {
         [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::ASSIGNED);
 
-        $response = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/status', [
+        $response = $this->apiAs($driverUser)->postJson('/api/driver/status', [
             'assignment_id' => $assignment->id,
             'status' => DeliveryStatus::COMPLETED,
         ]);
@@ -37,7 +37,7 @@ class DeliveryStatusWorkflowTest extends TestCase
     {
         [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::ASSIGNED);
 
-        $start = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/status', [
+        $start = $this->apiAs($driverUser)->postJson('/api/driver/status', [
             'assignment_id' => $assignment->id,
             'status' => 'in_progress',
             'latitude' => 14.1234,
@@ -47,7 +47,7 @@ class DeliveryStatusWorkflowTest extends TestCase
             ->assertJsonPath('status', DeliveryStatus::EN_ROUTE_TO_PICKUP)
             ->assertJsonPath('allowed_action', 'Arrived at Pickup');
 
-        $arrivedPickup = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/status', [
+        $arrivedPickup = $this->apiAs($driverUser)->postJson('/api/driver/status', [
             'assignment_id' => $assignment->id,
             'status' => 'arrived',
         ]);
@@ -70,14 +70,14 @@ class DeliveryStatusWorkflowTest extends TestCase
     {
         [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::ARRIVED_AT_PICKUP);
 
-        $response = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/status', [
+        $response = $this->apiAs($driverUser)->postJson('/api/driver/status', [
             'assignment_id' => $assignment->id,
             'status' => DeliveryStatus::EN_ROUTE_TO_DESTINATION,
         ]);
 
         $response->assertOk()
             ->assertJsonPath('status', DeliveryStatus::EN_ROUTE_TO_DESTINATION)
-            ->assertJsonPath('allowed_action', 'Arrived');
+            ->assertJsonPath('allowed_action', 'Arrived at Destination');
 
         $this->assertDatabaseHas('dispatch_assignments', [
             'id' => $assignment->id,
@@ -90,7 +90,7 @@ class DeliveryStatusWorkflowTest extends TestCase
         Storage::fake('public');
         [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::EN_ROUTE_TO_PICKUP);
 
-        $response = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/documents', [
+        $response = $this->apiAs($driverUser)->postJson('/api/driver/documents', [
             'assignment_id' => $assignment->id,
             'type' => 'receipt',
             'file' => UploadedFile::fake()->image('receipt.png'),
@@ -105,7 +105,7 @@ class DeliveryStatusWorkflowTest extends TestCase
         Storage::fake('public');
         [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::EN_ROUTE_TO_PICKUP);
 
-        $response = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/documents', [
+        $response = $this->apiAs($driverUser)->postJson('/api/driver/documents', [
             'assignment_id' => $assignment->id,
             'type' => 'other',
             'file' => UploadedFile::fake()->image('misc.png'),
@@ -137,16 +137,17 @@ class DeliveryStatusWorkflowTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('current_status', DeliveryStatus::EN_ROUTE_TO_PICKUP)
-            ->assertJsonPath('timeline.0.status', DeliveryStatus::ASSIGNED)
-            ->assertJsonPath('timeline.1.status', DeliveryStatus::EN_ROUTE_TO_PICKUP)
-            ->assertJsonPath('timeline.2.status', DeliveryStatus::ARRIVED_AT_PICKUP)
-            ->assertJsonPath('timeline.3.status', DeliveryStatus::EN_ROUTE_TO_DESTINATION)
-            ->assertJsonPath('timeline.4.status', DeliveryStatus::ARRIVED)
-            ->assertJsonPath('timeline.5.status', DeliveryStatus::COMPLETED);
+            ->assertJsonPath('timeline.0.status', 'pending')
+            ->assertJsonPath('timeline.1.status', DeliveryStatus::ASSIGNED)
+            ->assertJsonPath('timeline.2.status', DeliveryStatus::EN_ROUTE_TO_PICKUP)
+            ->assertJsonPath('timeline.3.status', DeliveryStatus::ARRIVED_AT_PICKUP)
+            ->assertJsonPath('timeline.4.status', DeliveryStatus::EN_ROUTE_TO_DESTINATION)
+            ->assertJsonPath('timeline.5.status', DeliveryStatus::ARRIVED_AT_DESTINATION)
+            ->assertJsonPath('timeline.6.status', DeliveryStatus::COMPLETED);
 
-        $this->assertNotNull($response->json('timeline.0.timestamp'));
         $this->assertNotNull($response->json('timeline.1.timestamp'));
-        $this->assertNull($response->json('timeline.4.timestamp'));
+        $this->assertNotNull($response->json('timeline.2.timestamp'));
+        $this->assertNull($response->json('timeline.5.timestamp'));
     }
 
     /**

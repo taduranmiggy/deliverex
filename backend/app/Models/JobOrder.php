@@ -56,6 +56,8 @@ class JobOrder extends Model
         'pickup_barangay',
         'pickup_street',
         'pickup_landmark',
+        'pickup_latitude',
+        'pickup_longitude',
         // structured drop-off address
         'dropoff_province',
         'dropoff_city',

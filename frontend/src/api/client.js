@@ -28,6 +28,9 @@ function buildApiError(payload, status) {
   if (payload?.errors && typeof payload.errors === 'object') {
     err.fieldErrors = payload.errors
   }
+  if (payload?.conflict) {
+    err.conflict = payload.conflict
+  }
   return err
 }
 

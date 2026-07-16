@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchDriverAssignments, postTrackingUpdate } from '../../api/driver'
 import { enqueue } from '../../utils/offlineQueue'
+import { clearPendingConflict, getPendingConflict } from '../../utils/syncQueue'
+import ConflictResolutionModal from '../../components/driver/ConflictResolutionModal'
 import { StatusBadge } from '../../components/ui'
 import useSyncOnReconnect from '../../hooks/useSyncOnReconnect'
+import useActiveJobTracking from '../../hooks/useActiveJobTracking'
 import { CheckCircle2, ChevronRight, MapPin, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 import { buildDisplayAddress } from '../../utils/jobOrderHelpers'
 
@@ -11,6 +14,7 @@ function DriverDashboard() {
   const [assignments, setAssignments] = useState([])
   const [error, setError]             = useState('')
   const [gpsMsg, setGpsMsg]           = useState('')
+  const [activeConflict, setActiveConflict] = useState(() => getPendingConflict())
   const { syncState, lastSynced, pendingCount, isOnline, manualSync } = useSyncOnReconnect()
 
   useEffect(() => {
@@ -21,15 +25,36 @@ function DriverDashboard() {
 
   const active = assignments.find((a) => !['completed', 'cancelled'].includes(a.status))
 
+  useActiveJobTracking(active, isOnline)
+
+  useEffect(() => {
+    setActiveConflict(getPendingConflict())
+  }, [syncState, pendingCount])
+
+  const handleConflictResolved = () => {
+    clearPendingConflict()
+    setActiveConflict(null)
+    manualSync()
+  }
+
   const handleGpsPing = () => {
     if (!active) { setGpsMsg('No active assignment.'); return }
     if (!navigator.geolocation) { setGpsMsg('Geolocation not supported.'); return }
     setGpsMsg('Locating…')
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const payload = { assignment_id: active.id, latitude: pos.coords.latitude, longitude: pos.coords.longitude }
+        const payload = {
+          assignment_id: active.id,
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy_m: pos.coords.accuracy,
+          heading: Number.isFinite(pos.coords.heading) ? pos.coords.heading : null,
+          speed_kmh: Number.isFinite(pos.coords.speed) && pos.coords.speed >= 0 ? pos.coords.speed * 3.6 : null,
+          captured_at: new Date(pos.timestamp || Date.now()).toISOString(),
+          source: 'manual_ping',
+        }
         if (!isOnline) {
-          enqueue({ type: 'tracking', payload })
+          enqueue({ type: 'tracking', payload, action_timestamp: payload.captured_at })
           setGpsMsg('GPS queued for sync.')
         } else {
           postTrackingUpdate(payload)
@@ -46,6 +71,7 @@ function DriverDashboard() {
     isOnline ? <Wifi size={14} /> : <WifiOff size={14} />
 
   return (
+    <>
     <section className="driver-page">
       {/* Connectivity bar */}
       <div className={`driver-conn-bar ${isOnline ? 'driver-conn-bar--online' : 'driver-conn-bar--offline'}`}>
@@ -121,6 +147,15 @@ function DriverDashboard() {
         </div>
       )}
     </section>
+    {activeConflict && (
+      <ConflictResolutionModal
+        conflict={activeConflict.conflict}
+        queueItem={activeConflict.queue_item}
+        onResolved={handleConflictResolved}
+        onClose={() => setActiveConflict(null)}
+      />
+    )}
+  </>
   )
 }
 

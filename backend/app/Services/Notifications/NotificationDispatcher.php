@@ -71,27 +71,52 @@ class NotificationDispatcher
         $job  = $assignment->jobOrder;
         $code = $job?->tracking_code ?? (string) $job?->id;
         $normalized = DeliveryStatus::canonicalize($status) ?? $status;
-        $label = DeliveryStatus::label($normalized);
+        $milestoneTitle = DeliveryStatus::milestoneNotificationTitle($normalized);
+        $customerLabel = DeliveryStatus::customerLabel($normalized);
 
-        $this->notifyUser(
-            $assignment->assignedBy,
-            'Delivery status update',
-            'Job '.$code.' updated to '.$label.'.'
-        );
-
-        if ($job && $job->customerAccount) {
+        if ($milestoneTitle) {
             $this->notifyUser(
-                $job->customerAccount,
+                $assignment->assignedBy,
+                $milestoneTitle,
+                'Job '.$code.': '.$milestoneTitle.'.'
+            );
+
+            if ($job && $job->customerAccount) {
+                $this->notifyUser(
+                    $job->customerAccount,
+                    $milestoneTitle,
+                    'Your delivery '.$code.' is now '.$customerLabel.'.'
+                );
+            }
+
+            $this->notifyRole(
+                'manager',
+                $milestoneTitle,
+                'Job '.$code.' ('.($assignment->driver?->user?->name ?? 'driver').'): '.$milestoneTitle.'.'
+            );
+        } else {
+            $label = DeliveryStatus::label($normalized);
+
+            $this->notifyUser(
+                $assignment->assignedBy,
                 'Delivery status update',
-                'Your delivery '.$code.' is now '.$label.'.'
+                'Job '.$code.' updated to '.$label.'.'
+            );
+
+            if ($job && $job->customerAccount) {
+                $this->notifyUser(
+                    $job->customerAccount,
+                    'Delivery status update',
+                    'Your delivery '.$code.' is now '.$customerLabel.'.'
+                );
+            }
+
+            $this->notifyRole(
+                'manager',
+                'Delivery status update',
+                'Job '.$code.' ('.($assignment->driver?->user?->name ?? 'driver').') is now '.$label.'.'
             );
         }
-
-        $this->notifyRole(
-            'manager',
-            'Delivery status update',
-            'Job '.$code.' ('.($assignment->driver?->user?->name ?? 'driver').') is now '.$label.'.'
-        );
 
         $emailType = match (true) {
             in_array($normalized, [
@@ -99,7 +124,7 @@ class NotificationDispatcher
                 DeliveryStatus::EN_ROUTE_TO_DESTINATION,
             ], true) => EmailType::DELIVERY_EN_ROUTE,
             $normalized === DeliveryStatus::ARRIVED_AT_PICKUP => EmailType::DELIVERY_ARRIVED_AT_PICKUP,
-            $normalized === DeliveryStatus::ARRIVED => EmailType::DELIVERY_ARRIVED,
+            $normalized === DeliveryStatus::ARRIVED_AT_DESTINATION => EmailType::DELIVERY_ARRIVED,
             default => null,
         };
 

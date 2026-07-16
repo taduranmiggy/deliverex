@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Driver;
 use App\Models\User;
+use App\Services\Driver\DriverAvailabilityService;
 use Illuminate\Support\Str;
 
 class DriverAccount
@@ -69,6 +70,8 @@ class DriverAccount
                 $driver->refresh();
             }
         }
+
+        app(DriverAvailabilityService::class)->sync($driver, 'driver_login_provision');
 
         return $driver;
     }

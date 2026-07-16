@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Driver;
 use App\Http\Controllers\Controller;
 use App\Models\OfflineSyncQueue;
 use App\Support\ActionTimestamp;
+use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 
 /**
@@ -66,6 +67,11 @@ class OfflineSyncController extends Controller
                 'status' => 'synced',
                 'synced_at' => now(),
             ]);
+
+        AuditLogger::record($request->user(), 'offline.sync_completed', OfflineSyncQueue::class, null, [
+            'item_count' => count($data['client_queue_ids']),
+            'client_queue_ids' => $data['client_queue_ids'],
+        ], $request);
 
         return response()->json(['message' => 'Queue items marked synced']);
     }

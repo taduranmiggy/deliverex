@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Services\Company\CompanyService;
+use App\Support\AuditChangeTracker;
 use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 
@@ -67,13 +68,36 @@ class CompanyController extends Controller
             'status' => 'sometimes|in:pending_activation,active,inactive,archived',
         ]);
 
+        $trackFields = ['company_name', 'company_email', 'contact_person', 'contact_number', 'address', 'status'];
+        $before = $company->only($trackFields);
+
         $company->update($data);
 
         if (($data['status'] ?? null) === Company::STATUS_ACTIVE) {
             $this->companies->ensureOwnerMembership($company->fresh());
         }
 
-        AuditLogger::record($request->user(), 'company.updated', Company::class, $company->id, $data, $request);
+        $after = $company->fresh()->only($trackFields);
+        $changes = AuditChangeTracker::diffArrays($before, $after, $trackFields);
+
+        AuditLogger::recordChanges(
+            $request->user(),
+            'company.updated',
+            Company::class,
+            $company->id,
+            $changes,
+            ['company_id' => $company->id],
+            $request,
+        );
+
+        if (isset($changes['status'])) {
+            $action = ($changes['status']['new'] ?? '') === Company::STATUS_ACTIVE
+                ? 'company.activated'
+                : 'company.deactivated';
+            AuditLogger::record($request->user(), $action, Company::class, $company->id, [
+                'changes' => ['status' => $changes['status']],
+            ], $request);
+        }
 
         return response()->json($company->fresh());
     }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import BottomSheet from '../../components/driver/BottomSheet'
+import JobOrderRouteMap from '../../components/JobOrderRouteMap'
 import DeliveryTimeline from '../../components/driver/DeliveryTimeline'
 import DriverOfflineBar from '../../components/driver/DriverOfflineBar'
 import DriverStatusChip from '../../components/driver/DriverStatusChip'
@@ -495,7 +496,8 @@ function DriverJobDetailsPage() {
           <div className="da-card">
             <p className="da-card__label"><MapPin size={12} style={{ display: 'inline', marginRight: 4 }} />Route</p>
             <div className="da-kv"><span>Pickup</span><strong>{buildDisplayAddress('pickup', job) || '—'}</strong></div>
-            <div className="da-kv"><span>Drop-off</span><strong>{buildDisplayAddress('dropoff', job) || '—'}</strong></div>
+            <div className="da-kv"><span>Destination</span><strong>{buildDisplayAddress('dropoff', job) || '—'}</strong></div>
+            <JobOrderRouteMap jobOrderId={job?.id} readOnly />
             <div className="da-kv"><span>Schedule</span><strong>{formatJobSchedule(job)}</strong></div>
             {job?.tracking_code && (
               <div className="da-kv"><span>Tracking</span><strong style={{ fontFamily: 'monospace' }}>{job.tracking_code}</strong></div>

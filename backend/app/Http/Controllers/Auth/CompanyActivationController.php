@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Services\Company\CompanyService;
+use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -50,6 +52,11 @@ class CompanyActivationController extends Controller
 
         $company = $this->companies->validateActivationToken($token);
         $result = $this->companies->activateCompany($company, $data['password'], $request);
+
+        AuditLogger::record($result['user'] ?? null, 'auth.company_activated', Company::class, $company->id, [
+            'company_name' => $company->company_name,
+            'company_email' => $company->company_email,
+        ], $request);
 
         $response = response()->json([
             'message' => 'Company account activated successfully.',

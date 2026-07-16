@@ -417,11 +417,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 9px 18px;
+  gap: 8px;
+  min-height: var(--control-height, 44px);
+  padding: 11px 20px;
   border-radius: var(--radius-md);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--text-sm, 0.9375rem);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
@@ -783,9 +784,9 @@
 }
 
 .dx-data-table thead th {
-  padding: 11px 16px;
+  padding: 14px 18px;
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: var(--text-xs, 0.8125rem);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -803,10 +804,11 @@
 }
 
 .dx-data-table tbody td {
-  padding: 13px 16px;
+  padding: 15px 18px;
   border-bottom: 1px solid var(--stroke);
   vertical-align: middle;
   color: var(--text);
+  font-size: var(--text-sm, 0.9375rem);
 }
 
 .dx-data-table tbody tr:last-child td {
@@ -1033,10 +1035,10 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
-  padding: 9px 0;
+  gap: 14px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--slate-100);
-  font-size: 0.875rem;
+  font-size: var(--text-sm, 0.9375rem);
 }
 .dx-kv:last-of-type { border-bottom: none; }
 .dx-kv > span { color: var(--muted); flex-shrink: 0; }
@@ -5521,3 +5523,165 @@
     justify-content: center;
   }
 }
+
+@media print {
+  .dx-staff-sidebar,
+  .dx-topbar,
+  .btn-dx-primary,
+  .btn-dx-secondary,
+  .dx-pagination,
+  .dx-report-tab,
+  .dx-modal-backdrop {
+    display: none !important;
+  }
+  .dx-report-print-area {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .dx-report-print-area table {
+    page-break-inside: auto;
+  }
+  .dx-report-print-area tr {
+    page-break-inside: avoid;
+  }
+}
+
+/* ── Job order route map ─────────────────────────────────────── */
+.dx-job-route-map {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.dx-job-route-map__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.dx-job-route-map__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--slate-50);
+  border: 1px solid var(--stroke);
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+}
+
+.dx-job-route-map__badge {
+  margin-left: auto;
+  font-size: var(--text-xs, 0.8125rem);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.dx-job-route-map__stage {
+  height: 280px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--stroke);
+}
+
+.dx-job-route-map--loading,
+.dx-job-route-map--empty,
+.dx-job-route-map--error {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed var(--stroke);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: var(--text-sm, 0.875rem);
+  padding: 20px;
+}
+
+.dx-job-route-pin {
+  width: 28px;
+  height: 28px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+}
+
+.dx-job-route-pin {
+  transform: rotate(-45deg);
+}
+
+.dx-job-route-pin::first-letter,
+.dx-job-route-pin {
+  line-height: 1;
+}
+
+/* ── Offline conflict resolution ─────────────────────────────── */
+.dx-conflict-card {
+  background: var(--slate-50);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.dx-conflict-card--client {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.dx-conflict-card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs, 0.8125rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.dx-conflict-card__meta {
+  margin: 6px 0 0;
+  font-size: var(--text-xs, 0.8125rem);
+  color: var(--muted);
+}
+
+.dx-conflict-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.dx-conflict-fields__label {
+  font-size: var(--text-xs, 0.8125rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea,
+.dx-input {
+  min-height: var(--control-height, 44px);
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.dx-detail-panel__body {
+  padding: var(--space-5, 20px);
+}
+
+.dx-panel {
+  padding: var(--space-5, 20px);
+}
+

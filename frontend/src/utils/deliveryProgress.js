@@ -5,7 +5,7 @@ export const DELIVERY_PROGRESS_STEPS = [
   { key: 'en_route_to_pickup', label: 'En Route to Pickup', icon: Truck },
   { key: 'arrived_at_pickup', label: 'Arrived at Pickup', icon: MapPin },
   { key: 'en_route_to_destination', label: 'Enroute to Destination', icon: Truck },
-  { key: 'arrived', label: 'Arrived', icon: MapPin },
+  { key: 'arrived_at_destination', label: 'Arrived at Destination', icon: MapPin },
   { key: 'completed', label: 'Completed', icon: CheckCircle2 },
 ]
 
@@ -18,7 +18,7 @@ export function deliveryProgressIndex(status) {
   if (s === 'en_route_to_pickup') return 2
   if (s === 'arrived_at_pickup') return 3
   if (s === 'en_route_to_destination' || s === 'in_progress' || s === 'en_route') return 4
-  if (s === 'arrived') return 5
+  if (s === 'arrived_at_destination' || s === 'arrived') return 5
   if (s === 'completed' || s === 'delivered') return 6
   return 0
 }

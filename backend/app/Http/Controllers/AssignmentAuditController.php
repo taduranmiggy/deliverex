@@ -28,6 +28,23 @@ class AssignmentAuditController extends Controller
             $query->where('job_order_id', $request->integer('job_order_id'));
         }
 
+        if ($request->filled('from')) {
+            try {
+                $query->where('created_at', '>=', \Illuminate\Support\Carbon::parse($request->query('from'))->startOfDay());
+            } catch (\Throwable) {
+            }
+        }
+
+        if ($request->filled('to')) {
+            try {
+                $query->where('created_at', '<=', \Illuminate\Support\Carbon::parse($request->query('to'))->endOfDay());
+            } catch (\Throwable) {
+            }
+        }
+
+        $sortDir = strtolower((string) $request->query('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $query->reorder()->orderBy('created_at', $sortDir);
+
         $paginated = $query->paginate(max(1, min(100, (int) $request->integer('per_page', 6))));
 
         $paginated->getCollection()->transform(fn (AssignmentAuditTrail $trail) => $this->formatTrail($trail));

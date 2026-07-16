@@ -257,22 +257,33 @@ function DriverInfoPanel({ marker, destinationMarker }) {
         </div>
       ) : null}
 
-      <div className="dx-fleet-map-info__row">
-        <span className="dx-fleet-map-info__label">Last Updated</span>
-        {gpsUpdate?.eventLabel ? (
-          <>
-            <span className="dx-fleet-map-info__value">{gpsUpdate.eventLabel}</span>
-            {gpsUpdate.isOffline && (
-              <span className="dx-fleet-map-info__offline">
-                Performed offline
-                {gpsUpdate.syncedOnly ? ` · Synced ${gpsUpdate.syncedOnly}` : ''}
-              </span>
-            )}
-          </>
-        ) : (
+      {marker?.gpsAt && (
+        <>
+          <div className="dx-fleet-map-info__row">
+            <span className="dx-fleet-map-info__label">Last Updated</span>
+            <span className="dx-fleet-map-info__value">{gpsUpdate?.eventLabel ?? '—'}</span>
+          </div>
+          {Number.isFinite(marker.speedKmh) && (
+            <div className="dx-fleet-map-info__row">
+              <span className="dx-fleet-map-info__label">Speed</span>
+              <span className="dx-fleet-map-info__value">{marker.speedKmh.toFixed(1)} km/h</span>
+            </div>
+          )}
+          {marker.isOffline && (
+            <div className="dx-fleet-map-info__row">
+              <span className="dx-fleet-map-info__label">Connection</span>
+              <span className="dx-fleet-map-info__value dx-fleet-map-info__value--muted">Offline indicator</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {!marker?.gpsAt && (
+        <div className="dx-fleet-map-info__row">
+          <span className="dx-fleet-map-info__label">Last Updated</span>
           <span className="dx-fleet-map-info__value dx-fleet-map-info__value--muted">—</span>
-        )}
-      </div>
+        </div>
+      )}
 
       {marker && Number.isFinite(marker.lat) && Number.isFinite(marker.lng) ? (
         <div className="dx-fleet-map-info__row">
@@ -296,7 +307,7 @@ function MapSkeleton() {
   )
 }
 
-function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = [], loading = false }) {
+function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = [], historyPolylines = [], loading = false }) {
   const markerRefs = useRef({})
   const initialViewRef = useRef(null)
 
@@ -313,6 +324,16 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
   }, [valid])
 
   const initialZoom = valid.length <= 1 ? 13 : 11
+
+  const validHistoryPolylines = useMemo(
+    () =>
+      historyPolylines.filter((line) =>
+        Array.isArray(line?.positions) &&
+        line.positions.length > 1 &&
+        line.positions.every((p) => Number.isFinite(p?.[0]) && Number.isFinite(p?.[1])),
+      ),
+    [historyPolylines],
+  )
 
   const validRouteLines = useMemo(
     () =>
@@ -368,6 +389,19 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
             initialViewRef={initialViewRef}
           />
           <MapToolbar markers={valid} routeLines={validRouteLines} initialViewRef={initialViewRef} />
+
+          {validHistoryPolylines.map((line) => (
+            <Polyline
+              key={line.id}
+              positions={line.positions}
+              pathOptions={{
+                color: '#64748b',
+                weight: 3,
+                opacity: 0.65,
+                dashArray: '6 8',
+              }}
+            />
+          ))}
 
           {validRouteLines.map((line) => (
             <Polyline

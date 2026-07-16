@@ -11,10 +11,14 @@ use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Vehicle;
 use App\Services\Assignment\BestFitAssignmentService;
+use App\Services\Driver\DriverAvailabilityService;
+use App\Services\Fleet\AssignmentResourceSyncService;
+use App\Services\Fleet\VehicleAvailabilityService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Support\AssignmentScheduleConflict;
 use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
+use App\Support\DriverLicenseValidator;
 use App\Support\JobOrderScheduleValidator;
 use Illuminate\Http\Request;
 
@@ -22,7 +26,10 @@ class AssignmentController extends Controller
 {
     public function __construct(
         private NotificationDispatcher $notificationDispatcher,
-        private BestFitAssignmentService $bestFitAssignmentService
+        private BestFitAssignmentService $bestFitAssignmentService,
+        private DriverAvailabilityService $driverAvailability,
+        private VehicleAvailabilityService $vehicleAvailability,
+        private AssignmentResourceSyncService $resourceSync,
     ) {
     }
 
@@ -73,19 +80,23 @@ class AssignmentController extends Controller
         }
 
         $activeOnJob = DispatchAssignment::where('job_order_id', $jobOrder->id)
-            ->whereNotIn('status', ['completed', 'cancelled'])
+            ->whereIn('status', DeliveryStatus::availabilityBlocking())
             ->exists();
 
         if ($activeOnJob) {
             return response()->json(['message' => 'This job order already has an active assignment.'], 422);
         }
 
-        if ($driver->status === 'inactive' || $driver->availability === 'offline') {
+        if ($this->driverAvailability->isAdminUnavailable($driver)) {
             return response()->json(['message' => 'Driver is offline and cannot be assigned.'], 422);
         }
 
-        if ($driver->availability !== null && $driver->availability !== 'available') {
+        if (! $this->driverAvailability->isAssignable($driver)) {
             return response()->json(['message' => 'Driver must be available before assignment.'], 422);
+        }
+
+        if (! $this->vehicleAvailability->isAssignable($vehicle)) {
+            return response()->json(['message' => 'Vehicle must be available before assignment.'], 422);
         }
 
         if (! $driver->user_id) {
@@ -94,12 +105,8 @@ class AssignmentController extends Controller
             ], 422);
         }
 
-        if (in_array($vehicle->status, ['maintenance', 'unavailable', 'inactive'], true)) {
-            return response()->json(['message' => 'Vehicle is not dispatchable (maintenance or unavailable).'], 422);
-        }
-
-        if ($vehicle->status !== null && $vehicle->status !== 'available') {
-            return response()->json(['message' => 'Vehicle must be available before assignment.'], 422);
+        if (! DriverLicenseValidator::isEligible($driver)) {
+            return response()->json(['message' => DriverLicenseValidator::INELIGIBILITY_MESSAGE], 422);
         }
 
         if (AssignmentScheduleConflict::hasDriverConflict($driver->id, $jobOrder)) {
@@ -141,14 +148,20 @@ class AssignmentController extends Controller
         DeliveryStatusHistory::create([
             'job_order_id' => $assignment->job_order_id,
             'assignment_id' => $assignment->id,
+            'driver_id' => $assignment->driver_id,
             'status' => DeliveryStatus::ASSIGNED,
+            'previous_status' => null,
             'updated_by' => $request->user()?->id,
             'updated_at' => now(),
             'remarks' => 'Dispatched via Best-Fit assignment',
             'created_at' => now(),
         ]);
 
-        $this->applyResourceLocks($driver, $vehicle, $assignment, $jobOrder);
+        $this->resourceSync->syncForAssignment(
+            $assignment,
+            'dispatcher_assignment_created',
+            $request->user()?->id,
+        );
 
         $jobOrder->update(['status' => DeliveryStatus::toJobOrderStatus(DeliveryStatus::ASSIGNED)]);
 
@@ -184,23 +197,15 @@ class AssignmentController extends Controller
             'audit_trail_id'    => $auditTrail->id,
         ], $request);
 
-        return response()->json($assignment, 201);
-    }
-
-    /**
-     * Lock driver/vehicle only when the job is active now or has no future schedule.
-     */
-    private function applyResourceLocks(Driver $driver, Vehicle $vehicle, DispatchAssignment $assignment, JobOrder $jobOrder): void
-    {
-        $startsSoon = ! $jobOrder->scheduled_start
-            || $jobOrder->scheduled_start->lte(now()->addHour());
-
-        if ($startsSoon) {
-            $driver->update([
-                'availability'          => 'busy',
-                'current_assignment_id' => $assignment->id,
-            ]);
-            $vehicle->update(['status' => 'assigned']);
+        if ($isOverride) {
+            AuditLogger::record($request->user(), 'dispatch.dispatcher_override', DispatchAssignment::class, $assignment->id, [
+                'job_order_id' => $jobOrder->id,
+                'override_reason' => $auditTrail->override_reason,
+                'recommended_driver_id' => $recommended['driver_id'] ?? null,
+                'assigned_driver_id' => $driver->id,
+            ], $request);
         }
+
+        return response()->json($assignment, 201);
     }
 }

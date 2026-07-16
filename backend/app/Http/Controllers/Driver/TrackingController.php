@@ -3,15 +3,16 @@
 namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
-use App\Models\TrackingLog;
-use App\Services\Notifications\NotificationDispatcher;
+use App\Models\DispatchAssignment;
+use App\Services\Gps\TrackingService;
 use App\Support\ActionTimestamp;
 use App\Support\AuditLogger;
+use App\Support\GpsCoordinateValidator;
 use Illuminate\Http\Request;
 
 class TrackingController extends Controller
 {
-    public function __construct(private NotificationDispatcher $notificationDispatcher)
+    public function __construct(private TrackingService $trackingService)
     {
     }
 
@@ -21,47 +22,75 @@ class TrackingController extends Controller
             'assignment_id' => 'required|exists:dispatch_assignments,id',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
-            'captured_at' => 'nullable|date',
-            'action_timestamp' => 'nullable|date',
-            'action_taken_at' => 'nullable|date',
+            'accuracy_m' => 'nullable|numeric|min:0',
+            'heading' => 'nullable|numeric',
+            'speed_kmh' => 'nullable|numeric|min:0',
+            'speed' => 'nullable|numeric|min:0',
+            'captured_at' => 'nullable|string',
+            'action_timestamp' => 'nullable|string',
+            'action_taken_at' => 'nullable|string',
+            'source' => 'nullable|string|max:40',
+            'force' => 'nullable|boolean',
         ]);
 
-        $assignment = \App\Models\DispatchAssignment::findOrFail($data['assignment_id']);
+        $assignment = DispatchAssignment::findOrFail($data['assignment_id']);
         $driverId = $request->user()?->driver?->id;
 
         if ($assignment->driver_id !== $driverId) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $capturedAt = isset($data['captured_at'])
-            ? ActionTimestamp::resolve($data['captured_at'])
-            : ActionTimestamp::resolveFromRequest($request);
-
-        $lastLog = $assignment->trackingLogs()->latest('captured_at')->first();
-
-        // Use firstOrCreate so replaying a queued offline batch (same point + timestamp)
-        // does not create duplicate GPS logs on reconnect/auto-sync.
-        $log = TrackingLog::firstOrCreate([
-            'assignment_id' => $assignment->id,
-            'captured_at'   => $capturedAt,
-            'latitude'      => $data['latitude'],
-            'longitude'     => $data['longitude'],
-        ]);
-
-        if ($lastLog && $lastLog->captured_at && $lastLog->captured_at->diffInMinutes(now()) >= 45) {
-            $assignment->loadMissing('assignedBy', 'jobOrder');
-            $code = $assignment->jobOrder?->tracking_code ?? (string) $assignment->job_order_id;
-            $this->notificationDispatcher->notifyUser(
-                $assignment->assignedBy,
-                'Prolonged inactivity alert',
-                'No GPS updates for job '.$code.' in the last 45 minutes.'
-            );
-            AuditLogger::record($request->user(), 'delivery.inactivity_alert', \App\Models\DispatchAssignment::class, $assignment->id, [
-                'job_order_id' => $assignment->job_order_id,
-                'last_ping_at' => $lastLog->captured_at?->toIso8601String(),
-            ], $request);
+        if ($error = GpsCoordinateValidator::validate((float) $data['latitude'], (float) $data['longitude'])) {
+            return response()->json(['message' => $error], 422);
         }
 
-        return response()->json($log, 201);
+        $timestampMeta = ActionTimestamp::resolveFromRequestWithMeta($request);
+        $capturedAt = isset($data['captured_at'])
+            ? ActionTimestamp::resolve($data['captured_at'])
+            : $timestampMeta['actionAt'];
+        $syncedAt = $timestampMeta['fromClient'] ? now() : null;
+
+        $result = $this->trackingService->record($assignment, [
+            'latitude' => (float) $data['latitude'],
+            'longitude' => (float) $data['longitude'],
+            'accuracy_m' => $data['accuracy_m'] ?? null,
+            'heading' => $data['heading'] ?? null,
+            'speed_kmh' => $data['speed_kmh'] ?? $data['speed'] ?? null,
+            'captured_at' => $capturedAt,
+            'synced_at' => $syncedAt,
+            'source' => $data['source'] ?? 'driver_ping',
+            'force' => (bool) ($data['force'] ?? false),
+        ], $driverId);
+
+        if ($result['skipped'] && $result['log'] === null) {
+            AuditLogger::record($request->user(), 'gps.sync_failed', DispatchAssignment::class, $assignment->id, [
+                'reason' => $result['reason'] ?? 'GPS update rejected.',
+                'latitude' => (float) $data['latitude'],
+                'longitude' => (float) $data['longitude'],
+            ], $request);
+
+            return response()->json([
+                'message' => $result['reason'] ?? 'GPS update rejected.',
+            ], 422);
+        }
+
+        $log = $result['log'];
+        $fleet = $this->trackingService->formatForFleet($log);
+
+        return response()->json([
+            'id' => $log->id,
+            'assignment_id' => $log->assignment_id,
+            'latitude' => $log->latitude,
+            'longitude' => $log->longitude,
+            'accuracy_m' => $log->accuracy_m,
+            'heading' => $log->heading,
+            'speed_kmh' => $log->speed_kmh,
+            'captured_at' => $log->captured_at?->toIso8601String(),
+            'event_at' => $log->event_at,
+            'synced_at' => $log->synced_at?->toIso8601String(),
+            'skipped' => $result['skipped'],
+            'skip_reason' => $result['reason'],
+            'location' => $fleet,
+        ], $result['skipped'] ? 200 : 201);
     }
 }

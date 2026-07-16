@@ -5,10 +5,18 @@ namespace App\Services\Assignment;
 use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Vehicle;
+use App\Services\Driver\DriverAvailabilityService;
+use App\Services\Fleet\VehicleAvailabilityService;
 use App\Support\AssignmentScheduleConflict;
 
 class DispatchResourceService
 {
+    public function __construct(
+        private DriverAvailabilityService $driverAvailability,
+        private VehicleAvailabilityService $vehicleAvailability,
+    ) {
+    }
+
     public function optionsForJob(JobOrder $jobOrder): array
     {
         $requiredVolume = $jobOrder->load_volume_m3 !== null
@@ -20,7 +28,7 @@ class DispatchResourceService
             'user_id' => $driver->user_id,
             'has_login_account' => (bool) $driver->user_id,
             'name' => $driver->full_name ?: $driver->user?->name ?: ('Driver #'.$driver->id),
-            'availability' => $driver->availability ?? 'available',
+            'availability' => $this->driverAvailability->deriveAvailability($driver),
             'status' => $driver->status ?? 'active',
         ])->values()->all();
 
@@ -29,7 +37,7 @@ class DispatchResourceService
             ->map(fn (Vehicle $vehicle) => [
                 'id' => $vehicle->id,
                 'plate_no' => $vehicle->plate_no,
-                'status' => $vehicle->status ?? 'available',
+                'status' => $this->vehicleAvailability->deriveStatus($vehicle),
                 'vehicle_type' => $vehicle->vehicleType?->name ?? $vehicle->type,
                 'cbm_capacity' => $vehicle->cbm_capacity ?? $vehicle->max_volume_m3 ?? $vehicle->rounded_cbm_capacity,
             ])->values()->all();
@@ -48,12 +56,18 @@ class DispatchResourceService
                 $q->where('status', '!=', 'inactive')
                     ->orWhereNull('status');
             })
-            ->where(function ($q) {
-                $q->where('availability', '!=', 'offline')
-                    ->orWhereNull('availability');
-            })
             ->get()
-            ->filter(fn (Driver $d) => ! AssignmentScheduleConflict::hasDriverConflict($d->id, $jobOrder))
+            ->filter(function (Driver $driver) use ($jobOrder) {
+                if ($this->driverAvailability->isAdminUnavailable($driver)) {
+                    return false;
+                }
+
+                if (! $this->driverAvailability->isAssignable($driver)) {
+                    return false;
+                }
+
+                return ! AssignmentScheduleConflict::hasDriverConflict($driver->id, $jobOrder);
+            })
             ->values();
     }
 
@@ -61,9 +75,14 @@ class DispatchResourceService
     {
         return Vehicle::query()
             ->with('vehicleType')
-            ->whereNotIn('status', ['maintenance', 'unavailable', 'inactive'])
             ->get()
-            ->filter(fn (Vehicle $v) => ! AssignmentScheduleConflict::hasVehicleConflict($v->id, $jobOrder))
+            ->filter(function (Vehicle $vehicle) use ($jobOrder) {
+                if (! $this->vehicleAvailability->isAssignable($vehicle)) {
+                    return false;
+                }
+
+                return ! AssignmentScheduleConflict::hasVehicleConflict($vehicle->id, $jobOrder);
+            })
             ->values();
     }
 

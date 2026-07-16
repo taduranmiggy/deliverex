@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
+use App\Support\AuditChangeTracker;
+use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -38,6 +40,10 @@ class VehicleController extends Controller
         $this->normalizeVehiclePayload($data);
         $vehicle = Vehicle::create($data);
 
+        AuditLogger::record($request->user(), 'vehicle.created', Vehicle::class, $vehicle->id, [
+            'plate_no' => $vehicle->plate_no,
+        ], $request);
+
         return response()->json($vehicle->load('vehicleType'), 201);
     }
 
@@ -59,14 +65,32 @@ class VehicleController extends Controller
             'status' => 'nullable|in:available,assigned,in_use,maintenance,inactive,unavailable',
         ]);
 
+        $trackFields = ['plate_no', 'vehicle_type_id', 'type', 'capacity', 'status'];
+        $before = $vehicle->only($trackFields);
+
         $this->normalizeVehiclePayload($data);
         $vehicle->update($data);
+
+        $changes = AuditChangeTracker::diffArrays($before, $vehicle->fresh()->only($trackFields), $trackFields);
+        AuditLogger::recordChanges(
+            $request->user(),
+            'vehicle.updated',
+            Vehicle::class,
+            $vehicle->id,
+            $changes,
+            ['plate_no' => $vehicle->plate_no],
+            $request,
+        );
 
         return response()->json($vehicle->fresh()->load('vehicleType'));
     }
 
-    public function destroy(Vehicle $vehicle)
+    public function destroy(Request $request, Vehicle $vehicle)
     {
+        AuditLogger::record($request->user(), 'vehicle.deactivated', Vehicle::class, $vehicle->id, [
+            'plate_no' => $vehicle->plate_no,
+        ], $request);
+
         $vehicle->update(['status' => 'inactive']);
         return response()->json(['message' => 'Vehicle archived']);
     }

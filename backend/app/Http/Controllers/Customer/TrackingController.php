@@ -6,13 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\DeliveryCompletionProof;
 use App\Models\JobOrder;
 use App\Services\Delivery\EtaEstimationService;
+use App\Services\Gps\TrackingService;
 use App\Support\CustomerProofDocuments;
 use App\Support\DeliveryStatus;
 
 class TrackingController extends Controller
 {
-    public function __construct(private EtaEstimationService $etaEstimation)
-    {
+    public function __construct(
+        private EtaEstimationService $etaEstimation,
+        private TrackingService $trackingService,
+    ) {
     }
 
     public function show(string $trackingCode)
@@ -50,8 +53,8 @@ class TrackingController extends Controller
         if ($latestAssignment) {
             $timeline = $latestAssignment->deliveryStatusLogs()
                 ->orderBy('created_at')
-                ->get(['status', 'notes', 'created_at', 'synced_at', 'latitude', 'longitude', 'arrival_verified'])
-                ->map(fn ($row) => $this->formatStatusEvent($row))
+                ->get(['status', 'created_at', 'synced_at'])
+                ->map(fn ($row) => $this->formatCustomerStatusEvent($row))
                 ->values()
                 ->all();
         }
@@ -78,10 +81,10 @@ class TrackingController extends Controller
                 'synced_at' => null,
                 'performed_offline' => false,
             ],
-            ...collect(DeliveryStatus::lifecycle())
+            ...collect(DeliveryStatus::customerTimeline())
                 ->map(fn (string $stage) => [
                     'status' => $stage,
-                    'label' => $stage === DeliveryStatus::ASSIGNED ? 'Dispatched' : DeliveryStatus::label($stage),
+                    'label' => $stage === DeliveryStatus::ASSIGNED ? 'Assigned' : DeliveryStatus::customerLabel($stage),
                     'timestamp' => null,
                     'event_at' => null,
                     'synced_at' => null,
@@ -123,12 +126,7 @@ class TrackingController extends Controller
             'status'              => $currentStatus,
             'eta_window'          => $this->etaLabel($jobOrder),
             'eta'                 => $eta,
-            'approximate_location'=> $latestTracking
-                ? [
-                    'lat' => round((float) $latestTracking->latitude, 2),
-                    'lng' => round((float) $latestTracking->longitude, 2),
-                ]
-                : null,
+            'approximate_location'=> $this->trackingService->formatForCustomer($latestTracking),
             'timeline'            => $orderedTimeline,
             'status_events'       => $timeline,
             'proof_of_delivery_available' => $proofAvailable,
@@ -146,19 +144,17 @@ class TrackingController extends Controller
         ]);
     }
 
-    private function formatStatusEvent($row): array
+    private function formatCustomerStatusEvent($row): array
     {
+        $canonical = DeliveryStatus::canonicalize((string) $row->status) ?? $row->status;
+
         return [
-            'status'            => DeliveryStatus::canonicalize((string) $row->status) ?? $row->status,
-            'notes'             => $row->notes,
+            'status'            => $canonical,
+            'label'             => DeliveryStatus::customerLabel($canonical),
             'at'                => $row->created_at?->toIso8601String(),
             'event_at'          => $row->created_at?->toIso8601String(),
             'synced_at'         => $row->synced_at?->toIso8601String(),
             'performed_offline' => $row->synced_at !== null,
-            'arrival_verified'  => (bool) $row->arrival_verified,
-            'gps_verified_at'   => $row->arrival_verified
-                ? $row->created_at?->toIso8601String()
-                : null,
         ];
     }
 

@@ -131,53 +131,69 @@ class AnalyticsController extends Controller
             ->get()
             ->map(fn ($row) => ['month' => $row->month, 'count' => (int) $row->count]);
 
-        $drivers = Driver::with('user')->get();
-        $driverDelayRates = $drivers->map(function (Driver $driver) use ($fromDate, $toDate) {
-            $totalAssignments = DispatchAssignment::where('driver_id', $driver->id)
-                ->whereBetween('created_at', [$fromDate, $toDate])
-                ->count();
-            $delayCount = DeliveryDelayReport::where('driver_id', $driver->id)
-                ->whereBetween('created_at', [$fromDate, $toDate])
-                ->count();
-            $rate = $totalAssignments > 0
-                ? round(($delayCount / $totalAssignments) * 100, 1)
-                : null;
+        $drivers = Driver::with('user')->get()->keyBy('id');
+
+        $assignmentCounts = DispatchAssignment::query()
+            ->select('driver_id', DB::raw('COUNT(*) as total'))
+            ->whereBetween('created_at', [$fromDate, $toDate])
+            ->groupBy('driver_id')
+            ->pluck('total', 'driver_id');
+
+        $delayCounts = DeliveryDelayReport::query()
+            ->select('driver_id', DB::raw('COUNT(*) as total'))
+            ->whereBetween('created_at', [$fromDate, $toDate])
+            ->groupBy('driver_id')
+            ->pluck('total', 'driver_id');
+
+        $driverDelayRates = $assignmentCounts->map(function ($total, $driverId) use ($drivers, $delayCounts) {
+            $driver = $drivers->get($driverId);
+            if (! $driver) {
+                return null;
+            }
+            $delayCount = (int) ($delayCounts[$driverId] ?? 0);
+            $rate = $total > 0 ? round(($delayCount / $total) * 100, 1) : null;
 
             return [
-                'id'                => $driver->id,
-                'name'              => $driver->user?->name ?? '—',
-                'total_assignments' => $totalAssignments,
-                'delay_reports'     => $delayCount,
-                'delay_rate_pct'    => $rate,
+                'id' => $driver->id,
+                'name' => $driver->user?->name ?? '—',
+                'total_assignments' => (int) $total,
+                'delay_reports' => $delayCount,
+                'delay_rate_pct' => $rate,
             ];
-        })->filter(fn ($row) => $row['total_assignments'] > 0)
-            ->sortByDesc('delay_rate_pct')
-            ->values();
+        })->filter()->sortByDesc('delay_rate_pct')->values();
 
-        $vehicles = Vehicle::with('vehicleType')->get();
-        $vehicleDelayRates = $vehicles->map(function (Vehicle $vehicle) use ($fromDate, $toDate) {
-            $totalAssignments = DispatchAssignment::where('vehicle_id', $vehicle->id)
-                ->whereBetween('created_at', [$fromDate, $toDate])
-                ->count();
-            $delayCount = DeliveryDelayReport::whereHas(
-                'assignment',
-                fn ($q) => $q->where('vehicle_id', $vehicle->id)
-            )->whereBetween('created_at', [$fromDate, $toDate])->count();
-            $rate = $totalAssignments > 0
-                ? round(($delayCount / $totalAssignments) * 100, 1)
-                : null;
+        $vehicles = Vehicle::with('vehicleType')->get()->keyBy('id');
+
+        $vehicleAssignmentCounts = DispatchAssignment::query()
+            ->select('vehicle_id', DB::raw('COUNT(*) as total'))
+            ->whereBetween('created_at', [$fromDate, $toDate])
+            ->groupBy('vehicle_id')
+            ->pluck('total', 'vehicle_id');
+
+        $vehicleDelayCounts = DeliveryDelayReport::query()
+            ->join('dispatch_assignments', 'delivery_delay_reports.assignment_id', '=', 'dispatch_assignments.id')
+            ->select('dispatch_assignments.vehicle_id', DB::raw('COUNT(*) as total'))
+            ->whereBetween('delivery_delay_reports.created_at', [$fromDate, $toDate])
+            ->groupBy('dispatch_assignments.vehicle_id')
+            ->pluck('total', 'vehicle_id');
+
+        $vehicleDelayRates = $vehicleAssignmentCounts->map(function ($total, $vehicleId) use ($vehicles, $vehicleDelayCounts) {
+            $vehicle = $vehicles->get($vehicleId);
+            if (! $vehicle) {
+                return null;
+            }
+            $delayCount = (int) ($vehicleDelayCounts[$vehicleId] ?? 0);
+            $rate = $total > 0 ? round(($delayCount / $total) * 100, 1) : null;
 
             return [
-                'id'                => $vehicle->id,
-                'plate_no'          => $vehicle->plate_no,
-                'type'              => $vehicle->type ?? $vehicle->vehicleType?->name,
-                'total_assignments' => $totalAssignments,
-                'delay_reports'     => $delayCount,
-                'delay_rate_pct'    => $rate,
+                'id' => $vehicle->id,
+                'plate_no' => $vehicle->plate_no,
+                'type' => $vehicle->type ?? $vehicle->vehicleType?->name,
+                'total_assignments' => (int) $total,
+                'delay_reports' => $delayCount,
+                'delay_rate_pct' => $rate,
             ];
-        })->filter(fn ($row) => $row['total_assignments'] > 0)
-            ->sortByDesc('delay_rate_pct')
-            ->values();
+        })->filter()->sortByDesc('delay_rate_pct')->values();
 
         return response()->json([
             'summary' => [

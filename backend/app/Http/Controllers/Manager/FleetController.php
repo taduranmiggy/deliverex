@@ -4,10 +4,14 @@ namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
 use App\Models\DispatchAssignment;
-use App\Models\TrackingLog;
+use App\Services\Gps\TrackingService;
 
 class FleetController extends Controller
 {
+    public function __construct(private TrackingService $trackingService)
+    {
+    }
+
     public function index()
     {
         $assignments = DispatchAssignment::with('jobOrder', 'driver.user', 'vehicle')
@@ -16,21 +20,17 @@ class FleetController extends Controller
             ->get();
 
         $data = $assignments->map(function (DispatchAssignment $a) {
-            $latest = TrackingLog::where('assignment_id', $a->id)
-                ->orderByDesc('captured_at')
-                ->first();
+            $latest = $this->trackingService->latestForAssignment($a);
+            $history = $this->trackingService->historyForAssignment($a, 100);
 
             return [
-                'id'         => $a->id,
-                'status'     => $a->status,
-                'driver'     => $a->driver?->user?->name,
-                'vehicle'    => $a->vehicle?->plate_no,
-                'job_order'  => $a->jobOrder,
-                'gps'        => $latest ? [
-                    'lat' => (float) $latest->latitude,
-                    'lng' => (float) $latest->longitude,
-                    'at'  => $latest->captured_at?->toIso8601String(),
-                ] : null,
+                'id' => $a->id,
+                'status' => $a->status,
+                'driver' => $a->driver?->user?->name,
+                'vehicle' => $a->vehicle?->plate_no,
+                'job_order' => $a->jobOrder,
+                'gps' => $this->trackingService->formatForFleet($latest),
+                'route_history' => $history,
             ];
         });
 

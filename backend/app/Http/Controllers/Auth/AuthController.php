@@ -232,6 +232,11 @@ class AuthController extends Controller
             $this->sessions->revokeCurrentSession($user, is_string($sessionId) ? $sessionId : null);
         }
 
+        AuditLogger::record($user, 'auth.session_revoked', User::class, $user->id, [
+            'all' => (bool) ($data['all'] ?? false),
+            'session_id' => $data['session_id'] ?? $request->attributes->get('auth_session_id'),
+        ], $request);
+
         return response()->json(['message' => 'Session revoked']);
     }
 
@@ -288,7 +293,12 @@ class AuthController extends Controller
     {
         $request->validate(['email' => 'required|email']);
 
-        Password::sendResetLink($request->only('email'));
+        $email = strtolower(trim($request->input('email')));
+        Password::sendResetLink(['email' => $email]);
+
+        AuditLogger::record(null, 'auth.password_reset_requested', User::class, null, [
+            'email' => $email,
+        ], $request);
 
         return response()->json([
             'message' => 'If the email exists, a password reset link has been sent.',
@@ -379,6 +389,13 @@ class AuthController extends Controller
         );
 
         if ($status === Password::PASSWORD_RESET) {
+            $user = User::query()->where('email', $request->input('email'))->first();
+            if ($user) {
+                AuditLogger::record($user, 'auth.password_reset', User::class, $user->id, [
+                    'email' => $user->email,
+                ], $request);
+            }
+
             return response()->json(['message' => 'Password reset successfully. You can now sign in.']);
         }
 
@@ -432,6 +449,7 @@ class AuthController extends Controller
         ]);
 
         $user = $request->user();
+        $wasFirstLogin = (bool) $user->must_change_password;
 
         if (! Hash::check($data['current_password'], $user->password)) {
             throw ValidationException::withMessages([
@@ -445,7 +463,9 @@ class AuthController extends Controller
             'password_changed_at' => now(),
         ])->save();
 
-        AuditLogger::record($user, 'auth.password_changed', User::class, $user->id, [], $request);
+        AuditLogger::record($user, 'auth.password_changed', User::class, $user->id, [
+            'first_login' => $wasFirstLogin,
+        ], $request);
 
         $this->prepareUserPayload($user);
 

@@ -15,13 +15,25 @@ class TrackingLog extends Model
 
     protected $fillable = [
         'assignment_id',
+        'driver_id',
         'latitude',
         'longitude',
+        'accuracy_m',
+        'heading',
+        'speed_kmh',
+        'source',
         'captured_at',
+        'synced_at',
     ];
 
     protected $casts = [
         'captured_at' => 'datetime',
+        'synced_at' => 'datetime',
+        'latitude' => 'float',
+        'longitude' => 'float',
+        'accuracy_m' => 'float',
+        'heading' => 'float',
+        'speed_kmh' => 'float',
     ];
 
     public function getEventAtAttribute(): ?string
@@ -32,5 +44,10 @@ class TrackingLog extends Model
     public function assignment()
     {
         return $this->belongsTo(DispatchAssignment::class, 'assignment_id');
+    }
+
+    public function driver()
+    {
+        return $this->belongsTo(Driver::class, 'driver_id');
     }
 }

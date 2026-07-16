@@ -33,7 +33,7 @@ class OfflineActionTimestampTest extends TestCase
 
         $actionTimestamp = '2026-06-29T10:15:00.000Z';
 
-        $response = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/status', [
+        $response = $this->apiAs($driverUser)->postJson('/api/driver/status', [
             'assignment_id'    => $assignment->id,
             'status'           => DeliveryStatus::ARRIVED,
             'latitude'         => 14.5995,
@@ -42,21 +42,21 @@ class OfflineActionTimestampTest extends TestCase
         ]);
 
         $response->assertOk()
-            ->assertJsonPath('status', DeliveryStatus::ARRIVED)
+            ->assertJsonPath('status', DeliveryStatus::ARRIVED_AT_DESTINATION)
             ->assertJsonPath('event_at', '2026-06-29T10:15:00+00:00')
             ->assertJsonPath('synced_at', '2026-06-29T10:30:00+00:00')
             ->assertJsonPath('performed_offline', true);
 
         $this->assertDatabaseHas('delivery_status_logs', [
             'assignment_id' => $assignment->id,
-            'status'        => DeliveryStatus::ARRIVED,
+            'status'        => DeliveryStatus::ARRIVED_AT_DESTINATION,
             'created_at'    => '2026-06-29 10:15:00',
             'synced_at'     => '2026-06-29 10:30:00',
         ]);
 
         $this->assertDatabaseHas('delivery_status_history', [
             'assignment_id' => $assignment->id,
-            'status'        => DeliveryStatus::ARRIVED,
+            'status'        => DeliveryStatus::ARRIVED_AT_DESTINATION,
             'updated_at'    => '2026-06-29 10:15:00',
             'created_at'    => '2026-06-29 10:15:00',
         ]);
@@ -68,7 +68,7 @@ class OfflineActionTimestampTest extends TestCase
 
         $log = DeliveryStatusLog::query()
             ->where('assignment_id', $assignment->id)
-            ->where('status', DeliveryStatus::ARRIVED)
+            ->where('status', DeliveryStatus::ARRIVED_AT_DESTINATION)
             ->first();
 
         $this->assertNotNull($log);
@@ -84,7 +84,7 @@ class OfflineActionTimestampTest extends TestCase
 
         [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::ARRIVED_AT_PICKUP);
 
-        $response = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/status', [
+        $response = $this->apiAs($driverUser)->postJson('/api/driver/status', [
             'assignment_id'    => $assignment->id,
             'status'           => DeliveryStatus::EN_ROUTE_TO_DESTINATION,
             'action_timestamp' => 'definitely-not-iso8601',
@@ -107,7 +107,7 @@ class OfflineActionTimestampTest extends TestCase
         [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::EN_ROUTE_TO_DESTINATION);
         $jobOrder = $assignment->jobOrder;
 
-        $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/status', [
+        $this->apiAs($driverUser)->postJson('/api/driver/status', [
             'assignment_id'    => $assignment->id,
             'status'           => DeliveryStatus::ARRIVED,
             'latitude'         => 14.5995,
@@ -120,7 +120,7 @@ class OfflineActionTimestampTest extends TestCase
         $response->assertOk();
 
         $arrivedEvent = collect($response->json('status_events'))
-            ->firstWhere('status', DeliveryStatus::ARRIVED);
+            ->firstWhere('status', DeliveryStatus::ARRIVED_AT_DESTINATION);
 
         $this->assertNotNull($arrivedEvent);
         $this->assertSame('2026-06-29T10:15:00+00:00', $arrivedEvent['event_at']);
@@ -134,7 +134,7 @@ class OfflineActionTimestampTest extends TestCase
 
         [$driverUser, $assignment] = $this->createDriverAssignment(DeliveryStatus::ASSIGNED);
 
-        $response = $this->actingAs($driverUser, 'sanctum')->postJson('/api/driver/status', [
+        $response = $this->apiAs($driverUser)->postJson('/api/driver/status', [
             'assignment_id'    => $assignment->id,
             'status'           => DeliveryStatus::EN_ROUTE_TO_PICKUP,
             'latitude'         => 14.5995,
@@ -184,7 +184,7 @@ class OfflineActionTimestampTest extends TestCase
         $jobOrder = JobOrder::factory()->create([
             'created_by' => $dispatcher->id,
             'status' => DeliveryStatus::toJobOrderStatus($status),
-            'scheduled_start' => now()->subHour(),
+            'scheduled_start' => now()->addHour(),
             'scheduled_end' => now()->addHours(3),
             'dropoff_latitude' => 14.5995,
             'dropoff_longitude' => 120.9842,

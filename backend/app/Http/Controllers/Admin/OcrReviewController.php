@@ -47,7 +47,17 @@ class OcrReviewController extends Controller
                     $matchStatus = 'mismatch';
                 }
 
-                $ocr->setAttribute('validation_result', [
+                $validationFromDiagnostics = is_array($ocr->ocr_diagnostics['validation'] ?? null)
+                    ? $ocr->ocr_diagnostics['validation']
+                    : null;
+
+                $ocr->setAttribute('validation_result', $validationFromDiagnostics ? array_merge([
+                    'match_status' => $validationFromDiagnostics['overall_status'] === 'matched'
+                        ? 'matched'
+                        : ($validationFromDiagnostics['overall_status'] === 'mismatch' ? 'mismatch' : 'partial_match'),
+                    'mismatches' => $validationFromDiagnostics['mismatches'] ?? [],
+                    'field_checks' => $validationFromDiagnostics['fields'] ?? [],
+                ], $validationFromDiagnostics) : [
                     'match_status' => $matchStatus,
                     'volume_delta_ratio' => $volumeDelta,
                     'expected_volume' => $expectedVolume > 0 ? $expectedVolume : null,
@@ -55,6 +65,9 @@ class OcrReviewController extends Controller
                     'has_delivery_receipt_number' => $hasReceipt,
                     'has_dimensions' => $hasDims,
                 ]);
+                $ocr->setAttribute('field_confidence', $ocr->ocr_diagnostics['field_confidence'] ?? []);
+                $ocr->setAttribute('parser_status', $ocr->ocr_diagnostics['parser_status'] ?? null);
+                $ocr->setAttribute('auxiliary_fields', $ocr->ocr_diagnostics['auxiliary_fields'] ?? []);
                 $ocr->setAttribute('effective_values', $ocr->buildEffectiveValues());
 
                 return $ocr;
@@ -98,11 +111,11 @@ class OcrReviewController extends Controller
             /** @var OcrResult $ocr */
             $writer->addRow(new Row([
                 Cell::fromValue($ocr->job_order_id ? ('JO-'.$ocr->job_order_id) : '—'),
-                Cell::fromValue($ocr->delivery_receipt_number ?: '—'),
-                Cell::fromValue($ocr->extracted_length ?? '—'),
-                Cell::fromValue($ocr->extracted_width ?? '—'),
-                Cell::fromValue($ocr->extracted_height ?? '—'),
-                Cell::fromValue($ocr->extracted_volume ?? '—'),
+                Cell::fromValue($ocr->getEffectiveValue('delivery_receipt_number') ?: '—'),
+                Cell::fromValue($ocr->getEffectiveValue('length') ?? '—'),
+                Cell::fromValue($ocr->getEffectiveValue('width') ?? '—'),
+                Cell::fromValue($ocr->getEffectiveValue('height') ?? '—'),
+                Cell::fromValue($ocr->getEffectiveValue('volume') ?? '—'),
                 Cell::fromValue($ocr->vehicle_plate_no ?: '—'),
                 Cell::fromValue($ocr->driver_name ?: '—'),
                 Cell::fromValue($ocr->delivery_date ? $ocr->delivery_date->toDateTimeString() : '—'),
@@ -113,6 +126,12 @@ class OcrReviewController extends Controller
         }
 
         $writer->close();
+
+        AuditLogger::record($request->user(), 'reports.export_excel', OcrResult::class, null, [
+            'report' => 'ocr_review',
+            'file_name' => $fileName,
+            'filters' => $request->query(),
+        ], $request);
 
         return response()->download($tmpPath, $fileName)->deleteFileAfterSend(true);
     }

@@ -14,6 +14,7 @@ import { formatJobSchedule } from '../../utils/driverAssignment'
 import { formatEventAt } from '../../utils/deliveryTimestamps'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
+import JobOrderRouteMap from '../../components/JobOrderRouteMap'
 import { ClipboardList, Info, Loader2 } from 'lucide-react'
 
 const STATUS_OPTIONS = [
@@ -80,9 +81,10 @@ function DetailPanel({ order }) {
           <strong style={{ textAlign: 'right' }}>{buildDisplayAddress('pickup', order) || '—'}</strong>
         </div>
         <div className="dx-kv" style={{ alignItems: 'flex-start' }}>
-          <span>Drop-off</span>
+          <span>Destination</span>
           <strong style={{ textAlign: 'right' }}>{buildDisplayAddress('dropoff', order) || '—'}</strong>
         </div>
+        <JobOrderRouteMap jobOrderId={order.id} readOnly />
         {order.material_type && kv('Material', `${order.material_type}${order.specification_size ? ` · ${order.specification_size}` : ''}`)}
         {kv('Load', order.load_volume_m3 || order.volume_m3 ? `${order.load_volume_m3 ?? order.volume_m3} m³` : null)}
         {kv('Quarry', order.quarry?.quarry_name)}

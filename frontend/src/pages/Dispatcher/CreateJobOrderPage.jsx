@@ -28,6 +28,7 @@ import { companyDropoffFields } from '../../utils/companyAddress'
 import { formatJobSchedule } from '../../utils/driverAssignment'
 import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
 import { FilterSelect } from '../../components/ui'
+import JobOrderRouteMap from '../../components/JobOrderRouteMap'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1359,8 +1360,9 @@ function CreateJobOrderPage() {
                   <span>Pickup</span><strong style={{ textAlign: 'right' }}>{buildDisplayAddress('pickup', selected) || '—'}</strong>
                 </div>
                 <div className="dx-kv" style={{ alignItems: 'flex-start' }}>
-                  <span>Drop-off</span><strong style={{ textAlign: 'right' }}>{buildDisplayAddress('dropoff', selected) || '—'}</strong>
+                  <span>Destination</span><strong style={{ textAlign: 'right' }}>{buildDisplayAddress('dropoff', selected) || '—'}</strong>
                 </div>
+                <JobOrderRouteMap jobOrderId={selected.id} readOnly />
                 {selected.material_type && (
                   <div className="dx-kv"><span>Material</span><strong>{selected.material_type}{selected.specification_size ? ` · ${selected.specification_size}` : ''}</strong></div>
                 )}

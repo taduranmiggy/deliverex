@@ -9,7 +9,7 @@ use App\Http\Controllers\Admin\DocumentFileController;
 use App\Http\Controllers\Admin\DriverController as AdminDriverController;
 use App\Http\Controllers\Admin\MasterDataController as AdminMasterDataController;
 use App\Http\Controllers\Admin\OcrReviewController;
-use App\Http\Controllers\Admin\RolesController;
+use App\Http\Controllers\Admin\ResourceConsistencyController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VehicleController as AdminVehicleController;
 use App\Http\Controllers\Auth\AuthController;
@@ -30,7 +30,8 @@ use App\Http\Controllers\Dispatcher\JobOrderController;
 use App\Http\Controllers\Dispatcher\MaterialMasterDataController;
 use App\Http\Controllers\Dispatcher\MasterDataOptionsController;
 use App\Http\Controllers\Driver\AssignmentController as DriverAssignmentController;
-use App\Http\Controllers\Driver\OfflineSyncController;
+use App\Http\Controllers\Driver\SyncConflictController;
+use App\Http\Controllers\JobOrderMapController;
 use App\Http\Controllers\Driver\ProfileController as DriverProfileController;
 use App\Http\Controllers\Driver\CompletionProofController as DriverCompletionProofController;
 use App\Http\Controllers\Driver\DelayController as DriverDelayController;
@@ -42,6 +43,7 @@ use App\Http\Controllers\Gps\TrackingController as GpsTrackingController;
 use App\Http\Controllers\Manager\AnalyticsController;
 use App\Http\Controllers\Manager\DashboardController;
 use App\Http\Controllers\Manager\FleetController;
+use App\Http\Controllers\Manager\ReportExportController;
 use App\Http\Controllers\Manager\ReportsController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Ocr\OcrController;
@@ -70,7 +72,8 @@ Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
     ->middleware('throttle:6,1');
 
 // Public: customer tracking (no auth required)
-Route::get('/customer/track/{trackingCode}', [CustomerTrackingController::class, 'show']);
+Route::get('/customer/track/{trackingCode}', [CustomerTrackingController::class, 'show'])
+    ->middleware('throttle:60,1');
 
 // Public: submit inquiry (no auth required)
 Route::post('/customer/inquiry', [InquiryController::class, 'store']);
@@ -112,6 +115,9 @@ Route::middleware('auth.api')->group(function () {
 
     // ─── Admin ────────────────────────────────────────────────────────────────
     Route::middleware('role:admin')->prefix('admin')->group(function () {
+        Route::get('/fleet/consistency',        [ResourceConsistencyController::class, 'show']);
+        Route::post('/fleet/reconcile',         [ResourceConsistencyController::class, 'reconcile']);
+
         Route::get('/roles',                [RolesController::class, 'index']);
         Route::get('/audit-logs',           [AuditLogsController::class, 'index']);
         Route::get('/email-logs',           [EmailLogController::class, 'index']);
@@ -203,20 +209,23 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/assignments',                         [DriverAssignmentController::class, 'index']);
         Route::get('/assignments/{assignment}',            [DriverAssignmentController::class, 'show']);
         Route::post('/status',                             [DriverStatusController::class, 'store']);
-        Route::post('/tracking',                           [DriverTrackingController::class, 'store']);
+        Route::post('/tracking',                           [DriverTrackingController::class, 'store'])->middleware('throttle:120,1');
         Route::post('/documents',                          [DriverDocumentController::class, 'store']);
         Route::post('/issues',                             [DriverIssueController::class, 'store']);
         Route::post('/delays',                             [DriverDelayController::class, 'store']);
         Route::post('/completion-proof',                   [DriverCompletionProofController::class, 'store']);
         Route::post('/offline-queue',                      [OfflineSyncController::class, 'store']);
         Route::post('/offline-queue/synced',               [OfflineSyncController::class, 'markSynced']);
+        Route::get('/sync-conflicts',                      [SyncConflictController::class, 'index']);
+        Route::post('/sync-conflicts',                     [SyncConflictController::class, 'store']);
     });
 
     // ─── Manager ──────────────────────────────────────────────────────────────
     Route::middleware('role:manager')->prefix('manager')->group(function () {
         Route::get('/dashboard',  [DashboardController::class, 'index']);
-        Route::get('/reports',    [ReportsController::class, 'index']);
-        Route::get('/analytics',  [AnalyticsController::class, 'index']);
+        Route::get('/reports',         [ReportsController::class, 'index']);
+        Route::get('/reports/export', [ReportExportController::class, 'export']);
+        Route::get('/analytics',       [AnalyticsController::class, 'index']);
         Route::get('/active-deliveries', [FleetController::class, 'index']);
         Route::get('/vehicle-utilization', [VehicleUtilizationController::class, 'index']);
     });
@@ -237,6 +246,10 @@ Route::middleware('auth.api')->group(function () {
     });
 
     // ─── Admin + Dispatcher + Manager: GPS tracking view & OCR reprocess ─────
+    Route::middleware('role:admin|dispatcher|manager|driver')->group(function () {
+        Route::get('/job-orders/{jobOrder}/map', [JobOrderMapController::class, 'show']);
+    });
+
     Route::middleware('role:admin|dispatcher|manager')->group(function () {
         Route::get('/tracking/{assignment}',             [GpsTrackingController::class, 'show']);
     });

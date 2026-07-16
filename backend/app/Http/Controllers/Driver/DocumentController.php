@@ -56,9 +56,9 @@ class DocumentController extends Controller
         $storeOnly = in_array($type, self::STORE_ONLY_TYPES, true);
         $requiresArrivalGate = in_array($type, self::STATUS_GATED_OCR_TYPES, true);
         $status = DeliveryStatus::canonicalize($assignment->status) ?? $assignment->status;
-        if ($requiresArrivalGate && ! in_array($status, [DeliveryStatus::ARRIVED, DeliveryStatus::COMPLETED], true)) {
+        if ($requiresArrivalGate && ! DeliveryStatus::allowsOcrUpload((string) $status)) {
             return response()->json([
-                'message' => 'OCR uploads are only allowed when delivery status is Arrived or Completed.',
+                'message' => 'OCR uploads are only allowed when delivery status is Arrived at Destination or Completed.',
             ], 422);
         }
 

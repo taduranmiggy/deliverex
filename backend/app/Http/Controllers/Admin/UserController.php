@@ -7,6 +7,8 @@ use App\Models\CompanyUser;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Auth\UserInvitationService;
+use App\Support\AuditChangeTracker;
+use App\Support\AuditLogger;
 use App\Support\DriverAccount;
 use App\Services\Company\CompanyService;
 use Illuminate\Http\Request;
@@ -98,6 +100,12 @@ class UserController extends Controller
         $this->invites->sendInvitation($user->fresh());
         DriverAccount::sync($user->fresh());
 
+        AuditLogger::record($request->user(), 'user.created', User::class, $user->id, [
+            'email' => $user->email,
+            'role' => $role->name,
+            'company_id' => $companyId,
+        ], $request);
+
         return response()->json($this->toPayload($user->fresh()->load('role', 'driver', 'companyUser.company')), 201);
     }
 
@@ -127,6 +135,9 @@ class UserController extends Controller
             $this->assertSupportedRole($role->name);
             $nextRole = $role->name;
         }
+
+        $trackFields = ['role_id', 'name', 'email', 'phone', 'status'];
+        $before = $user->only($trackFields);
 
         $user->update($data);
 
@@ -158,10 +169,39 @@ class UserController extends Controller
 
         DriverAccount::sync($user->fresh());
 
+        $after = $user->fresh()->only($trackFields);
+        $changes = AuditChangeTracker::diffArrays($before, $after, $trackFields);
+
+        AuditLogger::recordChanges(
+            $request->user(),
+            'user.updated',
+            User::class,
+            $user->id,
+            $changes,
+            ['email' => $user->email],
+            $request,
+        );
+
+        if (isset($changes['role_id'])) {
+            AuditLogger::record($request->user(), 'user.role_changed', User::class, $user->id, [
+                'old_role_id' => $changes['role_id']['old'],
+                'new_role_id' => $changes['role_id']['new'],
+            ], $request);
+        }
+
+        if (isset($changes['status'])) {
+            $action = ($changes['status']['new'] ?? '') === 'active'
+                ? 'user.activated'
+                : 'user.deactivated';
+            AuditLogger::record($request->user(), $action, User::class, $user->id, [
+                'changes' => ['status' => $changes['status']],
+            ], $request);
+        }
+
         return response()->json($this->toPayload($user->fresh()->load('role', 'driver', 'companyUser.company')));
     }
 
-    public function sendInvite(User $user)
+    public function sendInvite(Request $request, User $user)
     {
         if (($user->status ?? 'active') === 'inactive') {
             return response()->json(['message' => 'Cannot send invite for inactive users.'], 422);
@@ -173,14 +213,23 @@ class UserController extends Controller
             $user->forceFill(['status' => 'pending'])->save();
         }
 
+        AuditLogger::record($request->user(), 'user.invite_sent', User::class, $user->id, [
+            'email' => $user->email,
+        ], $request);
+
         return response()->json([
             'message' => 'Invitation email sent.',
             'user' => $this->toPayload($user->fresh()->load('role', 'driver', 'companyUser.company')),
         ]);
     }
 
-    public function destroy(User $user)
+    public function destroy(Request $request, User $user)
     {
+        AuditLogger::record($request->user(), 'user.deleted', User::class, $user->id, [
+            'email' => $user->email,
+            'name' => $user->name,
+        ], $request);
+
         $user->delete();
 
         return response()->json(['message' => 'User deleted']);
