@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   createJobOrder, createMaterialSpecification, createMaterialType,
@@ -55,17 +55,40 @@ const STEPS = [
 
 const DRAFT_KEY = 'dx_jo_wizard_draft'
 
+/** Find the nearest scrollable ancestor (staff layout uses #main-content). */
+function getScrollParent(el) {
+  if (!el) return document.getElementById('main-content')
+  let node = el.parentElement
+  while (node) {
+    const { overflowY } = getComputedStyle(node)
+    if (/(auto|scroll|overlay)/.test(overflowY) && node.scrollHeight > node.clientHeight + 1) {
+      return node
+    }
+    node = node.parentElement
+  }
+  return document.getElementById('main-content')
+}
+
 /** Scroll the staff main pane so the job-order wizard is at the top. */
 function scrollJobOrderFormIntoView(el, { behavior = 'smooth' } = {}) {
   if (!el) return
-  requestAnimationFrame(() => {
-    const main = document.getElementById('main-content')
-    if (main) {
-      const top = el.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop - 16
-      main.scrollTo({ top: Math.max(0, top), behavior })
+
+  const runScroll = () => {
+    const scrollParent = getScrollParent(el)
+    if (scrollParent) {
+      const marginTop = Number.parseFloat(getComputedStyle(el).scrollMarginTop) || 16
+      const top = el.getBoundingClientRect().top
+        - scrollParent.getBoundingClientRect().top
+        + scrollParent.scrollTop
+        - marginTop
+      scrollParent.scrollTo({ top: Math.max(0, top), behavior })
       return
     }
     el.scrollIntoView({ behavior, block: 'start' })
+  }
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(runScroll)
   })
 }
 
@@ -275,7 +298,10 @@ function ScheduleReviewRows({ start, end }) {
 
 // ─── Job Order Wizard Form ─────────────────────────────────────────────────────
 
-function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading, onSaved, onCancel, onRefreshOptions }) {
+const JobOrderForm = forwardRef(function JobOrderForm(
+  { initial, options, pickupLocationOptions, clientsLoading, onSaved, onCancel, onRefreshOptions },
+  ref,
+) {
   const isEdit       = Boolean(initial?.id)
   const clients      = options.companies || options.clients || []
   const materialTypes = useMemo(() => options.material_types || [], [options.material_types])
@@ -395,7 +421,9 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
   // Tracks every field the dispatcher has manually typed into.
   const userEditedRef = useRef(new Set())
 
-  useEffect(() => {
+  useImperativeHandle(ref, () => stepPanelRef.current, [])
+
+  useLayoutEffect(() => {
     scrollJobOrderFormIntoView(stepPanelRef.current)
   }, [initial?.id])
 
@@ -625,6 +653,8 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       setError('')
       setStep((s) => Math.min(s + 1, 5))
       scrollJobOrderFormIntoView(stepPanelRef.current)
+    } else {
+      scrollJobOrderFormIntoView(stepPanelRef.current)
     }
   }
 
@@ -688,6 +718,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       if (!validateStep(s)) {
         setError('Some required fields are incomplete. Please review each step.')
         goToStep(s)
+        scrollJobOrderFormIntoView(stepPanelRef.current)
         return
       }
     }
@@ -699,6 +730,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       onSaved(saved, isEdit)
     } catch (err) {
       setError(err.message)
+      scrollJobOrderFormIntoView(stepPanelRef.current)
     } finally {
       setSaving(false)
     }
@@ -715,7 +747,12 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="dx-panel dx-job-order-wizard" style={{ padding: '22px 24px', marginTop: 16 }} ref={stepPanelRef}>
+    <div
+      id="job-order-form"
+      className="dx-panel dx-job-order-wizard"
+      style={{ padding: '22px 24px', marginTop: 16 }}
+      ref={stepPanelRef}
+    >
 
       {/* Title row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -1037,7 +1074,7 @@ function JobOrderForm({ initial, options, pickupLocationOptions, clientsLoading,
       </div>
     </div>
   )
-}
+})
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -1050,7 +1087,7 @@ function CreateJobOrderPage() {
   const [clientsLoading, setClientsLoading] = useState(true)
   const [selected, setSelected]     = useState(null)
   const [formMode, setFormMode]     = useState(null)
-  const formScrollRef               = useRef(null)
+  const formPanelRef                = useRef(null)
   const [error, setError]           = useState('')
   // Allow dashboard KPI cards to pre-select a tab via navigation state
   const [activeTab, setActiveTab]   = useState(location.state?.initialTab || 'active')
@@ -1189,11 +1226,12 @@ function CreateJobOrderPage() {
   const isCreating = formMode === 'create'
   const isEditing  = Boolean(formMode?.order)
   const formOpen   = isCreating || isEditing
+  const formScrollKey = isEditing ? `edit-${formMode.order.id}` : isCreating ? 'create' : null
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!formOpen) return
-    scrollJobOrderFormIntoView(formScrollRef.current)
-  }, [formOpen, formMode?.order?.id])
+    scrollJobOrderFormIntoView(formPanelRef.current)
+  }, [formOpen, formScrollKey])
 
   return (
     <section>
@@ -1218,18 +1256,17 @@ function CreateJobOrderPage() {
 
       {/* ── Wizard form — slides in above the table ── */}
       {formOpen && (
-        <div ref={formScrollRef} id="job-order-form">
-          <JobOrderForm
-            key={isEditing ? `edit-${formMode.order.id}` : 'create'}
-            initial={isEditing ? formMode.order : null}
-            options={masterData}
-            pickupLocationOptions={masterData.pickup_locations || []}
-            clientsLoading={clientsLoading}
-            onRefreshOptions={refreshOptions}
-            onSaved={handleSaved}
-            onCancel={() => setFormMode(null)}
-          />
-        </div>
+        <JobOrderForm
+          ref={formPanelRef}
+          key={isEditing ? `edit-${formMode.order.id}` : 'create'}
+          initial={isEditing ? formMode.order : null}
+          options={masterData}
+          pickupLocationOptions={masterData.pickup_locations || []}
+          clientsLoading={clientsLoading}
+          onRefreshOptions={refreshOptions}
+          onSaved={handleSaved}
+          onCancel={() => setFormMode(null)}
+        />
       )}
 
       <div className="dx-split-bestfit" style={{ gridTemplateColumns: '1fr 360px', gap: 20, marginTop: 16 }}>
