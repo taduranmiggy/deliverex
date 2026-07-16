@@ -145,7 +145,7 @@ class ResourceConsistencyService
             $duplicates = DispatchAssignment::query()
                 ->select($column)
                 ->selectRaw('COUNT(*) as active_count')
-                ->whereIn('status', DeliveryStatus::availabilityBlocking())
+                ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
                 ->groupBy($column)
                 ->havingRaw('COUNT(*) > 1')
                 ->get();
@@ -221,7 +221,7 @@ class ResourceConsistencyService
         $issues = [];
 
         DispatchAssignment::query()
-            ->whereIn('status', DeliveryStatus::availabilityBlocking())
+            ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
             ->with(['driver:id', 'vehicle:id,plate_no'])
             ->each(function (DispatchAssignment $assignment) use (&$issues) {
                 if (! $assignment->driver) {

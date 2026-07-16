@@ -71,10 +71,20 @@ class BestFitVehicleTypeMatchTest extends TestCase
         $this->assertSame($match['score'], $sum);
     }
 
+    public function test_vehicle_type_matches_by_id_when_free_text_labels_differ(): void
+    {
+        [$jobOrder, $vehicle] = $this->seedPair('Dump Truck', 'Legacy Mismatch Label', matchById: true);
+
+        $recommendations = app(BestFitAssignmentService::class)->recommend($jobOrder);
+        $match = collect($recommendations)->firstWhere('vehicle_id', $vehicle->id);
+
+        $this->assertNotNull($match, 'Vehicle should match via preferred_vehicle_type_id.');
+    }
+
     /**
      * @return array{0: JobOrder, 1: Vehicle}
      */
-    private function seedPair(string $requiredTypeName, string $vehicleTypeName): array
+    private function seedPair(string $requiredTypeName, string $vehicleTypeName, bool $matchById = false): array
     {
         $user = User::factory()->create(['email_verified_at' => now()]);
 
@@ -98,6 +108,7 @@ class BestFitVehicleTypeMatchTest extends TestCase
             'user_id' => $user->id,
             'full_name' => 'Best Fit Driver',
             'license_no' => 'LIC-BF-001',
+            'license_expiry' => now()->addYear(),
             'availability' => 'available',
             'status' => 'available',
         ]);
@@ -105,7 +116,7 @@ class BestFitVehicleTypeMatchTest extends TestCase
         $vehicle = Vehicle::create([
             'plate_no' => 'BF-001',
             'type' => $vehicleTypeName,
-            'vehicle_type_id' => $vehicleType->id,
+            'vehicle_type_id' => $matchById ? $requiredType->id : $vehicleType->id,
             'capacity' => '15 m3',
             'cbm_capacity' => 15,
             'status' => 'available',

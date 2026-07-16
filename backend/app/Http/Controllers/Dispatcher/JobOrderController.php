@@ -439,7 +439,7 @@ class JobOrderController extends Controller
         }
 
         // Free any driver/vehicle that was assigned to this job order
-        foreach ($jobOrder->assignments()->whereIn('status', DeliveryStatus::availabilityBlocking())->get() as $assignment) {
+        foreach ($jobOrder->assignments()->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())->get() as $assignment) {
             $assignment->update(['status' => DeliveryStatus::CANCELLED]);
             $this->resourceSync->syncForAssignment(
                 $assignment,

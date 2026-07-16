@@ -1,0 +1,190 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\DispatchAssignment;
+use App\Models\Driver;
+use App\Models\JobOrder;
+use App\Models\Role;
+use App\Models\User;
+use App\Models\Vehicle;
+use App\Models\VehicleType;
+use App\Services\Assignment\BestFitAssignmentService;
+use App\Services\Assignment\BestFitPipelineDiagnostic;
+use App\Services\Fleet\AssignmentResourceSyncService;
+use App\Support\DeliveryStatus;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class BestFitPipelineDiagnosticTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $dispatcher;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $dispatcherRole = Role::create(['name' => 'dispatcher']);
+        $this->dispatcher = User::factory()->create([
+            'role_id' => $dispatcherRole->id,
+            'email_verified_at' => now(),
+        ]);
+    }
+
+    public function test_legacy_dispatched_assignment_blocks_driver_until_repaired(): void
+    {
+        $driverRole = Role::create(['name' => 'driver']);
+        $driverUser = User::factory()->create(['role_id' => $driverRole->id, 'email_verified_at' => now()]);
+
+        $driver = Driver::create([
+            'user_id' => $driverUser->id,
+            'full_name' => 'Legacy Driver',
+            'license_no' => 'LIC-LEG-001',
+            'license_expiry' => now()->addYear(),
+            'availability' => 'available',
+            'status' => 'available',
+        ]);
+
+        $vehicle = Vehicle::create([
+            'plate_no' => 'LEG-001',
+            'type' => 'Dump Truck',
+            'cbm_capacity' => 15,
+            'status' => 'available',
+        ]);
+
+        $completedJob = JobOrder::factory()->create([
+            'created_by' => $this->dispatcher->id,
+            'status' => 'completed',
+        ]);
+
+        DispatchAssignment::create([
+            'job_order_id' => $completedJob->id,
+            'driver_id' => $driver->id,
+            'vehicle_id' => $vehicle->id,
+            'assigned_by' => $this->dispatcher->id,
+            'status' => 'dispatched',
+            'assigned_at' => now()->subDay(),
+            'completed_at' => now()->subHours(2),
+        ]);
+
+        $pendingJob = JobOrder::factory()->create([
+            'created_by' => $this->dispatcher->id,
+            'vehicle_type_required' => 'Dump Truck',
+            'load_volume_m3' => 10,
+            'status' => 'pending',
+        ]);
+
+        $service = app(BestFitAssignmentService::class);
+        $this->assertSame([], $service->recommend($pendingJob));
+
+        app(AssignmentResourceSyncService::class)->repairStaleBlockingAssignments('test');
+
+        $recommendations = $service->recommend($pendingJob);
+        $this->assertNotEmpty($recommendations);
+        $this->assertSame($driver->id, $recommendations[0]['driver_id']);
+    }
+
+    public function test_vehicle_type_matches_by_preferred_vehicle_type_id(): void
+    {
+        $driverRole = Role::create(['name' => 'driver']);
+        $driverUser = User::factory()->create(['role_id' => $driverRole->id, 'email_verified_at' => now()]);
+
+        $requiredType = VehicleType::create([
+            'name' => 'Dump Truck',
+            'wheel_type' => '10 Wheeler',
+            'min_cbm' => 10,
+            'max_cbm' => 20,
+            'status' => 'active',
+        ]);
+
+        Driver::create([
+            'user_id' => $driverUser->id,
+            'full_name' => 'Type Match Driver',
+            'license_no' => 'LIC-TYPE-001',
+            'license_expiry' => now()->addYear(),
+            'availability' => 'available',
+            'status' => 'available',
+        ]);
+
+        $vehicle = Vehicle::create([
+            'plate_no' => 'TYPE-001',
+            'type' => 'Legacy Label Mismatch',
+            'vehicle_type_id' => $requiredType->id,
+            'cbm_capacity' => 15,
+            'status' => 'available',
+        ]);
+
+        $jobOrder = JobOrder::factory()->create([
+            'created_by' => $this->dispatcher->id,
+            'preferred_vehicle_type_id' => $requiredType->id,
+            'vehicle_type_required' => 'Dump Truck',
+            'load_volume_m3' => 10,
+            'status' => 'pending',
+        ]);
+
+        $recommendations = app(BestFitAssignmentService::class)->recommend($jobOrder);
+
+        $this->assertNotEmpty($recommendations);
+        $this->assertSame($vehicle->id, $recommendations[0]['vehicle_id']);
+    }
+
+    public function test_diagnostics_report_license_incomplete_removals(): void
+    {
+        $driverRole = Role::create(['name' => 'driver']);
+        $driverUser = User::factory()->create(['role_id' => $driverRole->id, 'email_verified_at' => now()]);
+
+        Driver::create([
+            'user_id' => $driverUser->id,
+            'full_name' => 'No Expiry Driver',
+            'license_no' => 'LIC-NO-EXP',
+            'license_expiry' => null,
+            'availability' => 'available',
+            'status' => 'available',
+        ]);
+
+        Vehicle::create([
+            'plate_no' => 'VEH-001',
+            'type' => 'Dump Truck',
+            'cbm_capacity' => 15,
+            'status' => 'available',
+        ]);
+
+        $jobOrder = JobOrder::factory()->create([
+            'created_by' => $this->dispatcher->id,
+            'vehicle_type_required' => 'Dump Truck',
+            'load_volume_m3' => 10,
+            'status' => 'pending',
+        ]);
+
+        $report = app(BestFitPipelineDiagnostic::class)->analyze($jobOrder);
+
+        $this->assertSame(0, $report['summary']['recommendation_count']);
+        $this->assertSame('all_drivers_filtered', $report['bottleneck']);
+        $this->assertCount(1, $report['drivers']['removed']['license_incomplete']);
+        $this->assertSame('No Expiry Driver', $report['drivers']['removed']['license_incomplete'][0]['name']);
+    }
+
+    public function test_best_fit_api_includes_diagnostics_when_empty(): void
+    {
+        $jobOrder = JobOrder::factory()->create([
+            'created_by' => $this->dispatcher->id,
+            'vehicle_type_required' => 'Dump Truck',
+            'status' => 'pending',
+        ]);
+
+        $this->apiAs($this->dispatcher)
+            ->getJson("/api/dispatch/best-fit/{$jobOrder->id}")
+            ->assertOk()
+            ->assertJsonPath('recommendations', [])
+            ->assertJsonStructure([
+                'diagnostics' => [
+                    'summary',
+                    'drivers' => ['total', 'eligible_count', 'removed_counts', 'removed'],
+                    'vehicles' => ['total', 'eligible_count', 'removed_counts', 'removed'],
+                    'bottleneck',
+                ],
+            ]);
+    }
+}

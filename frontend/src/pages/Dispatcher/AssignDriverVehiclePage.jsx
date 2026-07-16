@@ -212,6 +212,89 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
   )
 }
 
+const DRIVER_REMOVAL_LABELS = {
+  inactive_status: 'Inactive account',
+  license_missing: 'Missing license number',
+  license_incomplete: 'Incomplete license (no expiry date)',
+  license_expired: 'Expired license',
+  admin_offline: 'Admin offline / inactive',
+  active_assignment: 'Active assignment blocking',
+  schedule_conflict: 'Schedule conflict',
+}
+
+const VEHICLE_REMOVAL_LABELS = {
+  admin_locked: 'Maintenance / unavailable',
+  active_assignment: 'Active assignment blocking',
+  schedule_conflict: 'Schedule conflict',
+  capacity_insufficient: 'Insufficient capacity',
+  vehicle_type_mismatch: 'Vehicle type mismatch',
+}
+
+function BestFitDiagnosticsPanel({ diagnostics }) {
+  if (!diagnostics) return null
+
+  const { summary, drivers, vehicles, bottleneck, job_requirements: req } = diagnostics
+
+  const renderRemovals = (removed, labels) => {
+    const entries = Object.entries(removed || {}).flatMap(([key, items]) =>
+      (items || []).map((item) => ({ ...item, category: labels[key] || key }))
+    )
+    if (entries.length === 0) return null
+
+    return (
+      <ul style={{ margin: '8px 0 0', padding: 0, listStyle: 'none', textAlign: 'left', fontSize: '0.8125rem' }}>
+        {entries.slice(0, 12).map((item, idx) => (
+          <li key={`${item.entity_id}-${idx}`} style={{ padding: '8px 10px', marginBottom: 6, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8 }}>
+            <strong>{item.name}</strong>
+            <div style={{ color: '#991b1b', marginTop: 2 }}>{item.category}</div>
+            <div style={{ color: 'var(--muted)', fontSize: '0.75rem', marginTop: 2 }}>
+              {item.field}: {String(item.actual ?? 'NULL')} → expected {String(item.expected ?? '—')}
+            </div>
+          </li>
+        ))}
+        {entries.length > 12 && (
+          <li style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>+ {entries.length - 12} more filtered out</li>
+        )}
+      </ul>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: 16, textAlign: 'left' }}>
+      <p style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: 8 }}>Pipeline diagnostics</p>
+      {req && (
+        <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: 10 }}>
+          Requires: {req.vehicle_type_name || 'Any type'}
+          {req.load_volume_m3 ? ` · ${req.load_volume_m3} m³` : ''}
+        </p>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+        <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid var(--stroke)', fontSize: '0.75rem' }}>
+          <strong>Drivers</strong>
+          <div>{summary?.eligible_drivers ?? 0} / {summary?.total_drivers ?? 0} eligible</div>
+          {drivers?.removed_counts && Object.entries(drivers.removed_counts).filter(([, c]) => c > 0).map(([k, c]) => (
+            <div key={k} style={{ color: 'var(--muted)' }}>{DRIVER_REMOVAL_LABELS[k] || k}: −{c}</div>
+          ))}
+        </div>
+        <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid var(--stroke)', fontSize: '0.75rem' }}>
+          <strong>Vehicles</strong>
+          <div>{summary?.eligible_vehicles ?? 0} / {summary?.total_vehicles ?? 0} eligible</div>
+          {vehicles?.removed_counts && Object.entries(vehicles.removed_counts).filter(([, c]) => c > 0).map(([k, c]) => (
+            <div key={k} style={{ color: 'var(--muted)' }}>{VEHICLE_REMOVAL_LABELS[k] || k}: −{c}</div>
+          ))}
+        </div>
+      </div>
+      {bottleneck && (
+        <p style={{ fontSize: '0.75rem', color: '#92400e', marginBottom: 8 }}>
+          Bottleneck: {bottleneck.replace(/_/g, ' ')}
+        </p>
+      )}
+      {renderRemovals(drivers?.removed, DRIVER_REMOVAL_LABELS)}
+      {renderRemovals(vehicles?.removed, VEHICLE_REMOVAL_LABELS)}
+    </div>
+  )
+}
+
 /* ── Page ───────────────────────────────────────────────────── */
 function AssignDriverVehiclePage() {
   const toast = useToast()
@@ -232,6 +315,7 @@ function AssignDriverVehiclePage() {
   const [overrideTab, setOverrideTab] = useState('suggested')
   const [altPage, setAltPage] = useState(1)
   const [altPerPage] = useState(6)
+  const [diagnostics, setDiagnostics] = useState(null)
 
   const location = useLocation()
   const preselectJobId = location.state?.jobOrderId ?? null
@@ -275,11 +359,13 @@ function AssignDriverVehiclePage() {
     setManualVehicleId('')
     setOverrideTab('suggested')
     setAltPage(1)
+    setDiagnostics(null)
     getBestFit(selected.id)
       .then((res) => {
         setRecommended(res.recommended || null)
         setRecommendations(res.recommendations || [])
         setOverrideOptions(res.override_options || { drivers: [], vehicles: [] })
+        setDiagnostics(res.diagnostics || null)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
@@ -496,8 +582,9 @@ function AssignDriverVehiclePage() {
             <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '32px 24px', textAlign: 'center' }}>
               <p style={{ fontWeight: 700, marginBottom: 8 }}>No recommendations available</p>
               <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginBottom: 14 }}>No available drivers or vehicles match the requirements.</p>
+              <BestFitDiagnosticsPanel diagnostics={diagnostics} />
               <a href="/admin/master-data" target="_blank" rel="noopener noreferrer"
-                style={{ color: 'var(--color-primary)', fontSize: '0.875rem', fontWeight: 600 }}>
+                style={{ color: 'var(--color-primary)', fontSize: '0.875rem', fontWeight: 600, display: 'inline-block', marginTop: 14 }}>
                 Check fleet availability in Master Data →
               </a>
             </div>

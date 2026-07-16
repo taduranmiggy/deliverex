@@ -144,7 +144,7 @@ final class DeliveryStatus
         };
     }
 
-    /** @return list<string> */
+    /** @return list<string> Canonical statuses that block driver/vehicle reuse. */
     public static function availabilityBlocking(): array
     {
         return [
@@ -155,6 +155,38 @@ final class DeliveryStatus
             self::ARRIVED_AT_DESTINATION,
             self::ARRIVED,
         ];
+    }
+
+    /**
+     * Raw assignment.status values stored in the database that block reuse.
+     * Includes legacy aliases so SQL whereIn matches historical rows.
+     *
+     * @return list<string>
+     */
+    public static function availabilityBlockingRawValues(): array
+    {
+        return array_values(array_unique([
+            self::ASSIGNED,
+            self::EN_ROUTE_TO_PICKUP,
+            self::ARRIVED_AT_PICKUP,
+            self::EN_ROUTE_TO_DESTINATION,
+            self::ARRIVED_AT_DESTINATION,
+            self::ARRIVED,
+            'dispatched',
+            'pending',
+            'in_progress',
+            'en_route',
+            'en route',
+            'en route to pickup',
+            'arrived at pickup',
+            'en route to destination',
+            'arrived at destination',
+        ]));
+    }
+
+    public static function applyAvailabilityBlockingScope(\Illuminate\Database\Eloquent\Builder $query, string $column = 'status'): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->whereIn($column, self::availabilityBlockingRawValues());
     }
 
     /** @return list<string> */

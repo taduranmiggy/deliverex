@@ -34,7 +34,7 @@ class AssignmentResourceSyncService
 
         $assignments = DispatchAssignment::query()
             ->where('job_order_id', $jobOrderId)
-            ->whereIn('status', DeliveryStatus::availabilityBlocking())
+            ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
             ->get();
 
         foreach ($assignments as $assignment) {
@@ -57,6 +57,7 @@ class AssignmentResourceSyncService
         $pointersCleared = 0;
 
         DB::transaction(function () use (&$duplicatesCancelled, &$pointersCleared, $reason) {
+            $this->repairStaleBlockingAssignments($reason);
             $duplicatesCancelled += $this->cancelDuplicateActiveAssignments('job_order_id');
             $duplicatesCancelled += $this->cancelDuplicateActiveAssignments('driver_id');
             $duplicatesCancelled += $this->cancelDuplicateActiveAssignments('vehicle_id');
@@ -77,7 +78,7 @@ class AssignmentResourceSyncService
 
         $duplicateGroups = DispatchAssignment::query()
             ->select($groupColumn)
-            ->whereIn('status', DeliveryStatus::availabilityBlocking())
+            ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
             ->groupBy($groupColumn)
             ->havingRaw('COUNT(*) > 1')
             ->pluck($groupColumn);
@@ -85,7 +86,7 @@ class AssignmentResourceSyncService
         foreach ($duplicateGroups as $groupId) {
             $activeAssignments = DispatchAssignment::query()
                 ->where($groupColumn, $groupId)
-                ->whereIn('status', DeliveryStatus::availabilityBlocking())
+                ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
                 ->orderByDesc('id')
                 ->get();
 
@@ -117,5 +118,37 @@ class AssignmentResourceSyncService
             });
 
         return $cleared;
+    }
+
+    /**
+     * Close assignments that still block availability after their job order finished
+     * or after completed_at was recorded without a terminal status.
+     */
+    public function repairStaleBlockingAssignments(string $reason = 'stale_assignment_cleanup'): int
+    {
+        $repaired = 0;
+
+        DispatchAssignment::query()
+            ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
+            ->whereHas('jobOrder', fn ($q) => $q->whereIn('status', ['completed', 'cancelled']))
+            ->each(function (DispatchAssignment $assignment) use (&$repaired, $reason) {
+                $assignment->update([
+                    'status'       => DeliveryStatus::COMPLETED,
+                    'completed_at' => $assignment->completed_at ?? now(),
+                ]);
+                $this->syncForAssignment($assignment, $reason);
+                $repaired++;
+            });
+
+        DispatchAssignment::query()
+            ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
+            ->whereNotNull('completed_at')
+            ->each(function (DispatchAssignment $assignment) use (&$repaired, $reason) {
+                $assignment->update(['status' => DeliveryStatus::COMPLETED]);
+                $this->syncForAssignment($assignment, $reason);
+                $repaired++;
+            });
+
+        return $repaired;
     }
 }

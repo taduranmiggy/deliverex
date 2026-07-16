@@ -80,7 +80,7 @@ class AssignmentController extends Controller
         }
 
         $activeOnJob = DispatchAssignment::where('job_order_id', $jobOrder->id)
-            ->whereIn('status', DeliveryStatus::availabilityBlocking())
+            ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
             ->exists();
 
         if ($activeOnJob) {

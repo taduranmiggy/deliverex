@@ -14,7 +14,7 @@ class AssignmentScheduleConflict
     public static function activeAssignmentQuery()
     {
         return DispatchAssignment::query()
-            ->whereIn('status', DeliveryStatus::availabilityBlocking());
+            ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues());
     }
 
     public static function hasDriverConflict(int $driverId, JobOrder $job, ?int $excludeAssignmentId = null): bool

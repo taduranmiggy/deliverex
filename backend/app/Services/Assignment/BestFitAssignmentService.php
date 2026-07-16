@@ -225,7 +225,7 @@ class BestFitAssignmentService
             ])
             ->join('dispatch_assignments', 'dispatch_assignments.id', '=', 'tracking_logs.assignment_id')
             ->whereIn('dispatch_assignments.driver_id', $driverIds)
-            ->whereIn('dispatch_assignments.status', DeliveryStatus::availabilityBlocking())
+            ->whereIn('dispatch_assignments.status', DeliveryStatus::availabilityBlockingRawValues())
             ->orderByDesc('tracking_logs.captured_at')
             ->orderByDesc('tracking_logs.id')
             ->get();
@@ -291,7 +291,7 @@ class BestFitAssignmentService
                 }
 
                 if ($requiredTypeNormalized !== null
-                    && ! $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized)) {
+                    && ! $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized, $jobOrder)) {
                     return false;
                 }
 
@@ -322,7 +322,7 @@ class BestFitAssignmentService
         }
 
         if ($requiredTypeNormalized !== null
-            && ! $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized)) {
+            && ! $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized, $jobOrder)) {
             return null;
         }
 
@@ -330,7 +330,7 @@ class BestFitAssignmentService
 
         // 1. Vehicle compatibility (40)
         $vehicleMatched = $requiredTypeNormalized === null
-            || $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized);
+            || $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized, $jobOrder);
         $vehicleContribution = $vehicleMatched ? self::WEIGHT_VEHICLE : 0;
         $vehicleDetail = $requiredTypeNormalized === null
             ? 'No specific vehicle type required for this job.'
@@ -594,8 +594,18 @@ class BestFitAssignmentService
         return $jobOrder->volume_m3 !== null ? (float) $jobOrder->volume_m3 : null;
     }
 
-    private function vehicleMatchesRequiredType(Vehicle $vehicle, string $requiredTypeNormalized): bool
+    private function vehicleMatchesRequiredType(Vehicle $vehicle, ?string $requiredTypeNormalized, JobOrder $jobOrder): bool
     {
+        if ($jobOrder->preferred_vehicle_type_id && $vehicle->vehicle_type_id) {
+            if ((int) $vehicle->vehicle_type_id === (int) $jobOrder->preferred_vehicle_type_id) {
+                return true;
+            }
+        }
+
+        if ($requiredTypeNormalized === null) {
+            return true;
+        }
+
         $actual = $this->normalizeVehicleTypeName($vehicle->vehicleType?->name ?? $vehicle->type);
 
         return $actual !== null && $actual === $requiredTypeNormalized;

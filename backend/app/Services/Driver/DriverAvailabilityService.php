@@ -40,7 +40,7 @@ class DriverAvailabilityService
     {
         return DispatchAssignment::query()
             ->where('driver_id', $driverId)
-            ->whereIn('status', DeliveryStatus::availabilityBlocking());
+            ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues());
     }
 
     public function activeAssignmentCount(Driver|int $driver): int
@@ -94,13 +94,10 @@ class DriverAvailabilityService
     {
         $driverId = $driver instanceof Driver ? $driver->id : $driver;
 
-        $inProgressStatuses = [
-            DeliveryStatus::EN_ROUTE_TO_PICKUP,
-            DeliveryStatus::ARRIVED_AT_PICKUP,
-            DeliveryStatus::EN_ROUTE_TO_DESTINATION,
-            DeliveryStatus::ARRIVED_AT_DESTINATION,
-            DeliveryStatus::ARRIVED,
-        ];
+        $inProgressStatuses = array_values(array_diff(
+            DeliveryStatus::availabilityBlockingRawValues(),
+            ['assigned', 'dispatched', 'pending'],
+        ));
 
         $inProgress = DispatchAssignment::query()
             ->where('driver_id', $driverId)
@@ -116,7 +113,7 @@ class DriverAvailabilityService
 
         return DispatchAssignment::query()
             ->where('driver_id', $driverId)
-            ->where('status', DeliveryStatus::ASSIGNED)
+            ->whereIn('status', ['assigned', 'dispatched', 'pending'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
             ->first();
