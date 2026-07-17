@@ -18,6 +18,7 @@ const AdminMasterDataPage = lazy(() => import('../pages/Admin/AdminMasterDataPag
 const AdminAuditLogsPage = lazy(() => import('../pages/Admin/AdminAuditLogsPage'))
 const AdminEmailLogsPage = lazy(() => import('../pages/Admin/AdminEmailLogsPage'))
 const AdminChatbotPage = lazy(() => import('../pages/Admin/AdminChatbotPage'))
+const InquiriesPage = lazy(() => import('../pages/Dispatcher/InquiriesPage'))
 const NotificationsPage = lazy(() => import('../pages/Admin/NotificationsPage'))
 const EditProfilePage = lazy(() => import('../pages/Account/EditProfilePage'))
 
@@ -72,6 +73,7 @@ export const roleRoutes = {
     <Route key="admin-companies"  path="companies"       element={<CompanyManagementPage />} />,
     <Route key="admin-users"      path="users"           element={<UserManagementPage />} />,
     <Route key="admin-chatbot"    path="chatbot"         element={<AdminChatbotPage />} />,
+    <Route key="admin-inquiries"  path="inquiries"       element={<InquiriesPage />} />,
     <Route key="admin-audit"      path="audit-logs"      element={<AdminAuditLogsPage />} />,
     <Route key="admin-email"      path="email-logs"      element={<AdminEmailLogsPage />} />,
     <Route key="admin-notifs"     path="notifications"   element={<NotificationsPage />} />,

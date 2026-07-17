@@ -6,15 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Inquiry;
 use App\Models\JobOrder;
 use App\Support\AuditLogger;
-use App\Services\Email\EmailService;
+use App\Services\Inquiry\InquiryNotificationService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Throwable;
 
 class InquiryController extends Controller
 {
-    public function __construct(private readonly EmailService $email) {}
+    public function __construct(private readonly InquiryNotificationService $notifications) {}
 
     /** Public: customer submits a contact / delivery inquiry. */
     public function store(Request $request)
@@ -72,15 +70,15 @@ class InquiryController extends Controller
             'email' => $inquiry->email,
         ], $request);
 
-        $mailSent = $this->sendSupportEmail($inquiry);
+        $notification = $this->notifications->notify($inquiry, 'public_form');
 
         return response()->json([
-            'message'    => $mailSent
+            'message'    => $notification['sent']
                 ? 'Your concern has been submitted successfully. Our team will respond via email.'
                 : 'Your concern has been saved. Email notification could not be sent.',
             'inquiry_id' => $inquiry->id,
             'reference_no' => $inquiry->reference_no,
-            'email_notification_sent' => $mailSent,
+            'email_notification_sent' => $notification['sent'],
         ], 201);
     }
 
@@ -129,15 +127,15 @@ class InquiryController extends Controller
             'email' => $inquiry->email,
         ], $request);
 
-        $mailSent = $this->sendSupportEmail($inquiry);
+        $notification = $this->notifications->notify($inquiry, 'customer_portal');
 
         return response()->json([
-            'message'    => $mailSent
+            'message'    => $notification['sent']
                 ? 'Your feedback has been submitted. Our team will respond via email.'
                 : 'Your feedback has been saved. Email notification could not be sent.',
             'inquiry_id' => $inquiry->id,
             'reference_no' => $inquiry->reference_no,
-            'email_notification_sent' => $mailSent,
+            'email_notification_sent' => $notification['sent'],
         ], 201);
     }
 
@@ -262,33 +260,4 @@ class InquiryController extends Controller
     {
         return 'INQ-'.now()->format('Y').'-'.str_pad((string) $id, 4, '0', STR_PAD_LEFT);
     }
-
-    private function sendSupportEmail(Inquiry $inquiry): bool
-    {
-        try {
-            $payload = [
-                'reference_no' => $inquiry->reference_no,
-                'name' => $inquiry->name,
-                'email' => $inquiry->email,
-                'phone' => $inquiry->phone,
-                'inquiry_type' => $inquiry->inquiry_type,
-                'subject_line' => $inquiry->subject,
-                'message_body' => $inquiry->message,
-            ];
-
-            $this->email->sendSupportInquiry($payload);
-            $this->email->sendContactConfirmation($inquiry->email, $payload);
-
-            return true;
-        } catch (Throwable $e) {
-            Log::error('Inquiry support email failed', [
-                'inquiry_id' => $inquiry->id,
-                'reference_no' => $inquiry->reference_no,
-                'error' => $e->getMessage(),
-            ]);
-
-            return false;
-        }
-    }
-
 }

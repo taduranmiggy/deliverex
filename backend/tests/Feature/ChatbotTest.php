@@ -2,14 +2,27 @@
 
 namespace Tests\Feature;
 
+use App\Models\EmailLog;
 use App\Models\Inquiry;
 use App\Models\JobOrder;
+use App\Services\Email\EmailType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class ChatbotTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Mail::fake();
+        config([
+            'mail.addresses.support' => 'support@example.com',
+            'services.resend.key' => 'test-resend-key',
+        ]);
+    }
 
     public function test_welcome_returns_capabilities(): void
     {
@@ -92,7 +105,8 @@ class ChatbotTest extends TestCase
         ]);
 
         $submit->assertOk()
-            ->assertJsonPath('messages.0.type', 'inquiry_submitted');
+            ->assertJsonPath('messages.0.type', 'inquiry_submitted')
+            ->assertJsonPath('email_notification_sent', true);
 
         $this->assertDatabaseHas('inquiries', [
             'email' => 'juan@example.com',
@@ -101,6 +115,20 @@ class ChatbotTest extends TestCase
 
         $inquiry = Inquiry::query()->where('email', 'juan@example.com')->first();
         $this->assertNotNull($inquiry->reference_no);
+
+        $this->assertDatabaseHas('email_logs', [
+            'email_type' => EmailType::SUPPORT_INQUIRY,
+            'recipient' => 'support@example.com',
+            'status' => EmailLog::STATUS_SENT,
+        ]);
+
+        $this->assertDatabaseHas('email_logs', [
+            'email_type' => EmailType::CONTACT_SUPPORT,
+            'recipient' => 'juan@example.com',
+            'status' => EmailLog::STATUS_SENT,
+        ]);
+
+        Mail::assertSent(\App\Mail\TemplateMail::class, 2);
     }
 
     public function test_tagalog_tracking_intent_starts_tracking_mode(): void

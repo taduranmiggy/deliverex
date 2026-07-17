@@ -8,17 +8,16 @@ use App\Models\Inquiry;
 use App\Models\JobOrder;
 use App\Models\User;
 use App\Services\Delivery\EtaEstimationService;
-use App\Services\Email\EmailService;
+use App\Services\Inquiry\InquiryNotificationService;
 use App\Support\AuditLogger;
 use App\Support\DeliveryStatus;
 use Illuminate\Support\Str;
-use Throwable;
 
 class ChatbotService
 {
     public function __construct(
         private readonly EtaEstimationService $etaEstimation,
-        private readonly EmailService $email,
+        private readonly InquiryNotificationService $inquiryNotifications,
     ) {
     }
 
@@ -463,16 +462,23 @@ class ChatbotService
             'source' => 'chatbot',
         ]);
 
-        $this->sendSupportEmail($inquiry);
+        $notification = $this->inquiryNotifications->notify($inquiry, 'chatbot');
+
+        $successMessage = "Your concern has been submitted successfully.\n\nReference: {$referenceNo}\n\nOur team will respond via email.";
+        if (! $notification['sent']) {
+            $successMessage .= "\n\nNote: We saved your concern but could not send the email notification to our team. Please contact support directly if you do not hear back.";
+        }
 
         return [
             'messages' => [[
                 'type' => 'inquiry_submitted',
                 'body' => [
                     'reference_no' => $referenceNo,
-                    'message' => "Your concern has been submitted successfully.\n\nReference: {$referenceNo}\n\nOur team will respond via email. You can also check status in the Support section when signed in.",
+                    'message' => $successMessage,
+                    'email_notification_sent' => $notification['sent'],
                 ],
             ]],
+            'email_notification_sent' => $notification['sent'],
             'suggestions' => config('chatbot.suggestions.after_answer', []),
             'state' => ['mode' => null],
             'typing_label' => 'Submitting concern...',
@@ -787,26 +793,6 @@ class ChatbotService
 
         return in_array($n, ['yes', 'yes submit', 'oo', 'sige', 'confirm', 'submit', 'ok', 'okay'], true)
             || str_starts_with($n, 'yes');
-    }
-
-    private function sendSupportEmail(Inquiry $inquiry): void
-    {
-        try {
-            $payload = [
-                'reference_no' => $inquiry->reference_no,
-                'name' => $inquiry->name,
-                'email' => $inquiry->email,
-                'phone' => $inquiry->phone,
-                'inquiry_type' => $inquiry->inquiry_type,
-                'subject_line' => $inquiry->subject,
-                'message_body' => $inquiry->message,
-            ];
-
-            $this->email->sendSupportInquiry($payload);
-            $this->email->sendContactConfirmation($inquiry->email, $payload);
-        } catch (Throwable) {
-            // Inquiry is saved; email failure should not block chat response.
-        }
     }
 
     private function isCancellation(string $message): bool

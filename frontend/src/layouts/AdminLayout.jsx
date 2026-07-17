@@ -1,5 +1,5 @@
 import {
-  Bell, Bot, Building2, ClipboardList, FileSearch, FileText, LayoutDashboard, Mail, Settings, Shield, Users,
+  Bell, Bot, Building2, ClipboardList, FileSearch, FileText, Inbox, LayoutDashboard, Mail, Settings, Shield, Users,
 } from 'lucide-react'
 import StaffAppShell from './StaffAppShell'
 
@@ -24,6 +24,7 @@ const NAV_SECTIONS = [
     label: 'Platform',
     items: [
       { to: '/admin/chatbot', label: 'Chatbot', Icon: Bot },
+      { to: '/admin/inquiries', label: 'Customer Concerns', Icon: Inbox },
       { to: '/admin/audit-logs', label: 'Audit Logs', Icon: FileText },
       { to: '/admin/email-logs', label: 'Email Logs', Icon: Mail },
       { to: '/admin/notifications', label: 'Notifications', Icon: Bell },

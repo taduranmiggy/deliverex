@@ -12,6 +12,10 @@ class ResendService
 {
     public function sendLogged(EmailLog $log, string $html): EmailLog
     {
+        if (config('mail.default') === 'resend' && empty(config('services.resend.key'))) {
+            throw new \RuntimeException('RESEND_API_KEY is not configured.');
+        }
+
         $log->increment('attempts');
 
         try {

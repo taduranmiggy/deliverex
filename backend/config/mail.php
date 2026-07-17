@@ -123,4 +123,8 @@ return [
         'support' => env('MAIL_SUPPORT_ADDRESS', 'deliverexapp@gmail.com'),
     ],
 
+    'inquiry' => [
+        'admin_path' => env('INQUIRY_ADMIN_PATH', '/admin/inquiries'),
+    ],
+
 ];

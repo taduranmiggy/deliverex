@@ -146,7 +146,7 @@ function ManagerDashboard() {
 
       <SectionCard title="Performance KPIs" className="dx-manager-kpi-section">
         <p className="dx-manager-kpi-section__period">{periodLabel}</p>
-        <div className="dx-kpi-card-grid">
+        <div className="dx-kpi-card-grid dx-kpi-card-grid--performance">
           {loading
             ? PERFORMANCE_KPIS.map(({ key }) => <KpiCardSkeleton key={key} />)
             : PERFORMANCE_KPIS.map((kpi) => {

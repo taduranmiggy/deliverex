@@ -71,14 +71,22 @@ class EmailServiceTest extends TestCase
 
     public function test_support_inquiry_email(): void
     {
+        config(['services.resend.key' => 'test-resend-key']);
+
         app(EmailService::class)->sendSupportInquiry([
             'reference_no' => 'INQ-2026-0001',
+            'inquiry_id' => 1,
             'name' => 'Jane',
             'email' => 'jane@example.com',
             'phone' => '09171234567',
             'inquiry_type' => 'general_question',
+            'inquiry_type_label' => 'General question',
+            'priority' => 'Normal',
             'subject_line' => 'Help',
             'message_body' => 'Need assistance',
+            'submitted_at' => 'Jul 18, 2026 2:00 AM UTC',
+            'source' => 'form',
+            'admin_url' => 'https://app.example.com/admin/inquiries?ref=INQ-2026-0001',
         ]);
 
         $this->assertDatabaseHas('email_logs', [

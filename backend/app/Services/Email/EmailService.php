@@ -22,6 +22,7 @@ class EmailService
         ?int $userId = null,
         ?int $companyId = null,
         array $metadata = [],
+        bool $forceSync = false,
     ): EmailLog {
         $recipient = strtolower(trim($recipient));
         $fromAddress = $from ?? $this->fromForType($type);
@@ -43,7 +44,7 @@ class EmailService
             ]),
         ]);
 
-        if ($this->shouldQueue()) {
+        if ($this->shouldQueue($type, $forceSync)) {
             SendEmailJob::dispatch($log->id);
 
             return $log;
@@ -66,7 +67,7 @@ class EmailService
             throw new \RuntimeException('Cannot retry email without template metadata.');
         }
 
-        if ($this->shouldQueue()) {
+        if ($this->shouldQueue($log->email_type)) {
             $log->forceFill(['status' => EmailLog::STATUS_PENDING])->save();
             SendEmailJob::dispatch($log->id);
 
@@ -221,13 +222,21 @@ class EmailService
 
     public function sendSupportInquiry(array $payload): EmailLog
     {
+        $supportRecipient = strtolower(trim((string) config('mail.addresses.support')));
+        $customerEmail = strtolower(trim((string) ($payload['email'] ?? '')));
+
         return $this->send(
             EmailType::SUPPORT_INQUIRY,
-            config('mail.addresses.support'),
-            'Customer Support Inquiry '.$payload['reference_no'],
+            $supportRecipient,
+            '[Deliverex] New concern '.$payload['reference_no'].' — '.$payload['subject_line'],
             'mail.support-inquiry',
-            array_merge($payload, ['subject' => 'Customer Support Inquiry '.$payload['reference_no']]),
+            array_merge($payload, ['subject' => 'New customer concern '.$payload['reference_no']]),
             config('mail.addresses.noreply'),
+            metadata: [
+                'reply_to' => filter_var($customerEmail, FILTER_VALIDATE_EMAIL) ? $customerEmail : null,
+                'inquiry_id' => $payload['inquiry_id'] ?? null,
+            ],
+            forceSync: true,
         );
     }
 
@@ -236,10 +245,11 @@ class EmailService
         return $this->send(
             EmailType::CONTACT_SUPPORT,
             $recipient,
-            'We received your inquiry — '.$payload['reference_no'],
+            'We received your concern — '.$payload['reference_no'],
             'mail.contact-confirmation',
-            array_merge($payload, ['subject' => 'We received your inquiry']),
+            array_merge($payload, ['subject' => 'We received your concern']),
             config('mail.addresses.support'),
+            forceSync: true,
         );
     }
 
@@ -273,8 +283,16 @@ class EmailService
         };
     }
 
-    private function shouldQueue(): bool
+    private function shouldQueue(string $type, bool $forceSync = false): bool
     {
+        if ($forceSync) {
+            return false;
+        }
+
+        if (in_array($type, [EmailType::SUPPORT_INQUIRY, EmailType::CONTACT_SUPPORT], true)) {
+            return false;
+        }
+
         return (bool) config('mail.queue', false)
             && config('queue.default') !== 'sync';
     }

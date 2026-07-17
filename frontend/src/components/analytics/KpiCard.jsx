@@ -53,12 +53,12 @@ function useAnimatedValue(target, animate) {
 export function KpiCardSkeleton() {
   return (
     <div className="dx-kpi-card dx-kpi-card--loading" aria-hidden>
-      <div className="dx-kpi-card__skel-icon" />
-      <div className="dx-kpi-card__body">
-        <div className="dx-kpi-card__skel-line dx-kpi-card__skel-line--sm" />
-        <div className="dx-kpi-card__skel-line dx-kpi-card__skel-line--lg" />
-        <div className="dx-kpi-card__skel-line dx-kpi-card__skel-line--md" />
+      <div className="dx-kpi-card__head">
+        <div className="dx-kpi-card__skel-icon" />
+        <div className="dx-kpi-card__skel-line dx-kpi-card__skel-line--sm" style={{ flex: 1, marginTop: 8 }} />
       </div>
+      <div className="dx-kpi-card__skel-line dx-kpi-card__skel-line--lg" />
+      <div className="dx-kpi-card__skel-line dx-kpi-card__skel-line--md" />
     </div>
   )
 }
@@ -87,17 +87,17 @@ export default function KpiCard({
 
   return (
     <article className="dx-kpi-card">
-      {Icon && (
-        <div className={iconClass} aria-hidden>
-          <Icon size={20} />
-        </div>
-      )}
-      <div className="dx-kpi-card__body">
+      <div className="dx-kpi-card__head">
+        {Icon && (
+          <div className={iconClass} aria-hidden>
+            <Icon size={20} />
+          </div>
+        )}
         <h3 className="dx-kpi-card__label">{label}</h3>
-        <p className="dx-kpi-card__value">{displayValue}</p>
-        {description && <p className="dx-kpi-card__desc">{description}</p>}
-        <TrendBadge trend={trend} />
       </div>
+      <p className="dx-kpi-card__value">{displayValue}</p>
+      {description && <p className="dx-kpi-card__desc">{description}</p>}
+      <TrendBadge trend={trend} />
     </article>
   )
 }
