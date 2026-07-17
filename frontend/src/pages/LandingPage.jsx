@@ -6,12 +6,10 @@ import DeliverexSiteFooter from '../components/customer/DeliverexSiteFooter'
 import InquiryForm from '../components/customer/InquiryForm'
 import PublicFaqSection from '../components/customer/PublicFaqSection'
 import PublicSiteNavBar from '../components/customer/PublicSiteNavBar'
+import LandingHeroScene from '../components/landing/LandingHeroScene'
 import {
-  MotionBackground,
   MotionButton,
   MotionCard,
-  MotionFloatingCard,
-  MotionHeroVisual,
   MotionModal,
   MotionPage,
   MotionParallax,
@@ -23,48 +21,6 @@ import {
   ArrowRight, CheckCircle2, FileCheck2, HeadphonesIcon, History,
   MessageSquare, Package, Search, X,
 } from 'lucide-react'
-
-function LandingHeroArt() {
-  return (
-    <svg className="landing-hero-art" viewBox="0 0 400 320" role="img" aria-labelledby="landing-hero-art-title">
-      <title id="landing-hero-art-title">Deliverex logistics dashboard illustration</title>
-      <defs>
-        <linearGradient id="landingArtGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0.78)" />
-        </linearGradient>
-      </defs>
-      <circle cx="200" cy="160" r="130" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1.2" />
-      <circle cx="200" cy="160" r="96" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-      <g fill="url(#landingArtGrad)">
-        <circle cx="88" cy="118" r="24" opacity="0.95" />
-        <circle cx="68" cy="198" r="18" opacity="0.88" />
-        <circle cx="128" cy="212" r="16" opacity="0.82" />
-      </g>
-      <path
-        d="M112 122 L188 134 M92 188 L194 158 M132 198 L198 168"
-        fill="none"
-        stroke="rgba(255,255,255,0.45)"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <rect x="198" y="88" width="148" height="112" rx="12" fill="rgba(255,255,255,0.92)" />
-      <rect x="216" y="108" width="64" height="8" rx="2" fill="#2563eb" opacity="0.85" />
-      <rect x="216" y="124" width="108" height="6" rx="2" fill="#94a3b8" opacity="0.55" />
-      <rect x="216" y="138" width="80" height="6" rx="2" fill="#94a3b8" opacity="0.4" />
-      <rect x="216" y="158" width="52" height="24" rx="5" fill="#2563eb" opacity="0.2" />
-      <rect x="248" y="196" width="56" height="28" rx="6" fill="#2563eb" opacity="0.35" />
-      <circle cx="262" cy="228" r="6" fill="#1e3a8a" />
-      <circle cx="288" cy="228" r="6" fill="#1e3a8a" />
-    </svg>
-  )
-}
-
-const FLOATING_CARDS = [
-  { label: 'Status', value: 'En route', className: 'landing-hero__float-card--1' },
-  { label: 'ETA', value: '14 min', className: 'landing-hero__float-card--2' },
-  { label: 'POD', value: 'Verified', className: 'landing-hero__float-card--3' },
-]
 
 const FEATURES = [
   { Icon: Package, title: 'Delivery Tracking', desc: 'Look up shipment status and delivery progress with a Tracking ID.' },
@@ -92,20 +48,19 @@ function LandingPage() {
       <PublicSiteNavBar />
 
       <section
-        className="landing-hero"
+        className="landing-hero landing-hero--enhanced"
         style={{
           background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 45%, #2563eb 100%)',
           padding: 'clamp(60px, 10vw, 120px) 24px',
           color: '#fff',
         }}
       >
-        <MotionBackground variant="hero" />
         <div className="landing-hero__inner">
           <MotionStagger className="landing-hero__copy" style={{ textAlign: 'center' }}>
             <MotionStaggerItem index={0}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.1)', borderRadius: 99, padding: '5px 16px', fontSize: '0.8125rem', fontWeight: 600, marginBottom: 24, backdropFilter: 'blur(10px)' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80' }} />
-                Trusted logistics tracking for construction & site services
+                Live GPS · Fleet Dispatch · Smart Logistics
               </div>
             </MotionStaggerItem>
 
@@ -117,7 +72,7 @@ function LandingPage() {
 
             <MotionStaggerItem index={2}>
               <p style={{ fontSize: 'clamp(1rem, 2vw, 1.2rem)', color: 'rgba(255,255,255,0.75)', maxWidth: 520, margin: '0 auto 40px', lineHeight: 1.65 }}>
-                Enter your Tracking ID to view delivery status, estimated arrival, and proof-of-delivery updates.
+                Real-time GPS tracking, route optimization, and proof-of-delivery — built for construction logistics teams.
               </p>
             </MotionStaggerItem>
 
@@ -156,23 +111,8 @@ function LandingPage() {
             </MotionStaggerItem>
           </MotionStagger>
 
-          <MotionParallax className="landing-hero__visual-wrap" offset={10}>
-            <MotionHeroVisual>
-              <LandingHeroArt />
-            </MotionHeroVisual>
-            <div className="landing-hero__float-cards">
-              {FLOATING_CARDS.map((card, i) => (
-                <MotionFloatingCard
-                  key={card.label}
-                  index={i}
-                  className={card.className}
-                  style={{ position: 'absolute' }}
-                >
-                  <p className="landing-hero__float-card-label">{card.label}</p>
-                  <p className="landing-hero__float-card-value">{card.value}</p>
-                </MotionFloatingCard>
-              ))}
-            </div>
+          <MotionParallax className="landing-hero__visual-wrap" offset={14}>
+            <LandingHeroScene />
           </MotionParallax>
         </div>
       </section>
