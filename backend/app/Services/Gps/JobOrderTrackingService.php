@@ -10,6 +10,7 @@ use App\Services\Delivery\EtaEstimationService;
 use App\Services\Delivery\JobOrderLocationService;
 use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
+use App\Support\GpsCoordinateValidator;
 
 class JobOrderTrackingService
 {
@@ -128,15 +129,16 @@ class JobOrderTrackingService
     /** @return array<string, mixed>|null */
     private function point(mixed $lat, mixed $lng, string $address): ?array
     {
-        if (! is_numeric($lat) || ! is_numeric($lng)) {
-            return $address !== '' ? ['address' => $address] : null;
+        $pair = GpsCoordinateValidator::pair($lat, $lng, 'job_tracking_point');
+        if ($pair) {
+            return [
+                'lat' => $pair['lat'],
+                'lng' => $pair['lng'],
+                'address' => $address,
+            ];
         }
 
-        return [
-            'lat' => (float) $lat,
-            'lng' => (float) $lng,
-            'address' => $address,
-        ];
+        return $address !== '' ? ['address' => $address] : null;
     }
 
     private function trackingLogFromCurrent($current, DispatchAssignment $assignment): TrackingLog

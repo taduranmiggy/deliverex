@@ -71,4 +71,16 @@ return [
         'openrouteservice_api_key' => env('OPENROUTESERVICE_API_KEY'),
         'openrouteservice_url' => env('OPENROUTESERVICE_URL', 'https://api.openrouteservice.org/v2/directions/driving-car'),
     ],
+
+    /** Log geocode, GPS, routing stages when true (debug only). */
+    'debug_pipeline' => filter_var(env('GPS_DEBUG_PIPELINE', false), FILTER_VALIDATE_BOOL),
+
+    /** Restrict job-order / map coordinates to Philippines bounding box. */
+    'philippines_bounds' => [
+        'enabled' => filter_var(env('GPS_PHILIPPINES_BOUNDS', true), FILTER_VALIDATE_BOOL),
+        'min_lat' => 4.5,
+        'max_lat' => 21.5,
+        'min_lng' => 116.0,
+        'max_lng' => 127.5,
+    ],
 ];

@@ -4,6 +4,7 @@
  */
 import { Children, useEffect, useState } from 'react'
 import { API_URL } from '../../config/api.js'
+import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
 import {
   Loader2, Package, Search, TrendingUp, TrendingDown,
 } from 'lucide-react'
@@ -61,8 +62,13 @@ const BADGE_MAP = {
   dispatched:  'badge-dx badge-dx--dispatched',
   in_progress: 'badge-dx badge-dx--enroute',
   en_route:    'badge-dx badge-dx--enroute',
+  en_route_to_pickup: 'badge-dx badge-dx--enroute',
+  en_route_to_destination: 'badge-dx badge-dx--enroute',
+  arrived_at_pickup: 'badge-dx badge-dx--arrived',
+  arrived_at_destination: 'badge-dx badge-dx--arrived',
   arrived:     'badge-dx badge-dx--arrived',
   completed:   'badge-dx badge-dx--completed',
+  completed_with_pod: 'badge-dx badge-dx--completed',
   cancelled:   'badge-dx badge-dx--cancelled',
   delayed:     'badge-dx badge-dx--pending',
   // User/driver
@@ -86,24 +92,16 @@ const BADGE_MAP = {
 }
 
 const BADGE_LABELS = {
-  pending: 'Pending',
-  in_progress: 'En Route',
-  en_route: 'En Route',
-  assigned: 'Dispatched',
-  dispatched: 'Dispatched',
-  arrived: 'Arrived',
-  completed: 'Completed',
-  completed_with_pod: 'Completed',
-  cancelled: 'Cancelled',
-  delayed: 'Delayed',
-  available: 'Available', needs_review: 'Flagged', validated: 'Validated',
+  available: 'Available',
+  needs_review: 'Flagged',
+  validated: 'Validated',
   busy: 'On Duty',
 }
 
 export function StatusBadge({ status, label }) {
   const key = String(status || '').toLowerCase().replace(/ /g, '_')
-  const cls = BADGE_MAP[key] ?? 'badge-dx badge-dx--muted'
-  const txt = label ?? BADGE_LABELS[key] ?? (status ? String(status).replace(/_/g, ' ') : '—')
+  const cls = BADGE_MAP[key] ?? jobStatusBadgeClass(status)
+  const txt = label ?? BADGE_LABELS[key] ?? formatJobStatus(status)
   return <span className={cls}>{txt}</span>
 }
 

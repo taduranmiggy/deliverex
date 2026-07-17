@@ -6,6 +6,7 @@ import useAuth from '../../hooks/useAuth'
 import DeliverexSiteFooter from '../../components/customer/DeliverexSiteFooter'
 import { roleHome } from '../../utils/roleUtils'
 import { IconChevronLeft, IconLockOutlined, IconMail } from '../../components/DxIcons'
+import { MotionButton, MotionPage, MotionStagger, MotionStaggerItem } from '../../motion'
 import './LoginPage.css'
 
 function LoginPage() {
@@ -48,15 +49,18 @@ function LoginPage() {
   }
 
   return (
-    <div className="auth-split-root">
+    <MotionPage className="auth-split-root">
       <section className="auth-split-layout" aria-label="Sign in">
         <div className="auth-split-form-col">
-          <div className="auth-split-form-inner">
+          <MotionStagger className="auth-split-form-inner">
+            <MotionStaggerItem index={0}>
             <Link to="/" className="auth-back-home auth-back-home--split">
               <IconChevronLeft />
               Back to home
             </Link>
+            </MotionStaggerItem>
 
+            <MotionStaggerItem index={1}>
             <div className="auth-brand-lockup">
               <span className="auth-brand-logo" aria-hidden />
               <span className="auth-brand-text">Deliverex</span>
@@ -64,7 +68,9 @@ function LoginPage() {
 
             <h1 className="auth-split-title">Sign in</h1>
             <p className="auth-split-lead">Admin, manager, dispatcher, and customer accounts use this page.</p>
+            </MotionStaggerItem>
 
+            <MotionStaggerItem index={2}>
             {notice ? <p className="auth-success-dx auth-success-split">{notice}</p> : null}
 
             <form onSubmit={handleSubmit} className="auth-form-split" noValidate>
@@ -78,7 +84,7 @@ function LoginPage() {
                     id={emailId}
                     name="email"
                     type="email"
-                    className="auth-input-control"
+                    className="auth-input-control motion-focus-glow"
                     placeholder="Email"
                     autoComplete="email"
                     required
@@ -96,7 +102,7 @@ function LoginPage() {
                     id={passwordId}
                     name="password"
                     type={showPassword ? 'text' : 'password'}
-                    className="auth-input-control"
+                    className="auth-input-control motion-focus-glow"
                     placeholder="Password"
                     autoComplete="current-password"
                     required
@@ -131,21 +137,22 @@ function LoginPage() {
               </div>
 
               {error ? <p className="auth-error-dx auth-error-split">{error}</p> : null}
-              <button className="auth-btn-submit" type="submit">
+              <MotionButton className="auth-btn-submit" type="submit">
                 Log In
-              </button>
+              </MotionButton>
             </form>
 
             <p className="auth-alt-link" style={{ marginTop: 16, color: 'var(--muted)' }}>
               B2B company accounts are provisioned by an administrator.
             </p>
-          </div>
+            </MotionStaggerItem>
+          </MotionStagger>
         </div>
 
         <AuthMarketingAside />
       </section>
       <DeliverexSiteFooter />
-    </div>
+    </MotionPage>
   )
 }
 

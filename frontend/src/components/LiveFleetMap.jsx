@@ -21,7 +21,8 @@ import 'leaflet/dist/leaflet.css'
 import './LiveFleetMap.css'
 import AnimatedDriverMarker from './AnimatedDriverMarker'
 import { formatEventAt, formatOfflineSyncLabel, formatSyncedAt } from '../utils/deliveryTimestamps'
-import { gpsColorForStatus, gpsOfflineLabel, GPS_STATUS_COLORS } from '../utils/gpsStatusColors'
+import { gpsColorForStatus, GPS_STATUS_COLORS } from '../utils/gpsStatusColors'
+import { formatDriverGpsAge, isDriverOffline } from '../utils/fleetLiveSync'
 import { Crosshair, Minus, Plus, RotateCcw } from 'lucide-react'
 
 const DEFAULT_CENTER = [14.5995, 120.9842]
@@ -236,14 +237,19 @@ function DriverInfoPanel({ marker, destinationMarker }) {
   if (!marker && !destinationMarker) return null
 
   const gpsUpdate = marker ? formatLastGpsUpdate(marker) : null
-  const offlineLabel = marker ? gpsOfflineLabel(marker.offline) : null
+  const driverOffline = marker
+    ? isDriverOffline({ at: marker.gpsAt, offline: marker.offline, is_stale: marker.isOffline })
+    : false
 
   return (
     <aside className="dx-fleet-map-info" aria-label="Delivery tracking details">
       <h4 className="dx-fleet-map-info__title">Tracking Details</h4>
 
-      {offlineLabel && (
-        <p className="dx-fleet-map-info__offline" role="status">{offlineLabel}</p>
+      {driverOffline && marker?.gpsAt && (
+        <div className="dx-fleet-offline-banner" role="status">
+          <strong>Driver Offline</strong>
+          <span>Last GPS received: {formatDriverGpsAge(marker.gpsAt)}</span>
+        </div>
       )}
 
       {marker ? (
@@ -295,7 +301,7 @@ function DriverInfoPanel({ marker, destinationMarker }) {
           {marker.isOffline && (
             <div className="dx-fleet-map-info__row">
               <span className="dx-fleet-map-info__label">Connection</span>
-              <span className="dx-fleet-map-info__value dx-fleet-map-info__value--muted">Offline indicator</span>
+              <span className="dx-fleet-map-info__value dx-fleet-map-info__value--muted">Driver Offline</span>
             </div>
           )}
         </>

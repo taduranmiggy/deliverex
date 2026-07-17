@@ -84,7 +84,7 @@ function DetailPanel({ order }) {
           <span>Destination</span>
           <strong style={{ textAlign: 'right' }}>{buildDisplayAddress('dropoff', order) || '—'}</strong>
         </div>
-        <JobOrderRouteMap jobOrderId={order.id} readOnly />
+        <JobOrderRouteMap key={order.id} jobOrderId={order.id} readOnly />
         {order.material_type && kv('Material', `${order.material_type}${order.specification_size ? ` · ${order.specification_size}` : ''}`)}
         {kv('Load', order.load_volume_m3 || order.volume_m3 ? `${order.load_volume_m3 ?? order.volume_m3} m³` : null)}
         {kv('Quarry', order.quarry?.quarry_name)}

@@ -2,8 +2,19 @@
 
 namespace App\Support;
 
+use Illuminate\Support\Facades\Log;
+
 final class GpsCoordinateValidator
 {
+    public static function isUsable(mixed $latitude, mixed $longitude): bool
+    {
+        if (! is_numeric($latitude) || ! is_numeric($longitude)) {
+            return false;
+        }
+
+        return self::validate((float) $latitude, (float) $longitude) === null;
+    }
+
     public static function validate(?float $latitude, ?float $longitude): ?string
     {
         if ($latitude === null || $longitude === null) {
@@ -30,7 +41,64 @@ final class GpsCoordinateValidator
             }
         }
 
+        if (config('gps.philippines_bounds.enabled', true)) {
+            $bounds = config('gps.philippines_bounds');
+            $phMinLat = (float) ($bounds['min_lat'] ?? 4.5);
+            $phMaxLat = (float) ($bounds['max_lat'] ?? 21.5);
+            $phMinLng = (float) ($bounds['min_lng'] ?? 116.0);
+            $phMaxLng = (float) ($bounds['max_lng'] ?? 127.5);
+
+            if ($latitude < $phMinLat || $latitude > $phMaxLat
+                || $longitude < $phMinLng || $longitude > $phMaxLng) {
+                return 'Coordinates are outside the Philippines service area.';
+            }
+        }
+
         return null;
+    }
+
+    /**
+     * @return array{lat: float, lng: float}|null
+     */
+    public static function pair(mixed $latitude, mixed $longitude, string $context = 'coordinate'): ?array
+    {
+        if (! self::isUsable($latitude, $longitude)) {
+            $reason = self::validate(
+                is_numeric($latitude) ? (float) $latitude : null,
+                is_numeric($longitude) ? (float) $longitude : null,
+            ) ?? 'Invalid coordinates';
+
+            Log::warning('Rejected invalid coordinates', [
+                'context' => $context,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'reason' => $reason,
+            ]);
+
+            LocationPipelineLogger::log('coordinate_rejected', [
+                'context' => $context,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'reason' => $reason,
+            ]);
+
+            return null;
+        }
+
+        return [
+            'lat' => (float) $latitude,
+            'lng' => (float) $longitude,
+        ];
+    }
+
+    public static function areDuplicate(
+        float $lat1,
+        float $lng1,
+        float $lat2,
+        float $lng2,
+        float $thresholdMeters = 15.0,
+    ): bool {
+        return self::distanceMeters($lat1, $lng1, $lat2, $lng2) <= $thresholdMeters;
     }
 
     public static function distanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float

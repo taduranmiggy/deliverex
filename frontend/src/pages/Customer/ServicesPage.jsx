@@ -1,6 +1,14 @@
 import { Link } from 'react-router-dom'
 import { Mail, MapPin, Phone, Truck, Workflow, Wrench } from 'lucide-react'
 import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_HREF } from '../../config/support'
+import {
+  MotionButton,
+  MotionCard,
+  MotionIcon,
+  MotionSection,
+  MotionStagger,
+  MotionStaggerItem,
+} from '../../motion'
 
 const SERVICES = [
   {
@@ -27,40 +35,46 @@ function ServicesPage() {
   return (
     <div className="customer-info-page">
       <section className="customer-info-hero">
-        <div className="customer-info-hero__inner">
-          <p className="tracking-eyebrow" style={{ color: 'rgba(255,255,255,0.75)' }}>Services</p>
-          <h1>Construction logistics you can coordinate and track</h1>
-          <p>
-            Deliverex supports operational logistics for construction and site delivery requirements
-            — from material hauling to proof-of-delivery verification.
-          </p>
-          <div className="customer-info-hero__actions">
-            <Link to="/customer" className="btn-dx-primary btn-sm">Contact Support</Link>
-            <Link to="/customer/track" className="customer-info-hero__ghost-btn">
-              <MapPin size={15} /> Track Delivery
-            </Link>
-          </div>
-        </div>
+        <MotionStagger className="customer-info-hero__inner">
+          <MotionStaggerItem index={0}>
+            <p className="tracking-eyebrow" style={{ color: 'rgba(255,255,255,0.75)' }}>Services</p>
+          </MotionStaggerItem>
+          <MotionStaggerItem index={1}>
+            <h1>Construction logistics you can coordinate and track</h1>
+          </MotionStaggerItem>
+          <MotionStaggerItem index={2}>
+            <p>
+              Deliverex supports operational logistics for construction and site delivery requirements
+              — from material hauling to proof-of-delivery verification.
+            </p>
+          </MotionStaggerItem>
+          <MotionStaggerItem index={3}>
+            <div className="customer-info-hero__actions">
+              <MotionButton as={Link} to="/customer/support" className="btn-dx-primary btn-sm">Contact Support</MotionButton>
+              <MotionButton as={Link} to="/customer/track" className="customer-info-hero__ghost-btn">
+                <MapPin size={15} /> Track Delivery
+              </MotionButton>
+            </div>
+          </MotionStaggerItem>
+        </MotionStagger>
       </section>
 
       <div className="customer-info-body">
-        <div className="customer-service-grid">
+        <div className="customer-service-grid customer-service-grid--motion">
           {SERVICES.map(({ title, description, icon: Icon }, index) => (
-            <article
-              key={title}
-              className="customer-service-card"
-              style={{ animationDelay: `${index * 80}ms` }}
-            >
-              <div className="customer-service-card__icon">
-                <Icon size={22} aria-hidden />
-              </div>
+            <MotionCard key={title} index={index} className="customer-service-card" hover>
+              <MotionIcon>
+                <div className="customer-service-card__icon">
+                  <Icon size={22} aria-hidden />
+                </div>
+              </MotionIcon>
               <h2>{title}</h2>
               <p>{description}</p>
-            </article>
+            </MotionCard>
           ))}
         </div>
 
-        <section className="customer-contact-card">
+        <MotionSection className="customer-contact-card">
           <div>
             <p className="customer-contact-card__kicker">Get in touch</p>
             <h2>Contact Information</h2>
@@ -84,7 +98,7 @@ function ServicesPage() {
               </span>
             </a>
           </div>
-        </section>
+        </MotionSection>
       </div>
     </div>
   )

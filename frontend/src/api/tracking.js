@@ -1,5 +1,9 @@
 import { apiRequest } from './client'
 
+export function fetchFleetLiveTracking() {
+  return apiRequest('/dispatch/fleet-live')
+}
+
 export function fetchTrackingLogs(assignmentId, page = 1, includeHistory = false) {
   const params = new URLSearchParams({ page: String(page) })
   if (includeHistory) params.set('include_history', '1')

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { MapContainer, Marker, Polyline, TileLayer } from 'react-leaflet'
+import { useEffect, useMemo, useState } from 'react'
+import { MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import AnimatedDriverMarker from './AnimatedDriverMarker'
@@ -11,6 +11,34 @@ const DEST_COLOR = '#dc2626'
 
 const TRUCK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>`
 const PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`
+
+function FitBounds({ points, polyline }) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (polyline?.length > 1) {
+      const bounds = L.latLngBounds(polyline)
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 })
+        return
+      }
+    }
+
+    if (points.length >= 2) {
+      const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lng]))
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 })
+      }
+      return
+    }
+
+    if (points.length === 1) {
+      map.setView([points[0].lat, points[0].lng], 13)
+    }
+  }, [map, points, polyline])
+
+  return null
+}
 
 function makeDriverIcon(color) {
   const size = 34
@@ -52,7 +80,7 @@ export default function CustomerLiveMap({
 }) {
   const [ready, setReady] = useState(false)
 
-  const markers = useMemo(() => {
+  const markerPoints = useMemo(() => {
     const items = []
     if (pickup?.lat != null && pickup?.lng != null) items.push({ lat: pickup.lat, lng: pickup.lng })
     if (destination?.lat != null && destination?.lng != null) items.push({ lat: destination.lat, lng: destination.lng })
@@ -61,11 +89,11 @@ export default function CustomerLiveMap({
   }, [driverLocation, pickup, destination])
 
   const center = useMemo(() => {
-    if (markers.length === 0) return DEFAULT_CENTER
-    const lat = markers.reduce((s, m) => s + m.lat, 0) / markers.length
-    const lng = markers.reduce((s, m) => s + m.lng, 0) / markers.length
+    if (markerPoints.length === 0) return DEFAULT_CENTER
+    const lat = markerPoints.reduce((s, m) => s + m.lat, 0) / markerPoints.length
+    const lng = markerPoints.reduce((s, m) => s + m.lng, 0) / markerPoints.length
     return [lat, lng]
-  }, [markers])
+  }, [markerPoints])
 
   const routePositions = useMemo(() => {
     if (Array.isArray(route?.polyline) && route.polyline.length > 1) {
@@ -74,15 +102,18 @@ export default function CustomerLiveMap({
     if (driverLocation && destination?.lat != null) {
       return [[driverLocation.lat, driverLocation.lng], [destination.lat, destination.lng]]
     }
+    if (pickup?.lat != null && destination?.lat != null) {
+      return [[pickup.lat, pickup.lng], [destination.lat, destination.lng]]
+    }
     return []
-  }, [route, driverLocation, destination])
+  }, [route, driverLocation, destination, pickup])
 
   const offlineLabel = gpsOfflineLabel(offline ?? driverLocation?.offline)
 
-  if (markers.length === 0) {
+  if (markerPoints.length === 0) {
     return (
       <div className="dx-customer-live-map dx-customer-live-map--empty" style={{ minHeight: height }}>
-        Live map will appear when the driver shares a location.
+        Unable to display map for this job order. Please verify the pickup or destination address.
       </div>
     )
   }
@@ -95,6 +126,7 @@ export default function CustomerLiveMap({
         <p className="dx-customer-live-map__offline" role="status">{offlineLabel}</p>
       )}
       <MapContainer
+        key={`customer-live-${pickup?.lat ?? 'p'}-${destination?.lat ?? 'd'}-${driverLocation?.lat ?? 'dr'}`}
         center={center}
         zoom={12}
         scrollWheelZoom={false}
@@ -102,6 +134,7 @@ export default function CustomerLiveMap({
         whenReady={() => setReady(true)}
       >
         <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <FitBounds points={markerPoints} polyline={routePositions} />
         {routePositions.length > 1 && (
           <Polyline positions={routePositions} pathOptions={{ color: driverColor, weight: 4, opacity: 0.85 }} />
         )}
@@ -120,6 +153,9 @@ export default function CustomerLiveMap({
         <span>Last updated: {formatTime(lastUpdated ?? driverLocation?.at)}</span>
         {eta?.estimated_arrival_label && <span>ETA: {eta.estimated_arrival_label}</span>}
         {eta?.remaining_distance_label && <span>{eta.remaining_distance_label} remaining</span>}
+        {route?.distance_label && !eta?.remaining_distance_label && (
+          <span>Route: {route.distance_label}{route.duration_label ? ` · ${route.duration_label}` : ''}</span>
+        )}
       </div>
     </div>
   )

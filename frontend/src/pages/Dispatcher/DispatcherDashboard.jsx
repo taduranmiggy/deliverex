@@ -141,8 +141,8 @@ function DispatcherDashboard() {
           {deliveries.length === 0 ? (
             <EmptyState icon={Truck} title="No active deliveries" message="Assign jobs to see active deliveries here." />
           ) : (
-            <div className="dx-data-table-wrap">
-              <table className="dx-data-table">
+            <div className="dx-data-table-wrap dx-data-table-wrap--dashboard-deliveries">
+              <table className="dx-data-table dx-data-table--dashboard-deliveries">
                 <thead><tr>
                   <th>Job ID</th><th>Client</th><th>Route</th><th>Priority</th><th>Status</th><th>Arrival</th><th>Delay Reason</th><th>Driver</th>
                 </tr></thead>
@@ -151,24 +151,35 @@ function DispatcherDashboard() {
                     const delay = item.latest_delay_report
                     const arrivedLog = item.latest_arrived_status_log
                     const isPastDue = item.job_order?.scheduled_end && new Date(item.job_order.scheduled_end).getTime() < Date.now()
+                    const pickup = buildDisplayAddress('pickup', item.job_order) || '—'
+                    const dropoff = buildDisplayAddress('dropoff', item.job_order) || '—'
+                    const routeLabel = `${pickup} → ${dropoff}`
+                    const priority = item.job_order?.priority ?? 'normal'
+                    const priorityCls = priority === 'urgent' || priority === 'high'
+                      ? 'badge-dx badge-dx--prio-high'
+                      : priority === 'low'
+                        ? 'badge-dx badge-dx--muted'
+                        : 'badge-dx badge-dx--prio-medium'
                     return (
                     <tr key={item.id}>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8125rem' }}>{formatJobPublicId(item.job_order_id)}</td>
-                      <td style={{ fontWeight: 600 }}>{buildDisplayName(item.job_order) || '—'}</td>
-                      <td style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
-                        {buildDisplayAddress('pickup', item.job_order) || '—'} → {buildDisplayAddress('dropoff', item.job_order) || '—'}
+                      <td className="dx-dashboard-deliveries__id">{formatJobPublicId(item.job_order_id)}</td>
+                      <td className="dx-dashboard-deliveries__client">{buildDisplayName(item.job_order) || '—'}</td>
+                      <td className="dx-dashboard-deliveries__route" title={routeLabel}>
+                        <span className="dx-table-route">{routeLabel}</span>
                       </td>
-                      <td style={{ textTransform: 'capitalize', fontSize: '0.8125rem', color: 'var(--muted)' }}>{item.job_order?.priority ?? '—'}</td>
-                      <td><StatusBadge status={item.status} /></td>
-                      <td style={{ fontSize: '0.8125rem', color: arrivedLog?.arrival_verified ? '#166534' : 'var(--muted)' }}>
+                      <td>
+                        <span className={priorityCls} style={{ textTransform: 'capitalize' }}>{priority}</span>
+                      </td>
+                      <td className="dx-dashboard-deliveries__status"><StatusBadge status={item.status} /></td>
+                      <td className="dx-dashboard-deliveries__arrival" style={{ color: arrivedLog?.arrival_verified ? '#166534' : 'var(--muted)' }}>
                         {arrivedLog?.arrival_verified
                           ? `GPS Verified${formatEventAt(arrivedLog, undefined, { hour: 'numeric', minute: '2-digit' }) ? ` · ${formatEventAt(arrivedLog, undefined, { hour: 'numeric', minute: '2-digit' })}` : ''}`
-                          : item.status === 'arrived' || item.status === 'completed' ? 'Not verified' : '—'}
+                          : item.status === 'arrived' || item.status === 'arrived_at_destination' || item.status === 'completed' ? 'Not verified' : '—'}
                       </td>
-                      <td style={{ fontSize: '0.8125rem', color: delay ? '#991b1b' : isPastDue ? 'var(--color-warning)' : 'var(--muted)' }}>
+                      <td className="dx-dashboard-deliveries__delay" style={{ color: delay ? '#991b1b' : isPastDue ? 'var(--color-warning)' : 'var(--muted)' }}>
                         {delay ? getDelayReasonLabel(delay.delay_reason) : isPastDue ? 'Past due (no reason)' : '—'}
                       </td>
-                      <td style={{ fontSize: '0.875rem' }}>{item.driver?.user?.name ?? '—'}</td>
+                      <td className="dx-dashboard-deliveries__driver">{item.driver?.user?.name ?? '—'}</td>
                     </tr>
                     )
                   })}

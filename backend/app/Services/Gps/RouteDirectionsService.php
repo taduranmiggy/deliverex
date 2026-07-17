@@ -3,6 +3,7 @@
 namespace App\Services\Gps;
 
 use App\Support\GpsCoordinateValidator;
+use App\Support\LocationPipelineLogger;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -15,15 +16,40 @@ class RouteDirectionsService
     {
         $ors = $this->fetchOpenRouteService($fromLng, $fromLat, $toLng, $toLat);
         if ($ors) {
+            LocationPipelineLogger::log('route_api_response', [
+                'engine' => 'openrouteservice',
+                'from' => [$fromLat, $fromLng],
+                'to' => [$toLat, $toLng],
+                'distance_label' => $ors['distance_label'] ?? null,
+                'duration_label' => $ors['duration_label'] ?? null,
+            ]);
+
             return $ors;
         }
 
         $osrm = $this->fetchOsrmRoute($fromLng, $fromLat, $toLng, $toLat);
         if ($osrm) {
+            LocationPipelineLogger::log('route_api_response', [
+                'engine' => 'osrm',
+                'from' => [$fromLat, $fromLng],
+                'to' => [$toLat, $toLng],
+                'distance_label' => $osrm['distance_label'] ?? null,
+                'duration_label' => $osrm['duration_label'] ?? null,
+            ]);
+
             return $osrm;
         }
 
-        return $this->straightLineRoute($fromLat, $fromLng, $toLat, $toLng);
+        $fallback = $this->straightLineRoute($fromLat, $fromLng, $toLat, $toLng);
+        LocationPipelineLogger::log('route_api_response', [
+            'engine' => 'straight_line',
+            'from' => [$fromLat, $fromLng],
+            'to' => [$toLat, $toLng],
+            'distance_label' => $fallback['distance_label'] ?? null,
+            'duration_label' => $fallback['duration_label'] ?? null,
+        ]);
+
+        return $fallback;
     }
 
     /** @return array<string, mixed>|null */

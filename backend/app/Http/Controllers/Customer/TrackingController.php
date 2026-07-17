@@ -76,12 +76,20 @@ class TrackingController extends Controller
 
         $eta = $this->etaEstimation->estimate($jobOrder, $latestTracking, $currentStatus);
 
-        $jobOrder = $this->locationService->ensureCoordinates($jobOrder);
-        $pickup = is_numeric($jobOrder->pickup_latitude) && is_numeric($jobOrder->pickup_longitude)
-            ? ['lat' => round((float) $jobOrder->pickup_latitude, 2), 'lng' => round((float) $jobOrder->pickup_longitude, 2)]
+        $mapData = $this->locationService->mapPayload($jobOrder);
+        $pickup = isset($mapData['pickup']['lat'], $mapData['pickup']['lng'])
+            ? [
+                'lat' => round((float) $mapData['pickup']['lat'], 6),
+                'lng' => round((float) $mapData['pickup']['lng'], 6),
+                'address' => $mapData['pickup']['address'] ?? null,
+            ]
             : null;
-        $destination = is_numeric($jobOrder->dropoff_latitude) && is_numeric($jobOrder->dropoff_longitude)
-            ? ['lat' => round((float) $jobOrder->dropoff_latitude, 2), 'lng' => round((float) $jobOrder->dropoff_longitude, 2)]
+        $destination = isset($mapData['destination']['lat'], $mapData['destination']['lng'])
+            ? [
+                'lat' => round((float) $mapData['destination']['lat'], 6),
+                'lng' => round((float) $mapData['destination']['lng'], 6),
+                'address' => $mapData['destination']['address'] ?? null,
+            ]
             : null;
 
         $route = null;
@@ -93,6 +101,12 @@ class TrackingController extends Controller
                 $destination['lng'],
             );
             unset($route['source']);
+        } elseif (is_array($mapData['route'] ?? null)) {
+            $route = [
+                'polyline' => $mapData['route']['polyline'] ?? null,
+                'distance_label' => $mapData['route']['distance_label'] ?? null,
+                'duration_label' => $mapData['route']['duration_label'] ?? null,
+            ];
         }
 
         $orderedTimeline = [

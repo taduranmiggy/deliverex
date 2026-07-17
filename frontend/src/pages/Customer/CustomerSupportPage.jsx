@@ -13,6 +13,7 @@ import { useToast } from '../../context/ToastContext'
 import {
   Mail, MessageSquare, MessageSquarePlus, Phone,
 } from 'lucide-react'
+import { MotionSection } from '../../motion'
 
 function CustomerSupportPage() {
   const { user, isAuthenticated, role } = useAuth()
@@ -35,7 +36,7 @@ function CustomerSupportPage() {
         description="Get assistance with tracking, deliveries, and account questions."
       />
 
-      <div className="customer-support-stack">
+      <MotionSection className="customer-support-stack">
         <div className="customer-support-actions">
           <CustomerActionCard
             layout="inline"
@@ -100,14 +101,16 @@ function CustomerSupportPage() {
             )}
           </section>
         </div>
+      </MotionSection>
 
-        {!isCustomer && (
+      {!isCustomer && (
+        <MotionSection>
           <p className="pwa-section__hint">
             <Link to={signInPath} className="auth-inline-link">Sign in</Link>
             {' '}to link deliveries when submitting inquiries.
           </p>
-        )}
-      </div>
+        </MotionSection>
+      )}
 
       <DeliverexAssistantChat open={chatOpen} onOpenChange={setChatOpen} />
     </CustomerPageShell>

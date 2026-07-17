@@ -28,7 +28,7 @@ function CustomerLayout() {
       <CustomerNavBar />
       <SyncStatusBar variant="customer" />
 
-      <PageTransition>
+      <PageTransition motion={!pwaMode}>
         <main className="customer-layout-main">
           <Suspense fallback={<RouteFallback />}>
             <Outlet />

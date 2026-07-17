@@ -24,6 +24,7 @@ use App\Http\Controllers\AssignmentAuditController;
 use App\Http\Controllers\IssueReportController;
 use App\Http\Controllers\VehicleUtilizationController;
 use App\Http\Controllers\Dispatcher\AssignmentController as DispatcherAssignmentController;
+use App\Http\Controllers\Dispatcher\FleetLiveTrackingController;
 use App\Http\Controllers\Dispatcher\BestFitController;
 use App\Http\Controllers\Dispatcher\CalendarController;
 use App\Http\Controllers\Dispatcher\DelayController as DispatcherDelayController;
@@ -188,6 +189,7 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/job-orders',               [JobOrderController::class, 'index']);
         Route::get('/job-orders/{jobOrder}',    [JobOrderController::class, 'show']);
         Route::get('/assignments',              [DispatcherAssignmentController::class, 'index']);
+        Route::get('/fleet-live',               [FleetLiveTrackingController::class, 'index']);
         Route::get('/master-data/options',      [MasterDataOptionsController::class, 'index']);
         Route::get('/delays',                   [DispatcherDelayController::class, 'index']);
     });

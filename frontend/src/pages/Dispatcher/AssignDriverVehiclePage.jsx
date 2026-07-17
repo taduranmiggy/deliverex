@@ -9,6 +9,7 @@ import { formatJobStatus } from '../../utils/statusLabels'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { formatJobSchedule } from '../../utils/driverAssignment'
 import { PaginationBar } from '../../components/ui'
+import JobOrderRouteMap from '../../components/JobOrderRouteMap'
 import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-react'
 
 // ─── Priority helpers ──────────────────────────────────────────────────────────
@@ -538,14 +539,8 @@ function AssignDriverVehiclePage() {
               <Zap size={28} style={{ marginBottom: 10, opacity: 0.3 }} />
               <p style={{ margin: 0, fontWeight: 600 }}>Select a job order to see the Best-Fit recommendation</p>
             </div>
-          ) : loading ? (
-            <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-              <Loader2 size={20} style={{ animation: 'spin 0.7s linear infinite' }} />
-              Analyzing fleet…
-            </div>
-          ) : top ? (
-            <div>
-              {/* Job context strip */}
+          ) : (
+            <>
               <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '12px 16px', marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <div>
@@ -577,24 +572,32 @@ function AssignDriverVehiclePage() {
                 )}
               </div>
 
-              {/* Top recommendation card */}
-              <CandidateCard
-                item={top}
-                isTop
-                onAssign={() => openModal(top, false)}
-                onOverride={() => openModal(top, false)}
-              />
-            </div>
-          ) : (
-            <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '32px 24px', textAlign: 'center' }}>
-              <p style={{ fontWeight: 700, marginBottom: 8 }}>No recommendations available</p>
-              <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginBottom: 14 }}>No available drivers or vehicles match the requirements.</p>
-              <BestFitDiagnosticsPanel diagnostics={diagnostics} />
-              <a href="/admin/master-data" target="_blank" rel="noopener noreferrer"
-                style={{ color: 'var(--color-primary)', fontSize: '0.875rem', fontWeight: 600, display: 'inline-block', marginTop: 14 }}>
-                Check fleet availability in Master Data →
-              </a>
-            </div>
+              <JobOrderRouteMap key={selected.id} jobOrderId={selected.id} variant="dispatch" readOnly />
+
+              {loading ? (
+                <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                  <Loader2 size={20} style={{ animation: 'spin 0.7s linear infinite' }} />
+                  Analyzing fleet…
+                </div>
+              ) : top ? (
+                <CandidateCard
+                  item={top}
+                  isTop
+                  onAssign={() => openModal(top, false)}
+                  onOverride={() => openModal(top, false)}
+                />
+              ) : (
+                <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '32px 24px', textAlign: 'center' }}>
+                  <p style={{ fontWeight: 700, marginBottom: 8 }}>No recommendations available</p>
+                  <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginBottom: 14 }}>No available drivers or vehicles match the requirements.</p>
+                  <BestFitDiagnosticsPanel diagnostics={diagnostics} />
+                  <a href="/admin/master-data" target="_blank" rel="noopener noreferrer"
+                    style={{ color: 'var(--color-primary)', fontSize: '0.875rem', fontWeight: 600, display: 'inline-block', marginTop: 14 }}>
+                    Check fleet availability in Master Data →
+                  </a>
+                </div>
+              )}
+            </>
           )}
           </div>
         </div>

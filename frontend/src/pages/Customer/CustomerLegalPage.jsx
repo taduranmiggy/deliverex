@@ -2,6 +2,7 @@ import CustomerPageShell, { CustomerPageHeader } from '../../components/customer
 import LegalDocument from '../../components/customer/LegalDocument'
 import { DATA_PRIVACY_POLICY } from '../../content/legal/dataPrivacyPolicy'
 import { TERMS_AND_CONDITIONS } from '../../content/legal/termsAndConditions'
+import { MotionSection } from '../../motion'
 
 const LEGAL_CONTENT = {
   'data-privacy-notice': {
@@ -24,10 +25,10 @@ function SimpleLegalSections({ sections }) {
   return (
     <div className="dx-panel legal-document legal-document--simple">
       {sections.map(([heading, body]) => (
-        <section key={heading} className="legal-document__section">
+        <MotionSection key={heading} as="section" className="legal-document__section">
           <h2 className="legal-document__section-title">{heading}</h2>
           <p className="legal-document__paragraph">{body}</p>
-        </section>
+        </MotionSection>
       ))}
     </div>
   )
@@ -51,7 +52,9 @@ function CustomerLegalPage({ type }) {
           title={fullDocument.title}
           description={description}
         />
-        <LegalDocument document={fullDocument} />
+        <MotionSection>
+          <LegalDocument document={fullDocument} />
+        </MotionSection>
       </CustomerPageShell>
     )
   }

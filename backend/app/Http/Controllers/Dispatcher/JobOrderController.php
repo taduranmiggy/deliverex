@@ -180,7 +180,7 @@ class JobOrderController extends Controller
         // name as the legacy pickup source so routes/reports still read sensibly.
         if (empty($data['pickup_location']) && ! empty($data['quarry_id'])) {
             $quarry = Quarry::query()->find($data['quarry_id']);
-            $data['pickup_location'] = $quarry?->quarry_name;
+            $data['pickup_location'] = trim((string) ($quarry?->address ?: $quarry?->quarry_name));
         }
 
         $data['created_by']         = $request->user()?->id;
@@ -336,7 +336,8 @@ class JobOrderController extends Controller
         $pickupFields = ['pickup_province', 'pickup_city', 'pickup_barangay', 'pickup_street', 'pickup_landmark', 'pickup_location'];
         $dropoffFields = ['dropoff_province', 'dropoff_city', 'dropoff_barangay', 'dropoff_street', 'dropoff_landmark', 'dropoff_location'];
         $addrFields = array_merge($pickupFields, $dropoffFields);
-        $pickupChanged = count(array_intersect(array_keys($data), $pickupFields)) > 0;
+        $pickupChanged = count(array_intersect(array_keys($data), $pickupFields)) > 0
+            || (array_key_exists('quarry_id', $data) && (int) ($data['quarry_id'] ?? 0) !== (int) ($jobOrder->quarry_id ?? 0));
         $dropoffChanged = count(array_intersect(array_keys($data), $dropoffFields)) > 0;
         if ($pickupChanged || $dropoffChanged) {
             $merged = array_merge($jobOrder->only($addrFields), $data);

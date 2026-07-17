@@ -22,6 +22,7 @@ export function ConfirmationModal({
   title,
   message,
   detail,
+  hint,
   icon: IconProp,
   variant = 'primary',
   confirmLabel = 'Confirm',
@@ -34,6 +35,7 @@ export function ConfirmationModal({
 }) {
   const titleId = useId()
   const descId = useId()
+  const hintId = useId()
   const panelRef = useRef(null)
   const cancelRef = useRef(null)
   const returnFocusTargetRef = useRef(null)
@@ -97,12 +99,12 @@ export function ConfirmationModal({
     >
       <div
         ref={panelRef}
-        className="dx-modal dx-confirm-modal"
+        className={`dx-modal dx-confirm-modal dx-confirm-modal--${variant}`}
         style={{ maxWidth: 460 }}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        aria-describedby={descId}
+        aria-describedby={hint ? `${descId} ${hintId}` : descId}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="dx-confirm-modal__header">
@@ -123,7 +125,12 @@ export function ConfirmationModal({
         <div className="dx-confirm-modal__body">
           <h2 id={titleId} className="dx-confirm-modal__title">{title}</h2>
           <p id={descId} className="dx-confirm-modal__message">{message}</p>
-          {detail && <p className="dx-confirm-modal__detail">{detail}</p>}
+          {detail && (
+            <div className="dx-confirm-modal__detail-wrap">
+              <p className="dx-confirm-modal__detail">{detail}</p>
+            </div>
+          )}
+          {hint && <p id={hintId} className="dx-confirm-modal__hint">{hint}</p>}
         </div>
 
         <div className="dx-confirm-modal__footer">

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { duration, easing } from '../../motion/motion'
+import { MotionSection } from '../../motion'
 import { trackDelivery } from '../../api/customer'
 import DeliverexAssistantChat from '../../components/DeliverexAssistantChat'
 import CustomerLiveMap from '../../components/CustomerLiveMap'
@@ -99,6 +101,7 @@ function TrackingPage() {
   return (
     <CustomerPageShell>
       <div className="tracking-page">
+        <MotionSection>
         <CustomerPageHeader
           eyebrow="Customer Tracking"
           title="Track your delivery"
@@ -113,9 +116,10 @@ function TrackingPage() {
             </>
           )}
         />
+        </MotionSection>
 
         <div className="tracking-grid">
-        {/* Search form */}
+        <MotionSection as="div">
         <form className="tracking-card tracking-form pwa-track-card pwa-track-card--page" onSubmit={handleTrack} aria-label="Track a delivery" noValidate>
           <h2 className="pwa-track-card__title">Look up shipment</h2>
           <div className="pwa-track-search">
@@ -173,9 +177,10 @@ function TrackingPage() {
             ))}
           </div>
         </form>
+        </MotionSection>
 
-        {/* Results */}
-        <div className="tracking-card tracking-status" aria-live="polite">
+        {/* Results — opacity-only animation; map host excluded from transform */}
+        <MotionSection as="div" variant="fade" className="tracking-card tracking-status" aria-live="polite">
           <div className="tracking-status-header">
             <div>
               <h2>Delivery Status</h2>
@@ -199,9 +204,10 @@ function TrackingPage() {
               <motion.div
                 key={result.tracking_code}
                 className="tracking-stack pwa-tracking-reveal"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: duration.medium, ease: easing.easeOut }}
               >
               {/* Progress bar */}
               <DeliveryProgressBar status={result.status} />
@@ -244,11 +250,12 @@ function TrackingPage() {
                 )}
               </div>
 
-              {/* Live map */}
-              {result.approximate_location && result.status !== 'completed' && result.status !== 'cancelled' && (
-                <div className="tracking-section">
-                  <h3>Live delivery map</h3>
+              {/* Live / planned route map */}
+              {(result.approximate_location || result.pickup || result.destination) && (
+                <div className="tracking-section tracking-map-host">
+                  <h3>{result.approximate_location ? 'Live delivery map' : 'Delivery route map'}</h3>
                   <CustomerLiveMap
+                    key={result.tracking_code}
                     driverLocation={result.approximate_location}
                     pickup={result.pickup}
                     destination={result.destination}
@@ -385,7 +392,7 @@ function TrackingPage() {
               </motion.div>
             </AnimatePresence>
           )}
-        </div>
+        </MotionSection>
         </div>
       </div>
 

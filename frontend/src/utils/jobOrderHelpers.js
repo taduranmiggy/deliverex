@@ -36,5 +36,10 @@ export function buildDisplayAddress(prefix, order) {
   if (street || city) {
     return formatAddressParts([street, barangay, city, province])
   }
-  return order?.[`${prefix}_location`] || ''
+  const legacy = order?.[`${prefix}_location`] || ''
+  if (legacy) return legacy
+  if (prefix === 'pickup') {
+    return order?.quarry?.quarry_name || order?.quarry?.name || ''
+  }
+  return ''
 }

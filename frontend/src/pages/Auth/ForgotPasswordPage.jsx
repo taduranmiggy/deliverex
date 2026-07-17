@@ -5,6 +5,7 @@ import AuthMarketingAside from '../../components/auth/AuthMarketingAside'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
 import DeliverexSiteFooter from '../../components/customer/DeliverexSiteFooter'
 import { IconChevronLeft, IconMail } from '../../components/DxIcons'
+import { MotionButton, MotionPage, MotionStagger, MotionStaggerItem } from '../../motion'
 import './LoginPage.css'
 
 const FORGOT_SLIDES = [
@@ -45,15 +46,18 @@ function ForgotPasswordPage() {
   }
 
   return (
-    <div className="auth-split-root">
+    <MotionPage className="auth-split-root">
       <section className="auth-split-layout" aria-label="Forgot password">
         <div className="auth-split-form-col">
-          <div className="auth-split-form-inner">
+          <MotionStagger className="auth-split-form-inner">
+            <MotionStaggerItem index={0}>
             <Link to="/login" className="auth-back-home auth-back-home--split">
               <IconChevronLeft />
               Back to sign in
             </Link>
+            </MotionStaggerItem>
 
+            <MotionStaggerItem index={1}>
             <div className="auth-brand-lockup">
               <span className="auth-brand-logo" aria-hidden />
               <span className="auth-brand-text">Deliverex</span>
@@ -64,7 +68,9 @@ function ForgotPasswordPage() {
               Enter the email address on your Deliverex account. If an account with this email exists,
               a password reset link will be sent.
             </p>
+            </MotionStaggerItem>
 
+            <MotionStaggerItem index={2}>
             {sent ? (
               <div className="auth-forgot-success">
                 <p className="auth-success-dx auth-success-split">
@@ -87,7 +93,7 @@ function ForgotPasswordPage() {
                       id={emailId}
                       name="email"
                       type="email"
-                      className="auth-input-control"
+                      className="auth-input-control motion-focus-glow"
                       autoComplete="email"
                       required
                       placeholder="Email"
@@ -99,19 +105,20 @@ function ForgotPasswordPage() {
 
                 {error ? <p className="auth-error-dx auth-error-split">{error}</p> : null}
 
-                <button className="auth-btn-submit" type="submit" disabled={submitting}>
+                <MotionButton className="auth-btn-submit" type="submit" disabled={submitting}>
                   {submitting ? 'Sending…' : 'Send reset link'}
-                </button>
+                </MotionButton>
               </form>
             )}
-          </div>
+            </MotionStaggerItem>
+          </MotionStagger>
         </div>
 
         <AuthMarketingAside slides={FORGOT_SLIDES} />
       </section>
       <DeliverexSiteFooter />
       <LoadingOverlay open={submitting} message="Sending reset link" submessage="Please wait." />
-    </div>
+    </MotionPage>
   )
 }
 

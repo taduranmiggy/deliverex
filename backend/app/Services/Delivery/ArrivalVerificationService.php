@@ -3,6 +3,7 @@
 namespace App\Services\Delivery;
 
 use App\Models\JobOrder;
+use App\Support\GpsCoordinateValidator;
 
 class ArrivalVerificationService
 {
@@ -15,11 +16,13 @@ class ArrivalVerificationService
      */
     public function resolveDestination(JobOrder $job): ?array
     {
-        if ($job->dropoff_latitude !== null && $job->dropoff_longitude !== null) {
-            return [
-                'lat' => (float) $job->dropoff_latitude,
-                'lng' => (float) $job->dropoff_longitude,
-            ];
+        $stored = GpsCoordinateValidator::pair(
+            $job->dropoff_latitude,
+            $job->dropoff_longitude,
+            'arrival_destination',
+        );
+        if ($stored) {
+            return $stored;
         }
 
         $address = $job->display_dropoff;

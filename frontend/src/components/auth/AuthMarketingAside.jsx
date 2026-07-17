@@ -1,4 +1,7 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
+import useReducedMotion from '../../hooks/useReducedMotion'
+import { slideCrossfade, withReducedMotion } from '../../motion/motion'
 
 const DEFAULT_SLIDES = [
   {
@@ -49,26 +52,46 @@ function AsideArt() {
 }
 
 function AuthMarketingAside({ slides = DEFAULT_SLIDES, intervalMs = 6200 }) {
+  const reduced = useReducedMotion()
   const [slide, setSlide] = useState(0)
+  const [direction, setDirection] = useState(1)
 
   useEffect(() => {
     if (slides.length <= 1) return undefined
     const t = window.setInterval(() => {
+      setDirection(1)
       setSlide((s) => (s + 1) % slides.length)
     }, intervalMs)
     return () => window.clearInterval(t)
   }, [slides.length, intervalMs])
 
+  const goToSlide = (i) => {
+    setDirection(i > slide ? 1 : -1)
+    setSlide(i)
+  }
+
   const current = slides[slide] ?? slides[0]
+  const variants = withReducedMotion(reduced, slideCrossfade)
 
   return (
     <aside className="auth-split-aside-col" aria-label="Deliverex highlights">
       <div className="auth-split-aside-pattern" aria-hidden />
       <div className="auth-split-aside-content">
         <AsideArt />
-        <div className="auth-aside-copy">
-          <h2 className="auth-aside-title">{current.title}</h2>
-          <p className="auth-aside-sub">{current.subtitle}</p>
+        <div className="auth-aside-copy" style={{ position: 'relative', minHeight: '5.5rem' }}>
+          <AnimatePresence mode="wait" custom={direction}>
+            <motion.div
+              key={slide}
+              custom={direction}
+              variants={variants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+            >
+              <h2 className="auth-aside-title">{current.title}</h2>
+              <p className="auth-aside-sub">{current.subtitle}</p>
+            </motion.div>
+          </AnimatePresence>
         </div>
         {slides.length > 1 ? (
           <div className="auth-aside-dots">
@@ -79,7 +102,7 @@ function AuthMarketingAside({ slides = DEFAULT_SLIDES, intervalMs = 6200 }) {
                 className={`auth-aside-dot${i === slide ? ' auth-aside-dot--active' : ''}`}
                 aria-label={`Slide ${i + 1}${i === slide ? ', current' : ''}`}
                 aria-current={i === slide ? 'true' : undefined}
-                onClick={() => setSlide(i)}
+                onClick={() => goToSlide(i)}
               />
             ))}
           </div>

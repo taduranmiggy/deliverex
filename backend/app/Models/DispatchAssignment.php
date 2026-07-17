@@ -89,6 +89,11 @@ class DispatchAssignment extends Model
         return $this->hasMany(TrackingLog::class, 'assignment_id');
     }
 
+    public function latestTrackingLog()
+    {
+        return $this->hasOne(TrackingLog::class, 'assignment_id')->latestOfMany('captured_at');
+    }
+
     public function deliveryDocuments()
     {
         return $this->hasMany(DeliveryDocument::class, 'assignment_id');

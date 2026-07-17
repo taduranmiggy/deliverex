@@ -1427,7 +1427,7 @@ function CreateJobOrderPage() {
                 <div className="dx-kv" style={{ alignItems: 'flex-start' }}>
                   <span>Destination</span><strong style={{ textAlign: 'right' }}>{buildDisplayAddress('dropoff', selected) || '—'}</strong>
                 </div>
-                <JobOrderRouteMap jobOrderId={selected.id} readOnly />
+                <JobOrderRouteMap key={selected.id} jobOrderId={selected.id} variant="detail" readOnly />
                 {selected.material_type && (
                   <div className="dx-kv"><span>Material</span><strong>{selected.material_type}{selected.specification_size ? ` · ${selected.specification_size}` : ''}</strong></div>
                 )}
