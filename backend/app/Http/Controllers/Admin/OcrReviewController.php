@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\OcrResult;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Reports\ExportDateRange;
+use App\Services\Reports\OcrReportQuery;
 use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use OpenSpout\Common\Entity\Cell;
@@ -13,8 +15,10 @@ use OpenSpout\Writer\XLSX\Writer;
 
 class OcrReviewController extends Controller
 {
-    public function __construct(private NotificationDispatcher $notificationDispatcher)
-    {
+    public function __construct(
+        private NotificationDispatcher $notificationDispatcher,
+        private OcrReportQuery $ocrReportQuery,
+    ) {
     }
     public function index(Request $request)
     {
@@ -26,7 +30,7 @@ class OcrReviewController extends Controller
             'document.assignment.vehicle'
         )
             ->orderByDesc('created_at');
-        $this->applyFilters($query, $request);
+        $this->ocrReportQuery->applyFilters($query, $request);
 
         $perPage = min(50, max(1, (int) $request->query('per_page', 6)));
 
@@ -77,9 +81,11 @@ class OcrReviewController extends Controller
 
     public function export(Request $request)
     {
-        $query = OcrResult::with('validator', 'document.assignment.jobOrder')
-            ->orderByDesc('created_at');
-        $this->applyFilters($query, $request);
+        $range = ExportDateRange::resolve($request, defaultDays: 30);
+        $request = ExportDateRange::mergeIntoRequest($request, $range);
+
+        ['query' => $query] = $this->ocrReportQuery->build($request);
+        $query->with('validator', 'document.assignment.jobOrder')->orderByDesc('created_at');
 
         if (! $query->exists()) {
             return response()->json([
@@ -354,49 +360,5 @@ class OcrReviewController extends Controller
         }
 
         return (string) $original === (string) $corrected;
-    }
-
-    private function applyFilters($query, Request $request): void
-    {
-        $filter = (string) $request->query('filter', 'all');
-        $status = (string) $request->query('status', 'all');
-        $jobOrderId = trim((string) $request->query('job_order_id', ''));
-        $dateFrom = $request->query('date_from');
-        $dateTo = $request->query('date_to');
-
-        switch ($filter) {
-            case 'waiting':
-                $query->whereIn('processing_status', ['pending', 'processing', 'processed', 'completed'])
-                    ->where('review_status', 'pending_review');
-                break;
-            case 'validated':
-                $query->where('review_status', 'verified');
-                break;
-            case 'flagged':
-                $query->whereIn('review_status', ['flagged', 'rejected']);
-                break;
-            default:
-                break;
-        }
-
-        if ($status !== '' && $status !== 'all') {
-            $query->where('review_status', $status);
-        }
-
-        if ($jobOrderId !== '') {
-            $numeric = (int) preg_replace('/\D+/', '', $jobOrderId);
-            if ($numeric > 0) {
-                $query->where('job_order_id', $numeric);
-            } else {
-                $query->whereRaw('1 = 0');
-            }
-        }
-
-        if ($dateFrom) {
-            $query->whereDate('delivery_date', '>=', $dateFrom);
-        }
-        if ($dateTo) {
-            $query->whereDate('delivery_date', '<=', $dateTo);
-        }
     }
 }

@@ -5,40 +5,28 @@ namespace App\Services\Reports;
 use App\Models\AssignmentAuditTrail;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 
 class AssignmentAuditReportQuery
 {
     /** @return array{query: Builder, filters: array<string, string|null>} */
     public function build(Request $request): array
     {
+        $range = ExportDateRange::resolveOptional($request);
+        $request = ExportDateRange::mergeIntoRequest($request, $range);
+
         $query = AssignmentAuditTrail::query()->with(['jobOrder', 'dispatcher', 'assignment']);
 
         $filters = [
-            'from' => $request->query('from'),
-            'to' => $request->query('to'),
+            'from' => $range['from'],
+            'to' => $range['to'],
+            'all_records' => $range['all_records'] ? 'yes' : null,
             'overrides_only' => $request->boolean('overrides_only') ? 'yes' : null,
             'job_order_id' => $request->query('job_order_id'),
             'sort_dir' => strtolower((string) $request->query('sort_dir', 'desc')),
         ];
 
-        if (! $filters['from'] && ! $filters['to']) {
-            $query->where('created_at', '>=', now()->subDays(90));
-            $filters['from'] = now()->subDays(90)->toDateString();
-            $filters['to'] = now()->toDateString();
-        }
-
-        if ($filters['from'] || $filters['to']) {
-            try {
-                if ($filters['from']) {
-                    $query->where('created_at', '>=', Carbon::parse($filters['from'])->startOfDay());
-                }
-                if ($filters['to']) {
-                    $query->where('created_at', '<=', Carbon::parse($filters['to'])->endOfDay());
-                }
-            } catch (\Throwable) {
-                abort(422, 'Invalid date range');
-            }
+        if (! $range['all_records'] && ($range['from'] || $range['to'])) {
+            ExportDateRange::applyToQuery($query, 'created_at', $range['from'], $range['to']);
         }
 
         if ($request->boolean('overrides_only')) {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchAssignmentAuditTrails } from '../../api/assignmentAudit'
 import { exportManagerReport, fetchAnalytics, fetchReports } from '../../api/manager'
-import ExportConfirmModal from '../../components/ExportConfirmModal'
+import ExportReportModal from '../../components/ExportReportModal'
 import { DataTable, EmptyState, PageHeader, StatusBadge } from '../../components/ui'
 import { downloadBlob, printReportPanel } from '../../utils/export/download'
 import { ClipboardList, Download, FileText, Printer, Users } from 'lucide-react'
@@ -35,7 +35,6 @@ function ReportsPage() {
   const [auditTrails, setAuditTrails] = useState([])
   const [auditMeta, setAuditMeta] = useState({ last_page: 1, total: 0 })
   const [loading, setLoading] = useState(false)
-  const [exporting, setExporting] = useState(false)
   const [error, setError] = useState('')
   const [page, setPage] = useState(1)
   const [meta, setMeta] = useState({ last_page: 1, total: 0 })
@@ -44,8 +43,9 @@ function ReportsPage() {
   const [toDate, setToDate] = useState('')
   const [dateField, setDateField] = useState('assigned_at')
   const [sortDir, setSortDir] = useState('desc')
-  const [exportFormat, setExportFormat] = useState('csv')
   const [showExportSummary, setShowExportSummary] = useState(false)
+
+  const reportKey = EXPORT_TYPES[tab]
 
   const deliveryFilters = useMemo(() => ({
     page,
@@ -123,78 +123,58 @@ function ReportsPage() {
     return parts.length ? parts.join(' · ') : 'All records'
   }, [statusFilter, fromDate, toDate, dateField, tab])
 
-  const exportSummary = useMemo(() => {
+  const reportExportFilterFields = useMemo(() => {
     if (tab === 'deliveries') {
-      return {
-        report: 'Deliveries',
-        filters: filterSummary,
-        rows: meta.total,
-        total: meta.total,
-        dateRange: fromDate && toDate ? `${fromDate} – ${toDate}` : fromDate ? `From ${fromDate}` : toDate ? `Until ${toDate}` : 'All records',
-      }
+      return [
+        {
+          key: 'status',
+          label: 'Status',
+          type: 'select',
+          defaultValue: statusFilter,
+          options: [
+            { value: '', label: 'All statuses' },
+            ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
+          ],
+        },
+        {
+          key: 'date_field',
+          label: 'Date field',
+          type: 'select',
+          defaultValue: dateField,
+          options: [
+            { value: 'assigned_at', label: 'Assigned at' },
+            { value: 'completed_at', label: 'Completed at' },
+            { value: 'started_at', label: 'Started at' },
+          ],
+        },
+      ]
     }
-    if (tab === 'driver_perf') {
-      const rows = analytics?.drivers ?? []
-      return {
-        report: 'Driver Performance',
-        filters: filterSummary,
-        rows: analytics?.drivers_pagination?.total ?? rows.length,
-        total: analytics?.drivers_pagination?.total ?? rows.length,
-        dateRange: analytics?.filters?.from && analytics?.filters?.to
-          ? `${analytics.filters.from} – ${analytics.filters.to}`
-          : filterSummary,
-      }
+    if (tab === 'assignment_audit') {
+      return [
+        { key: 'job_order_id', label: 'Job Order ID', type: 'text', placeholder: 'e.g. 1042' },
+      ]
     }
-    return {
-      report: 'Assignment Audit',
-      filters: filterSummary,
-      rows: auditMeta.total,
-      total: auditMeta.total,
-      dateRange: fromDate && toDate ? `${fromDate} – ${toDate}` : 'Last 90 days (default)',
-    }
-  }, [tab, filterSummary, meta.total, analytics, auditMeta.total, fromDate, toDate])
+    return []
+  }, [tab, statusFilter, dateField])
 
-  const buildExportFilters = () => {
+  const reportInitialFilters = useMemo(() => {
     if (tab === 'deliveries') {
       return {
         status: statusFilter || undefined,
-        from: fromDate || undefined,
-        to: toDate || undefined,
         date_field: dateField,
         sort: dateField,
         sort_dir: sortDir,
       }
     }
     if (tab === 'driver_perf') {
-      return {
-        from: fromDate || analytics?.filters?.from,
-        to: toDate || analytics?.filters?.to,
-        sort: 'reliability_score',
-        sort_dir: sortDir,
-      }
+      return { sort: 'reliability_score', sort_dir: sortDir }
     }
-    return {
-      from: fromDate || undefined,
-      to: toDate || undefined,
-      sort_dir: sortDir,
-    }
-  }
+    return { sort_dir: sortDir }
+  }, [tab, statusFilter, dateField, sortDir])
 
-  const handleConfirmExport = async () => {
-    setExporting(true)
-    try {
-      const { blob, filename } = await exportManagerReport(
-        EXPORT_TYPES[tab],
-        exportFormat,
-        buildExportFilters(),
-      )
-      downloadBlob(blob, filename)
-      setShowExportSummary(false)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setExporting(false)
-    }
+  const handleExport = async (format, filters) => {
+    const { blob, filename } = await exportManagerReport(reportKey, format, filters)
+    downloadBlob(blob, filename)
   }
 
   const applyFilters = () => {
@@ -211,7 +191,7 @@ function ReportsPage() {
           <button type="button" className="btn-dx-secondary" onClick={() => printReportPanel()} disabled={loading}>
             <Printer size={15} /> Print
           </button>
-          <button type="button" className="btn-dx-primary" onClick={() => setShowExportSummary(true)} disabled={loading || exportSummary.total === 0}>
+          <button type="button" className="btn-dx-primary" onClick={() => setShowExportSummary(true)} disabled={loading}>
             <Download size={15} /> Export
           </button>
         </div>
@@ -369,20 +349,16 @@ function ReportsPage() {
         )}
       </div>
 
-      <ExportConfirmModal
+      <ExportReportModal
         open={showExportSummary}
         onClose={() => setShowExportSummary(false)}
-        onConfirm={handleConfirmExport}
-        reportName={exportSummary.report}
-        dateRange={exportSummary.dateRange}
-        filters={exportSummary.filters}
-        rows={exportSummary.rows}
-        total={exportSummary.total}
-        confirming={exporting}
-        formatValue={exportFormat}
-        onFormatChange={setExportFormat}
-        infoNotice="Server export includes all matching records (up to 10,000 rows) with Deliverex report branding."
-        confirmLabel={`Download ${exportFormat.toUpperCase()}`}
+        reportKey={reportKey}
+        reportTitle={TABS.find((t) => t.key === tab)?.label ?? 'Report'}
+        onExport={handleExport}
+        initialFilters={reportInitialFilters}
+        filterFields={reportExportFilterFields}
+        formatOptions={['csv', 'xlsx', 'pdf']}
+        defaultFormat="csv"
       />
     </>
   )

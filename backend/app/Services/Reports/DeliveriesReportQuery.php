@@ -6,13 +6,15 @@ use App\Models\DispatchAssignment;
 use App\Support\DeliveryStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 
 class DeliveriesReportQuery
 {
     /** @return array{query: Builder, filters: array<string, string|null>} */
     public function build(Request $request): array
     {
+        $range = ExportDateRange::resolveOptional($request);
+        $request = ExportDateRange::mergeIntoRequest($request, $range);
+
         $dateField = (string) $request->query('date_field', 'assigned_at');
         $allowedDateFields = config('reports.deliveries.date_fields', ['assigned_at']);
         if (! in_array($dateField, $allowedDateFields, true)) {
@@ -25,8 +27,9 @@ class DeliveriesReportQuery
         $filters = [
             'status' => $request->query('status'),
             'date_field' => $dateField,
-            'from' => $request->query('from'),
-            'to' => $request->query('to'),
+            'from' => $range['from'],
+            'to' => $range['to'],
+            'all_records' => $range['all_records'] ? 'yes' : null,
             'driver_id' => $request->query('driver_id'),
             'vehicle_id' => $request->query('vehicle_id'),
             'company_id' => $request->query('company_id'),
@@ -50,21 +53,8 @@ class DeliveriesReportQuery
             $query->whereHas('jobOrder', fn (Builder $q) => $q->where('company_id', (int) $filters['company_id']));
         }
 
-        if ($filters['from'] || $filters['to']) {
-            try {
-                $fromDate = $filters['from'] ? Carbon::parse($filters['from'])->startOfDay() : null;
-                $toDate = $filters['to'] ? Carbon::parse($filters['to'])->endOfDay() : null;
-            } catch (\Throwable) {
-                abort(422, 'Invalid date range');
-            }
-
-            if ($fromDate && $toDate) {
-                $query->whereBetween($dateField, [$fromDate, $toDate]);
-            } elseif ($fromDate) {
-                $query->where($dateField, '>=', $fromDate);
-            } elseif ($toDate) {
-                $query->where($dateField, '<=', $toDate);
-            }
+        if (! $range['all_records'] && ($range['from'] || $range['to'])) {
+            ExportDateRange::applyToQuery($query, $dateField, $range['from'], $range['to']);
         }
 
         $sortField = (string) $filters['sort'];

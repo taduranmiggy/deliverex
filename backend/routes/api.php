@@ -19,7 +19,7 @@ use App\Http\Controllers\Customer\InquiryController;
 use App\Http\Controllers\Customer\CompanyUserController;
 use App\Http\Controllers\Customer\PortalController as CustomerPortalController;
 use App\Http\Controllers\Customer\TrackingController as CustomerTrackingController;
-use App\Http\Controllers\DriverPerformanceController;
+use App\Http\Controllers\ExportPreviewController;
 use App\Http\Controllers\AssignmentAuditController;
 use App\Http\Controllers\IssueReportController;
 use App\Http\Controllers\VehicleUtilizationController;
@@ -240,6 +240,11 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/analytics',       [AnalyticsController::class, 'index']);
         Route::get('/active-deliveries', [FleetController::class, 'index']);
         Route::get('/vehicle-utilization', [VehicleUtilizationController::class, 'index']);
+    });
+
+    // ─── Admin + Manager: export preview ─────────────────────────────────────
+    Route::middleware('role:admin|manager')->group(function () {
+        Route::get('/exports/preview', [ExportPreviewController::class, 'show']);
     });
 
     // ─── Admin + Manager: driver performance scoring ─────────────────────────

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchAuditLogs, exportAuditLogs } from '../../api/admin'
-import ExportConfirmModal from '../../components/ExportConfirmModal'
+import ExportReportModal from '../../components/ExportReportModal'
 import { EmptyState, FilterSelect, LoadingRows, PageHeader, SearchInput } from '../../components/ui'
 import { normalizeOcrModuleLabel } from '../../utils/displayLabels'
 import {
@@ -198,8 +198,17 @@ function AdminAuditLogsPage() {
   const [perPage]   = useState(PER_PAGE)
   const [selected, setSelected] = useState(null)
   const [showExportSummary, setShowExportSummary] = useState(false)
-  const [exportFormat, setExportFormat] = useState('pdf')
-  const [exporting, setExporting] = useState(false)
+
+  const auditExportFilterFields = useMemo(() => [
+    { key: 'module', label: 'Module', type: 'select', defaultValue: module, options: MODULES },
+    { key: 'search', label: 'Search', type: 'text', placeholder: 'User, action, IP…' },
+  ], [module])
+
+  const auditInitialFilters = useMemo(() => ({
+    module: module !== 'all' ? module : undefined,
+    search: search || undefined,
+    sort,
+  }), [module, search, sort])
 
   const load = useCallback(async (params = {}) => {
     setLoading(true)
@@ -250,43 +259,12 @@ function AdminAuditLogsPage() {
 
   const handleSort = (dir) => { setSort(dir); setPage(1) }
 
-  const exportSummary = useMemo(() => {
-    const moduleLabel = MODULES.find((m) => m.value === module)?.label ?? 'All Modules'
-    const parts = [moduleLabel]
-    if (from) parts.push(`From ${from}`)
-    if (to) parts.push(`To ${to}`)
-    if (search) parts.push(`Search: “${search}”`)
-    return {
-      report: 'Audit Logs',
-      dateRange: from && to ? `${from} – ${to}` : from ? `From ${from}` : to ? `Until ${to}` : 'All records',
-      filters: parts.join(' · '),
-      rows: logs.length,
-      total,
-    }
-  }, [module, from, to, search, logs.length, total])
-
-  const exportFilters = useMemo(() => ({
-    module: module !== 'all' ? module : undefined,
-    from: from || undefined,
-    to: to || undefined,
-    search: search || undefined,
-    sort,
-  }), [module, from, to, search, sort])
-
-  const handleConfirmExport = async () => {
-    setExporting(true)
-    try {
-      const { blob, filename } = await exportAuditLogs(exportFormat, exportFilters)
-      const url = URL.createObjectURL(blob)
-      const a = Object.assign(document.createElement('a'), { href: url, download: filename })
-      a.click()
-      URL.revokeObjectURL(url)
-      setShowExportSummary(false)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setExporting(false)
-    }
+  const handleExport = async (format, filters) => {
+    const { blob, filename } = await exportAuditLogs(format, filters)
+    const url = URL.createObjectURL(blob)
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename })
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   /* Input style reuse */
@@ -305,7 +283,6 @@ function AdminAuditLogsPage() {
           type="button"
           className="btn-dx-secondary"
           onClick={() => setShowExportSummary(true)}
-          disabled={total === 0 && logs.length === 0}
         >
           <Download size={15} /> Export
         </button>
@@ -487,21 +464,16 @@ function AdminAuditLogsPage() {
         <LogDetailModal log={selected} onClose={() => setSelected(null)} />
       )}
 
-      <ExportConfirmModal
+      <ExportReportModal
         open={showExportSummary}
         onClose={() => setShowExportSummary(false)}
-        onConfirm={handleConfirmExport}
-        reportName={exportSummary.report}
-        dateRange={exportSummary.dateRange}
-        filters={exportSummary.filters}
-        rows={exportSummary.total || exportSummary.rows}
-        total={exportSummary.total}
-        confirming={exporting}
-        formatValue={exportFormat}
-        onFormatChange={setExportFormat}
-        formatOptions={['csv', 'xlsx', 'pdf']}
-        infoNotice="Server export includes all matching audit records (up to 10,000 rows) with Deliverex report branding."
-        confirmLabel={`Download ${exportFormat.toUpperCase()}`}
+        reportKey="audit_logs"
+        reportTitle="Audit Logs"
+        onExport={handleExport}
+        initialFilters={auditInitialFilters}
+        filterFields={auditExportFilterFields}
+        formatOptions={['pdf', 'xlsx', 'csv']}
+        defaultFormat="pdf"
       />
     </>
   )

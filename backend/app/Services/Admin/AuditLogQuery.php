@@ -3,6 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Models\AuditLog;
+use App\Services\Reports\ExportDateRange;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -11,6 +12,9 @@ class AuditLogQuery
     /** @return array{query: Builder, filters: array<string, string|null>} */
     public function build(Request $request): array
     {
+        $range = ExportDateRange::resolveOptional($request);
+        $request = ExportDateRange::mergeIntoRequest($request, $range);
+
         $module = $request->query('module');
         $role = $request->query('role');
         $action = $request->query('action');
@@ -37,18 +41,8 @@ class AuditLogQuery
             $query->where('action', 'like', '%'.$action.'%');
         }
 
-        if ($from) {
-            try {
-                $query->where('created_at', '>=', \Illuminate\Support\Carbon::parse($from)->startOfDay());
-            } catch (\Throwable) {
-            }
-        }
-
-        if ($to) {
-            try {
-                $query->where('created_at', '<=', \Illuminate\Support\Carbon::parse($to)->endOfDay());
-            } catch (\Throwable) {
-            }
+        if (! $range['all_records'] && ($range['from'] || $range['to'])) {
+            ExportDateRange::applyToQuery($query, 'created_at', $range['from'], $range['to']);
         }
 
         if ($search !== '') {
@@ -81,8 +75,9 @@ class AuditLogQuery
             'module' => $module && $module !== 'all' ? (string) $module : null,
             'role' => $role && $role !== 'all' ? (string) $role : null,
             'action' => $action ? (string) $action : null,
-            'from' => $from ? (string) $from : null,
-            'to' => $to ? (string) $to : null,
+            'from' => $range['from'],
+            'to' => $range['to'],
+            'all_records' => $range['all_records'] ? 'yes' : null,
             'search' => $search !== '' ? $search : null,
             'sort' => $sortDir,
         ];

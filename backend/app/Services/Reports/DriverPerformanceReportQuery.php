@@ -2,6 +2,7 @@
 
 namespace App\Services\Reports;
 
+use App\Services\Reports\ExportDateRange;
 use App\Services\Performance\DriverPerformanceScoringService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -17,15 +18,23 @@ class DriverPerformanceReportQuery
      */
     public function build(Request $request): array
     {
-        $from = $request->query('from');
-        $to = $request->query('to');
+        $range = ExportDateRange::resolveOptional($request);
 
-        $fromDate = $from ? Carbon::parse($from)->startOfDay() : now()->subDays(30)->startOfDay();
-        $toDate = $to ? Carbon::parse($to)->endOfDay() : now()->endOfDay();
+        if ($range['all_records']) {
+            $fromDate = Carbon::parse('2000-01-01')->startOfDay();
+            $toDate = now()->endOfDay();
+        } elseif ($range['from'] || $range['to']) {
+            $fromDate = Carbon::parse($range['from'] ?? '2000-01-01')->startOfDay();
+            $toDate = Carbon::parse($range['to'] ?? now()->toDateString())->endOfDay();
+        } else {
+            $fromDate = now()->subDays(29)->startOfDay();
+            $toDate = now()->endOfDay();
+        }
 
         $filters = [
-            'from' => $fromDate->toDateString(),
-            'to' => $toDate->toDateString(),
+            'from' => $range['all_records'] ? null : $fromDate->toDateString(),
+            'to' => $range['all_records'] ? null : $toDate->toDateString(),
+            'all_records' => $range['all_records'] ? 'yes' : null,
             'sort' => $request->query('sort', 'reliability_score'),
             'sort_dir' => strtolower((string) $request->query('sort_dir', 'desc')),
         ];

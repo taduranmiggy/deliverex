@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { exportOcrReport, fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, saveOcrCorrections, validateOcr } from '../../api/admin'
-import ExportConfirmModal from '../../components/ExportConfirmModal'
+import ExportReportModal from '../../components/ExportReportModal'
 import OcrCorrectionModal from '../../components/OcrCorrectionModal'
 import { EmptyState, PageHeader, PaginationBar } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
@@ -403,7 +403,6 @@ function OcrReviewPage() {
   const [issueType, setIssueType] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading]       = useState(false)
-  const [exporting, setExporting]   = useState(false)
   const [showExportSummary, setShowExportSummary] = useState(false)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [previewError, setPreviewError] = useState('')
@@ -554,56 +553,50 @@ function OcrReviewPage() {
     }
   }
 
-  const handleExport = async () => {
-    if (isDispatcher) return
-    setExporting(true)
-    try {
-      const blob = await exportOcrReport({
-        filter: tab,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
-        status: statusFilter !== 'all' ? statusFilter : undefined,
-        job_order_id: jobOrderIdFilter || undefined,
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      const d = new Date()
-      const datePart = `${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}_${String(d.getDate()).padStart(2, '0')}`
-      a.href = url
-      a.download = `OCR_Report_${datePart}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
-      toast('OCR report exported successfully.', 'success')
-    } catch (err) {
-      toast(err.message || 'Failed to export OCR report.', 'error')
-    } finally {
-      setExporting(false)
-    }
+  const handleExport = async (_format, filters) => {
+    const blob = await exportOcrReport(filters)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const d = new Date()
+    const datePart = `${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}_${String(d.getDate()).padStart(2, '0')}`
+    a.href = url
+    a.download = `OCR_Report_${datePart}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    toast('OCR report exported successfully.', 'success')
   }
 
-  const handleConfirmExport = async () => {
-    await handleExport()
-    setShowExportSummary(false)
-  }
+  const ocrExportFilterFields = useMemo(() => [
+    {
+      key: 'filter',
+      label: 'Review queue',
+      type: 'select',
+      defaultValue: tab,
+      options: FILTER_TABS.map((t) => ({ value: t.key, label: t.label })),
+    },
+    {
+      key: 'status',
+      label: 'Review status',
+      type: 'select',
+      defaultValue: statusFilter,
+      options: [
+        { value: 'all', label: 'All' },
+        { value: 'pending_review', label: 'Pending Review' },
+        { value: 'verified', label: 'Verified' },
+        { value: 'flagged', label: 'Flagged' },
+        { value: 'rejected', label: 'Rejected' },
+      ],
+    },
+    { key: 'job_order_id', label: 'Job Order ID', type: 'text', placeholder: 'e.g. 12345' },
+  ], [tab, statusFilter])
 
-  const ocrExportSummary = useMemo(() => {
-    const tabLabel = FILTER_TABS.find((t) => t.key === tab)?.label ?? tab
-    const statusLabel = statusFilter === 'all' ? 'All statuses' : (REVIEW_STATUS_BADGE[statusFilter]?.label ?? statusFilter)
-    const parts = [`Tab: ${tabLabel}`, `Status: ${statusLabel}`]
-    if (jobOrderIdFilter) parts.push(`Job Order: ${jobOrderIdFilter}`)
-    let dateRange = 'All records'
-    if (dateFrom && dateTo) dateRange = `${dateFrom} – ${dateTo}`
-    else if (dateFrom) dateRange = `From ${dateFrom}`
-    else if (dateTo) dateRange = `Until ${dateTo}`
-    return {
-      report: 'OCR Review Export',
-      dateRange,
-      filters: parts.join(' · '),
-      rows: total,
-    }
-  }, [tab, statusFilter, jobOrderIdFilter, dateFrom, dateTo, total])
+  const ocrInitialFilters = useMemo(() => ({
+    filter: tab,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    job_order_id: jobOrderIdFilter || undefined,
+  }), [tab, statusFilter, jobOrderIdFilter])
 
   const getBadge = (item) => STATUS_MAP[item.processing_status] ?? { cls: 'badge-dx badge-dx--muted', label: item.processing_status ?? '—' }
   const getReviewBadge = (item) => REVIEW_STATUS_BADGE[item.review_status] ?? { cls: 'badge-dx badge-dx--muted', label: item.review_status ?? '—' }
@@ -856,8 +849,8 @@ function OcrReviewPage() {
             : 'System-wide OCR validation, oversight, and delivery audit review'}
       >
         {!isDispatcher && !isReadOnly && (
-          <button type="button" className="btn-dx-primary" onClick={() => setShowExportSummary(true)} disabled={exporting || total === 0}>
-            {exporting ? <><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Exporting...</> : 'Export XLSX'}
+          <button type="button" className="btn-dx-primary" onClick={() => setShowExportSummary(true)}>
+            Export
           </button>
         )}
       </PageHeader>
@@ -1285,17 +1278,16 @@ function OcrReviewPage() {
         changedFieldCount={pendingCorrectionFields ? Object.keys(pendingCorrectionFields).length : 0}
       />
 
-      <ExportConfirmModal
+      <ExportReportModal
         open={showExportSummary}
         onClose={() => setShowExportSummary(false)}
-        onConfirm={handleConfirmExport}
-        reportName={ocrExportSummary.report}
-        dateRange={ocrExportSummary.dateRange}
-        filters={ocrExportSummary.filters}
-        rows={ocrExportSummary.rows}
-        confirmLabel="Download XLSX"
-        confirming={exporting}
-        infoNotice="All records matching the current filters will be exported from the server."
+        reportKey="ocr"
+        reportTitle="OCR Reports"
+        onExport={handleExport}
+        initialFilters={ocrInitialFilters}
+        filterFields={ocrExportFilterFields}
+        formatOptions={['xlsx']}
+        defaultFormat="xlsx"
       />
     </>
   )

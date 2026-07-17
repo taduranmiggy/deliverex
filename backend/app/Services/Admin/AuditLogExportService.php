@@ -3,6 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Models\AuditLog;
+use App\Services\Reports\ExportDateRange;
 use App\Services\Reports\PdfReportRenderer;
 use App\Services\Reports\ReportMetadata;
 use App\Services\Reports\ReportSpreadsheetExporter;
@@ -26,6 +27,9 @@ class AuditLogExportService
         if (! in_array($format, ['csv', 'xlsx', 'pdf'], true)) {
             abort(422, 'Invalid export format. Use csv, xlsx, or pdf.');
         }
+
+        $range = ExportDateRange::resolve($request);
+        $request = ExportDateRange::mergeIntoRequest($request, $range);
 
         ['query' => $builder, 'filters' => $filters] = $this->query->build($request);
         $maxRows = (int) config('reports.export_max_rows', 10000);

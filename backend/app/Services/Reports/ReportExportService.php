@@ -26,6 +26,9 @@ class ReportExportService
             abort(422, 'Invalid export format. Use csv, xlsx, or pdf.');
         }
 
+        $range = ExportDateRange::resolve($request);
+        $request = ExportDateRange::mergeIntoRequest($request, $range);
+
         $result = match ($type) {
             'deliveries' => $this->exportDeliveries($request, $format),
             'driver_performance' => $this->exportDriverPerformance($request, $format),
