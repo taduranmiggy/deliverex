@@ -8,6 +8,7 @@ import {
   MonthlyDelayTrendChart,
 } from '../../components/analytics/AnalyticsCharts'
 import { DataTable, EmptyState, FilterSelect, PageHeader, PaginationBar, SectionCard, StatCard, StatusBadge } from '../../components/ui'
+import { formatPct } from '../../utils/formatMetrics'
 import { AlertTriangle, Award, BarChart3, Car, CheckCircle2, Clock, TrendingDown, Truck, Users } from 'lucide-react'
 
 function scoreColor(score) {
@@ -128,12 +129,12 @@ function AnalyticsPage() {
       </div>
 
       <div className="dx-stat-row">
-        <StatCard label="Total Jobs" value={s.total ?? '—'} icon={BarChart3} iconVariant="default" />
-        <StatCard label="Completed" value={s.completed ?? '—'} icon={CheckCircle2} iconVariant="green" />
-        <StatCard label="Completion Rate" value={s.completion_rate_pct != null ? `${s.completion_rate_pct}%` : '—'} icon={Award} iconVariant="green" />
-        <StatCard label="In Progress" value={s.in_progress ?? '—'} icon={Clock} iconVariant="purple" />
-        <StatCard label="Delayed" value={s.delayed ?? '—'} icon={TrendingDown} iconVariant={s.delayed > 0 ? 'red' : 'green'} />
-        <StatCard label="Fleet Util." value={fleet.utilization_pct != null ? `${fleet.utilization_pct}%` : '—'} icon={Car} iconVariant="orange" />
+        <StatCard label="Total Jobs" value={loading ? '…' : (s.total ?? '—')} icon={BarChart3} iconVariant="default" />
+        <StatCard label="Completed" value={loading ? '…' : (s.completed ?? '—')} icon={CheckCircle2} iconVariant="green" />
+        <StatCard label="Completion Rate" value={loading ? '…' : formatPct(s.completion_rate_pct)} icon={Award} iconVariant="green" />
+        <StatCard label="In Progress" value={loading ? '…' : (s.in_progress ?? '—')} icon={Clock} iconVariant="purple" />
+        <StatCard label="Delayed" value={loading ? '…' : (s.delayed ?? '—')} icon={TrendingDown} iconVariant={!loading && s.delayed > 0 ? 'red' : 'green'} />
+        <StatCard label="Fleet Util." value={loading ? '…' : formatPct(fleet.utilization_pct)} icon={Car} iconVariant="orange" />
       </div>
 
       <div className="dx-grid-2 dx-grid-2--start" style={{ marginBottom: 20 }}>
@@ -188,8 +189,8 @@ function AnalyticsPage() {
         </SectionCard>
       </div>
 
-      <div className="dx-stat-row" style={{ marginBottom: 20 }}>
-        <StatCard label="Delay Reports" value={delays.total_reports ?? '—'} icon={AlertTriangle} iconVariant={delays.total_reports > 0 ? 'red' : 'green'} />
+      <div className="dx-stat-row dx-stat-row--compact" style={{ marginBottom: 20 }}>
+        <StatCard label="Delay Reports" value={loading ? '…' : (delays.total_reports ?? '—')} icon={AlertTriangle} iconVariant={!loading && delays.total_reports > 0 ? 'red' : 'green'} />
       </div>
 
       <div className="dx-grid-2 dx-grid-2--start" style={{ marginBottom: 20 }}>

@@ -59,7 +59,9 @@ function ChartTooltip({ active, payload, label }) {
 }
 
 export function DailyDeliveriesChart({ data }) {
-  if (!data?.length) return <ChartEmpty />
+  if (!data?.length || !data.some((row) => Number(row.count) > 0)) {
+    return <ChartEmpty message="No completed deliveries for this period." />
+  }
   return (
     <div style={{ width: '100%', height: 260 }}>
       <ResponsiveContainer>

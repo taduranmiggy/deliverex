@@ -237,6 +237,10 @@
   margin-bottom: 24px;
 }
 
+.dx-stat-row--compact {
+  grid-template-columns: repeat(auto-fit, minmax(220px, max-content));
+}
+
 .dx-stat-card {
   background: var(--surface);
   border-radius: var(--radius-lg);
@@ -285,6 +289,13 @@
   color: var(--color-primary);
   opacity: 0;
   transition: opacity 0.14s;
+}
+
+.dx-stat-card__desc {
+  margin-top: 4px;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--muted);
 }
 
 .dx-stat-card--clickable:hover .dx-stat-card__hint {
@@ -4068,6 +4079,237 @@
   margin-top: 2px;
 }
 
+/* ── Analytics KPI cards (manager dashboard) ─────────────── */
+.dx-kpi-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (min-width: 1440px) {
+  .dx-kpi-card-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .dx-kpi-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .dx-kpi-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .dx-kpi-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dx-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 148px;
+  height: 100%;
+  padding: 16px 16px 14px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--stroke);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.dx-kpi-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.dx-kpi-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.dx-kpi-card__icon--green  { background: var(--color-success-light); color: var(--color-success); }
+.dx-kpi-card__icon--yellow { background: var(--color-warning-light); color: var(--color-warning); }
+.dx-kpi-card__icon--red    { background: var(--color-error-light);   color: var(--color-error); }
+.dx-kpi-card__icon--purple { background: var(--color-purple-light);  color: var(--color-purple); }
+.dx-kpi-card__icon--orange { background: var(--color-orange-light);  color: var(--color-orange); }
+
+.dx-kpi-card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+
+.dx-kpi-card__label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dx-kpi-card__value {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.2vw, 1.65rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.dx-kpi-card__desc {
+  margin: 2px 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.dx-kpi-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.dx-kpi-trend--up   { color: var(--color-success); }
+.dx-kpi-trend--down { color: var(--color-error); }
+.dx-kpi-trend--flat { color: var(--muted); }
+
+.dx-kpi-card--loading {
+  pointer-events: none;
+}
+
+.dx-kpi-card__skel-icon,
+.dx-kpi-card__skel-line {
+  background: linear-gradient(90deg, var(--slate-100) 25%, var(--slate-50) 50%, var(--slate-100) 75%);
+  background-size: 200% 100%;
+  animation: dx-kpi-shimmer 1.2s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+.dx-kpi-card__skel-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.dx-kpi-card__skel-line { height: 10px; }
+.dx-kpi-card__skel-line--sm { width: 55%; margin-top: 4px; }
+.dx-kpi-card__skel-line--lg { width: 40%; height: 22px; margin-top: 8px; }
+.dx-kpi-card__skel-line--md { width: 70%; margin-top: 10px; }
+
+@keyframes dx-kpi-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Weekly deliveries mini chart */
+.dx-weekly-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-height: 120px;
+  padding: 0 2px 4px;
+}
+
+.dx-weekly-chart__col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.dx-weekly-chart__bar-wrap {
+  width: 100%;
+  height: 88px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.dx-weekly-chart__bar {
+  width: 100%;
+  max-width: 44px;
+  min-height: 4px;
+  border-radius: 6px 6px 2px 2px;
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  transition: height 0.35s ease;
+}
+
+.dx-weekly-chart__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+.dx-weekly-chart__empty {
+  margin: 0;
+  padding: 28px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.875rem;
+  border: 1px dashed var(--stroke);
+  border-radius: 12px;
+  background: var(--slate-50);
+}
+
+.dx-fleet-snapshot {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.dx-fleet-snapshot__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--stroke);
+  font-size: 0.875rem;
+}
+
+.dx-fleet-snapshot__row:last-child {
+  border-bottom: none;
+}
+
+.dx-fleet-snapshot__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.dx-fleet-snapshot__value {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
 /* ── Analytics: Fleet Status chart ───────────────────────── */
 .dx-fleet-status-panel {
   height: auto;
@@ -5721,9 +5963,10 @@
 /* ── Structured user name fields ─────────────────────────────────────── */
 .dx-name-fields {
   display: grid;
-  grid-template-columns: 1fr minmax(72px, 0.45fr) 1fr;
+  grid-template-columns: 1fr minmax(96px, 0.5fr) 1fr;
   gap: 12px;
   grid-column: 1 / -1;
+  align-items: end;
 }
 .dx-name-fields__field {
   display: grid;
@@ -5732,8 +5975,15 @@
   font-size: 0.8125rem;
   color: var(--slate-700);
 }
+.dx-name-fields__field > span:first-child {
+  min-height: 1.25rem;
+  line-height: 1.25;
+}
 .dx-name-fields__field input {
   font-weight: 400;
+}
+.dx-name-fields__field--mi > span:first-child {
+  white-space: nowrap;
 }
 .dx-name-fields__field--mi input {
   text-align: center;

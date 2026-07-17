@@ -49,6 +49,9 @@ export function StatCard({ label, value, icon: Icon, delta, deltaType = 'up', ic
         {hint && onClick && (
           <div className="dx-stat-card__hint">{hint} →</div>
         )}
+        {hint && !onClick && (
+          <div className="dx-stat-card__desc">{hint}</div>
+        )}
       </div>
     </Tag>
   )

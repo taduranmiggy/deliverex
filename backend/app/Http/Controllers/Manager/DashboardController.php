@@ -27,19 +27,20 @@ class DashboardController extends Controller
         // Daily completed for the last 7 days
         $dailyCompleted = DispatchAssignment::where('status', 'completed')
             ->where('completed_at', '>=', now()->subDays(6)->startOfDay())
-            ->select(DB::raw("DATE(completed_at) as date"), DB::raw("COUNT(*) as count"))
-            ->groupBy(DB::raw("DATE(completed_at)"))
+            ->select(DB::raw('DATE(completed_at) as date'), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw('DATE(completed_at)'))
             ->orderBy('date')
             ->get()
-            ->keyBy('date');
+            ->mapWithKeys(fn ($row) => [\Illuminate\Support\Carbon::parse($row->date)->toDateString() => (int) $row->count]);
 
         $weekDays = [];
         for ($i = 6; $i >= 0; $i--) {
-            $d = now()->subDays($i)->toDateString();
+            $day = now()->subDays($i);
+            $d = $day->toDateString();
             $weekDays[] = [
-                'label' => now()->subDays($i)->format('D'),
+                'label' => $day->format('D'),
                 'date'  => $d,
-                'count' => (int) ($dailyCompleted[$d]->count ?? 0),
+                'count' => (int) ($dailyCompleted[$d] ?? 0),
             ];
         }
 

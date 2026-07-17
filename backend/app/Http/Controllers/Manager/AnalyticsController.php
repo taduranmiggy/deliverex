@@ -9,7 +9,6 @@ use App\Models\Driver;
 use App\Models\JobOrder;
 use App\Models\Vehicle;
 use App\Services\Performance\DriverPerformanceScoringService;
-use App\Support\DeliveryStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -42,17 +41,15 @@ class AnalyticsController extends Controller
         $completed     = (clone $baseJobs)->where('status', 'completed')->count();
         $pending       = (clone $baseJobs)->where('status', 'pending')->count();
         $inProgress    = (clone $baseJobs)->whereIn('status', [
-            DeliveryStatus::ASSIGNED,
+            'assigned',
             'in_progress',
-            DeliveryStatus::EN_ROUTE_TO_PICKUP,
-            DeliveryStatus::ARRIVED_AT_PICKUP,
-            DeliveryStatus::EN_ROUTE_TO_DESTINATION,
-            DeliveryStatus::ARRIVED,
+            'arrived',
         ])->count();
         $cancelled     = (clone $baseJobs)->where('status', 'cancelled')->count();
 
-        // Delayed: active jobs that are past their scheduled_end
-        $delayed = JobOrder::whereNotIn('status', ['completed', 'cancelled'])
+        // Delayed: active jobs in the selected period that are past their scheduled_end
+        $delayed = (clone $baseJobs)
+            ->whereNotIn('status', ['completed', 'cancelled'])
             ->whereNotNull('scheduled_end')
             ->where('scheduled_end', '<', now())
             ->count();
@@ -106,7 +103,7 @@ class AnalyticsController extends Controller
             ->groupBy(DB::raw('DATE(completed_at)'))
             ->orderBy('date')
             ->get()
-            ->keyBy('date');
+            ->mapWithKeys(fn ($row) => [Carbon::parse($row->date)->toDateString() => $row]);
 
         $dailyStats = $this->buildDailySeries($fromDate, $toDate, $dailyRaw);
 

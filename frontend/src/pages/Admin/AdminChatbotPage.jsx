@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { IconEyeOutline, IconPencil, IconTrash } from '../../components/DxIcons'
+import ExportConfirmModal from '../../components/ExportConfirmModal'
 import AdminChatbotIntentsPanel from '../../components/admin/AdminChatbotIntentsPanel'
 import ChatbotPaginatedTable from '../../components/admin/ChatbotPaginatedTable'
 import { PUBLIC_FAQS } from '../../data/publicFaqs'
+import { downloadCsv } from '../../utils/export/download'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -258,6 +260,21 @@ function ResolvedBarChart() {
   )
 }
 
+function filterConversations(rows, { search, role, status }) {
+  const query = search.trim().toLowerCase()
+  return rows.filter((row) => {
+    if (query && !row.id.toLowerCase().includes(query) && !row.userLabel.toLowerCase().includes(query)) {
+      return false
+    }
+    if (role !== 'all' && !row.userLabel.toLowerCase().includes(`(${role})`)) {
+      return false
+    }
+    if (status === 'resolved' && !row.resolved) return false
+    if (status === 'unresolved' && row.resolved) return false
+    return true
+  })
+}
+
 function AdminChatbotPage() {
   const [tab, setTab] = useState('dashboard')
   const [redactPhone, setRedactPhone] = useState(true)
@@ -265,6 +282,58 @@ function AdminChatbotPage() {
   const [redactTracking, setRedactTracking] = useState(false)
   const [retentionDays, setRetentionDays] = useState('90')
   const [webhookSecretVisible, setWebhookSecretVisible] = useState(false)
+  const [conversationSearch, setConversationSearch] = useState('')
+  const [conversationRole, setConversationRole] = useState('all')
+  const [conversationStatus, setConversationStatus] = useState('all')
+  const [showExportSummary, setShowExportSummary] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const filteredConversations = useMemo(
+    () => filterConversations(CONVERSATIONS, {
+      search: conversationSearch,
+      role: conversationRole,
+      status: conversationStatus,
+    }),
+    [conversationSearch, conversationRole, conversationStatus],
+  )
+
+  const conversationExportSummary = useMemo(() => {
+    const parts = []
+    if (conversationSearch.trim()) parts.push(`Search: "${conversationSearch.trim()}"`)
+    if (conversationRole !== 'all') {
+      parts.push(`Role: ${conversationRole.charAt(0).toUpperCase()}${conversationRole.slice(1)}`)
+    }
+    if (conversationStatus !== 'all') {
+      parts.push(`Status: ${conversationStatus.charAt(0).toUpperCase()}${conversationStatus.slice(1)}`)
+    }
+    return {
+      report: 'Chatbot Conversations',
+      filters: parts.length ? parts.join(' · ') : 'None',
+      dateRange: 'All records',
+      rows: filteredConversations.length,
+      total: filteredConversations.length,
+    }
+  }, [conversationSearch, conversationRole, conversationStatus, filteredConversations.length])
+
+  const handleConfirmConversationExport = () => {
+    setExporting(true)
+    try {
+      const headers = ['Session ID', 'User', 'Top Intent', 'Status', 'Duration', 'Date / Time']
+      const rows = filteredConversations.map((row) => [
+        row.id,
+        row.userLabel,
+        row.intent,
+        row.resolved ? 'Resolved' : 'Unresolved',
+        row.duration,
+        row.at,
+      ])
+      const stamp = new Date().toISOString().slice(0, 10)
+      downloadCsv(`chatbot-conversations-${stamp}.csv`, headers, rows)
+      setShowExportSummary(false)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <section className="dx-chatbot-page">
@@ -382,27 +451,46 @@ function AdminChatbotPage() {
       {tab === 'conversations' && (
         <div className="dx-panel">
           <div className="dx-chat-toolbar">
-            <input type="search" placeholder="Session ID or Name" aria-label="Search sessions" />
-            <select aria-label="Role filter">
-              <option>All Roles</option>
-              <option>Customer</option>
-              <option>Dispatcher</option>
+            <input
+              type="search"
+              placeholder="Session ID or Name"
+              aria-label="Search sessions"
+              value={conversationSearch}
+              onChange={(e) => setConversationSearch(e.target.value)}
+            />
+            <select
+              aria-label="Role filter"
+              value={conversationRole}
+              onChange={(e) => setConversationRole(e.target.value)}
+            >
+              <option value="all">All Roles</option>
+              <option value="customer">Customer</option>
+              <option value="dispatcher">Dispatcher</option>
             </select>
-            <select aria-label="Status filter">
-              <option>All Status</option>
-              <option>Resolved</option>
-              <option>Unresolved</option>
+            <select
+              aria-label="Status filter"
+              value={conversationStatus}
+              onChange={(e) => setConversationStatus(e.target.value)}
+            >
+              <option value="all">All Status</option>
+              <option value="resolved">Resolved</option>
+              <option value="unresolved">Unresolved</option>
             </select>
             <button type="button" className="btn-dx-secondary">
               More Filters
             </button>
-            <button type="button" className="btn-dx-primary">
+            <button
+              type="button"
+              className="btn-dx-primary"
+              onClick={() => setShowExportSummary(true)}
+              disabled={filteredConversations.length === 0}
+            >
               Export
             </button>
           </div>
           <ChatbotPaginatedTable
             columns={['Session ID', 'User', 'Top Intent', 'Status', 'Duration', 'Date / Time', 'Actions']}
-            rows={CONVERSATIONS}
+            rows={filteredConversations}
             renderRow={(row) => (
               <tr key={row.id}>
                 <td>{row.id}</td>
@@ -728,6 +816,20 @@ function AdminChatbotPage() {
           </div>
         </>
       )}
+
+      <ExportConfirmModal
+        open={showExportSummary}
+        onClose={() => setShowExportSummary(false)}
+        onConfirm={handleConfirmConversationExport}
+        reportName={conversationExportSummary.report}
+        dateRange={conversationExportSummary.dateRange}
+        filters={conversationExportSummary.filters}
+        rows={conversationExportSummary.rows}
+        total={conversationExportSummary.total}
+        confirming={exporting}
+        confirmLabel="Download CSV"
+        infoNotice="Exports the conversations currently shown in the table (respects search and filter selections)."
+      />
     </section>
   )
 }

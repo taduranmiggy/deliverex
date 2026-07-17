@@ -50,14 +50,14 @@ class ManagerDashboardTest extends TestCase
             'status' => 'available',
         ]);
 
-        $scheduledEnd = now()->subDays(2)->addHours(3);
-        $startedAt = now()->subDays(2);
-        $completedAt = $scheduledEnd->copy()->subHour();
+        $scheduledEnd = now()->addDays(2);
+        $startedAt = now()->subHour();
+        $completedAt = now()->subMinutes(30);
 
         $jobOrder = JobOrder::factory()->create([
             'created_by' => $dispatcher->id,
             'status' => 'completed',
-            'scheduled_start' => $startedAt->copy()->subHour(),
+            'scheduled_start' => now()->addHour(),
             'scheduled_end' => $scheduledEnd,
         ]);
 
@@ -80,11 +80,13 @@ class ManagerDashboardTest extends TestCase
             'dispatcher_id' => $dispatcher->id,
             'assigned_driver_id' => $driver->id,
             'assigned_vehicle_id' => $vehicle->id,
+            'assigned_driver_name' => $driverUser->name,
+            'assigned_vehicle_plate' => $vehicle->plate_no,
             'is_override' => false,
             'best_fit_score' => 88.5,
         ]);
 
-        $response = $this->actingAs($manager, 'sanctum')
+        $response = $this->apiAs($manager)
             ->getJson('/api/manager/dashboard');
 
         $response->assertOk();
@@ -98,10 +100,14 @@ class ManagerDashboardTest extends TestCase
             'period' => ['from', 'to'],
         ]);
 
-        $response->assertJsonPath('on_time_pct', 100.0);
-        $response->assertJsonPath('delivery_completion_pct', 100.0);
-        $response->assertJsonPath('pod_completion_pct', 100.0);
+        $response->assertJsonPath('on_time_pct', 100);
+        $response->assertJsonPath('delivery_completion_pct', 100);
+        $response->assertJsonPath('pod_completion_pct', 100);
+        $response->assertJsonPath('exception_rate_pct', 0);
+        $response->assertJsonPath('driver_utilization_pct', 100);
+        $response->assertJsonPath('best_fit_efficiency_score', 88.5);
         $this->assertNotNull($response->json('avg_delivery_time_hours'));
+        $this->assertIsArray($response->json('on_time_pct_trend'));
     }
 
     public function test_manager_can_read_ocr_review_queue(): void
