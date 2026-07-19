@@ -12,7 +12,6 @@ import {
   MotionCard,
   MotionModal,
   MotionPage,
-  MotionParallax,
   MotionSection,
   MotionStagger,
   MotionStaggerItem,
@@ -111,9 +110,9 @@ function LandingPage() {
             </MotionStaggerItem>
           </MotionStagger>
 
-          <MotionParallax className="landing-hero__visual-wrap" offset={14}>
+          <div className="landing-hero__visual-wrap">
             <LandingHeroScene />
-          </MotionParallax>
+          </div>
         </div>
       </section>
 

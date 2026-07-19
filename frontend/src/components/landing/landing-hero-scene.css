@@ -1,593 +1,116 @@
-/* ═══════════════════════════════════════════════════════════
-   Landing Hero Scene — premium logistics visualization
-═══════════════════════════════════════════════════════════ */
+/* Landing hero — clean delivery overview panel */
 
-.hero-scene {
-  position: relative;
+.hero-preview {
   width: 100%;
-  min-height: clamp(320px, 42vw, 480px);
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 20px 22px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+  color: #0f172a;
+}
+
+.hero-preview__header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.hero-scene__stage {
-  position: relative;
-  width: min(100%, 520px);
-  aspect-ratio: 1 / 1;
-  max-height: 480px;
+.hero-preview__live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
 }
 
-/* ── Ambient background layers ───────────────────────────── */
-.hero-scene-bg {
-  position: absolute;
-  inset: -10%;
-  pointer-events: none;
-  overflow: hidden;
+.hero-preview__title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #334155;
 }
 
-.hero-scene-bg__gradient {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    145deg,
-    rgba(37, 99, 235, 0.2) 0%,
-    rgba(30, 58, 138, 0.08) 40%,
-    rgba(16, 185, 129, 0.06) 100%
-  );
-  background-size: 200% 200%;
-  animation: heroGradShift 28s ease-in-out infinite;
-}
-
-.hero-scene-bg__radial {
-  position: absolute;
-  top: 20%;
-  left: 50%;
-  width: 120%;
-  height: 80%;
-  transform: translateX(-50%);
-  background: radial-gradient(ellipse, rgba(96, 165, 250, 0.22) 0%, transparent 65%);
-  filter: blur(24px);
-}
-
-.hero-scene-bg__grid {
-  position: absolute;
-  inset: 0;
-  opacity: 0.4;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 40px 40px;
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black 10%, transparent 70%);
-  animation: heroGridFade 1.2s ease-out both;
-}
-
-.hero-scene-bg__route {
-  position: absolute;
-  height: 2px;
+.hero-preview__badge {
+  margin-left: auto;
+  padding: 3px 8px;
   border-radius: 99px;
-  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.5), transparent);
-  filter: blur(1px);
-  opacity: 0.5;
-}
-
-.hero-scene-bg__route--1 {
-  width: 60%;
-  top: 35%;
-  left: 10%;
-  transform: rotate(-12deg);
-  animation: heroRouteDrift 20s ease-in-out infinite;
-}
-
-.hero-scene-bg__route--2 {
-  width: 45%;
-  bottom: 30%;
-  right: 5%;
-  transform: rotate(8deg);
-  animation: heroRouteDrift 24s ease-in-out infinite reverse;
-}
-
-.hero-scene-bg__particles {
-  position: absolute;
-  inset: 0;
-}
-
-.hero-scene-bg__particle {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35);
-  animation: heroParticleFloat 8s ease-in-out infinite;
-}
-
-.hero-scene-bg__particle--1  { top: 12%; left: 18%; animation-delay: 0s; }
-.hero-scene-bg__particle--2  { top: 25%; left: 72%; animation-delay: 1.2s; }
-.hero-scene-bg__particle--3  { top: 45%; left: 8%;  animation-delay: 2.4s; }
-.hero-scene-bg__particle--4  { top: 60%; left: 85%; animation-delay: 0.8s; }
-.hero-scene-bg__particle--5  { top: 78%; left: 22%; animation-delay: 3.1s; }
-.hero-scene-bg__particle--6  { top: 88%; left: 58%; animation-delay: 1.8s; }
-.hero-scene-bg__particle--7  { top: 15%; left: 45%; animation-delay: 4s; width: 3px; height: 3px; }
-.hero-scene-bg__particle--8  { top: 52%; left: 92%; animation-delay: 2s; width: 3px; height: 3px; }
-.hero-scene-bg__particle--9  { top: 70%; left: 42%; animation-delay: 5s; }
-.hero-scene-bg__particle--10 { top: 32%; left: 30%; animation-delay: 3.5s; width: 2px; height: 2px; }
-.hero-scene-bg__particle--11 { top: 55%; left: 65%; animation-delay: 6s; width: 2px; height: 2px; }
-.hero-scene-bg__particle--12 { top: 8%;  left: 88%; animation-delay: 4.5s; width: 3px; height: 3px; }
-
-/* ── Center hub ──────────────────────────────────────────── */
-.hero-hub {
-  position: absolute;
-  inset: 8%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1;
-}
-
-.hero-hub__svg {
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.hero-hub__route {
-  animation: heroRouteDraw 3s ease-out 0.6s forwards;
-}
-
-.hero-hub__route--static {
-  stroke-dashoffset: 0;
-  animation: none;
-}
-
-.hero-hub__radar {
-  transform-origin: 210px 210px;
-  animation: heroRadarExpand 3.5s ease-out infinite;
-}
-
-.hero-hub__radar--2 { animation-delay: 1.2s; }
-.hero-hub__radar--3 { animation-delay: 2.4s; }
-
-.hero-hub__gps-pulse {
-  animation: heroGpsPulse 2.4s ease-out infinite;
-}
-
-.hero-hub__gps-pulse--2 { animation-delay: 1.2s; }
-
-.hero-hub__orbit-wrap {
-  animation: heroOrbitSpin 8s linear infinite;
-  transform-origin: 0 0;
-}
-
-@keyframes heroOrbitSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.hero-hub__node {
-  filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.2));
-}
-
-.hero-hub__panel {
-  animation: heroPanelBreath 5s ease-in-out infinite;
-}
-
-.hero-hub__card {
-  position: absolute;
-  width: min(42%, 140px);
-  text-align: center;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.hero-hub__card-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.hero-hub__live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #10b981;
-  animation: heroPulseDot 2s ease-in-out infinite;
-}
-
-.hero-hub__card-label {
   font-size: 0.625rem;
-  font-weight: 600;
-  text-transform: uppercase;
+  font-weight: 700;
   letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
 }
 
-.hero-hub__card-title {
-  font-size: clamp(0.8125rem, 2vw, 0.9375rem);
-  font-weight: 800;
-  color: #0f172a;
-  margin: 0 0 8px;
-  letter-spacing: -0.02em;
+.hero-preview__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
 
-.hero-hub__metrics {
+.hero-preview__stat {
   display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 10px;
-  margin-bottom: 8px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
 }
 
-.hero-hub__metric-value {
-  font-size: clamp(1.125rem, 3vw, 1.375rem);
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.03em;
-}
-
-.hero-hub__metric-value--green {
-  color: #059669;
-}
-
-.hero-hub__metric-unit {
-  display: block;
-  font-size: 0.625rem;
-  font-weight: 500;
-  color: #64748b;
-  margin-top: 1px;
-}
-
-.hero-hub__metric-divider {
-  width: 1px;
-  height: 24px;
-  background: #e2e8f0;
-}
-
-.hero-hub__progress {
-  height: 4px;
-  border-radius: 99px;
-  background: #e2e8f0;
-  overflow: hidden;
-}
-
-.hero-hub__progress-bar {
-  height: 100%;
-  width: 68%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #10b981);
-  animation: heroProgressGrow 2s ease-out 1s both;
-}
-
-/* ── Glassmorphism floating cards ────────────────────────── */
-.hero-scene__cards {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 3;
-}
-
-.hero-float {
-  position: absolute !important;
-  min-width: clamp(148px, 28vw, 188px);
-  padding: 14px 16px !important;
-  border-radius: 18px !important;
-  background: rgba(255, 255, 255, 0.78) !important;
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.85) !important;
-  box-shadow:
-    0 4px 6px rgba(15, 23, 42, 0.04),
-    0 12px 32px rgba(15, 23, 42, 0.12),
-    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
-    0 0 40px rgba(37, 99, 235, 0.06) !important;
-  color: #0f172a;
-}
-
-.hero-float--eta {
-  top: 2%;
-  left: -2%;
-}
-
-.hero-float--status {
-  top: 4%;
-  right: -4%;
-}
-
-.hero-float--verify {
-  bottom: 8%;
-  left: -4%;
-}
-
-.hero-float--tracking {
-  bottom: 6%;
-  right: -2%;
-}
-
-.hero-float__icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+.hero-preview__icon-wrap {
   display: grid;
   place-items: center;
-  margin-bottom: 8px;
-}
-
-.hero-float__icon--orange {
-  background: rgba(249, 115, 22, 0.12);
-  color: #ea580c;
-}
-
-.hero-float__icon--green {
-  background: rgba(16, 185, 129, 0.12);
-  color: #059669;
-}
-
-.hero-float__icon--blue {
-  background: rgba(37, 99, 235, 0.12);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #eff6ff;
   color: #2563eb;
+  flex-shrink: 0;
 }
 
-.hero-float__title {
-  font-size: clamp(0.8125rem, 1.8vw, 1.0625rem);
-  font-weight: 700;
-  color: #334155;
-  margin: 0 0 4px;
-  line-height: 1.3;
+.hero-preview__stat-body {
+  min-width: 0;
 }
 
-.hero-float__value {
-  font-size: clamp(1.75rem, 4.5vw, 2.25rem);
-  font-weight: 800;
-  color: #0f172a;
-  margin: 0 0 8px;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-}
-
-.hero-float__value--sm {
-  font-size: clamp(1.125rem, 2.8vw, 1.375rem);
-}
-
-.hero-float__value-unit {
-  font-size: 0.55em;
-  font-weight: 700;
-  color: #64748b;
-}
-
-.hero-float__meta {
+.hero-preview__stat-label {
+  margin: 0 0 2px;
   font-size: 0.6875rem;
-  font-weight: 500;
+  font-weight: 600;
   color: #64748b;
-  margin: 6px 0 0;
-  line-height: 1.4;
-}
-
-.hero-float__progress {
-  height: 5px;
-  border-radius: 99px;
-  background: #e2e8f0;
-  overflow: hidden;
-  margin-top: 4px;
-}
-
-.hero-float__progress-fill {
-  height: 100%;
-  border-radius: inherit;
-  transition: width 0.3s ease;
-}
-
-.hero-float__progress-fill--orange {
-  background: linear-gradient(90deg, #f97316, #fb923c);
-}
-
-.hero-float__row {
-  margin-bottom: 6px;
-}
-
-.hero-float__badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 99px;
-  font-size: 0.6875rem;
-  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.hero-float__badge--blue {
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
-}
-
-.hero-float__pulse {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #2563eb;
-  animation: heroPulseDot 2s ease-in-out infinite;
-}
-
-.hero-float__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  font-size: 0.6875rem;
-  font-weight: 600;
-}
-
-.hero-float__chip--green {
-  background: rgba(16, 185, 129, 0.12);
-  color: #047857;
-}
-
-.hero-float__tracking-id {
-  font-size: clamp(0.9375rem, 2.2vw, 1.0625rem);
-  font-weight: 800;
+.hero-preview__stat-value {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
   color: #0f172a;
-  letter-spacing: 0.04em;
-  margin: 0 0 8px;
-  font-family: ui-monospace, monospace;
+  line-height: 1.25;
+  word-break: break-word;
 }
 
-.hero-float__details {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.hero-preview__stat-hint {
+  margin: 4px 0 0;
   font-size: 0.6875rem;
-  font-weight: 500;
-  color: #64748b;
-}
-
-.hero-float__details span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-/* ── Responsive ──────────────────────────────────────────── */
-@media (max-width: 899px) {
-  .landing-hero__inner {
-    grid-template-columns: 1fr !important;
-  }
-
-  .hero-scene {
-    min-height: 340px;
-    margin-top: 16px;
-  }
-
-  .hero-scene__stage {
-    width: min(100%, 400px);
-  }
-
-  .hero-float--verify,
-  .hero-float--desktop-only {
-    display: none !important;
-  }
-
-  .hero-float--eta {
-    top: 0;
-    left: 0;
-  }
-
-  .hero-float--status {
-    top: 0;
-    right: 0;
-  }
-
-  .hero-float--tracking {
-    bottom: 0;
-    right: 0;
-    left: auto;
-  }
+  color: #94a3b8;
+  line-height: 1.35;
 }
 
 @media (max-width: 520px) {
-  .hero-float--tablet-up {
-    display: none !important;
+  .hero-preview {
+    padding: 16px 18px;
   }
 
-  .hero-float {
-    min-width: 140px;
-    padding: 12px 14px !important;
-  }
-
-  .hero-float--eta {
-    top: -2%;
-    left: 2%;
-  }
-
-  .hero-float--status {
-    top: auto;
-    bottom: 2%;
-    right: 2%;
-  }
-
-  .hero-scene__stage {
-    width: min(100%, 320px);
-  }
-}
-
-/* ── Keyframes (GPU: transform + opacity only) ─────────── */
-@keyframes heroGradShift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
-@keyframes heroGridFade {
-  from { opacity: 0; }
-  to { opacity: 0.4; }
-}
-
-@keyframes heroRouteDrift {
-  0%, 100% { transform: rotate(-12deg) translateX(0); opacity: 0.35; }
-  50% { transform: rotate(-12deg) translateX(12px); opacity: 0.55; }
-}
-
-@keyframes heroParticleFloat {
-  0%, 100% { transform: translate(0, 0); opacity: 0.3; }
-  50% { transform: translate(6px, -10px); opacity: 0.7; }
-}
-
-@keyframes heroRouteDraw {
-  to { stroke-dashoffset: 0; }
-}
-
-@keyframes heroRadarExpand {
-  0% { transform: scale(0.6); opacity: 0.6; }
-  100% { transform: scale(2.2); opacity: 0; }
-}
-
-@keyframes heroGpsPulse {
-  0% { transform: scale(0.8); opacity: 0.7; }
-  100% { transform: scale(2.5); opacity: 0; }
-}
-
-@keyframes heroOrbitSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes heroPanelBreath {
-  0%, 100% { opacity: 0.92; }
-  50% { opacity: 1; }
-}
-
-@keyframes heroProgressGrow {
-  from { width: 0; }
-  to { width: 68%; }
-}
-
-@keyframes heroPulseDot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.85); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hero-scene-bg__gradient,
-  .hero-scene-bg__route,
-  .hero-scene-bg__particle,
-  .hero-hub__route,
-  .hero-hub__radar,
-  .hero-hub__gps-pulse,
-  .hero-hub__orbit-wrap,
-  .hero-hub__panel,
-  .hero-hub__progress-bar,
-  .hero-hub__live-dot,
-  .hero-float__pulse {
-    animation: none !important;
-  }
-
-  .hero-hub__route {
-    stroke-dashoffset: 0;
-  }
-
-  .hero-hub__progress-bar {
-    width: 68%;
+  .hero-preview__grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -166,7 +166,7 @@
 
 .landing-hero__visual-wrap {
   position: relative;
-  min-height: 280px;
+  min-height: auto;
   display: flex;
   align-items: center;
   justify-content: center;
