@@ -16,6 +16,9 @@ return [
 
     'document_version' => env('REPORT_DOCUMENT_VERSION', '1.0'),
 
+    /** Absolute path or path relative to backend/public for PDF report logo. */
+    'logo_path' => env('REPORT_LOGO_PATH'),
+
     'deliveries' => [
         'orientation' => 'landscape',
         'date_fields' => ['assigned_at', 'started_at', 'completed_at', 'created_at'],

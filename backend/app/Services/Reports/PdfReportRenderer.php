@@ -77,11 +77,17 @@ class PdfReportRenderer
 
     private function logoDataUri(): ?string
     {
-        $candidates = [
+        $configured = config('reports.logo_path');
+        $candidates = array_values(array_filter([
+            is_string($configured) && $configured !== '' ? $configured : null,
+            public_path('images/deliverex-logo.png'),
+            public_path('favicon-192x192.png'),
+            public_path('deliverexfavicon.png'),
+            public_path('deliverexx.png'),
             dirname(base_path()).DIRECTORY_SEPARATOR.'frontend'.DIRECTORY_SEPARATOR.'public'.DIRECTORY_SEPARATOR.'favicon-192x192.png',
+            dirname(base_path()).DIRECTORY_SEPARATOR.'frontend'.DIRECTORY_SEPARATOR.'public'.DIRECTORY_SEPARATOR.'deliverexfavicon.png',
             dirname(base_path()).DIRECTORY_SEPARATOR.'frontend'.DIRECTORY_SEPARATOR.'public'.DIRECTORY_SEPARATOR.'deliverexx.png',
-            public_path('favicon.svg'),
-        ];
+        ]));
 
         foreach ($candidates as $path) {
             if (! is_file($path) || ! is_readable($path)) {
@@ -89,7 +95,12 @@ class PdfReportRenderer
             }
 
             $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-            $mime = $extension === 'svg' ? 'image/svg+xml' : 'image/png';
+            $mime = match ($extension) {
+                'svg' => 'image/svg+xml',
+                'jpg', 'jpeg' => 'image/jpeg',
+                'webp' => 'image/webp',
+                default => 'image/png',
+            };
 
             return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($path));
         }
