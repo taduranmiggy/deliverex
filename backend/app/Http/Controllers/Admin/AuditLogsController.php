@@ -26,7 +26,9 @@ class AuditLogsController extends Controller
 
         $logs->getCollection()->transform(fn ($log) => $this->presenter->present($log));
 
-        return response()->json($logs);
+        return response()->json(array_merge($logs->toArray(), [
+            'filter_options' => $this->auditLogQuery->options(),
+        ]));
     }
 
     public function export(Request $request)

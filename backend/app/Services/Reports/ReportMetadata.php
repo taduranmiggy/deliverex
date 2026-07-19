@@ -41,11 +41,14 @@ final class ReportMetadata
     {
         $lines = [];
         foreach ($this->filters as $key => $value) {
-            if ($value === null || $value === '') {
+            if ($value === null || $value === '' || in_array($key, [
+                'from', 'to', 'date_from', 'date_to', 'date_preset', 'all_records',
+            ], true)) {
                 continue;
             }
             $label = ucwords(str_replace('_', ' ', (string) $key));
-            $lines[] = "{$label}: {$value}";
+            $displayValue = is_bool($value) ? ($value ? 'Yes' : 'No') : (is_scalar($value) ? (string) $value : json_encode($value));
+            $lines[] = "{$label}: {$displayValue}";
         }
 
         return $lines ?: ['None'];
@@ -53,10 +56,25 @@ final class ReportMetadata
 
     public function generatedAtLabel(): string
     {
-        return now()->timezone(config('reports.default_timezone'))->format('M j, Y g:i A T');
+        return now()->timezone(config('reports.default_timezone'))->format('F j, Y g:i A');
     }
 
-    public function generatedByLabel(): string
+    public function generatedDateLabel(): string
+    {
+        return now()->timezone(config('reports.default_timezone'))->format('F j, Y');
+    }
+
+    public function generatedTimeLabel(): string
+    {
+        return now()->timezone(config('reports.default_timezone'))->format('g:i A');
+    }
+
+    public function generatedByName(): string
+    {
+        return $this->generatedBy?->name ?? 'System';
+    }
+
+    public function generatedByRole(): string
     {
         if (! $this->generatedBy) {
             return 'System';
@@ -66,7 +84,41 @@ final class ReportMetadata
             ? $this->generatedBy->role?->name
             : $this->generatedBy->loadMissing('role')->role?->name;
 
-        return trim($this->generatedBy->name.' ('.($role ?? 'user').')');
+        return ucwords(str_replace('_', ' ', $role ?? 'User'));
+    }
+
+    public function dateRangeLabel(): string
+    {
+        if (($this->filters['all_records'] ?? null) === true || ($this->filters['all_records'] ?? null) === 'yes') {
+            return 'All records';
+        }
+
+        $from = $this->filters['from'] ?? $this->filters['date_from'] ?? null;
+        $to = $this->filters['to'] ?? $this->filters['date_to'] ?? null;
+
+        return ExportDateRange::label(
+            is_scalar($from) ? (string) $from : null,
+            is_scalar($to) ? (string) $to : null,
+        );
+    }
+
+    public function orientation(int $columnCount): string
+    {
+        $configured = config("reports.{$this->reportType}.orientation");
+        if (in_array($configured, ['portrait', 'landscape'], true)) {
+            return $configured;
+        }
+
+        return $columnCount >= 6 ? 'landscape' : 'portrait';
+    }
+
+    public function generatedByLabel(): string
+    {
+        if (! $this->generatedBy) {
+            return 'System';
+        }
+
+        return trim($this->generatedByName().' ('.$this->generatedByRole().')');
     }
 
     public function fileSlug(): string

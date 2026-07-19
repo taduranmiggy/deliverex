@@ -42,19 +42,30 @@ export function fetchOcrQueue(page = 1, filter = 'all', params = {}) {
   return apiRequest(`/ocr/review?${qs}`)
 }
 
-export async function exportOcrReport(params = {}) {
+export async function exportOcrReport(format = 'pdf', params = {}) {
   const token = localStorage.getItem('deliverex_token')
   const qs = new URLSearchParams(
-    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
+    {
+      format,
+      ...Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
+    },
   ).toString()
   const response = await fetch(`${API_URL}/admin/ocr/review/export${qs ? `?${qs}` : ''}`, {
-    headers: token ? { Authorization: `Bearer ${token}`, Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } : {},
+    headers: {
+      Accept: 'application/octet-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   })
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
     throw new Error(err.message || 'Failed to export OCR report.')
   }
-  return response.blob()
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename="?([^";]+)"?/)
+  const filename = match?.[1] || `ocr-review_${new Date().toISOString().slice(0, 10)}.${format}`
+
+  return { blob, filename }
 }
 export function fetchRoles()               { return apiRequest('/admin/roles') }
 export function fetchAuditLogs(params = {}) {
@@ -87,6 +98,33 @@ export async function exportAuditLogs(format, filters = {}) {
   const disposition = response.headers.get('Content-Disposition') || ''
   const match = disposition.match(/filename="?([^";]+)"?/)
   const filename = match?.[1] || `audit-logs_${new Date().toISOString().slice(0, 10)}.${format}`
+
+  return { blob, filename }
+}
+
+export async function exportEnterpriseReport(type, format = 'pdf', filters = {}) {
+  const qs = new URLSearchParams({
+    type,
+    format,
+    ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v != null && v !== '')),
+  }).toString()
+  const token = localStorage.getItem('deliverex_token')
+  const response = await fetch(`${API_URL}/reports/export?${qs}`, {
+    headers: {
+      Accept: 'application/octet-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.message || 'Failed to export report.')
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename="?([^";]+)"?/)
+  const filename = match?.[1] || `${type}_${new Date().toISOString().slice(0, 10)}.${format}`
 
   return { blob, filename }
 }

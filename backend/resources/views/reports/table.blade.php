@@ -4,83 +4,173 @@
     <meta charset="utf-8">
     <title>{{ $meta->reportTitle }}</title>
     <style>
-        @page { margin: 36px 40px 52px 40px; }
-        body { font-family: DejaVu Sans, sans-serif; font-size: 10.5px; color: #1e293b; margin: 0; }
-        .header { border-bottom: 2px solid #2563eb; padding-bottom: 14px; margin-bottom: 18px; }
-        .brand-row { display: table; width: 100%; }
-        .brand-left { display: table-cell; vertical-align: middle; width: 58%; }
-        .brand-right { display: table-cell; vertical-align: middle; text-align: right; width: 42%; }
-        .logo-box {
-            width: 42px; height: 42px; border-radius: 8px; background: #2563eb; color: #fff;
-            text-align: center; line-height: 42px; font-weight: bold; font-size: 16px;
-            display: inline-block; margin-right: 10px; vertical-align: middle;
+        @page { margin: 30px 34px 52px; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: DejaVu Sans, Arial, sans-serif;
+            font-size: 9.5px;
+            line-height: 1.35;
+            color: #172033;
         }
-        .company { font-size: 17px; font-weight: bold; color: #0f172a; margin: 0; display: inline-block; vertical-align: middle; }
-        .product { font-size: 11px; color: #2563eb; font-weight: bold; margin: 4px 0 0; letter-spacing: 0.05em; text-transform: uppercase; }
-        .report-title { font-size: 14px; font-weight: bold; margin: 0; color: #334155; }
-        .meta { font-size: 9.5px; color: #64748b; line-height: 1.6; margin-top: 10px; }
-        table.data { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .report-header {
+            border: 1px solid #d7e0ec;
+            border-top: 5px solid #1d4ed8;
+            border-radius: 6px;
+            padding: 15px 17px 13px;
+            margin-bottom: 14px;
+            background: #ffffff;
+        }
+        .brand-table, .meta-table, .footer-table { width: 100%; border-collapse: collapse; }
+        .brand-table td, .meta-table td, .footer-table td { border: 0; padding: 0; }
+        .brand-cell { width: 54%; vertical-align: middle; }
+        .title-cell { width: 46%; vertical-align: middle; text-align: right; }
+        .logo {
+            width: 46px;
+            height: 46px;
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+        .logo-fallback {
+            display: inline-block;
+            width: 46px;
+            height: 46px;
+            line-height: 46px;
+            text-align: center;
+            border-radius: 8px;
+            background: #1d4ed8;
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: 700;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        .brand-copy { display: inline-block; vertical-align: middle; }
+        .system-name { margin: 0; color: #0f172a; font-size: 18px; line-height: 1.1; font-weight: 700; }
+        .company-name { margin: 4px 0 0; color: #526078; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+        .report-kicker { margin: 0 0 4px; color: #1d4ed8; font-size: 8px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+        .report-title { margin: 0; color: #172033; font-size: 16px; line-height: 1.2; font-weight: 700; }
+        .document-id { margin: 5px 0 0; color: #718096; font-size: 8px; }
+        .divider { height: 1px; margin: 13px 0 10px; background: #dce4ef; }
+        .meta-table td { width: 50%; vertical-align: top; color: #40506a; line-height: 1.65; }
+        .meta-table td:last-child { padding-left: 24px; }
+        .meta-label { display: inline-block; min-width: 83px; color: #718096; font-size: 8.2px; font-weight: 700; text-transform: uppercase; }
+        .meta-value { color: #172033; font-weight: 600; }
+        .filters {
+            margin-top: 10px;
+            padding: 8px 10px;
+            border-left: 3px solid #1d4ed8;
+            background: #f4f7fb;
+            color: #40506a;
+        }
+        .filters-title { margin-right: 7px; color: #172033; font-size: 8.3px; font-weight: 700; text-transform: uppercase; }
+        .summary { margin-top: 8px; color: #40506a; font-size: 8.7px; }
+        .summary-item { display: inline-block; margin-right: 16px; }
+        .summary-key { color: #718096; text-transform: uppercase; font-size: 7.8px; font-weight: 700; }
+        table.data { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; }
+        table.data thead { display: table-header-group; }
+        table.data tr { page-break-inside: avoid; }
         table.data th {
-            background: #f1f5f9;
-            color: #334155;
-            font-size: 9px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            padding: 9px 8px;
-            border: 1px solid #cbd5e1;
+            padding: 7px 6px;
+            border: 1px solid #c7d2e1;
+            background: #eaf0f8;
+            color: #24324a;
+            font-size: 8px;
+            line-height: 1.2;
+            font-weight: 700;
             text-align: left;
+            text-transform: uppercase;
+            letter-spacing: .025em;
         }
         table.data td {
-            padding: 8px;
-            border: 1px solid #e2e8f0;
-            font-size: 9px;
+            padding: 6px;
+            border: 1px solid #dce4ef;
             vertical-align: top;
-            word-wrap: break-word;
+            color: #26354d;
+            font-size: 8.2px;
+            overflow-wrap: anywhere;
         }
-        table.data tr:nth-child(even) td { background: #f8fafc; }
+        table.data tbody tr:nth-child(even) td { background: #f8fafc; }
+        body.compact table.data th { padding: 6px 4px; font-size: 7.1px; }
+        body.compact table.data td { padding: 5px 4px; font-size: 7.25px; }
+        .empty { padding: 20px !important; text-align: center; color: #718096 !important; }
         .footer {
             position: fixed;
-            bottom: 0;
-            left: 0;
             right: 0;
-            font-size: 8.5px;
+            bottom: -34px;
+            left: 0;
+            padding-top: 7px;
+            border-top: 1px solid #cbd5e1;
             color: #64748b;
-            border-top: 1px solid #e2e8f0;
-            padding: 8px 40px 0;
+            font-size: 7.4px;
         }
-        .footer-row { display: table; width: 100%; }
-        .footer-left { display: table-cell; text-align: left; width: 50%; }
-        .footer-right { display: table-cell; text-align: right; width: 50%; }
-        .summary { margin: 12px 0 0; font-size: 9.5px; color: #475569; }
-        .doc-meta { font-size: 9px; color: #94a3b8; margin-top: 4px; }
+        .footer-left { width: 75%; text-align: left; }
+        .footer-right { width: 25%; text-align: right; padding-right: 94px !important; color: #1d4ed8; font-weight: 700; }
     </style>
 </head>
-<body>
-    <div class="header">
-        <div class="brand-row">
-            <div class="brand-left">
-                <span class="logo-box">DX</span>
-                <div style="display:inline-block; vertical-align:middle;">
-                    <p class="company">{{ $companyName }}</p>
-                    <p class="product">{{ $productName }}</p>
-                </div>
-            </div>
-            <div class="brand-right">
-                <p class="report-title">{{ $meta->reportTitle }}</p>
-                <p class="doc-meta">Document version {{ $documentVersion ?? '1.0' }}@if(!empty($jobOrderId)) · Job Order #{{ $jobOrderId }}@endif</p>
-            </div>
+<body class="{{ ($columnCount ?? count($headers)) >= 9 ? 'compact' : '' }}">
+    <div class="footer">
+        <table class="footer-table">
+            <tr>
+                <td class="footer-left">{{ $footerText }} | {{ $productName }} Enterprise Reporting</td>
+                <td class="footer-right"></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="report-header">
+        <table class="brand-table">
+            <tr>
+                <td class="brand-cell">
+                    @if (!empty($logoDataUri))
+                        <img class="logo" src="{{ $logoDataUri }}" alt="Deliverex logo">
+                    @else
+                        <span class="logo-fallback">DX</span>
+                    @endif
+                    <div class="brand-copy">
+                        <p class="system-name">{{ $productName }}</p>
+                        <p class="company-name">{{ $companyName }}</p>
+                    </div>
+                </td>
+                <td class="title-cell">
+                    <p class="report-kicker">Deliverex Enterprise Report</p>
+                    <h1 class="report-title">{{ $meta->reportTitle }}</h1>
+                    <p class="document-id">Version {{ $documentVersion ?? '1.0' }}@if(!empty($jobOrderId)) | Job Order #{{ $jobOrderId }}@endif</p>
+                </td>
+            </tr>
+        </table>
+
+        <div class="divider"></div>
+
+        <table class="meta-table">
+            <tr>
+                <td>
+                    <span class="meta-label">Generated By</span>
+                    <span class="meta-value">{{ $meta->generatedByName() }}</span><br>
+                    <span class="meta-label">User Role</span>
+                    <span class="meta-value">{{ $meta->generatedByRole() }}</span>
+                </td>
+                <td>
+                    <span class="meta-label">Generated On</span>
+                    <span class="meta-value">{{ $meta->generatedDateLabel() }}</span><br>
+                    <span class="meta-label">Time</span>
+                    <span class="meta-value">{{ $meta->generatedTimeLabel() }}</span><br>
+                    <span class="meta-label">Date Range</span>
+                    <span class="meta-value">{{ $meta->dateRangeLabel() }}</span>
+                </td>
+            </tr>
+        </table>
+
+        <div class="filters">
+            <span class="filters-title">Filters Used</span>
+            {{ implode(' | ', $meta->filterLines()) }}
         </div>
-        <div class="meta">
-            Generated by: {{ $meta->generatedByLabel() }}<br>
-            Exported by: {{ $exportedBy ?? $meta->generatedByLabel() }}<br>
-            Generated at: {{ $meta->generatedAtLabel() }}<br>
-            Filters: {{ implode(' · ', $meta->filterLines()) }}
-        </div>
+
         @if (!empty($meta->summary))
             <div class="summary">
                 @foreach ($meta->summary as $key => $value)
                     @if ($value !== null && $value !== '')
-                        {{ ucwords(str_replace('_', ' ', $key)) }}: {{ $value }}@if (!$loop->last) · @endif
+                        <span class="summary-item"><span class="summary-key">{{ ucwords(str_replace('_', ' ', $key)) }}</span> {{ $value }}</span>
                     @endif
                 @endforeach
             </div>
@@ -99,22 +189,16 @@
             @forelse ($rows as $row)
                 <tr>
                     @foreach ($row as $cell)
-                        <td>{{ $cell ?? '—' }}</td>
+                        <td>{{ $cell ?? '-' }}</td>
                     @endforeach
                 </tr>
             @empty
                 <tr>
-                    <td colspan="{{ count($headers) }}">No records found for the selected filters.</td>
+                    <td class="empty" colspan="{{ count($headers) }}">No records found for the selected filters.</td>
                 </tr>
             @endforelse
         </tbody>
     </table>
 
-    <div class="footer">
-        <div class="footer-row">
-            <div class="footer-left">{{ $footerText }} · {{ $productName }} Enterprise Reporting</div>
-            <div class="footer-right">Digital export · Confidential</div>
-        </div>
-    </div>
 </body>
 </html>

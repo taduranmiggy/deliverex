@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(HandleCors::class);
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+        $middleware->append(\App\Http\Middleware\AuditHttpActivity::class);
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'auth.api' => \App\Http\Middleware\AuthenticateApi::class,

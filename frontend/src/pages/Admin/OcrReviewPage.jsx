@@ -553,14 +553,12 @@ function OcrReviewPage() {
     }
   }
 
-  const handleExport = async (_format, filters) => {
-    const blob = await exportOcrReport(filters)
+  const handleExport = async (format, filters) => {
+    const { blob, filename } = await exportOcrReport(format, filters)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    const d = new Date()
-    const datePart = `${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}_${String(d.getDate()).padStart(2, '0')}`
     a.href = url
-    a.download = `OCR_Report_${datePart}.xlsx`
+    a.download = filename
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -1286,8 +1284,8 @@ function OcrReviewPage() {
         onExport={handleExport}
         initialFilters={ocrInitialFilters}
         filterFields={ocrExportFilterFields}
-        formatOptions={['xlsx']}
-        defaultFormat="xlsx"
+        formatOptions={['pdf', 'xlsx', 'csv']}
+        defaultFormat="pdf"
       />
     </>
   )

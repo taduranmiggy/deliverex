@@ -12,6 +12,7 @@ class ReportExportService
         private DeliveriesReportQuery $deliveriesQuery,
         private AssignmentAuditReportQuery $auditQuery,
         private DriverPerformanceReportQuery $driverPerformanceQuery,
+        private EnterpriseReportQuery $enterpriseQuery,
         private ReportSpreadsheetExporter $spreadsheet,
         private PdfReportRenderer $pdf,
     ) {
@@ -20,7 +21,7 @@ class ReportExportService
     public function export(Request $request)
     {
         $type = (string) $request->query('type', 'deliveries');
-        $format = strtolower((string) $request->query('format', 'csv'));
+        $format = strtolower((string) $request->query('format', config('reports.default_format', 'pdf')));
 
         if (! in_array($format, ['csv', 'xlsx', 'pdf'], true)) {
             abort(422, 'Invalid export format. Use csv, xlsx, or pdf.');
@@ -33,7 +34,7 @@ class ReportExportService
             'deliveries' => $this->exportDeliveries($request, $format),
             'driver_performance' => $this->exportDriverPerformance($request, $format),
             'assignment_audit' => $this->exportAssignmentAudit($request, $format),
-            default => abort(422, 'Unsupported report type.'),
+            default => $this->exportEnterprise($request, $format, $type),
         };
 
         AuditLogger::record($request->user(), 'reports.export_'.$format, null, null, [
@@ -116,6 +117,20 @@ class ReportExportService
         );
 
         return $this->respond($format, $meta, $this->auditQuery->headers(), $rows);
+    }
+
+    private function exportEnterprise(Request $request, string $format, string $type)
+    {
+        $data = $this->enterpriseQuery->build($request, $type);
+        $meta = ReportMetadata::fromRequest(
+            $request,
+            $type,
+            $data['title'],
+            $data['filters'],
+            $data['summary'],
+        );
+
+        return $this->respond($format, $meta, $data['headers'], $data['rows']);
     }
 
     /**

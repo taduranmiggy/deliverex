@@ -25,8 +25,10 @@ class ExportPreviewController extends Controller
         $role = $user?->role?->name;
 
         $allowed = match ($report) {
-            'audit_logs', 'ocr' => $role === 'admin',
+            'audit_logs', 'ocr', 'email_monitoring', 'system_logs' => $role === 'admin',
             'deliveries', 'driver_performance', 'assignment_audit' => $role === 'manager',
+            'job_orders', 'tracking', 'ocr_reviews', 'notifications', 'analytics',
+            'drivers', 'vehicles', 'customers', 'support_inquiries', 'chatbox' => in_array($role, ['admin', 'manager'], true),
             default => false,
         };
 

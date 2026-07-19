@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { IconEyeOutline, IconPencil, IconTrash } from '../../components/DxIcons'
-import ExportConfirmModal from '../../components/ExportConfirmModal'
+import ExportReportModal from '../../components/ExportReportModal'
 import AdminChatbotIntentsPanel from '../../components/admin/AdminChatbotIntentsPanel'
 import ChatbotPaginatedTable from '../../components/admin/ChatbotPaginatedTable'
 import { PUBLIC_FAQS } from '../../data/publicFaqs'
-import { downloadCsv } from '../../utils/export/download'
+import { exportEnterpriseReport } from '../../api/admin'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -286,7 +286,6 @@ function AdminChatbotPage() {
   const [conversationRole, setConversationRole] = useState('all')
   const [conversationStatus, setConversationStatus] = useState('all')
   const [showExportSummary, setShowExportSummary] = useState(false)
-  const [exporting, setExporting] = useState(false)
 
   const filteredConversations = useMemo(
     () => filterConversations(CONVERSATIONS, {
@@ -297,42 +296,17 @@ function AdminChatbotPage() {
     [conversationSearch, conversationRole, conversationStatus],
   )
 
-  const conversationExportSummary = useMemo(() => {
-    const parts = []
-    if (conversationSearch.trim()) parts.push(`Search: "${conversationSearch.trim()}"`)
-    if (conversationRole !== 'all') {
-      parts.push(`Role: ${conversationRole.charAt(0).toUpperCase()}${conversationRole.slice(1)}`)
-    }
-    if (conversationStatus !== 'all') {
-      parts.push(`Status: ${conversationStatus.charAt(0).toUpperCase()}${conversationStatus.slice(1)}`)
-    }
-    return {
-      report: 'Chatbot Conversations',
-      filters: parts.length ? parts.join(' · ') : 'None',
-      dateRange: 'All records',
-      rows: filteredConversations.length,
-      total: filteredConversations.length,
-    }
-  }, [conversationSearch, conversationRole, conversationStatus, filteredConversations.length])
+  const chatbotExportFilters = useMemo(() => ({
+    search: conversationSearch || undefined,
+    status: conversationStatus !== 'all' ? conversationStatus : undefined,
+  }), [conversationSearch, conversationStatus])
 
-  const handleConfirmConversationExport = () => {
-    setExporting(true)
-    try {
-      const headers = ['Session ID', 'User', 'Top Intent', 'Status', 'Duration', 'Date / Time']
-      const rows = filteredConversations.map((row) => [
-        row.id,
-        row.userLabel,
-        row.intent,
-        row.resolved ? 'Resolved' : 'Unresolved',
-        row.duration,
-        row.at,
-      ])
-      const stamp = new Date().toISOString().slice(0, 10)
-      downloadCsv(`chatbot-conversations-${stamp}.csv`, headers, rows)
-      setShowExportSummary(false)
-    } finally {
-      setExporting(false)
-    }
+  const handleConversationExport = async (format, filters) => {
+    const { blob, filename } = await exportEnterpriseReport('chatbox', format, filters)
+    const url = URL.createObjectURL(blob)
+    const anchor = Object.assign(document.createElement('a'), { href: url, download: filename })
+    anchor.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -817,18 +791,23 @@ function AdminChatbotPage() {
         </>
       )}
 
-      <ExportConfirmModal
+      <ExportReportModal
         open={showExportSummary}
         onClose={() => setShowExportSummary(false)}
-        onConfirm={handleConfirmConversationExport}
-        reportName={conversationExportSummary.report}
-        dateRange={conversationExportSummary.dateRange}
-        filters={conversationExportSummary.filters}
-        rows={conversationExportSummary.rows}
-        total={conversationExportSummary.total}
-        confirming={exporting}
-        confirmLabel="Download CSV"
-        infoNotice="Exports the conversations currently shown in the table (respects search and filter selections)."
+        reportKey="chatbox"
+        reportTitle="Support Chatbox Report"
+        onExport={handleConversationExport}
+        initialFilters={chatbotExportFilters}
+        filterFields={[
+          { key: 'search', label: 'Keyword', type: 'text', placeholder: 'Session, user, or message' },
+          { key: 'status', label: 'Status', type: 'select', options: [
+            { value: 'all', label: 'All statuses' },
+            { value: 'resolved', label: 'Resolved' },
+            { value: 'unresolved', label: 'Unresolved' },
+          ] },
+        ]}
+        formatOptions={['pdf', 'xlsx', 'csv']}
+        defaultFormat="pdf"
       />
     </section>
   )

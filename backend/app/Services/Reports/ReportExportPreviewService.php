@@ -13,6 +13,7 @@ class ReportExportPreviewService
         private AssignmentAuditReportQuery $assignmentAuditQuery,
         private DriverPerformanceReportQuery $driverPerformanceQuery,
         private OcrReportQuery $ocrReportQuery,
+        private EnterpriseReportQuery $enterpriseReportQuery,
     ) {
     }
 
@@ -27,7 +28,7 @@ class ReportExportPreviewService
             'driver_performance' => $this->previewDriverPerformance($request),
             'assignment_audit' => $this->previewAssignmentAudit($request),
             'ocr' => $this->previewOcr($request),
-            default => abort(422, 'Unsupported report type for preview.'),
+            default => $this->previewEnterprise($request, $report),
         };
 
         $count = (int) ($result['count'] ?? 0);
@@ -110,6 +111,20 @@ class ReportExportPreviewService
             'count' => $query->count(),
             'date_range' => $range['label'],
             'filters' => $filters,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function previewEnterprise(Request $request, string $report): array
+    {
+        $range = ExportDateRange::resolve($request);
+        $req = ExportDateRange::mergeIntoRequest($request, $range);
+        $data = $this->enterpriseReportQuery->build($req, $report);
+
+        return [
+            'count' => count($data['rows']),
+            'date_range' => $range['label'],
+            'filters' => $data['filters'],
         ];
     }
 }

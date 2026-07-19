@@ -357,8 +357,8 @@ function ReportsPage() {
         onExport={handleExport}
         initialFilters={reportInitialFilters}
         filterFields={reportExportFilterFields}
-        formatOptions={['csv', 'xlsx', 'pdf']}
-        defaultFormat="csv"
+        formatOptions={['pdf', 'xlsx', 'csv']}
+        defaultFormat="pdf"
       />
     </>
   )

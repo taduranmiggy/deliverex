@@ -7,17 +7,19 @@ use App\Models\OcrResult;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Reports\ExportDateRange;
 use App\Services\Reports\OcrReportQuery;
+use App\Services\Reports\PdfReportRenderer;
+use App\Services\Reports\ReportMetadata;
+use App\Services\Reports\ReportSpreadsheetExporter;
 use App\Support\AuditLogger;
 use Illuminate\Http\Request;
-use OpenSpout\Common\Entity\Cell;
-use OpenSpout\Common\Entity\Row;
-use OpenSpout\Writer\XLSX\Writer;
 
 class OcrReviewController extends Controller
 {
     public function __construct(
         private NotificationDispatcher $notificationDispatcher,
         private OcrReportQuery $ocrReportQuery,
+        private PdfReportRenderer $pdf,
+        private ReportSpreadsheetExporter $spreadsheet,
     ) {
     }
     public function index(Request $request)
@@ -81,10 +83,15 @@ class OcrReviewController extends Controller
 
     public function export(Request $request)
     {
+        $format = strtolower((string) $request->query('format', config('reports.default_format', 'pdf')));
+        if (! in_array($format, ['pdf', 'xlsx', 'csv'], true)) {
+            abort(422, 'Invalid export format. Use pdf, xlsx, or csv.');
+        }
+
         $range = ExportDateRange::resolve($request, defaultDays: 30);
         $request = ExportDateRange::mergeIntoRequest($request, $range);
 
-        ['query' => $query] = $this->ocrReportQuery->build($request);
+        ['query' => $query, 'filters' => $filters] = $this->ocrReportQuery->build($request);
         $query->with('validator', 'document.assignment.jobOrder')->orderByDesc('created_at');
 
         if (! $query->exists()) {
@@ -93,53 +100,47 @@ class OcrReviewController extends Controller
             ], 422);
         }
 
-        $fileName = 'OCR_Report_'.now()->format('Y_m_d').'.xlsx';
-        $tmpPath = storage_path('app/tmp_'.$fileName);
+        $headers = [
+            'Job Order', 'Receipt No.', 'Length', 'Width', 'Height', 'Volume',
+            'Plate No.', 'Driver', 'Delivery Date', 'OCR Status', 'Review Status', 'Reviewed By',
+        ];
+        $maxRows = (int) config('reports.export_max_rows', 10000);
+        $rows = $query->limit($maxRows)->get()->map(fn (OcrResult $ocr) => [
+            $ocr->job_order_id ? ('JO-'.$ocr->job_order_id) : '-',
+            $ocr->getEffectiveValue('delivery_receipt_number') ?: '-',
+            $ocr->getEffectiveValue('length') ?? '-',
+            $ocr->getEffectiveValue('width') ?? '-',
+            $ocr->getEffectiveValue('height') ?? '-',
+            $ocr->getEffectiveValue('volume') ?? '-',
+            $ocr->vehicle_plate_no ?: '-',
+            $ocr->driver_name ?: '-',
+            $ocr->delivery_date?->timezone(config('reports.default_timezone'))->format('Y-m-d H:i') ?? '-',
+            $ocr->processing_status ?: '-',
+            $ocr->review_status ?: '-',
+            $ocr->validator?->name ?: '-',
+        ])->all();
 
-        $writer = new Writer;
-        $writer->openToFile($tmpPath);
-        $writer->addRow(new Row([
-            Cell::fromValue('Job Order ID'),
-            Cell::fromValue('Delivery Receipt No'),
-            Cell::fromValue('Length'),
-            Cell::fromValue('Width'),
-            Cell::fromValue('Height'),
-            Cell::fromValue('Volume'),
-            Cell::fromValue('Plate Number'),
-            Cell::fromValue('Driver Name'),
-            Cell::fromValue('Delivery Date'),
-            Cell::fromValue('OCR Status'),
-            Cell::fromValue('Review Status'),
-            Cell::fromValue('Reviewed By'),
-        ]));
+        $meta = ReportMetadata::fromRequest(
+            $request,
+            'ocr_reviews',
+            'OCR Review Report',
+            $filters,
+            ['total_records' => count($rows)],
+        );
+        $fileName = $meta->fileSlug().'.'.$format;
 
-        foreach ($query->cursor() as $ocr) {
-            /** @var OcrResult $ocr */
-            $writer->addRow(new Row([
-                Cell::fromValue($ocr->job_order_id ? ('JO-'.$ocr->job_order_id) : '—'),
-                Cell::fromValue($ocr->getEffectiveValue('delivery_receipt_number') ?: '—'),
-                Cell::fromValue($ocr->getEffectiveValue('length') ?? '—'),
-                Cell::fromValue($ocr->getEffectiveValue('width') ?? '—'),
-                Cell::fromValue($ocr->getEffectiveValue('height') ?? '—'),
-                Cell::fromValue($ocr->getEffectiveValue('volume') ?? '—'),
-                Cell::fromValue($ocr->vehicle_plate_no ?: '—'),
-                Cell::fromValue($ocr->driver_name ?: '—'),
-                Cell::fromValue($ocr->delivery_date ? $ocr->delivery_date->toDateTimeString() : '—'),
-                Cell::fromValue($ocr->processing_status ?: '—'),
-                Cell::fromValue($ocr->review_status ?: '—'),
-                Cell::fromValue($ocr->validator?->name ?: '—'),
-            ]));
-        }
-
-        $writer->close();
-
-        AuditLogger::record($request->user(), 'reports.export_excel', OcrResult::class, null, [
-            'report' => 'ocr_review',
+        AuditLogger::record($request->user(), 'reports.export_'.$format, OcrResult::class, null, [
+            'report_type' => 'ocr_reviews',
+            'format' => $format,
             'file_name' => $fileName,
-            'filters' => $request->query(),
+            'filters' => $filters,
         ], $request);
 
-        return response()->download($tmpPath, $fileName)->deleteFileAfterSend(true);
+        return match ($format) {
+            'pdf' => $this->pdf->render($meta, $headers, $rows, $fileName),
+            'xlsx' => $this->spreadsheet->toXlsx($meta, $headers, $rows, $fileName),
+            default => $this->spreadsheet->toCsv($meta, $headers, $rows, $fileName),
+        };
     }
 
     /**

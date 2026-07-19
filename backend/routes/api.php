@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ChatbotController;
+use App\Http\Controllers\DriverPerformanceController;
 use App\Http\Controllers\Admin\ChatbotIntentController;
 use App\Http\Controllers\Admin\EmailLogController;
 use App\Http\Controllers\Admin\CompanyController as AdminCompanyController;
@@ -245,6 +246,7 @@ Route::middleware('auth.api')->group(function () {
     // ─── Admin + Manager: export preview ─────────────────────────────────────
     Route::middleware('role:admin|manager')->group(function () {
         Route::get('/exports/preview', [ExportPreviewController::class, 'show']);
+        Route::get('/reports/export', [ReportExportController::class, 'export']);
     });
 
     // ─── Admin + Manager: driver performance scoring ─────────────────────────

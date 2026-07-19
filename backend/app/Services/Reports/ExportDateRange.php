@@ -113,7 +113,7 @@ class ExportDateRange
     public static function label(?string $from, ?string $to): string
     {
         if ($from && $to) {
-            return $from === $to ? $from : "{$from} – {$to}";
+            return $from === $to ? $from : "{$from} - {$to}";
         }
         if ($from) {
             return "From {$from}";

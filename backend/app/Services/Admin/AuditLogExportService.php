@@ -23,7 +23,7 @@ class AuditLogExportService
 
     public function export(Request $request)
     {
-        $format = strtolower((string) $request->query('format', 'csv'));
+        $format = strtolower((string) $request->query('format', 'pdf'));
         if (! in_array($format, ['csv', 'xlsx', 'pdf'], true)) {
             abort(422, 'Invalid export format. Use csv, xlsx, or pdf.');
         }
@@ -46,13 +46,14 @@ class AuditLogExportService
         $headers = [
             'Timestamp',
             'User',
-            'Email',
             'Role',
-            'Action',
-            'Readable Action',
             'Module',
-            'Details',
+            'Action',
+            'Description',
+            'Record ID',
             'IP Address',
+            'Browser / User Agent',
+            'Status',
         ];
 
         $rows = LazyCollection::make(function () use ($builder, $maxRows) {
@@ -90,13 +91,14 @@ class AuditLogExportService
                 ? \Illuminate\Support\Carbon::parse($presented['timestamp'])->timezone(config('app.timezone'))->format('Y-m-d H:i:s')
                 : '—',
             $presented['user'] ?? '—',
-            $presented['user_email'] ?? '—',
             $presented['role'] ?? '—',
-            $presented['action'] ?? '—',
-            $this->presenter->readableAction($presented['action'] ?? ''),
             $presented['module'] ?? '—',
-            $presented['details'] ?? '—',
+            $this->presenter->readableAction($presented['action'] ?? ''),
+            $presented['description'] ?? $presented['details'] ?? '—',
+            $presented['subject_id'] ?? '—',
             $presented['ip_address'] ?? '—',
+            $presented['user_agent'] ? mb_substr((string) $presented['user_agent'], 0, 100) : '—',
+            ucfirst((string) ($presented['status'] ?? 'success')),
         ];
     }
 }

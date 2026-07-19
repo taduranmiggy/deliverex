@@ -12,17 +12,28 @@ import {
 const MODULES = [
   { value: 'all',       label: 'All Modules' },
   { value: 'auth',      label: 'Auth' },
+  { value: 'dashboard', label: 'Dashboard' },
   { value: 'user',      label: 'User Management' },
   { value: 'company',   label: 'Companies' },
+  { value: 'customer',  label: 'Customer Management' },
   { value: 'job_order', label: 'Job Orders' },
   { value: 'dispatch',  label: 'Dispatch' },
+  { value: 'calendar',  label: 'Calendar' },
+  { value: 'tracking',  label: 'Tracking' },
   { value: 'delivery',  label: 'Delivery' },
   { value: 'document',  label: 'Documents' },
   { value: 'ocr',       label: 'OCR' },
   { value: 'gps',       label: 'GPS' },
   { value: 'offline',   label: 'Offline Sync' },
   { value: 'reports',   label: 'Reports' },
+  { value: 'analytics', label: 'Analytics' },
+  { value: 'email',     label: 'Email Monitoring' },
+  { value: 'notification', label: 'Notifications' },
+  { value: 'support',   label: 'Support / Chatbox' },
   { value: 'settings',  label: 'Settings' },
+  { value: 'profile',   label: 'Profile Management' },
+  { value: 'driver',    label: 'Driver Management' },
+  { value: 'vehicle',   label: 'Vehicle Management' },
   { value: 'inquiry',   label: 'Inquiries' },
 ]
 
@@ -73,8 +84,10 @@ function LogDetailModal({ log, onClose }) {
     { label: 'Action',     value: log.action ?? '—' },
     { label: 'Readable',   value: formatAction(log.action) },
     { label: 'Module',     value: normalizeOcrModuleLabel(log.module ?? '—') },
+    { label: 'Status',     value: String(log.status ?? 'success').toUpperCase() },
+    { label: 'Record ID',  value: log.subject_id ?? '—' },
     { label: 'IP Address', value: log.ip_address ?? '—' },
-    { label: 'Details',    value: log.details ?? '—' },
+    { label: 'Description', value: log.description ?? log.details ?? '—' },
     ...(log.changes && Object.keys(log.changes).length > 0
       ? [{ label: 'Changes', value: log.details ?? JSON.stringify(log.changes, null, 2) }]
       : []),
@@ -190,25 +203,44 @@ function AdminAuditLogsPage() {
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
   const [module, setModule]     = useState('all')
+  const [user, setUser]         = useState('all')
+  const [role, setRole]         = useState('all')
+  const [action, setAction]     = useState('all')
   const [search, setSearch]     = useState('')
   const [from, setFrom]         = useState('')
   const [to, setTo]             = useState('')
   const [sort, setSort]         = useState('desc')
   const [page, setPage]         = useState(1)
   const [perPage]   = useState(PER_PAGE)
+  const [lastPage, setLastPage] = useState(1)
+  const [filterOptions, setFilterOptions] = useState({ modules: [], users: [], roles: [], actions: [] })
   const [selected, setSelected] = useState(null)
   const [showExportSummary, setShowExportSummary] = useState(false)
 
+  const moduleOptions = useMemo(() => [
+    { value: 'all', label: 'All Modules' },
+    ...(filterOptions.modules.length ? filterOptions.modules : MODULES.slice(1)),
+  ], [filterOptions.modules])
+  const userOptions = useMemo(() => [{ value: 'all', label: 'All Users' }, ...filterOptions.users], [filterOptions.users])
+  const roleOptions = useMemo(() => [{ value: 'all', label: 'All Roles' }, ...filterOptions.roles], [filterOptions.roles])
+  const actionOptions = useMemo(() => [{ value: 'all', label: 'All Actions' }, ...filterOptions.actions], [filterOptions.actions])
+
   const auditExportFilterFields = useMemo(() => [
-    { key: 'module', label: 'Module', type: 'select', defaultValue: module, options: MODULES },
+    { key: 'module', label: 'Module', type: 'select', defaultValue: module, options: moduleOptions },
+    { key: 'user', label: 'User', type: 'select', defaultValue: user, options: userOptions },
+    { key: 'role', label: 'Role', type: 'select', defaultValue: role, options: roleOptions },
+    { key: 'action', label: 'Action', type: 'select', defaultValue: action, options: actionOptions },
     { key: 'search', label: 'Search', type: 'text', placeholder: 'User, action, IP…' },
-  ], [module])
+  ], [action, actionOptions, module, moduleOptions, role, roleOptions, user, userOptions])
 
   const auditInitialFilters = useMemo(() => ({
     module: module !== 'all' ? module : undefined,
+    user: user !== 'all' ? user : undefined,
+    role: role !== 'all' ? role : undefined,
+    action: action !== 'all' ? action : undefined,
     search: search || undefined,
     sort,
-  }), [module, search, sort])
+  }), [action, module, role, search, sort, user])
 
   const load = useCallback(async (params = {}) => {
     setLoading(true)
@@ -217,6 +249,8 @@ function AdminAuditLogsPage() {
       const res = await fetchAuditLogs(params)
       setLogs(res.data || [])
       setTotal(res.total ?? res.data?.length ?? 0)
+      setLastPage(res.last_page ?? 1)
+      if (res.filter_options) setFilterOptions(res.filter_options)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -225,39 +259,48 @@ function AdminAuditLogsPage() {
   }, [])
 
   useEffect(() => {
-    load({ module: module !== 'all' ? module : undefined })
+    const timer = window.setTimeout(() => load({ page: 1, per_page: perPage, sort }), 0)
+    return () => window.clearTimeout(timer)
   }, []) // eslint-disable-line
+
+  const currentFilters = (overrides = {}) => ({
+    module: module !== 'all' ? module : undefined,
+    user: user !== 'all' ? user : undefined,
+    role: role !== 'all' ? role : undefined,
+    action: action !== 'all' ? action : undefined,
+    from: from || undefined,
+    to: to || undefined,
+    search: search || undefined,
+    sort,
+    per_page: perPage,
+    ...overrides,
+  })
 
   const handleFilter = () => {
     setPage(1)
-    load({
-      module: module !== 'all' ? module : undefined,
-      from:   from   || undefined,
-      to:     to     || undefined,
-      search: search || undefined,
-    })
+    load(currentFilters({ page: 1 }))
   }
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') handleFilter()
   }
 
-  /* Client-side sort + paginate */
-  const sorted = useMemo(() => (
-    [...logs].sort((a, b) => {
-      const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0
-      const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0
-      return sort === 'desc' ? tb - ta : ta - tb
-    })
-  ), [logs, sort])
+  const totalPages = Math.max(1, lastPage)
+  const safePage = Math.min(page, totalPages)
+  const pageLogs = logs
+  const fromCount = total === 0 ? 0 : (safePage - 1) * perPage + 1
+  const toCount = Math.min(safePage * perPage, total)
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / perPage))
-  const safePage   = Math.min(page, totalPages)
-  const pageLogs   = sorted.slice((safePage - 1) * perPage, safePage * perPage)
-  const fromCount  = sorted.length === 0 ? 0 : (safePage - 1) * perPage + 1
-  const toCount    = Math.min(safePage * perPage, sorted.length)
+  const handleSort = (dir) => {
+    setSort(dir)
+    setPage(1)
+    load(currentFilters({ page: 1, sort: dir }))
+  }
 
-  const handleSort = (dir) => { setSort(dir); setPage(1) }
+  const handlePage = (nextPage) => {
+    setPage(nextPage)
+    load(currentFilters({ page: nextPage }))
+  }
 
   const handleExport = async (format, filters) => {
     const { blob, filename } = await exportAuditLogs(format, filters)
@@ -293,7 +336,10 @@ function AdminAuditLogsPage() {
       {/* ── Filters ── */}
       <div className="dx-panel" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
-          <FilterSelect value={module} onChange={setModule} label="Module" options={MODULES} />
+          <FilterSelect value={module} onChange={setModule} label="Module" options={moduleOptions} />
+          <FilterSelect value={user} onChange={setUser} label="User" options={userOptions} />
+          <FilterSelect value={role} onChange={setRole} label="Role" options={roleOptions} />
+          <FilterSelect value={action} onChange={setAction} label="Action" options={actionOptions} />
           <label style={{ display: 'grid', gap: 5, fontWeight: 600, fontSize: '0.8125rem', color: 'var(--slate-700)' }}>
             From
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={inputStyle} onKeyDown={handleKeyDown} />
@@ -312,11 +358,15 @@ function AdminAuditLogsPage() {
             <button type="button" className="btn-dx-primary" onClick={handleFilter} disabled={loading}>
               {loading ? 'Loading…' : 'Apply Filters'}
             </button>
-            {(module !== 'all' || from || to || search) && (
+            {(module !== 'all' || user !== 'all' || role !== 'all' || action !== 'all' || from || to || search) && (
               <button
                 type="button"
                 className="btn-dx-secondary"
-                onClick={() => { setModule('all'); setFrom(''); setTo(''); setSearch(''); setPage(1); load({}) }}
+                onClick={() => {
+                  setModule('all'); setUser('all'); setRole('all'); setAction('all')
+                  setFrom(''); setTo(''); setSearch(''); setPage(1)
+                  load({ page: 1, per_page: perPage, sort })
+                }}
               >
                 Clear
               </button>
@@ -330,9 +380,9 @@ function AdminAuditLogsPage() {
         {/* Table toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.8125rem', color: 'var(--muted)', fontWeight: 500 }}>
-            {loading ? 'Loading logs…' : sorted.length === 0
+            {loading ? 'Loading logs…' : logs.length === 0
               ? 'No logs found'
-              : `Showing ${fromCount.toLocaleString()}–${toCount.toLocaleString()} of ${sorted.length.toLocaleString()} logs`}
+              : `Showing ${fromCount.toLocaleString()}–${toCount.toLocaleString()} of ${total.toLocaleString()} logs`}
           </span>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -367,20 +417,22 @@ function AdminAuditLogsPage() {
                 <th style={{ minWidth: 150 }}>User</th>
                 <th style={{ minWidth: 140 }}>Action</th>
                 <th style={{ minWidth: 120 }}>Module</th>
-                <th>Details</th>
+                <th>Description</th>
+                <th style={{ minWidth: 80 }}>Record ID</th>
+                <th style={{ minWidth: 90 }}>Status</th>
                 <th style={{ minWidth: 110 }}>IP</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <LoadingRows cols={6} rows={perPage > 10 ? 10 : perPage} />
+                <LoadingRows cols={8} rows={perPage > 10 ? 10 : perPage} />
               ) : pageLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={8}>
                     <EmptyState
                       icon={ClipboardList}
                       title="No audit logs found"
-                      message={search || from || to || module !== 'all'
+                      message={search || from || to || module !== 'all' || user !== 'all' || role !== 'all' || action !== 'all'
                         ? 'No logs match the current filters. Try adjusting your search.'
                         : 'System activity will appear here as actions are performed.'}
                     />
@@ -408,6 +460,7 @@ function AdminAuditLogsPage() {
                           {log.user_email}
                         </div>
                       )}
+                      {log.role && <div style={{ color: 'var(--muted)', fontSize: '0.7rem', textTransform: 'capitalize' }}>{log.role}</div>}
                     </td>
                     <td>
                       <span
@@ -432,8 +485,21 @@ function AdminAuditLogsPage() {
                       </span>
                     </td>
                     <td style={{ color: 'var(--muted)', fontSize: '0.8125rem', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      title={log.details}>
-                      {log.details || '—'}
+                      title={log.description ?? log.details}>
+                      {log.description || log.details || '—'}
+                    </td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                      {log.subject_id ?? '—'}
+                    </td>
+                    <td>
+                      <span style={{
+                        display: 'inline-flex', padding: '2px 8px', borderRadius: 99,
+                        fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+                        color: log.status === 'failed' ? '#b91c1c' : '#166534',
+                        background: log.status === 'failed' ? '#fef2f2' : '#f0fdf4',
+                      }}>
+                        {log.status ?? 'success'}
+                      </span>
                     </td>
                     <td style={{ color: 'var(--subtle)', fontSize: '0.75rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                       {log.ip_address ?? '—'}
@@ -446,14 +512,14 @@ function AdminAuditLogsPage() {
         </div>
 
         {/* Pagination footer */}
-        {!loading && sorted.length > perPage && (
+        {!loading && total > perPage && (
           <Pagination
             page={safePage}
             totalPages={totalPages}
-            onPage={setPage}
+            onPage={handlePage}
           />
         )}
-        {!loading && sorted.length > 0 && (
+        {!loading && total > 0 && (
           <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--muted)', marginTop: 10 }}>
             Page {safePage} of {totalPages}
           </p>

@@ -26,8 +26,8 @@ function ExportReportModal({
   onExport,
   initialFilters = {},
   filterFields = [],
-  formatOptions = ['csv', 'xlsx', 'pdf'],
-  defaultFormat = 'csv',
+  formatOptions = ['pdf', 'xlsx', 'csv'],
+  defaultFormat = 'pdf',
 }) {
   const saved = useMemo(() => (reportKey ? loadExportSession(reportKey) : null), [reportKey, open])
 

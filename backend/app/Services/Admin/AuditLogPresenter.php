@@ -13,11 +13,13 @@ class AuditLogPresenter
         return [
             'id' => $log->id,
             'timestamp' => $log->created_at?->toIso8601String(),
-            'user' => $log->user?->name ?? '—',
+            'user' => $log->user_name ?? $log->user?->name ?? 'System',
             'user_email' => $log->user?->email ?? null,
             'role' => $log->role_name ?? $log->user?->role?->name ?? null,
             'action' => $log->action,
             'module' => $log->module ?? AuditLogger::resolveModule((string) $log->action),
+            'description' => $log->description ?? $this->formatDetails($log),
+            'status' => $log->status ?? 'success',
             'subject_type' => $log->subject_type,
             'subject_id' => $log->subject_id,
             'details' => $this->formatDetails($log),
@@ -43,6 +45,10 @@ class AuditLogPresenter
 
     public function formatDetails(AuditLog $log): string
     {
+        if ($log->description) {
+            return $log->description;
+        }
+
         if (is_array($log->changes) && $log->changes !== []) {
             return collect($log->changes)
                 ->map(fn ($change, $field) => sprintf(
