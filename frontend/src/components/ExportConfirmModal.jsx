@@ -19,7 +19,7 @@ function ExportConfirmModal({
   confirming = false,
   formatValue,
   onFormatChange,
-  formatOptions = ['csv', 'xlsx', 'pdf'],
+  formatOptions = ['pdf'],
 }) {
   if (!open) return null
 

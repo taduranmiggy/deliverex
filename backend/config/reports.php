@@ -6,8 +6,9 @@ return [
     'footer_text' => env('REPORT_FOOTER', 'Confidential - For internal and authorized client use only.'),
     'support_email' => env('REPORT_SUPPORT_EMAIL', 'support@deliverex.com'),
 
-    /** PDF is the enterprise default; spreadsheets remain optional. */
+    /** PDF is the only allowed export format (non-editable, audit-friendly). */
     'default_format' => 'pdf',
+    'allowed_formats' => ['pdf'],
 
     /** Maximum rows per export (cursor/stream still used). */
     'export_max_rows' => (int) env('REPORT_EXPORT_MAX_ROWS', 10000),

@@ -26,7 +26,7 @@ function ExportReportModal({
   onExport,
   initialFilters = {},
   filterFields = [],
-  formatOptions = ['pdf', 'xlsx', 'csv'],
+  formatOptions = ['pdf'],
   defaultFormat = 'pdf',
 }) {
   const saved = useMemo(() => (reportKey ? loadExportSession(reportKey) : null), [reportKey, open])
@@ -137,6 +137,7 @@ function ExportReportModal({
 
   const dateRangeLabel = formatDateRangeLabel(dateFrom, dateTo, allRecords)
   const previewCount = preview.exportCount ?? preview.count
+  const showFormatPicker = formatOptions.length > 1
 
   const inputStyle = {
     padding: '8px 10px',
@@ -289,34 +290,36 @@ function ExportReportModal({
             </div>
           </section>
 
-          <section>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Format
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {formatOptions.map((fmt) => (
-                <button
-                  key={fmt}
-                  type="button"
-                  onClick={() => setFormat(fmt)}
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: 8,
-                    border: format === fmt ? '1px solid #2563eb' : '1px solid var(--stroke)',
-                    background: format === fmt ? '#eff6ff' : '#fff',
-                    color: format === fmt ? '#1d4ed8' : 'inherit',
-                    fontWeight: format === fmt ? 700 : 500,
-                    cursor: 'pointer',
-                    font: 'inherit',
-                    fontSize: '0.8125rem',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {fmt}
-                </button>
-              ))}
-            </div>
-          </section>
+          {showFormatPicker && (
+            <section>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Format
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {formatOptions.map((fmt) => (
+                  <button
+                    key={fmt}
+                    type="button"
+                    onClick={() => setFormat(fmt)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 8,
+                      border: format === fmt ? '1px solid #2563eb' : '1px solid var(--stroke)',
+                      background: format === fmt ? '#eff6ff' : '#fff',
+                      color: format === fmt ? '#1d4ed8' : 'inherit',
+                      fontWeight: format === fmt ? 700 : 500,
+                      cursor: 'pointer',
+                      font: 'inherit',
+                      fontSize: '0.8125rem',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {fmt}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           {exportError && (
             <p style={{ margin: 0, color: '#b91c1c', fontSize: '0.8125rem' }}>{exportError}</p>
@@ -329,7 +332,7 @@ function ExportReportModal({
             {exporting ? (
               <><Loader2 size={15} style={{ animation: 'spin 0.7s linear infinite' }} /> Generating…</>
             ) : (
-              <><Download size={15} /> Export {format.toUpperCase()}</>
+              <><Download size={15} /> Download PDF</>
             )}
           </button>
         </div>

@@ -115,20 +115,16 @@ class ReportsExportTest extends TestCase
         $this->assertStringContainsString('application/pdf', (string) $response->headers->get('Content-Type'));
     }
 
-    public function test_scenario_d_export_excel(): void
+    public function test_scenario_d_export_excel_is_rejected(): void
     {
-        $response = $this->apiAs($this->manager)->get('/api/manager/reports/export?type=deliveries&format=xlsx');
-
-        $response->assertOk();
-        $this->assertStringContainsString('spreadsheetml', (string) $response->headers->get('Content-Type'));
+        $this->apiAs($this->manager)->get('/api/manager/reports/export?type=deliveries&format=xlsx')
+            ->assertStatus(422);
     }
 
-    public function test_scenario_e_export_csv(): void
+    public function test_scenario_e_export_csv_is_rejected(): void
     {
-        $response = $this->apiAs($this->manager)->get('/api/manager/reports/export?type=deliveries&format=csv');
-
-        $response->assertOk();
-        $this->assertStringContainsString('text/csv', (string) $response->headers->get('Content-Type'));
+        $this->apiAs($this->manager)->get('/api/manager/reports/export?type=deliveries&format=csv')
+            ->assertStatus(422);
     }
 
     public function test_scenario_f_export_is_manager_only(): void
@@ -136,16 +132,16 @@ class ReportsExportTest extends TestCase
         $driverRole = Role::where('name', 'driver')->first();
         $driverUser = User::factory()->create(['role_id' => $driverRole->id, 'email_verified_at' => now()]);
 
-        $this->apiAs($driverUser)->get('/api/manager/reports/export?type=deliveries&format=csv')
+        $this->apiAs($driverUser)->get('/api/manager/reports/export?type=deliveries&format=pdf')
             ->assertForbidden();
     }
 
     public function test_export_logs_audit_entry(): void
     {
-        $this->apiAs($this->manager)->get('/api/manager/reports/export?type=assignment_audit&format=csv')->assertOk();
+        $this->apiAs($this->manager)->get('/api/manager/reports/export?type=assignment_audit&format=pdf')->assertOk();
 
         $this->assertTrue(
-            AuditLog::query()->where('action', 'reports.export_csv')->exists()
+            AuditLog::query()->where('action', 'reports.export_pdf')->exists()
         );
     }
 }

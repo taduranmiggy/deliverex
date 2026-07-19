@@ -354,7 +354,6 @@ function ReportsPage() {
         onExport={(format, filters) => exportManagerReport(reportKey, format, filters)}
         initialFilters={reportInitialFilters}
         filterFields={reportExportFilterFields}
-        formatOptions={['pdf', 'xlsx', 'csv']}
         defaultFormat="pdf"
       />
     </>

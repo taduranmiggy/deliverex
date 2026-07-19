@@ -9,7 +9,6 @@ use App\Services\Reports\ExportDateRange;
 use App\Services\Reports\OcrReportQuery;
 use App\Services\Reports\PdfReportRenderer;
 use App\Services\Reports\ReportMetadata;
-use App\Services\Reports\ReportSpreadsheetExporter;
 use App\Support\AuditLogger;
 use App\Support\ReportExportOptions;
 use Illuminate\Http\Request;
@@ -20,7 +19,6 @@ class OcrReviewController extends Controller
         private NotificationDispatcher $notificationDispatcher,
         private OcrReportQuery $ocrReportQuery,
         private PdfReportRenderer $pdf,
-        private ReportSpreadsheetExporter $spreadsheet,
     ) {
     }
     public function index(Request $request)
@@ -85,8 +83,8 @@ class OcrReviewController extends Controller
     public function export(Request $request)
     {
         $format = strtolower((string) $request->query('format', config('reports.default_format', 'pdf')));
-        if (! in_array($format, ['pdf', 'xlsx', 'csv'], true)) {
-            abort(422, 'Invalid export format. Use pdf, xlsx, or csv.');
+        if (! in_array($format, config('reports.allowed_formats', ['pdf']), true)) {
+            abort(422, 'Invalid export format. Only PDF exports are allowed.');
         }
 
         $range = ExportDateRange::resolve($request, defaultDays: 30);
@@ -129,7 +127,7 @@ class OcrReviewController extends Controller
             ['total_records' => count($rows)],
             exportOptions: ReportExportOptions::fromRequest($request),
         );
-        $fileName = $meta->fileSlug().'.'.$format;
+        $fileName = $meta->fileSlug().'.pdf';
 
         AuditLogger::record($request->user(), 'reports.export_'.$format, OcrResult::class, null, [
             'report_type' => 'ocr_reviews',
@@ -138,11 +136,7 @@ class OcrReviewController extends Controller
             'filters' => $filters,
         ], $request);
 
-        return match ($format) {
-            'pdf' => $this->pdf->render($meta, $headers, $rows, $fileName),
-            'xlsx' => $this->spreadsheet->toXlsx($meta, $headers, $rows, $fileName),
-            default => $this->spreadsheet->toCsv($meta, $headers, $rows, $fileName),
-        };
+        return $this->pdf->render($meta, $headers, $rows, $fileName);
     }
 
     /**

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Download, Eye, FileSpreadsheet, FileText, Loader2, X } from 'lucide-react'
+import { Download, Eye, FileText, Loader2, X } from 'lucide-react'
 import { fetchExportPreview } from '../../api/export'
 import { useExportWorkflow } from '../../hooks/useExportWorkflow'
 import { ExportProgressPanel, ExportSuccessPanel, PdfPreviewPanel } from './ExportPhasePanels'
@@ -31,7 +31,7 @@ function EnterpriseExportModal({
   onExport,
   initialFilters = {},
   filterFields = [],
-  formatOptions = ['pdf', 'xlsx', 'csv'],
+  formatOptions = ['pdf'],
   defaultFormat = 'pdf',
   includeOptionsConfig = null,
   children = null,
@@ -160,6 +160,7 @@ function EnterpriseExportModal({
   const previewCount = preview.count ?? 0
   const canExport = previewCount > 0 && !preview.loading
   const includeOpts = includeOptionsConfig ?? AUDIT_INCLUDE_OPTIONS
+  const showFormatPicker = formatOptions.length > 1
 
   return (
     <div className="dx-audit-export-backdrop" onClick={onClose} role="dialog" aria-modal="true">
@@ -178,22 +179,23 @@ function EnterpriseExportModal({
             </header>
 
             <div className="dx-audit-export-modal__body">
-              <section className="dx-audit-export-section">
-                <h3>Export Format</h3>
-                <div className="dx-audit-export-format">
-                  {formatOptions.map((id) => {
-                    const label = id === 'pdf' ? 'PDF (Recommended)' : id === 'xlsx' ? 'Excel (.xlsx)' : 'CSV'
-                    const Icon = id === 'xlsx' ? FileSpreadsheet : FileText
-                    return (
-                      <label key={id} className={`dx-audit-export-format__option${format === id ? ' is-active' : ''}`}>
-                        <input type="radio" name={`export-format-${sessionKey}`} checked={format === id} onChange={() => setFormat(id)} />
-                        <Icon size={16} />
-                        <span>{label}</span>
-                      </label>
-                    )
-                  })}
-                </div>
-              </section>
+              {showFormatPicker && (
+                <section className="dx-audit-export-section">
+                  <h3>Export Format</h3>
+                  <div className="dx-audit-export-format">
+                    {formatOptions.map((id) => {
+                      const label = id === 'pdf' ? 'PDF (Recommended)' : id.toUpperCase()
+                      return (
+                        <label key={id} className={`dx-audit-export-format__option${format === id ? ' is-active' : ''}`}>
+                          <input type="radio" name={`export-format-${sessionKey}`} checked={format === id} onChange={() => setFormat(id)} />
+                          <FileText size={16} />
+                          <span>{label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
 
               <section className="dx-audit-export-section">
                 <h3>Date Range</h3>
@@ -284,17 +286,9 @@ function EnterpriseExportModal({
               <button type="button" className="btn-dx-secondary" onClick={handlePreviewReport} disabled={preview.loading || previewLoading || !canExport}>
                 {previewLoading ? <><Loader2 size={15} className="dx-spin" /> Generating preview…</> : <><Eye size={15} /> Preview Report</>}
               </button>
-              {formatOptions.includes('csv') && (
-                <button type="button" className="btn-dx-secondary" onClick={() => runExport('csv', queryParams)} disabled={!canExport}>Export CSV</button>
-              )}
               {formatOptions.includes('pdf') && (
                 <button type="button" className="btn-dx-primary" onClick={() => runExport('pdf', queryParams)} disabled={!canExport}>
-                  <Download size={15} /> Export PDF
-                </button>
-              )}
-              {formatOptions.includes('xlsx') && (
-                <button type="button" className="btn-dx-primary" onClick={() => runExport('xlsx', queryParams)} disabled={!canExport}>
-                  <FileSpreadsheet size={15} /> Export Excel
+                  <Download size={15} /> Download PDF
                 </button>
               )}
             </footer>

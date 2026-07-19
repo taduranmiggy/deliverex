@@ -806,7 +806,6 @@ function AdminChatbotPage() {
             { value: 'unresolved', label: 'Unresolved' },
           ] },
         ]}
-        formatOptions={['pdf', 'xlsx', 'csv']}
         defaultFormat="pdf"
       />
     </section>

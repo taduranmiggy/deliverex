@@ -1273,7 +1273,6 @@ function OcrReviewPage() {
         onExport={exportOcrReport}
         initialFilters={ocrInitialFilters}
         filterFields={ocrExportFilterFields}
-        formatOptions={['pdf', 'xlsx', 'csv']}
         defaultFormat="pdf"
       />
     </>

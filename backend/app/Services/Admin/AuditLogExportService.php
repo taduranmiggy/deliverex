@@ -6,7 +6,6 @@ use App\Models\AuditLog;
 use App\Services\Reports\ExportDateRange;
 use App\Services\Reports\PdfReportRenderer;
 use App\Services\Reports\ReportMetadata;
-use App\Services\Reports\ReportSpreadsheetExporter;
 use App\Support\AuditLogger;
 use App\Support\ReportExportOptions;
 use Illuminate\Http\Request;
@@ -17,7 +16,6 @@ class AuditLogExportService
     public function __construct(
         private AuditLogQuery $query,
         private AuditLogPresenter $presenter,
-        private ReportSpreadsheetExporter $spreadsheet,
         private PdfReportRenderer $pdf,
     ) {
     }
@@ -25,8 +23,8 @@ class AuditLogExportService
     public function export(Request $request)
     {
         $format = strtolower((string) $request->query('format', 'pdf'));
-        if (! in_array($format, ['csv', 'xlsx', 'pdf'], true)) {
-            abort(422, 'Invalid export format. Use csv, xlsx, or pdf.');
+        if (! in_array($format, config('reports.allowed_formats', ['pdf']), true)) {
+            abort(422, 'Invalid export format. Only PDF exports are allowed.');
         }
 
         $range = ExportDateRange::resolve($request);
@@ -70,17 +68,9 @@ class AuditLogExportService
             'filters' => $filters,
         ], $request);
 
-        $filename = $meta->fileSlug().'.'.$format;
+        $filename = $meta->fileSlug().'.pdf';
 
-        if ($format === 'pdf') {
-            return $this->pdf->render($meta, $headers, $rows->all(), $filename);
-        }
-
-        if ($format === 'xlsx') {
-            return $this->spreadsheet->toXlsx($meta, $headers, $rows, $filename);
-        }
-
-        return $this->spreadsheet->toCsv($meta, $headers, $rows, $filename);
+        return $this->pdf->render($meta, $headers, $rows->all(), $filename);
     }
 
     /** @return list<string|null> */

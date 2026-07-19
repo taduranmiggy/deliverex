@@ -14,7 +14,6 @@ class ReportExportService
         private AssignmentAuditReportQuery $auditQuery,
         private DriverPerformanceReportQuery $driverPerformanceQuery,
         private EnterpriseReportQuery $enterpriseQuery,
-        private ReportSpreadsheetExporter $spreadsheet,
         private PdfReportRenderer $pdf,
     ) {
     }
@@ -24,8 +23,8 @@ class ReportExportService
         $type = (string) $request->query('type', 'deliveries');
         $format = strtolower((string) $request->query('format', config('reports.default_format', 'pdf')));
 
-        if (! in_array($format, ['csv', 'xlsx', 'pdf'], true)) {
-            abort(422, 'Invalid export format. Use csv, xlsx, or pdf.');
+        if (! in_array($format, config('reports.allowed_formats', ['pdf']), true)) {
+            abort(422, 'Invalid export format. Only PDF exports are allowed.');
         }
 
         $range = ExportDateRange::resolve($request);
@@ -143,19 +142,10 @@ class ReportExportService
      */
     private function respond(string $format, ReportMetadata $meta, array $headers, iterable $rows)
     {
-        $filename = $meta->fileSlug().'.'.$format;
+        $filename = $meta->fileSlug().'.pdf';
+        $materialized = $rows instanceof LazyCollection ? $rows->all() : iterator_to_array($rows);
 
-        if ($format === 'pdf') {
-            $materialized = $rows instanceof LazyCollection ? $rows->all() : iterator_to_array($rows);
-
-            return $this->pdf->render($meta, $headers, $materialized, $filename);
-        }
-
-        if ($format === 'xlsx') {
-            return $this->spreadsheet->toXlsx($meta, $headers, $rows, $filename);
-        }
-
-        return $this->spreadsheet->toCsv($meta, $headers, $rows, $filename);
+        return $this->pdf->render($meta, $headers, $materialized, $filename);
     }
 
     /** @return LazyCollection<int, list<string|int|float|null>> */
