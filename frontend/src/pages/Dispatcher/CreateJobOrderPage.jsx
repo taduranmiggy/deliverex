@@ -866,7 +866,7 @@ const JobOrderForm = forwardRef(function JobOrderForm(
 
             <div className="dx-wiz-grid" style={{ marginBottom: 16 }}>
               <FieldWrap label="Quarry / Supplier (Optional)" full>
-                <select value={form.quarry_id} onChange={set('quarry_id')}>
+                <select value={form.quarry_id} onChange={set('quarry_id')} className="dx-wiz-input" style={{ cursor: 'pointer' }}>
                   <option value="">— No linked supplier —</option>
                   {quarries.map((quarry) => (
                     <option key={quarry.id} value={quarry.id}>{quarry.quarry_name}</option>

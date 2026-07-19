@@ -20,11 +20,12 @@ function SearchableDirectoryField({ label, options, name, onSelect, disabled, lo
   )
 
   return (
-    <label style={{ display: 'grid', gap: 6, minWidth: 0 }}>
-      <span>{label}{required ? ' *' : ''}</span>
-      <div style={{ position: 'relative' }}>
+    <label className="dx-psgc-address__field">
+      <span className="dx-wiz-label-text">{label}{required ? ' *' : ''}</span>
+      <div className="dx-psgc-address__input-wrap">
         <input
           list={listId}
+          className="dx-wiz-input dx-psgc-address__input"
           value={query}
           disabled={disabled || loading}
           required={required}
@@ -41,9 +42,8 @@ function SearchableDirectoryField({ label, options, name, onSelect, disabled, lo
             if (match) onSelect(match)
             else setQuery(name || '')
           }}
-          style={{ width: '100%', paddingRight: 34 }}
         />
-        <span aria-hidden style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }}>
+        <span className="dx-psgc-address__chevron" aria-hidden>
           {loading ? '⌛' : '⌄'}
         </span>
         <datalist id={listId}>
@@ -158,9 +158,9 @@ export default function PsgcAddressSelector({ value, onChange, title, required =
   const patch = (changes) => onChange({ ...address, ...changes })
 
   return (
-    <fieldset style={{ gridColumn: '1/-1', border: '1px solid var(--border)', borderRadius: 12, padding: 16, margin: 0, minWidth: 0 }}>
-      {title && <legend style={{ padding: '0 7px', fontWeight: 700 }}>{title}</legend>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14 }}>
+    <fieldset className="dx-psgc-address dx-wiz-full">
+      {title && <legend className="dx-psgc-address__legend">{title}</legend>}
+      <div className="dx-psgc-address__grid">
         <SearchableDirectoryField
           key={`region-${address.region_code}-${address.region}`}
           label="Region" options={regions} name={address.region}
@@ -171,9 +171,13 @@ export default function PsgcAddressSelector({ value, onChange, title, required =
           }}
         />
         {independentRegion ? (
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span>Province / Administrative area</span>
-            <input value={`${address.region || 'Selected region'} (no PSGC province)`} disabled />
+          <label className="dx-psgc-address__field">
+            <span className="dx-wiz-label-text">Province / Administrative area</span>
+            <input
+              className="dx-wiz-input dx-psgc-address__input"
+              value={`${address.region || 'Selected region'} (no PSGC province)`}
+              disabled
+            />
           </label>
         ) : (
           <SearchableDirectoryField
@@ -201,9 +205,10 @@ export default function PsgcAddressSelector({ value, onChange, title, required =
           disabled={!address.city_code} loading={loading.barangays} required={required}
           onSelect={(option) => patch({ barangay_code: option.code, barangay: option.name })}
         />
-        <label style={{ display: 'grid', gap: 6, gridColumn: '1/-1' }}>
-          <span>Street / Building / House No.{required ? ' *' : ''}</span>
+        <label className="dx-psgc-address__field dx-psgc-address__field--full">
+          <span className="dx-wiz-label-text">Street / Building / House No.{required ? ' *' : ''}</span>
           <input
+            className="dx-wiz-input dx-psgc-address__input"
             required={required}
             value={address.street || ''}
             onChange={(event) => patch({ street: event.target.value })}
@@ -212,17 +217,18 @@ export default function PsgcAddressSelector({ value, onChange, title, required =
         </label>
       </div>
       {legacyAddress && !address.region_code && (
-        <p style={{ margin: '12px 0 0', color: 'var(--muted)', fontSize: '.84rem' }}>
+        <p className="dx-psgc-address__legacy">
           Legacy address: {legacyAddress}. Select the official PSGC divisions when changing this address.
         </p>
       )}
       {formattedPreview && (
-        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'var(--surface-subtle, #f8fafc)', fontSize: '.82rem' }}>
-          <strong>Formatted address preview</strong><br />{formattedPreview}
+        <div className="dx-psgc-address__preview">
+          <strong>Formatted address preview</strong>
+          <span>{formattedPreview}</span>
         </div>
       )}
       {error && (
-        <p role="alert" style={{ margin: '12px 0 0', color: 'var(--color-error, #b91c1c)', fontSize: '.84rem' }}>
+        <p role="alert" className="dx-psgc-address__error">
           {error} Existing selections are preserved; retry when the PSGC service is available.
         </p>
       )}
