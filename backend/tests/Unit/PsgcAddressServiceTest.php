@@ -112,4 +112,36 @@ class PsgcAddressServiceTest extends TestCase
         $this->assertSame(14.8527, $normalized['pickup_latitude']);
         $this->assertSame(120.8156, $normalized['pickup_longitude']);
     }
+
+    public function test_job_order_address_can_save_without_geocode_when_not_required(): void
+    {
+        Http::fake([
+            'https://psgc.test/api/v2/regions' => Http::response([
+                ['code' => '0300000000', 'name' => 'Central Luzon'],
+            ]),
+            'https://psgc.test/api/v2/regions/0300000000/provinces' => Http::response([
+                ['code' => '0314000000', 'name' => 'Bulacan'],
+            ]),
+            'https://psgc.test/api/v2/regions/0300000000/provinces/0314000000/cities-municipalities' => Http::response([
+                ['code' => '0314100000', 'name' => 'City of Malolos'],
+            ]),
+            'https://psgc.test/api/v2/regions/0300000000/provinces/0314000000/cities-municipalities/0314100000/barangays' => Http::response([
+                ['code' => '0314100001', 'name' => 'Guinhawa'],
+            ]),
+            'https://nominatim.openstreetmap.org/*' => Http::response([]),
+        ]);
+
+        $normalized = app(StandardizedAddressService::class)->normalize([
+            'pickup_region_code' => '0300000000',
+            'pickup_province_code' => '0314000000',
+            'pickup_city_code' => '0314100000',
+            'pickup_barangay_code' => '0314100001',
+            'pickup_street' => '123 Rizal Avenue',
+        ], 'pickup', false);
+
+        $this->assertNull($normalized['pickup_latitude']);
+        $this->assertNull($normalized['pickup_longitude']);
+        $this->assertNull($normalized['pickup_geocode_attempted_at']);
+        $this->assertSame('123 RIZAL AVENUE', $normalized['pickup_street']);
+    }
 }

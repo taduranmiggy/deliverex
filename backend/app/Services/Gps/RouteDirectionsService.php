@@ -4,6 +4,7 @@ namespace App\Services\Gps;
 
 use App\Support\GpsCoordinateValidator;
 use App\Support\LocationPipelineLogger;
+use App\Support\OpenRouteServiceAuth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -56,14 +57,15 @@ class RouteDirectionsService
     private function fetchOpenRouteService(float $fromLng, float $fromLat, float $toLng, float $toLat): ?array
     {
         $apiKey = config('gps.routing.openrouteservice_api_key');
-        if (! $apiKey) {
+        $authHeader = OpenRouteServiceAuth::authorizationHeader(is_string($apiKey) ? $apiKey : null);
+        if (! $authHeader) {
             return null;
         }
 
         try {
             $url = config('gps.routing.openrouteservice_url', 'https://api.openrouteservice.org/v2/directions/driving-car');
             $response = Http::timeout(10)
-                ->withHeaders(['Authorization' => $apiKey])
+                ->withHeaders($authHeader)
                 ->post($url, [
                     'coordinates' => [
                         [$fromLng, $fromLat],

@@ -35,7 +35,9 @@ class AddressGeocoderTest extends TestCase
 
         $this->assertSame(14.676, $coords['lat']);
         $this->assertSame(121.0437, $coords['lng']);
-        Http::assertSentCount(1);
+        Http::assertSent(function ($request) {
+            return $request->hasHeader('Authorization', 'Bearer test-ors-key');
+        });
     }
 
     public function test_geocode_falls_back_to_nominatim_when_openrouteservice_is_unconfigured(): void

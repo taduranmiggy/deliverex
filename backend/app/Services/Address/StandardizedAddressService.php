@@ -21,7 +21,7 @@ class StandardizedAddressService
      *
      * @return array<string, mixed>
      */
-    public function normalize(array $data, string $prefix): array
+    public function normalize(array $data, string $prefix, bool $requireGeocode = true): array
     {
         $regionCode = trim((string) ($data["{$prefix}_region_code"] ?? ''));
         $provinceCode = trim((string) ($data["{$prefix}_province_code"] ?? '')) ?: null;
@@ -58,7 +58,7 @@ class StandardizedAddressService
             $this->geocodeCandidates($street, $barangay, $city, $province, $region, $formatted),
         );
 
-        if (! $coordinates) {
+        if (! $coordinates && $requireGeocode) {
             throw ValidationException::withMessages([
                 "{$prefix}_address" => ['The standardized address could not be geocoded. Check the street details or try again when the geocoding service is available.'],
             ]);
@@ -76,9 +76,9 @@ class StandardizedAddressService
             "{$prefix}_street" => $street,
             "{$prefix}_formatted_address" => $formatted,
             "{$prefix}_location" => $formatted,
-            "{$prefix}_latitude" => $coordinates['lat'],
-            "{$prefix}_longitude" => $coordinates['lng'],
-            "{$prefix}_geocode_attempted_at" => now(),
+            "{$prefix}_latitude" => $coordinates['lat'] ?? null,
+            "{$prefix}_longitude" => $coordinates['lng'] ?? null,
+            "{$prefix}_geocode_attempted_at" => $coordinates ? now() : null,
         ];
     }
 

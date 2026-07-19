@@ -179,8 +179,8 @@ class JobOrderController extends Controller
 
         // Official PSGC labels replace client-supplied labels. Coordinates are
         // always resolved and persisted by the server before the job is created.
-        $data = array_merge($data, $this->addresses->normalize($data, 'pickup'));
-        $data = array_merge($data, $this->addresses->normalize($data, 'dropoff'));
+        $data = array_merge($data, $this->addresses->normalize($data, 'pickup', false));
+        $data = array_merge($data, $this->addresses->normalize($data, 'dropoff', false));
 
         JobOrderAddressValidator::validatePayload($data);
 
@@ -353,7 +353,7 @@ class JobOrderController extends Controller
 
             if ($pickupChanged) {
                 if (! empty($merged['pickup_region_code'])) {
-                    $data = array_merge($data, $this->addresses->normalize($merged, 'pickup'));
+                    $data = array_merge($data, $this->addresses->normalize($merged, 'pickup', false));
                 } elseif ($this->addressActuallyChanged($jobOrder, $data, $pickupFields)) {
                     throw ValidationException::withMessages([
                         'pickup_address' => ['Select the pickup address from the PSGC geographic directory.'],
@@ -363,7 +363,7 @@ class JobOrderController extends Controller
 
             if ($dropoffChanged) {
                 if (! empty($merged['dropoff_region_code'])) {
-                    $data = array_merge($data, $this->addresses->normalize($merged, 'dropoff'));
+                    $data = array_merge($data, $this->addresses->normalize($merged, 'dropoff', false));
                 } elseif ($this->addressActuallyChanged($jobOrder, $data, $dropoffFields)) {
                     throw ValidationException::withMessages([
                         'dropoff_address' => ['Select the destination address from the PSGC geographic directory.'],

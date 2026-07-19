@@ -4,6 +4,7 @@ namespace App\Services\Delivery;
 
 use App\Support\GpsCoordinateValidator;
 use App\Support\LocationPipelineLogger;
+use App\Support\OpenRouteServiceAuth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -96,7 +97,8 @@ class AddressGeocoder
     private function performOpenRouteServiceLookup(string $query): ?array
     {
         $apiKey = config('gps.routing.openrouteservice_api_key');
-        if (! $apiKey) {
+        $authHeader = OpenRouteServiceAuth::authorizationHeader(is_string($apiKey) ? $apiKey : null);
+        if (! $authHeader) {
             return null;
         }
 
@@ -107,7 +109,7 @@ class AddressGeocoder
             );
 
             $response = Http::timeout(12)
-                ->withHeaders(['Authorization' => $apiKey])
+                ->withHeaders($authHeader)
                 ->get($url, [
                     'text' => $query,
                     'size' => 1,
@@ -118,6 +120,7 @@ class AddressGeocoder
                 Log::warning('OpenRouteService geocoding HTTP failure', [
                     'address' => $query,
                     'status' => $response->status(),
+                    'body' => $response->json(),
                 ]);
 
                 return null;
