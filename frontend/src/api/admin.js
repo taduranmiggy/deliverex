@@ -69,17 +69,15 @@ export async function exportOcrReport(format = 'pdf', params = {}) {
 }
 export function fetchRoles()               { return apiRequest('/admin/roles') }
 export function fetchAuditLogs(params = {}) {
-  const qs = new URLSearchParams(
-    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
-  ).toString()
-  return apiRequest(`/admin/audit-logs${qs ? '?' + qs : ''}`)
+  return import('./export').then(({ buildExportQuery }) => {
+    const qs = buildExportQuery(params)
+    return apiRequest(`/admin/audit-logs${qs ? `?${qs}` : ''}`)
+  })
 }
 
 export async function exportAuditLogs(format, filters = {}) {
-  const qs = new URLSearchParams({
-    format,
-    ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v != null && v !== '')),
-  }).toString()
+  const { buildExportQuery } = await import('./export')
+  const qs = buildExportQuery({ format, ...filters })
 
   const token = localStorage.getItem('deliverex_token')
   const response = await fetch(`${API_URL}/admin/audit-logs/export?${qs}`, {

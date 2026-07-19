@@ -92,6 +92,10 @@ class AuditHttpActivity
                 return false;
             }
 
+            if (str_contains($path, 'audit-logs') && ! str_contains($path, 'export')) {
+                return false;
+            }
+
             return $request->user() !== null;
         }
 

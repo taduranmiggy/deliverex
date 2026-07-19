@@ -5,21 +5,25 @@ namespace App\Services\Admin;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\Reports\ExportDateRange;
+use App\Support\AuditActionCategories;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 class AuditLogQuery
 {
-    /** @return array{query: Builder, filters: array<string, string|null>} */
+    /** @return array{query: Builder, filters: array<string, mixed>} */
     public function build(Request $request): array
     {
         $range = ExportDateRange::resolveOptional($request);
         $request = ExportDateRange::mergeIntoRequest($request, $range);
 
         $module = $request->query('module');
+        $modules = $this->parseList($request, 'modules');
         $user = $request->query('user');
         $role = $request->query('role');
         $action = $request->query('action');
+        $actions = $this->parseList($request, 'actions');
+        $actionCategories = $this->parseList($request, 'action_categories');
         $from = $request->query('from');
         $to = $request->query('to');
         $search = trim((string) $request->query('search', ''));
@@ -28,12 +32,7 @@ class AuditLogQuery
 
         $query = AuditLog::query()->with('user.role');
 
-        if ($module && $module !== 'all') {
-            $query->where(function ($q) use ($module) {
-                $q->where('action', 'like', $module.'.%')
-                    ->orWhere('module', config("audit.modules.{$module}", $module));
-            });
-        }
+        $this->applyModuleFilter($query, $module, $modules);
 
         if ($user && $user !== 'all') {
             $query->where(function ($q) use ($user) {
@@ -54,6 +53,10 @@ class AuditLogQuery
 
         if ($action && $action !== 'all') {
             $query->where('action', $action);
+        } elseif ($actions !== []) {
+            $query->whereIn('action', $actions);
+        } elseif ($actionCategories !== []) {
+            AuditActionCategories::applyToQuery($query, $actionCategories);
         }
 
         if (! $range['all_records'] && ($range['from'] || $range['to'])) {
@@ -91,9 +94,12 @@ class AuditLogQuery
 
         $filters = [
             'module' => $module && $module !== 'all' ? (string) $module : null,
+            'modules' => $modules !== [] ? implode(', ', $modules) : null,
             'user' => $user && $user !== 'all' ? (string) $user : null,
             'role' => $role && $role !== 'all' ? (string) $role : null,
             'action' => $action && $action !== 'all' ? (string) $action : null,
+            'actions' => $actions !== [] ? implode(', ', $actions) : null,
+            'action_categories' => $actionCategories !== [] ? implode(', ', $actionCategories) : null,
             'from' => $range['from'],
             'to' => $range['to'],
             'all_records' => $range['all_records'] ? 'yes' : null,
@@ -102,6 +108,42 @@ class AuditLogQuery
         ];
 
         return ['query' => $query, 'filters' => $filters];
+    }
+
+    /** @param  Builder<AuditLog>  $query */
+    private function applyModuleFilter(Builder $query, ?string $module, array $modules): void
+    {
+        if ($modules === [] && ($module === null || $module === '' || $module === 'all')) {
+            return;
+        }
+
+        $selected = $modules !== [] ? $modules : [$module];
+
+        $query->where(function ($builder) use ($selected) {
+            foreach ($selected as $item) {
+                if (! $item || $item === 'all') {
+                    continue;
+                }
+                $builder->orWhere(function ($sub) use ($item) {
+                    $sub->where('action', 'like', $item.'.%')
+                        ->orWhere('module', config("audit.modules.{$item}", $item));
+                });
+            }
+        });
+    }
+
+    /** @return list<string> */
+    private function parseList(Request $request, string $key): array
+    {
+        $value = $request->query($key);
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('strval', $value)));
+        }
+        if (is_string($value) && $value !== '') {
+            return array_values(array_filter(array_map('trim', explode(',', $value))));
+        }
+
+        return [];
     }
 
     /** @return array<string, list<array{value: string, label: string}>> */

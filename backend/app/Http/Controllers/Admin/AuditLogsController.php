@@ -21,7 +21,7 @@ class AuditLogsController extends Controller
     {
         ['query' => $query] = $this->auditLogQuery->build($request);
 
-        $perPage = min(100, max(1, (int) $request->query('per_page', 6)));
+        $perPage = min(100, max(1, (int) $request->query('per_page', 25)));
         $logs = $query->paginate($perPage);
 
         $logs->getCollection()->transform(fn ($log) => $this->presenter->present($log));

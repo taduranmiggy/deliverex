@@ -10,6 +10,7 @@ final class ReportMetadata
     /**
      * @param  array<string, string|null>  $filters
      * @param  array<string, int|float|string|null>  $summary
+     * @param  array<string, bool>  $exportOptions
      */
     public function __construct(
         public readonly string $reportType,
@@ -17,6 +18,7 @@ final class ReportMetadata
         public readonly array $filters,
         public readonly ?User $generatedBy,
         public readonly array $summary = [],
+        public readonly array $exportOptions = [],
     ) {
     }
 
@@ -26,6 +28,7 @@ final class ReportMetadata
         string $reportTitle,
         array $filters,
         array $summary = [],
+        array $exportOptions = [],
     ): self {
         return new self(
             reportType: $reportType,
@@ -33,7 +36,13 @@ final class ReportMetadata
             filters: $filters,
             generatedBy: $request->user(),
             summary: $summary,
+            exportOptions: $exportOptions,
         );
+    }
+
+    public function exportOption(string $key, bool $default = true): bool
+    {
+        return (bool) ($this->exportOptions[$key] ?? $default);
     }
 
     /** @return list<string> */
