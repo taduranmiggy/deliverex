@@ -6578,6 +6578,25 @@ textarea,
 .dx-audit-export-success__icon { color: #16a34a; }
 .dx-audit-export-success__actions { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; justify-content: center; }
 
+.dx-audit-export-modal--wide { max-width: 920px; }
+
+.dx-export-pdf-preview {
+  display: flex; flex-direction: column; height: min(88vh, 820px);
+}
+.dx-export-pdf-preview__toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 18px; border-bottom: 1px solid var(--stroke); background: #f8fafc;
+  font-size: 0.875rem;
+}
+.dx-export-pdf-preview__toolbar span { color: var(--muted); font-size: 0.75rem; }
+.dx-export-pdf-preview__frame {
+  flex: 1; width: 100%; border: none; background: #525659; min-height: 480px;
+}
+.dx-export-pdf-preview__actions {
+  display: flex; gap: 10px; justify-content: flex-end; padding: 14px 18px;
+  border-top: 1px solid var(--stroke); background: #fafbfc;
+}
+
 @media (max-width: 768px) {
   .dx-audit-export-section--grid2 { grid-template-columns: 1fr; }
   .dx-audit-export-dates { grid-template-columns: 1fr; }

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchAssignmentAuditTrails } from '../../api/assignmentAudit'
 import { exportManagerReport, fetchAnalytics, fetchReports } from '../../api/manager'
-import ExportReportModal from '../../components/ExportReportModal'
+import EnterpriseExportModal from '../../components/export/EnterpriseExportModal'
 import { DataTable, EmptyState, PageHeader, StatusBadge } from '../../components/ui'
-import { downloadBlob, printReportPanel } from '../../utils/export/download'
+import { printReportPanel } from '../../utils/export/download'
 import { ClipboardList, Download, FileText, Printer, Users } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayName } from '../../utils/jobOrderHelpers'
@@ -171,11 +171,6 @@ function ReportsPage() {
     }
     return { sort_dir: sortDir }
   }, [tab, statusFilter, dateField, sortDir])
-
-  const handleExport = async (format, filters) => {
-    const { blob, filename } = await exportManagerReport(reportKey, format, filters)
-    downloadBlob(blob, filename)
-  }
 
   const applyFilters = () => {
     setPage(1)
@@ -349,12 +344,14 @@ function ReportsPage() {
         )}
       </div>
 
-      <ExportReportModal
+      <EnterpriseExportModal
         open={showExportSummary}
         onClose={() => setShowExportSummary(false)}
-        reportKey={reportKey}
-        reportTitle={TABS.find((t) => t.key === tab)?.label ?? 'Report'}
-        onExport={handleExport}
+        sessionKey={reportKey}
+        previewReportKey={reportKey}
+        title={`Export ${TABS.find((t) => t.key === tab)?.label ?? 'Report'}`}
+        subtitle="Choose filters and preview your export before downloading."
+        onExport={(format, filters) => exportManagerReport(reportKey, format, filters)}
         initialFilters={reportInitialFilters}
         filterFields={reportExportFilterFields}
         formatOptions={['pdf', 'xlsx', 'csv']}

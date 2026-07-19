@@ -8,6 +8,7 @@ use App\Services\Reports\PdfReportRenderer;
 use App\Services\Reports\ReportMetadata;
 use App\Services\Reports\ReportSpreadsheetExporter;
 use App\Support\AuditLogger;
+use App\Support\ReportExportOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\LazyCollection;
 
@@ -41,7 +42,7 @@ class AuditLogExportService
             'Audit Logs Report',
             $filters,
             ['total_records' => $total],
-            exportOptions: $this->exportOptions($request),
+            exportOptions: ReportExportOptions::fromRequest($request),
         );
 
         $headers = [
@@ -80,30 +81,6 @@ class AuditLogExportService
         }
 
         return $this->spreadsheet->toCsv($meta, $headers, $rows, $filename);
-    }
-
-    /** @return array<string, bool> */
-    private function exportOptions(Request $request): array
-    {
-        $defaults = [
-            'include_logo' => true,
-            'include_page_numbers' => true,
-            'include_generated_by' => true,
-            'include_timestamp' => true,
-            'include_filters_summary' => true,
-            'include_company' => true,
-            'include_signature' => false,
-            'include_watermark' => false,
-        ];
-
-        $resolved = [];
-        foreach ($defaults as $key => $default) {
-            $resolved[$key] = $request->has($key)
-                ? filter_var($request->query($key), FILTER_VALIDATE_BOOLEAN)
-                : $default;
-        }
-
-        return $resolved;
     }
 
     /** @return list<string|null> */

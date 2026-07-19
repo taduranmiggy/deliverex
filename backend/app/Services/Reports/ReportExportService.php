@@ -3,6 +3,7 @@
 namespace App\Services\Reports;
 
 use App\Support\AuditLogger;
+use App\Support\ReportExportOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\LazyCollection;
 
@@ -64,6 +65,7 @@ class ReportExportService
             'Delivery Report',
             $filters,
             $summary,
+            exportOptions: ReportExportOptions::fromRequest($request),
         );
 
         $rows = $this->lazyRows(
@@ -84,6 +86,7 @@ class ReportExportService
             'Driver Performance Report',
             $filters,
             $summary,
+            exportOptions: ReportExportOptions::fromRequest($request),
         );
 
         $rows = array_map(
@@ -109,6 +112,7 @@ class ReportExportService
                 'total_records' => $total,
                 'overrides' => (clone $query)->where('is_override', true)->count(),
             ],
+            exportOptions: ReportExportOptions::fromRequest($request),
         );
 
         $rows = $this->lazyRows(
@@ -128,6 +132,7 @@ class ReportExportService
             $data['title'],
             $data['filters'],
             $data['summary'],
+            exportOptions: ReportExportOptions::fromRequest($request),
         );
 
         return $this->respond($format, $meta, $data['headers'], $data['rows']);

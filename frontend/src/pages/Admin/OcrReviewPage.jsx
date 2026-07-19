@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { exportOcrReport, fetchDocumentPreviewBlob, fetchOcrQueue, reprocessOcr, saveOcrCorrections, validateOcr } from '../../api/admin'
-import ExportReportModal from '../../components/ExportReportModal'
+import EnterpriseExportModal from '../../components/export/EnterpriseExportModal'
 import OcrCorrectionModal from '../../components/OcrCorrectionModal'
 import { EmptyState, PageHeader, PaginationBar } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
@@ -551,19 +551,6 @@ function OcrReviewPage() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const handleExport = async (format, filters) => {
-    const { blob, filename } = await exportOcrReport(format, filters)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
-    toast('OCR report exported successfully.', 'success')
   }
 
   const ocrExportFilterFields = useMemo(() => [
@@ -1276,12 +1263,14 @@ function OcrReviewPage() {
         changedFieldCount={pendingCorrectionFields ? Object.keys(pendingCorrectionFields).length : 0}
       />
 
-      <ExportReportModal
+      <EnterpriseExportModal
         open={showExportSummary}
         onClose={() => setShowExportSummary(false)}
-        reportKey="ocr"
-        reportTitle="OCR Reports"
-        onExport={handleExport}
+        sessionKey="ocr"
+        previewReportKey="ocr"
+        title="Export OCR Report"
+        subtitle="Choose filters and preview your export before downloading."
+        onExport={exportOcrReport}
         initialFilters={ocrInitialFilters}
         filterFields={ocrExportFilterFields}
         formatOptions={['pdf', 'xlsx', 'csv']}

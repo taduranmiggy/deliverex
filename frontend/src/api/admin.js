@@ -43,13 +43,9 @@ export function fetchOcrQueue(page = 1, filter = 'all', params = {}) {
 }
 
 export async function exportOcrReport(format = 'pdf', params = {}) {
+  const { buildExportQuery } = await import('./export')
   const token = localStorage.getItem('deliverex_token')
-  const qs = new URLSearchParams(
-    {
-      format,
-      ...Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
-    },
-  ).toString()
+  const qs = buildExportQuery({ format, ...params })
   const response = await fetch(`${API_URL}/admin/ocr/review/export${qs ? `?${qs}` : ''}`, {
     headers: {
       Accept: 'application/octet-stream',

@@ -1,5 +1,6 @@
 import { apiRequest } from './client'
 import * as tokenStorage from '../services/session/tokenStorage'
+import { buildExportQuery } from './export'
 
 export function fetchManagerDashboard() {
   return apiRequest('/manager/dashboard')
@@ -25,11 +26,7 @@ export function fetchReportsLegacy(page = 1, status = '') {
 }
 
 export async function exportManagerReport(type, format, filters = {}) {
-  const qs = new URLSearchParams({
-    type,
-    format,
-    ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v != null && v !== '')),
-  }).toString()
+  const qs = buildExportQuery({ type, format, ...filters })
 
   const token = tokenStorage.getAccessToken()
   const base = import.meta.env.VITE_API_URL || '/api'

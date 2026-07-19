@@ -11,6 +11,7 @@ use App\Services\Reports\PdfReportRenderer;
 use App\Services\Reports\ReportMetadata;
 use App\Services\Reports\ReportSpreadsheetExporter;
 use App\Support\AuditLogger;
+use App\Support\ReportExportOptions;
 use Illuminate\Http\Request;
 
 class OcrReviewController extends Controller
@@ -126,6 +127,7 @@ class OcrReviewController extends Controller
             'OCR Review Report',
             $filters,
             ['total_records' => count($rows)],
+            exportOptions: ReportExportOptions::fromRequest($request),
         );
         $fileName = $meta->fileSlug().'.'.$format;
 
