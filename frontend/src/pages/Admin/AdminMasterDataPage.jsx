@@ -3,6 +3,8 @@ import { archiveMasterDataRecord, createMasterDataRecord, fetchMasterData, gener
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
 import useConfirmation from '../../hooks/useConfirmation'
 import { ChevronRight, Database, Link2, Plus, RefreshCw, UserPlus } from 'lucide-react'
+import PsgcAddressSelector from '../../components/PsgcAddressSelector'
+import { fromPsgcAddress, toPsgcAddress } from '../../utils/psgcAddress'
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
 // material-specifications is kept for modal reference but NOT in the visible tab strip.
@@ -41,7 +43,11 @@ function buildInitialForm(tab, item) {
   if (tab === 'quarries') return { ...base, quarry_name: item?.quarry_name || '', contact_person: item?.contact_person || '', email: item?.email || '', phone: item?.phone || '' }
   if (tab === 'vehicle-types') return { ...base, name: item?.name || '', wheel_type: item?.wheel_type || '', min_cbm: item?.min_cbm || '', max_cbm: item?.max_cbm || '' }
   if (tab === 'vehicles') return { ...base, plate_no: item?.plate_no || '', vehicle_type_id: item?.vehicle_type_id || '', length_cm: item?.length_cm || '', width_cm: item?.width_cm || '', height_cm: item?.height_cm || '', cbm_capacity: item?.cbm_capacity || '' }
-  if (tab === 'drivers') return { ...base, full_name: item?.full_name || '', license_no: item?.license_no || '', license_expiry: item?.license_expiry || '', availability: item?.availability || 'available' }
+  if (tab === 'drivers') return {
+    ...base, full_name: item?.full_name || '', license_no: item?.license_no || '',
+    license_expiry: item?.license_expiry || '', availability: item?.availability || 'available',
+    ...fromPsgcAddress(toPsgcAddress(item || {})), address: item?.address || '',
+  }
   if (tab === 'driver-vehicle-assignments') return { ...base, driver_id: item?.driver_id || '', vehicle_id: item?.vehicle_id || '', is_primary: String(Boolean(item?.is_primary)) }
   return { ...base, client_id: item?.client_id || '', quarry_id: item?.quarry_id || '', vehicle_type_id: item?.vehicle_type_id || '', is_default: String(item?.is_default ?? true) }
 }
@@ -58,6 +64,11 @@ function sanitizePayload(tab, form) {
   if (p.cbm_capacity === '') p.cbm_capacity = null
   if (p.license_no === '') p.license_no = null
   if (p.license_expiry === '') p.license_expiry = null
+  if (tab === 'drivers' && !p.address_region_code) {
+    Object.keys(p).forEach((key) => {
+      if (key === 'address' || key.startsWith('address_')) delete p[key]
+    })
+  }
   if (p.is_primary != null) p.is_primary = p.is_primary === true || p.is_primary === 'true'
   if (p.is_default != null) p.is_default = p.is_default === true || p.is_default === 'true'
   if (tab === 'vehicles') p.plate_no = String(p.plate_no || '').trim().toUpperCase()
@@ -223,6 +234,13 @@ function MasterRecordModal({ tab, item, data, onClose, onSaved }) {
               <label style={{ gridColumn: '1/-1' }}>Full name <input required value={form.full_name} onChange={set('full_name')} /></label>
               <label>License no <input value={form.license_no} onChange={set('license_no')} /></label>
               <label>License expiry <input type="date" value={form.license_expiry} onChange={set('license_expiry')} /></label>
+              <PsgcAddressSelector
+                title="Driver address"
+                value={toPsgcAddress(form)}
+                onChange={(address) => setForm((current) => ({ ...current, ...fromPsgcAddress(address) }))}
+                required={!isEdit || Boolean(form.address_region_code)}
+                legacyAddress={form.address || ''}
+              />
               <label>Availability
                 <select value={form.availability} onChange={set('availability')}>
                   <option value="available">Available</option>

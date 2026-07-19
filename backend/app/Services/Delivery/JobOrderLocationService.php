@@ -24,7 +24,9 @@ class JobOrderLocationService
         $updates = [];
         $geocodedPickup = false;
 
-        if (! GpsCoordinateValidator::isUsable($jobOrder->pickup_latitude, $jobOrder->pickup_longitude)) {
+        if (! GpsCoordinateValidator::isUsable($jobOrder->pickup_latitude, $jobOrder->pickup_longitude)
+            && $jobOrder->pickup_geocode_attempted_at === null) {
+            $updates['pickup_geocode_attempted_at'] = now();
             $pickupCoords = null;
             $pickupCandidates = $this->pickupGeocodeCandidates($jobOrder);
 
@@ -60,7 +62,9 @@ class JobOrderLocationService
             }
         }
 
-        if (! GpsCoordinateValidator::isUsable($jobOrder->dropoff_latitude, $jobOrder->dropoff_longitude)) {
+        if (! GpsCoordinateValidator::isUsable($jobOrder->dropoff_latitude, $jobOrder->dropoff_longitude)
+            && $jobOrder->dropoff_geocode_attempted_at === null) {
+            $updates['dropoff_geocode_attempted_at'] = now();
             if ($geocodedPickup) {
                 usleep(1_100_000);
             }
@@ -413,7 +417,9 @@ class JobOrderLocationService
             ];
         }
 
-        return $address !== '' ? ['address' => $address, 'kind' => $kind] : null;
+        // Tracking consumers must never infer map points from incomplete text.
+        // Legacy text is used only by the one-time server-side geocoding pass.
+        return null;
     }
 
     /** @param  array<string, mixed>|null  $pickup

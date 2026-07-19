@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Services\Address\StandardizedAddressService;
 use App\Services\Company\CompanyService;
 use App\Support\AuditChangeTracker;
 use App\Support\AuditLogger;
@@ -11,7 +12,10 @@ use Illuminate\Http\Request;
 
 class CompanyController extends Controller
 {
-    public function __construct(private readonly CompanyService $companies) {}
+    public function __construct(
+        private readonly CompanyService $companies,
+        private readonly StandardizedAddressService $addresses,
+    ) {}
 
     public function index(Request $request)
     {
@@ -40,8 +44,14 @@ class CompanyController extends Controller
             'company_email' => 'required|email|max:255|unique:companies,company_email',
             'contact_person' => 'nullable|string|max:120',
             'contact_number' => 'nullable|string|max:50',
-            'address' => 'nullable|string',
+            'address_region_code' => 'required|string|size:10',
+            'address_province_code' => 'nullable|string|size:10',
+            'address_city_code' => 'required|string|size:10',
+            'address_barangay_code' => 'required|string|size:10',
+            'address_street' => 'required|string|max:255',
         ]);
+
+        $data = array_merge($data, $this->addresses->normalizeEntityAddress($data));
 
         $company = $this->companies->createPendingCompany($data, $request->user());
 
@@ -64,9 +74,21 @@ class CompanyController extends Controller
             'company_email' => 'sometimes|email|max:255|unique:companies,company_email,'.$company->id,
             'contact_person' => 'nullable|string|max:120',
             'contact_number' => 'nullable|string|max:50',
-            'address' => 'nullable|string',
+            'address_region_code' => 'sometimes|nullable|string|size:10',
+            'address_province_code' => 'sometimes|nullable|string|size:10',
+            'address_city_code' => 'sometimes|nullable|string|size:10',
+            'address_barangay_code' => 'sometimes|nullable|string|size:10',
+            'address_street' => 'sometimes|nullable|string|max:255',
             'status' => 'sometimes|in:pending_activation,active,inactive,archived',
         ]);
+
+        $addressFields = ['address_region_code', 'address_province_code', 'address_city_code', 'address_barangay_code', 'address_street'];
+        if (count(array_intersect(array_keys($data), $addressFields)) > 0) {
+            $data = array_merge(
+                $data,
+                $this->addresses->normalizeEntityAddress(array_merge($company->only($addressFields), $data)),
+            );
+        }
 
         $trackFields = ['company_name', 'company_email', 'contact_person', 'contact_number', 'address', 'status'];
         $before = $company->only($trackFields);

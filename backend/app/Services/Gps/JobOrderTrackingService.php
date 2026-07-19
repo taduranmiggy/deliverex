@@ -138,7 +138,9 @@ class JobOrderTrackingService
             ];
         }
 
-        return $address !== '' ? ['address' => $address] : null;
+        // A tracking marker is a persisted coordinate pair, never text that a
+        // client could geocode differently or route as zero-valued coordinates.
+        return null;
     }
 
     private function trackingLogFromCurrent($current, DispatchAssignment $assignment): TrackingLog

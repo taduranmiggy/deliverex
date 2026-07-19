@@ -53,6 +53,7 @@ use App\Http\Controllers\Manager\ReportExportController;
 use App\Http\Controllers\Manager\ReportsController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Ocr\OcrController;
+use App\Http\Controllers\PsgcController;
 use Illuminate\Support\Facades\Route;
 
 // ─── Public ──────────────────────────────────────────────────────────────────
@@ -83,6 +84,17 @@ Route::get('/customer/track/{trackingCode}', [CustomerTrackingController::class,
 
 // Public: submit inquiry (no auth required)
 Route::post('/customer/inquiry', [InquiryController::class, 'store']);
+
+// Public reference data is required by both authenticated forms and account activation.
+// The backend proxy adds caching, a stable response shape, and useful outage messages.
+Route::middleware('throttle:120,1')->prefix('psgc')->group(function () {
+    Route::get('/regions', [PsgcController::class, 'regions']);
+    Route::get('/regions/{region}/provinces', [PsgcController::class, 'provinces']);
+    Route::get('/regions/{region}/cities-municipalities', [PsgcController::class, 'regionalCities']);
+    Route::get('/regions/{region}/provinces/{province}/cities-municipalities', [PsgcController::class, 'provincialCities']);
+    Route::get('/regions/{region}/cities-municipalities/{city}/barangays', [PsgcController::class, 'regionalBarangays']);
+    Route::get('/regions/{region}/provinces/{province}/cities-municipalities/{city}/barangays', [PsgcController::class, 'provincialBarangays']);
+});
 
 // Public: intelligent chatbot (optional auth for personalized replies)
 Route::middleware(['auth.api.optional', 'throttle:30,1'])->prefix('chatbot')->group(function () {

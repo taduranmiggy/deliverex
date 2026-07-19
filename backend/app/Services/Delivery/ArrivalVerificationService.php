@@ -7,7 +7,7 @@ use App\Support\GpsCoordinateValidator;
 
 class ArrivalVerificationService
 {
-    public function __construct(private DropoffGeocoder $geocoder)
+    public function __construct(private JobOrderLocationService $locations)
     {
     }
 
@@ -16,27 +16,13 @@ class ArrivalVerificationService
      */
     public function resolveDestination(JobOrder $job): ?array
     {
-        $stored = GpsCoordinateValidator::pair(
+        $job = $this->locations->ensureCoordinates($job);
+
+        return GpsCoordinateValidator::pair(
             $job->dropoff_latitude,
             $job->dropoff_longitude,
             'arrival_destination',
         );
-        if ($stored) {
-            return $stored;
-        }
-
-        $address = $job->display_dropoff;
-        $coords  = $this->geocoder->geocode($address);
-        if (! $coords) {
-            return null;
-        }
-
-        $job->update([
-            'dropoff_latitude'  => $coords['lat'],
-            'dropoff_longitude' => $coords['lng'],
-        ]);
-
-        return $coords;
     }
 
     /**

@@ -5,13 +5,17 @@ import {
 } from '../../api/admin'
 import { DataTable, EmptyState, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
 import { Building2, Plus } from 'lucide-react'
+import PsgcAddressSelector from '../../components/PsgcAddressSelector'
+import { fromPsgcAddress, toPsgcAddress } from '../../utils/psgcAddress'
 
 const BLANK = {
   company_name: '',
   company_email: '',
   contact_person: '',
   contact_number: '',
-  address: '',
+  address: '', address_region_code: '', address_region: '', address_province_code: '',
+  address_province: '', address_city_code: '', address_city: '',
+  address_barangay_code: '', address_barangay: '', address_street: '',
 }
 
 const STATUS_TABS = [
@@ -46,6 +50,11 @@ function CompanyModal({ company, onClose, onSaved }) {
     setError('')
     try {
       const payload = { ...form }
+      if (isEdit && !form.address_region_code) {
+        Object.keys(payload).forEach((key) => {
+          if (key === 'address' || key.startsWith('address_')) delete payload[key]
+        })
+      }
       if (isEdit) {
         onSaved(await updateCompany(company.id, payload), true)
       } else {
@@ -70,7 +79,13 @@ function CompanyModal({ company, onClose, onSaved }) {
           <label style={{ gridColumn: '1/-1' }}>Company email <input required type="email" value={form.company_email} onChange={set('company_email')} disabled={isEdit && company?.status === 'active'} /></label>
           <label>Contact person <input value={form.contact_person ?? ''} onChange={set('contact_person')} /></label>
           <label>Contact number <input value={form.contact_number ?? ''} onChange={set('contact_number')} /></label>
-          <label style={{ gridColumn: '1/-1' }}>Address <textarea rows={2} value={form.address ?? ''} onChange={set('address')} /></label>
+          <PsgcAddressSelector
+            title="Company address"
+            value={toPsgcAddress(form)}
+            onChange={(address) => setForm((current) => ({ ...current, ...fromPsgcAddress(address) }))}
+            required={!isEdit || Boolean(form.address_region_code)}
+            legacyAddress={form.address || ''}
+          />
           {isEdit && (
             <label style={{ gridColumn: '1/-1' }}>Status
               <select value={form.status} onChange={set('status')}>

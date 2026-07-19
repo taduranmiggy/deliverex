@@ -32,6 +32,13 @@ class MasterDataOptionsController extends Controller
                 'address_barangay' => $c->address_barangay,
                 'address_city' => $c->address_city,
                 'address_province' => $c->address_province,
+                'address_region' => $c->address_region,
+                'address_region_code' => $c->address_region_code,
+                'address_province_code' => $c->address_province_code,
+                'address_city_code' => $c->address_city_code,
+                'address_barangay_code' => $c->address_barangay_code,
+                'address_latitude' => $c->address_latitude,
+                'address_longitude' => $c->address_longitude,
             ]);
 
         $preferences = CompanyQuarryVehiclePreference::query()

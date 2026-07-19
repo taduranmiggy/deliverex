@@ -14,6 +14,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
+use App\Services\Address\StandardizedAddressService;
 use App\Support\DriverAccount;
 use App\Services\Driver\DriverAvailabilityService;
 use App\Services\Fleet\VehicleAvailabilityService;
@@ -31,6 +32,7 @@ class MasterDataController extends Controller
     public function __construct(
         private DriverAvailabilityService $driverAvailability,
         private VehicleAvailabilityService $vehicleAvailability,
+        private StandardizedAddressService $addresses,
     ) {
     }
 
@@ -252,7 +254,21 @@ class MasterDataController extends Controller
             'license_expiry' => ['nullable', 'date'],
             'availability' => ['nullable', Rule::in(['available', 'busy', 'offline'])],
             'status' => ['nullable', Rule::in(['available', 'assigned', 'in_use', 'inactive'])],
+            'address_region_code' => [Rule::requiredIf(! $id), 'nullable', 'string', 'size:10'],
+            'address_province_code' => ['nullable', 'string', 'size:10'],
+            'address_city_code' => [Rule::requiredIf(! $id), 'nullable', 'string', 'size:10'],
+            'address_barangay_code' => [Rule::requiredIf(! $id), 'nullable', 'string', 'size:10'],
+            'address_street' => [Rule::requiredIf(! $id), 'nullable', 'string', 'max:255'],
         ]);
+
+        $model = $id ? Driver::query()->findOrFail($id) : new Driver();
+        $addressFields = ['address_region_code', 'address_province_code', 'address_city_code', 'address_barangay_code', 'address_street'];
+        if (count(array_intersect(array_keys($data), $addressFields)) > 0) {
+            $data = array_merge($data, $this->addresses->normalizeEntityAddress(array_merge(
+                $model->only($addressFields),
+                $data,
+            )));
+        }
 
         $data['full_name'] = trim($data['full_name']);
         $data['license_no'] = isset($data['license_no']) ? trim((string) $data['license_no']) : null;
@@ -260,7 +276,6 @@ class MasterDataController extends Controller
         $data['status'] = $data['status'] ?? 'available';
         $data['availability'] = $data['availability'] ?? ($data['status'] === 'inactive' ? 'offline' : 'available');
 
-        $model = $id ? Driver::query()->findOrFail($id) : new Driver();
         $model->fill($data)->save();
         $this->driverAvailability->sync($model, 'admin_master_data_save', $request->user()?->id);
         $model->refresh();

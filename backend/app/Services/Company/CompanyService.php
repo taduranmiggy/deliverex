@@ -23,7 +23,7 @@ class CompanyService
 
     public function createPendingCompany(array $data, User $admin): Company
     {
-        $company = Company::query()->create([
+        $company = Company::query()->create(array_merge([
             'company_name' => $data['company_name'],
             'company_email' => strtolower(trim($data['company_email'])),
             'contact_person' => $data['contact_person'] ?? null,
@@ -31,7 +31,12 @@ class CompanyService
             'address' => $data['address'] ?? null,
             'status' => Company::STATUS_ACTIVE,
             'created_by' => $admin->id,
-        ]);
+        ], array_intersect_key($data, array_flip([
+            'address_street', 'address_barangay', 'address_city', 'address_province',
+            'address_region', 'address_region_code', 'address_province_code',
+            'address_city_code', 'address_barangay_code', 'address_latitude',
+            'address_longitude', 'address_geocode_attempted_at',
+        ]))));
 
         return $company->fresh();
     }

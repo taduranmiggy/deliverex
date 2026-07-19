@@ -25,6 +25,14 @@ class Company extends Model
         'address_barangay',
         'address_city',
         'address_province',
+        'address_region',
+        'address_region_code',
+        'address_province_code',
+        'address_city_code',
+        'address_barangay_code',
+        'address_latitude',
+        'address_longitude',
+        'address_geocode_attempted_at',
         'status',
         'activation_token',
         'activation_expires_at',
@@ -33,6 +41,9 @@ class Company extends Model
 
     protected $casts = [
         'activation_expires_at' => 'datetime',
+        'address_latitude' => 'float',
+        'address_longitude' => 'float',
+        'address_geocode_attempted_at' => 'datetime',
     ];
 
     protected $hidden = [

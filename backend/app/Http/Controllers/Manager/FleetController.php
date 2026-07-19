@@ -8,6 +8,7 @@ use App\Services\Delivery\JobOrderLocationService;
 use App\Services\Gps\DriverLocationService;
 use App\Services\Gps\RouteDirectionsService;
 use App\Services\Gps\TrackingService;
+use App\Support\GpsCoordinateValidator;
 
 class FleetController extends Controller
 {
@@ -49,11 +50,11 @@ class FleetController extends Controller
                 $jobOrder = $this->locationService->ensureCoordinates($jobOrder);
             }
 
-            $pickup = $jobOrder && is_numeric($jobOrder->pickup_latitude) && is_numeric($jobOrder->pickup_longitude)
-                ? ['lat' => (float) $jobOrder->pickup_latitude, 'lng' => (float) $jobOrder->pickup_longitude]
+            $pickup = $jobOrder
+                ? GpsCoordinateValidator::pair($jobOrder->pickup_latitude, $jobOrder->pickup_longitude, 'manager_fleet_pickup')
                 : null;
-            $destination = $jobOrder && is_numeric($jobOrder->dropoff_latitude) && is_numeric($jobOrder->dropoff_longitude)
-                ? ['lat' => (float) $jobOrder->dropoff_latitude, 'lng' => (float) $jobOrder->dropoff_longitude]
+            $destination = $jobOrder
+                ? GpsCoordinateValidator::pair($jobOrder->dropoff_latitude, $jobOrder->dropoff_longitude, 'manager_fleet_destination')
                 : null;
 
             $route = null;

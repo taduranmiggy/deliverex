@@ -14,10 +14,26 @@ class Driver extends Model
         'availability',
         'status',
         'current_assignment_id',
+        'address',
+        'address_street',
+        'address_barangay',
+        'address_city',
+        'address_province',
+        'address_region',
+        'address_region_code',
+        'address_province_code',
+        'address_city_code',
+        'address_barangay_code',
+        'address_latitude',
+        'address_longitude',
+        'address_geocode_attempted_at',
     ];
 
     protected $casts = [
         'license_expiry' => 'date',
+        'address_latitude' => 'float',
+        'address_longitude' => 'float',
+        'address_geocode_attempted_at' => 'datetime',
     ];
 
     public function user()

@@ -30,9 +30,9 @@ class CompanyAddressHelper
             return false;
         }
 
-        return ! empty($company->address_street)
-            || ! empty($company->address_barangay)
-            || ! empty($company->address_city)
-            || ! empty($company->address_province);
+        return ! empty($company->address_region_code)
+            && ! empty($company->address_city_code)
+            && ! empty($company->address_barangay_code)
+            && ! empty($company->address_street);
     }
 }

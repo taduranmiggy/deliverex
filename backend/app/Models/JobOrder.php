@@ -52,21 +52,35 @@ class JobOrder extends Model
         'pickup_location',
         'dropoff_location',
         // structured pickup address
+        'pickup_region_code',
+        'pickup_region',
+        'pickup_province_code',
         'pickup_province',
+        'pickup_city_code',
         'pickup_city',
+        'pickup_barangay_code',
         'pickup_barangay',
         'pickup_street',
         'pickup_landmark',
+        'pickup_formatted_address',
         'pickup_latitude',
         'pickup_longitude',
+        'pickup_geocode_attempted_at',
         // structured drop-off address
+        'dropoff_region_code',
+        'dropoff_region',
+        'dropoff_province_code',
         'dropoff_province',
+        'dropoff_city_code',
         'dropoff_city',
+        'dropoff_barangay_code',
         'dropoff_barangay',
         'dropoff_street',
         'dropoff_landmark',
+        'dropoff_formatted_address',
         'dropoff_latitude',
         'dropoff_longitude',
+        'dropoff_geocode_attempted_at',
         'quarry_id',
         'preferred_vehicle_type_id',
         'delivery_type',
@@ -124,6 +138,10 @@ class JobOrder extends Model
      */
     public function getDisplayPickupAttribute(): string
     {
+        if (trim((string) $this->pickup_formatted_address) !== '') {
+            return trim((string) $this->pickup_formatted_address);
+        }
+
         return JobOrderAddressFormatter::displayFromStructured(
             $this->pickup_street,
             $this->pickup_barangay,
@@ -139,6 +157,10 @@ class JobOrder extends Model
      */
     public function getDisplayDropoffAttribute(): string
     {
+        if (trim((string) $this->dropoff_formatted_address) !== '') {
+            return trim((string) $this->dropoff_formatted_address);
+        }
+
         return JobOrderAddressFormatter::displayFromStructured(
             $this->dropoff_street,
             $this->dropoff_barangay,
@@ -154,6 +176,12 @@ class JobOrder extends Model
         'load_volume_m3' => 'decimal:3',
         'scheduled_start' => 'datetime',
         'scheduled_end' => 'datetime',
+        'pickup_latitude' => 'float',
+        'pickup_longitude' => 'float',
+        'dropoff_latitude' => 'float',
+        'dropoff_longitude' => 'float',
+        'pickup_geocode_attempted_at' => 'datetime',
+        'dropoff_geocode_attempted_at' => 'datetime',
     ];
 
     /** @deprecated Use company_id */

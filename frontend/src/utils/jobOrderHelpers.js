@@ -29,6 +29,9 @@ export function buildDisplayName(order) {
  * @param {object} order  job order record
  */
 export function buildDisplayAddress(prefix, order) {
+  const standardized = order?.[`${prefix}_formatted_address`]
+  if (standardized) return standardized
+
   const street = order?.[`${prefix}_street`]
   const barangay = order?.[`${prefix}_barangay`]
   const city = order?.[`${prefix}_city`]

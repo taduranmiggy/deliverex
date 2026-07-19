@@ -17,6 +17,7 @@ use App\Support\DeliveryStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -91,6 +92,26 @@ class AuditTrailTest extends TestCase
 
     public function test_scenario_b_dispatcher_job_order_create_is_recorded(): void
     {
+        Http::fake([
+            'https://psgc.cloud/api/v2/regions' => Http::response([
+                ['code' => '1300000000', 'name' => 'National Capital Region'],
+            ]),
+            'https://psgc.cloud/api/v2/regions/1300000000/provinces' => Http::response([]),
+            'https://psgc.cloud/api/v2/regions/1300000000/cities-municipalities' => Http::response([
+                ['code' => '1374040000', 'name' => 'Quezon City'],
+                ['code' => '1374030000', 'name' => 'City of Pasig'],
+            ]),
+            'https://psgc.cloud/api/v2/regions/1300000000/cities-municipalities/1374040000/barangays' => Http::response([
+                ['code' => '1374040001', 'name' => 'Bagumbayan'],
+            ]),
+            'https://psgc.cloud/api/v2/regions/1300000000/cities-municipalities/1374030000/barangays' => Http::response([
+                ['code' => '1374030001', 'name' => 'San Antonio'],
+            ]),
+            'https://nominatim.openstreetmap.org/*' => Http::response([
+                ['lat' => '14.5995', 'lon' => '120.9842'],
+            ]),
+        ]);
+
         $company = Company::create([
             'company_name' => 'Audit Test Co',
             'company_email' => 'company@audit.test',
@@ -100,14 +121,14 @@ class AuditTrailTest extends TestCase
 
         $response = $this->apiAs($this->dispatcher)->postJson('/api/dispatch/job-orders', [
             'company_id' => $company->id,
+            'pickup_region_code' => '1300000000',
+            'pickup_city_code' => '1374040000',
+            'pickup_barangay_code' => '1374040001',
             'pickup_street' => 'Quarry Gate 1',
-            'pickup_barangay' => 'Industrial Park',
-            'pickup_city' => 'Quezon City',
-            'pickup_province' => 'Metro Manila',
+            'dropoff_region_code' => '1300000000',
+            'dropoff_city_code' => '1374030000',
+            'dropoff_barangay_code' => '1374030001',
             'dropoff_street' => 'Construction Site Alpha',
-            'dropoff_barangay' => 'San Antonio',
-            'dropoff_city' => 'Pasig City',
-            'dropoff_province' => 'Metro Manila',
             'load_volume_m3' => 12,
             'custom_material_type_name' => 'Gravel',
             'custom_specification_name' => '3/4 inch',

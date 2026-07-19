@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Driver;
+use App\Services\Address\StandardizedAddressService;
 use App\Services\Driver\DriverAvailabilityService;
 use App\Support\AuditChangeTracker;
 use App\Support\AuditLogger;
@@ -13,6 +14,7 @@ class DriverController extends Controller
 {
     public function __construct(
         private DriverAvailabilityService $driverAvailability,
+        private StandardizedAddressService $addresses,
     ) {
     }
     public function index(Request $request)
@@ -31,7 +33,14 @@ class DriverController extends Controller
             'license_expiry' => 'nullable|date',
             'availability' => 'nullable|in:available,busy,offline',
             'status' => 'nullable|in:available,assigned,in_use,inactive',
+            'address_region_code' => 'required|string|size:10',
+            'address_province_code' => 'nullable|string|size:10',
+            'address_city_code' => 'required|string|size:10',
+            'address_barangay_code' => 'required|string|size:10',
+            'address_street' => 'required|string|max:255',
         ]);
+
+        $data = array_merge($data, $this->addresses->normalizeEntityAddress($data));
 
         $data['full_name'] = trim($data['full_name']);
         if (($data['license_no'] ?? null) !== null) {
@@ -60,7 +69,20 @@ class DriverController extends Controller
             'license_expiry' => 'nullable|date',
             'availability' => 'nullable|in:available,busy,offline',
             'status' => 'nullable|in:available,assigned,in_use,inactive',
+            'address_region_code' => 'sometimes|nullable|string|size:10',
+            'address_province_code' => 'sometimes|nullable|string|size:10',
+            'address_city_code' => 'sometimes|nullable|string|size:10',
+            'address_barangay_code' => 'sometimes|nullable|string|size:10',
+            'address_street' => 'sometimes|nullable|string|max:255',
         ]);
+
+        $addressFields = ['address_region_code', 'address_province_code', 'address_city_code', 'address_barangay_code', 'address_street'];
+        if (count(array_intersect(array_keys($data), $addressFields)) > 0) {
+            $data = array_merge($data, $this->addresses->normalizeEntityAddress(array_merge(
+                $driver->only($addressFields),
+                $data,
+            )));
+        }
 
         if (array_key_exists('full_name', $data)) {
             $data['full_name'] = trim($data['full_name']);

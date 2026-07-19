@@ -11,6 +11,7 @@ use App\Support\CompanyAddressHelper;
 use App\Support\AuditLogger;
 use App\Support\DriverAccount;
 use App\Services\Auth\SessionService;
+use App\Services\Address\StandardizedAddressService;
 use App\Services\Company\CompanyService;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
@@ -26,6 +27,7 @@ class AuthController extends Controller
     public function __construct(
         private readonly SessionService $sessions,
         private readonly CompanyService $companies,
+        private readonly StandardizedAddressService $addresses,
     ) {}
 
     /**
@@ -358,17 +360,28 @@ class AuthController extends Controller
                 PasswordRule::min(8)->mixedCase()->numbers()->symbols(),
             ],
             'company_address' => 'nullable|array',
+            'company_address.region_code' => 'required_with:company_address|nullable|string|size:10',
+            'company_address.province_code' => 'nullable|string|size:10',
+            'company_address.city_code' => 'required_with:company_address|nullable|string|size:10',
+            'company_address.barangay_code' => 'required_with:company_address|nullable|string|size:10',
             'company_address.street' => 'required_with:company_address|nullable|string|max:255',
-            'company_address.barangay' => 'required_with:company_address|nullable|string|max:100',
-            'company_address.city' => 'required_with:company_address|nullable|string|max:100',
-            'company_address.province' => 'required_with:company_address|nullable|string|max:100',
         ]);
 
         $companyAddress = $request->input('company_address');
+        $normalizedCompanyAddress = null;
+        if (is_array($companyAddress)) {
+            $normalizedCompanyAddress = $this->addresses->normalizeEntityAddress([
+                'address_region_code' => $companyAddress['region_code'] ?? null,
+                'address_province_code' => $companyAddress['province_code'] ?? null,
+                'address_city_code' => $companyAddress['city_code'] ?? null,
+                'address_barangay_code' => $companyAddress['barangay_code'] ?? null,
+                'address_street' => $companyAddress['street'] ?? null,
+            ]);
+        }
 
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
-            function (User $user, string $password) use ($companyAddress) {
+            function (User $user, string $password) use ($normalizedCompanyAddress) {
                 $user->forceFill([
                     'password' => $password,
                     'must_change_password' => false,
@@ -377,12 +390,10 @@ class AuthController extends Controller
                     'invitation_accepted_at' => now(),
                 ])->save();
 
-                if (is_array($companyAddress)) {
+                if (is_array($normalizedCompanyAddress)) {
                     $user->load(['role', 'companyUser.company']);
                     if ($user->role?->name === 'customer' && $user->companyUser?->company) {
-                        $user->companyUser->company->update(
-                            CompanyAddressHelper::normalizeStructured($companyAddress),
-                        );
+                        $user->companyUser->company->update($normalizedCompanyAddress);
                     }
                 }
             }

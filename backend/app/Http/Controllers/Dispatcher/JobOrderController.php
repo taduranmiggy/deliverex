@@ -13,9 +13,8 @@ use App\Services\Fleet\AssignmentResourceSyncService;
 use App\Models\JobOrder;
 use App\Models\MaterialSpecification;
 use App\Models\MaterialType;
-use App\Models\Quarry;
 use App\Models\User;
-use App\Models\Vehicle;
+use App\Services\Address\StandardizedAddressService;
 use App\Services\Delivery\JobOrderLocationService;
 use App\Services\MasterData\MaterialMasterDataService;
 use App\Support\AuditChangeTracker;
@@ -26,6 +25,7 @@ use App\Support\JobOrderAddressValidator;
 use App\Support\JobOrderScheduleValidator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class JobOrderController extends Controller
 {
@@ -35,6 +35,7 @@ class JobOrderController extends Controller
         private DriverAvailabilityService $driverAvailability,
         private AssignmentResourceSyncService $resourceSync,
         private JobOrderLocationService $locationService,
+        private StandardizedAddressService $addresses,
     ) {
     }
 
@@ -89,18 +90,26 @@ class JobOrderController extends Controller
             'contact_person'             => 'nullable|string|max:120',
             'customer_email'             => 'nullable|email|max:255',
             'customer_contact'           => 'nullable|string|max:50',
+            'pickup_region_code'         => 'required|string|size:10',
+            'pickup_province_code'       => 'nullable|string|size:10',
+            'pickup_city_code'           => 'required|string|size:10',
+            'pickup_barangay_code'       => 'required|string|size:10',
             'pickup_province'            => 'nullable|string|max:100',
             'pickup_city'                => 'nullable|string|max:100',
             'pickup_barangay'            => 'nullable|string|max:100',
-            'pickup_street'              => 'nullable|string|max:255',
+            'pickup_street'              => 'required|string|max:255',
             'pickup_landmark'            => 'nullable|string|max:255',
             'pickup_location'            => 'nullable|string',
-            'dropoff_province'           => 'required_without:dropoff_location|nullable|string|max:100',
-            'dropoff_city'               => 'required_without:dropoff_location|nullable|string|max:100',
+            'dropoff_region_code'        => 'required|string|size:10',
+            'dropoff_province_code'      => 'nullable|string|size:10',
+            'dropoff_city_code'          => 'required|string|size:10',
+            'dropoff_barangay_code'      => 'required|string|size:10',
+            'dropoff_province'           => 'nullable|string|max:100',
+            'dropoff_city'               => 'nullable|string|max:100',
             'dropoff_barangay'           => 'nullable|string|max:100',
-            'dropoff_street'             => 'required_without:dropoff_location|nullable|string|max:255',
+            'dropoff_street'             => 'required|string|max:255',
             'dropoff_landmark'           => 'nullable|string|max:255',
-            'dropoff_location'           => 'required_without:dropoff_province|nullable|string',
+            'dropoff_location'           => 'nullable|string',
             'quarry_id'                  => 'nullable|exists:quarries,id',
             'preferred_vehicle_type_id'  => 'nullable|exists:vehicle_types,id',
             'material_type_id'           => 'nullable|exists:material_types,id',
@@ -162,26 +171,18 @@ class JobOrderController extends Controller
             return response()->json(['message' => 'Selected company has no email on file.'], 422);
         }
 
-        // A job needs a source: either a quarry/supplier (possibly auto-filled from the
-        // client preference above) OR explicit pickup details.
-        if (empty($data['quarry_id']) && empty($data['pickup_location']) && empty($data['pickup_province'])) {
-            return response()->json(['message' => 'Provide a quarry/supplier or pickup source details.'], 422);
-        }
-
         // Resolve full name from client, custom name, or legacy parts
         $data = $this->resolveCustomerName($data, $company->company_name ?? '');
 
         // Resolve combined address strings from structured parts
         $data = $this->resolveAddresses($data);
 
-        JobOrderAddressValidator::validatePayload($data);
+        // Official PSGC labels replace client-supplied labels. Coordinates are
+        // always resolved and persisted by the server before the job is created.
+        $data = array_merge($data, $this->addresses->normalize($data, 'pickup'));
+        $data = array_merge($data, $this->addresses->normalize($data, 'dropoff'));
 
-        // For quarry-sourced jobs with no explicit pickup address, use the quarry
-        // name as the legacy pickup source so routes/reports still read sensibly.
-        if (empty($data['pickup_location']) && ! empty($data['quarry_id'])) {
-            $quarry = Quarry::query()->find($data['quarry_id']);
-            $data['pickup_location'] = trim((string) ($quarry?->address ?: $quarry?->quarry_name));
-        }
+        JobOrderAddressValidator::validatePayload($data);
 
         $data['created_by']         = $request->user()?->id;
         $data['customer_user_id']   = $this->companyService->resolveCustomerUserIdForCompany($company);
@@ -271,6 +272,10 @@ class JobOrderController extends Controller
             'customer_email'             => 'sometimes|email|max:255',
             'customer_contact'           => 'nullable|string|max:50',
             // structured pickup
+            'pickup_region_code'         => 'sometimes|nullable|string|size:10',
+            'pickup_province_code'       => 'sometimes|nullable|string|size:10',
+            'pickup_city_code'           => 'sometimes|nullable|string|size:10',
+            'pickup_barangay_code'       => 'sometimes|nullable|string|size:10',
             'pickup_province'            => 'sometimes|nullable|string|max:100',
             'pickup_city'                => 'sometimes|nullable|string|max:100',
             'pickup_barangay'            => 'nullable|string|max:100',
@@ -279,6 +284,10 @@ class JobOrderController extends Controller
             // legacy fallback
             'pickup_location'            => 'sometimes|nullable|string',
             // structured drop-off
+            'dropoff_region_code'        => 'sometimes|nullable|string|size:10',
+            'dropoff_province_code'      => 'sometimes|nullable|string|size:10',
+            'dropoff_city_code'          => 'sometimes|nullable|string|size:10',
+            'dropoff_barangay_code'      => 'sometimes|nullable|string|size:10',
             'dropoff_province'           => 'sometimes|nullable|string|max:100',
             'dropoff_city'               => 'sometimes|nullable|string|max:100',
             'dropoff_barangay'           => 'nullable|string|max:100',
@@ -333,15 +342,38 @@ class JobOrderController extends Controller
         }
 
         // Keep structured address fields in sync with legacy combined fields
-        $pickupFields = ['pickup_province', 'pickup_city', 'pickup_barangay', 'pickup_street', 'pickup_landmark', 'pickup_location'];
-        $dropoffFields = ['dropoff_province', 'dropoff_city', 'dropoff_barangay', 'dropoff_street', 'dropoff_landmark', 'dropoff_location'];
+        $pickupFields = ['pickup_region_code', 'pickup_province_code', 'pickup_city_code', 'pickup_barangay_code', 'pickup_province', 'pickup_city', 'pickup_barangay', 'pickup_street', 'pickup_landmark', 'pickup_location'];
+        $dropoffFields = ['dropoff_region_code', 'dropoff_province_code', 'dropoff_city_code', 'dropoff_barangay_code', 'dropoff_province', 'dropoff_city', 'dropoff_barangay', 'dropoff_street', 'dropoff_landmark', 'dropoff_location'];
         $addrFields = array_merge($pickupFields, $dropoffFields);
         $pickupChanged = count(array_intersect(array_keys($data), $pickupFields)) > 0
             || (array_key_exists('quarry_id', $data) && (int) ($data['quarry_id'] ?? 0) !== (int) ($jobOrder->quarry_id ?? 0));
         $dropoffChanged = count(array_intersect(array_keys($data), $dropoffFields)) > 0;
         if ($pickupChanged || $dropoffChanged) {
             $merged = array_merge($jobOrder->only($addrFields), $data);
-            $data = array_merge($data, $this->resolveAddresses($merged));
+
+            if ($pickupChanged) {
+                if (! empty($merged['pickup_region_code'])) {
+                    $data = array_merge($data, $this->addresses->normalize($merged, 'pickup'));
+                } elseif ($this->addressActuallyChanged($jobOrder, $data, $pickupFields)) {
+                    throw ValidationException::withMessages([
+                        'pickup_address' => ['Select the pickup address from the PSGC geographic directory.'],
+                    ]);
+                }
+            }
+
+            if ($dropoffChanged) {
+                if (! empty($merged['dropoff_region_code'])) {
+                    $data = array_merge($data, $this->addresses->normalize($merged, 'dropoff'));
+                } elseif ($this->addressActuallyChanged($jobOrder, $data, $dropoffFields)) {
+                    throw ValidationException::withMessages([
+                        'dropoff_address' => ['Select the destination address from the PSGC geographic directory.'],
+                    ]);
+                }
+            }
+
+            if (empty($merged['pickup_region_code']) || empty($merged['dropoff_region_code'])) {
+                $data = array_merge($data, $this->resolveAddresses(array_merge($merged, $data)));
+            }
             JobOrderAddressValidator::validatePayload(array_merge(
                 $jobOrder->only(array_merge($addrFields, ['quarry_id'])),
                 $data,
@@ -516,6 +548,19 @@ class JobOrderController extends Controller
         }
 
         return $data;
+    }
+
+    /** @param list<string> $fields */
+    private function addressActuallyChanged(JobOrder $jobOrder, array $data, array $fields): bool
+    {
+        foreach ($fields as $field) {
+            if (array_key_exists($field, $data)
+                && (string) ($data[$field] ?? '') !== (string) ($jobOrder->{$field} ?? '')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

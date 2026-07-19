@@ -2,15 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { fetchAccountActivationContext, resetPassword } from '../../api/auth'
 import PasswordFieldsForm, { allPasswordRulesPassed } from '../../components/auth/PasswordFieldsForm'
+import PsgcAddressSelector from '../../components/PsgcAddressSelector'
+import { emptyPsgcAddress, isCompletePsgcAddress } from '../../utils/psgcAddress'
 import { isStandalonePwa } from '../../utils/pwaUtils'
 import './LoginPage.css'
-
-const BLANK_ADDRESS = {
-  street: '',
-  barangay: '',
-  city: '',
-  province: '',
-}
 
 function AccountActivationPage() {
   const [searchParams] = useSearchParams()
@@ -25,7 +20,7 @@ function AccountActivationPage() {
 
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
-  const [companyAddress, setCompanyAddress] = useState(BLANK_ADDRESS)
+  const [companyAddress, setCompanyAddress] = useState(emptyPsgcAddress)
   const [context, setContext] = useState(null)
   const [loadingContext, setLoadingContext] = useState(true)
   const [error, setError] = useState('')
@@ -55,10 +50,6 @@ function AccountActivationPage() {
     return () => { cancelled = true }
   }, [email, token])
 
-  const setAddress = (key) => (e) => {
-    setCompanyAddress((prev) => ({ ...prev, [key]: e.target.value }))
-  }
-
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
@@ -77,8 +68,7 @@ function AccountActivationPage() {
     }
 
     if (needsCompanyAddress) {
-      const missing = ['street', 'barangay', 'city', 'province'].filter((k) => !companyAddress[k]?.trim())
-      if (missing.length) {
+      if (!isCompletePsgcAddress(companyAddress)) {
         setError('Complete company address is required before activating your account.')
         return
       }
@@ -95,9 +85,10 @@ function AccountActivationPage() {
       if (needsCompanyAddress) {
         payload.company_address = {
           street: companyAddress.street.trim(),
-          barangay: companyAddress.barangay.trim(),
-          city: companyAddress.city.trim(),
-          province: companyAddress.province.trim(),
+          region_code: companyAddress.region_code,
+          province_code: companyAddress.province_code || null,
+          city_code: companyAddress.city_code,
+          barangay_code: companyAddress.barangay_code,
         }
       }
 
@@ -180,23 +171,11 @@ function AccountActivationPage() {
         <form onSubmit={handleSubmit} className="auth-form-dx auth-activation-form" noValidate>
           {needsCompanyAddress ? (
             <div className="auth-form-section">
-              <p className="auth-form-section__title">Company address</p>
-              <label>
-                Street / building / site
-                <input required value={companyAddress.street} onChange={setAddress('street')} />
-              </label>
-              <label>
-                Barangay
-                <input required value={companyAddress.barangay} onChange={setAddress('barangay')} />
-              </label>
-              <label>
-                City / municipality
-                <input required value={companyAddress.city} onChange={setAddress('city')} />
-              </label>
-              <label>
-                Province
-                <input required value={companyAddress.province} onChange={setAddress('province')} />
-              </label>
+              <PsgcAddressSelector
+                title="Company address"
+                value={companyAddress}
+                onChange={setCompanyAddress}
+              />
             </div>
           ) : null}
 

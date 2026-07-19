@@ -19,16 +19,13 @@ import {
   validateJobSchedule,
 } from '../../utils/scheduleValidation'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
-import {
-  composeStructuredAddress,
-  parseFullAddressToStructured,
-  validateSimpleRouteStep,
-} from '../../utils/jobOrderAddressValidation'
 import { companyDropoffFields } from '../../utils/companyAddress'
 import { formatJobSchedule } from '../../utils/driverAssignment'
 import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
 import { FilterSelect } from '../../components/ui'
 import JobOrderRouteMap from '../../components/JobOrderRouteMap'
+import PsgcAddressSelector from '../../components/PsgcAddressSelector'
+import { fromPsgcAddress, isCompletePsgcAddress, toPsgcAddress } from '../../utils/psgcAddress'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,8 +34,10 @@ const BLANK = {
   contact_person: '', customer_email: '', customer_contact: '',
   quarry_id: '', preferred_vehicle_type_id: '',
   pickup_location: '', dropoff_location: '',
-  pickup_province: '', pickup_city: '', pickup_barangay: '', pickup_street: '', pickup_landmark: '',
-  dropoff_province: '', dropoff_city: '', dropoff_barangay: '', dropoff_street: '', dropoff_landmark: '',
+  pickup_region_code: '', pickup_region: '', pickup_province_code: '', pickup_province: '',
+  pickup_city_code: '', pickup_city: '', pickup_barangay_code: '', pickup_barangay: '', pickup_street: '', pickup_landmark: '',
+  dropoff_region_code: '', dropoff_region: '', dropoff_province_code: '', dropoff_province: '',
+  dropoff_city_code: '', dropoff_city: '', dropoff_barangay_code: '', dropoff_barangay: '', dropoff_street: '', dropoff_landmark: '',
   material_type_id: '', material_specification_id: '', load_volume_m3: '',
   scheduled_start: '', scheduled_end: '',
   priority: 'normal', special_handling_instructions: '', notes: '',
@@ -299,7 +298,7 @@ function ScheduleReviewRows({ start, end }) {
 // ─── Job Order Wizard Form ─────────────────────────────────────────────────────
 
 const JobOrderForm = forwardRef(function JobOrderForm(
-  { initial, options, pickupLocationOptions, clientsLoading, onSaved, onCancel, onRefreshOptions },
+  { initial, options, clientsLoading, onSaved, onCancel, onRefreshOptions },
   ref,
 ) {
   const isEdit       = Boolean(initial?.id)
@@ -308,21 +307,6 @@ const JobOrderForm = forwardRef(function JobOrderForm(
   const vehicleTypes = options.vehicle_types || []
   const quarries     = options.quarries        || []
   const toast        = useToast()
-  const pickupLocationItems = useMemo(() => {
-    const map = new Map()
-    ;(pickupLocationOptions || []).forEach((item, idx) => {
-      const name = (item?.name || '').trim()
-      if (!name) return
-      if (!map.has(name.toLowerCase())) map.set(name.toLowerCase(), { id: item.id || `opt-${idx}`, name })
-    })
-    quarries.forEach((q) => {
-      const name = (q.quarry_name || '').trim()
-      if (!name) return
-      if (!map.has(name.toLowerCase())) map.set(name.toLowerCase(), { id: `quarry-${q.id}`, name })
-    })
-    return Array.from(map.values())
-  }, [pickupLocationOptions, quarries])
-
   const findClientById       = (id) => clients.find((c) => String(c.id) === String(id))
   const findDefaultPreference = (clientId) => (options.client_preferences || []).find(
     (p) => String(p.client_id) === String(clientId) && p.is_default,
@@ -364,13 +348,23 @@ const JobOrderForm = forwardRef(function JobOrderForm(
       preferred_vehicle_type_id: initial.preferred_vehicle_type_id ?? '',
       pickup_location: pickupFromInitial || quarryPickupFallback,
       dropoff_location: initial.dropoff_location ?? buildDisplayAddress('dropoff', initial) ?? '',
+      pickup_region_code: initial.pickup_region_code ?? '',
+      pickup_region: initial.pickup_region ?? '',
+      pickup_province_code: initial.pickup_province_code ?? '',
       pickup_province: initial.pickup_province ?? '',
+      pickup_city_code: initial.pickup_city_code ?? '',
       pickup_city: initial.pickup_city ?? '',
+      pickup_barangay_code: initial.pickup_barangay_code ?? '',
       pickup_barangay: initial.pickup_barangay ?? '',
       pickup_street: initial.pickup_street ?? '',
       pickup_landmark: initial.pickup_landmark ?? '',
+      dropoff_region_code: initial.dropoff_region_code ?? '',
+      dropoff_region: initial.dropoff_region ?? '',
+      dropoff_province_code: initial.dropoff_province_code ?? '',
       dropoff_province: initial.dropoff_province ?? '',
+      dropoff_city_code: initial.dropoff_city_code ?? '',
       dropoff_city: initial.dropoff_city ?? '',
+      dropoff_barangay_code: initial.dropoff_barangay_code ?? '',
       dropoff_barangay: initial.dropoff_barangay ?? '',
       dropoff_street: initial.dropoff_street ?? '',
       dropoff_landmark: initial.dropoff_landmark ?? '',
@@ -406,14 +400,10 @@ const JobOrderForm = forwardRef(function JobOrderForm(
   const [materialTypeError, setMaterialTypeError]           = useState('')
   const [specError, setSpecError]                           = useState('')
   const [autoFilled, setAutoFilled]                         = useState({})
-  const [pickupLocationSelection, setPickupLocationSelection] = useState(
-    form.pickup_location ? { type: 'custom', label: form.pickup_location } : null,
-  )
   const [showRouteDetails, setShowRouteDetails] = useState(
     () => Boolean(String(form.route_additional_details ?? '').trim()),
   )
 
-  const pickupFromQuarry = Boolean(form.quarry_id)
   const scheduleMin = minDatetimeLocalValue()
   const scheduleEndMin = minEndDatetimeLocalValue(form.scheduled_start)
 
@@ -443,14 +433,6 @@ const JobOrderForm = forwardRef(function JobOrderForm(
     const selected = materialTypes.find((m) => String(m.id) === String(form.material_type_id))
     return selected?.specifications || []
   }, [materialTypes, form.material_type_id])
-
-  useEffect(() => {
-    if (form.pickup_location) {
-      setPickupLocationSelection({ type: 'custom', label: form.pickup_location })
-    } else {
-      setPickupLocationSelection(null)
-    }
-  }, [form.pickup_location])
 
   useEffect(() => {
     if (!clients.length) return
@@ -535,10 +517,12 @@ const JobOrderForm = forwardRef(function JobOrderForm(
       userEditedRef.current.delete('dropoff_barangay')
       userEditedRef.current.delete('dropoff_city')
       userEditedRef.current.delete('dropoff_province')
+      userEditedRef.current.delete('dropoff_region_code')
+      userEditedRef.current.delete('dropoff_province_code')
+      userEditedRef.current.delete('dropoff_city_code')
+      userEditedRef.current.delete('dropoff_barangay_code')
       userEditedRef.current.delete('dropoff_location')
       const prefQuarryId = pref?.quarry_id ? String(pref.quarry_id) : ''
-      const prefQuarry = prefQuarryId ? quarries.find((q) => String(q.id) === prefQuarryId) : null
-      const canAutoFillPickup = Boolean(prefQuarry) && !userEditedRef.current.has('pickup_location')
       const dropoffAutofill = companyDropoffFields(client)
       const canAutoFillDropoff = Boolean(dropoffAutofill)
       setForm((f) => {
@@ -548,27 +532,19 @@ const JobOrderForm = forwardRef(function JobOrderForm(
           contact_person:   client?.contact_person || '',
           customer_email:   client?.company_email || client?.email || '',
           customer_contact: client?.contact_number || client?.phone || '',
+          quarry_id: prefQuarryId || f.quarry_id,
           preferred_vehicle_type_id: pref?.vehicle_type_id ? String(pref.vehicle_type_id) : f.preferred_vehicle_type_id,
-        }
-        if (canAutoFillPickup) {
-          next.quarry_id = prefQuarryId
-          next.pickup_location = prefQuarry.quarry_name
-          next.pickup_street = prefQuarry.quarry_name
         }
         if (canAutoFillDropoff) {
           Object.assign(next, dropoffAutofill)
         }
         return next
       })
-      if (canAutoFillPickup) {
-        setPickupLocationSelection({ type: 'existing', id: `quarry-${prefQuarryId}`, label: prefQuarry.quarry_name })
-      }
       if (client) {
         filled.contact_person   = Boolean(client.contact_person)
         filled.customer_email   = Boolean(client.email)
         filled.customer_contact = Boolean(client.phone)
       }
-      if (canAutoFillPickup) filled.pickup_location = true
       if (canAutoFillDropoff) {
         filled.dropoff_location = true
       }
@@ -580,25 +556,7 @@ const JobOrderForm = forwardRef(function JobOrderForm(
       setAutoFilled({})
     }
     setFE((prev) => { if (!prev.client) return prev; const n = { ...prev }; delete n.client; return n })
-  }, [findClientById, findDefaultPreference, quarries])
-
-  const handlePickupLocationChange = useCallback((selection) => {
-    setPickupLocationSelection(selection)
-    userEditedRef.current.add('pickup_location')
-    const quarryId =
-      selection?.type === 'existing' && String(selection.id).startsWith('quarry-')
-        ? String(selection.id).replace(/^quarry-/, '')
-        : ''
-    setForm((f) => ({
-      ...f,
-      pickup_location: selection?.label || '',
-      pickup_street: selection?.label || '',
-      quarry_id: quarryId,
-    }))
-    if (fieldErrors.pickup_location) {
-      setFE((prev) => { const n = { ...prev }; delete n.pickup_location; return n })
-    }
-  }, [fieldErrors.pickup_location])
+  }, [findClientById, findDefaultPreference])
 
   // ── Field change ───────────────────────────────────────────────────────────
   const set = (k) => (e) => {
@@ -635,7 +593,12 @@ const JobOrderForm = forwardRef(function JobOrderForm(
         errs.load_volume_m3 = 'Load volume is required.'
     }
     if (step === 3) {
-      Object.assign(errs, validateSimpleRouteStep(form, { pickupFromQuarry }))
+      if (!isCompletePsgcAddress(toPsgcAddress(form, 'pickup'))) {
+        errs.pickup_address = 'Complete the pickup address using the PSGC selections.'
+      }
+      if (!isCompletePsgcAddress(toPsgcAddress(form, 'dropoff'))) {
+        errs.dropoff_address = 'Complete the destination address using the PSGC selections.'
+      }
     }
     if (step === 4) {
       const schedErrs = validateJobSchedule(
@@ -668,12 +631,6 @@ const JobOrderForm = forwardRef(function JobOrderForm(
 
   // ── Final payload + submit ─────────────────────────────────────────────────
   const buildPayload = () => {
-    const pickupLine = String(form.pickup_location ?? '').trim()
-      || composeStructuredAddress('pickup', form)
-    const destinationLine = String(form.dropoff_location ?? '').trim()
-      || composeStructuredAddress('dropoff', form)
-    const pickupParsed = pickupFromQuarry ? null : parseFullAddressToStructured(pickupLine)
-    const dropParsed = parseFullAddressToStructured(destinationLine)
     const routeDetails = String(form.route_additional_details ?? '').trim()
 
     return {
@@ -684,17 +641,11 @@ const JobOrderForm = forwardRef(function JobOrderForm(
     customer_contact:         form.customer_contact || null,
     quarry_id:                form.quarry_id ? Number(form.quarry_id) : null,
     preferred_vehicle_type_id: form.preferred_vehicle_type_id ? Number(form.preferred_vehicle_type_id) : null,
-    pickup_location:          pickupLine || null,
-    dropoff_location:         destinationLine || null,
-    pickup_province:          pickupFromQuarry ? null : (pickupParsed?.province || null),
-    pickup_city:              pickupFromQuarry ? null : (pickupParsed?.city || null),
-    pickup_barangay:          pickupFromQuarry ? null : (pickupParsed?.barangay || null),
-    pickup_street:            pickupFromQuarry ? (pickupLine || null) : (pickupParsed?.street || null),
+    pickup_location:          null,
+    dropoff_location:         null,
+    ...fromPsgcAddress(toPsgcAddress(form, 'pickup'), 'pickup'),
     pickup_landmark:          null,
-    dropoff_province:         dropParsed.province || null,
-    dropoff_city:             dropParsed.city || null,
-    dropoff_barangay:         dropParsed.barangay || null,
-    dropoff_street:           dropParsed.street || null,
+    ...fromPsgcAddress(toPsgcAddress(form, 'dropoff'), 'dropoff'),
     dropoff_landmark:         null,
     material_type_id:         form.material_type_id ? Number(form.material_type_id) : null,
     material_specification_id: form.material_specification_id ? Number(form.material_specification_id) : null,
@@ -910,33 +861,42 @@ const JobOrderForm = forwardRef(function JobOrderForm(
           <>
             <p className="dx-wizard-step-title">Route</p>
             <p className="dx-wizard-step-subtitle">
-              Enter pickup and destination addresses. Use the full address in each field.
+              Select official Philippine administrative divisions. Only street, building, or house details are typed manually.
             </p>
 
             <div className="dx-wiz-grid" style={{ marginBottom: 16 }}>
-              <FieldWrap label={<>Pickup Location {autoFilled.pickup_location && <AutoFilledTag />}</>} required error={fieldErrors.pickup_location} full>
-                <CreatableCombobox
-                  items={pickupLocationItems}
-                  getItemId={(item) => item.id}
-                  getItemLabel={(item) => item.name}
-                  value={pickupLocationSelection}
-                  onChange={handlePickupLocationChange}
-                  error={fieldErrors.pickup_location || null}
-                  placeholder="Search quarry, supplier, or enter pickup address…"
-                  customOptionLabel={(q) => `Use custom pickup: ${q}`}
-                  emptyMessage="No saved pickup locations."
-                />
+              <FieldWrap label="Quarry / Supplier (Optional)" full>
+                <select value={form.quarry_id} onChange={set('quarry_id')}>
+                  <option value="">— No linked supplier —</option>
+                  {quarries.map((quarry) => (
+                    <option key={quarry.id} value={quarry.id}>{quarry.quarry_name}</option>
+                  ))}
+                </select>
               </FieldWrap>
 
-              <FieldWrap label={<>Destination {autoFilled.dropoff_location && <AutoFilledTag />}</>} required error={fieldErrors.dropoff_location} full>
-                <WizTextarea
-                  value={form.dropoff_location}
-                  onChange={set('dropoff_location')}
-                  placeholder="e.g. #43 Ninang Lydia St., B.F. Homes Phase 1, Caloocan City"
-                  error={fieldErrors.dropoff_location}
-                  rows={2}
-                />
-              </FieldWrap>
+              <PsgcAddressSelector
+                title="Pickup address"
+                value={toPsgcAddress(form, 'pickup')}
+                onChange={(address) => {
+                  userEditedRef.current.add('pickup_address')
+                  setForm((current) => ({ ...current, pickup_location: '', ...fromPsgcAddress(address, 'pickup') }))
+                  setFE((current) => ({ ...current, pickup_address: undefined }))
+                }}
+                legacyAddress={isEdit ? form.pickup_location : ''}
+              />
+              {fieldErrors.pickup_address && <p className="notice error" style={{ gridColumn: '1/-1', margin: 0 }}>{fieldErrors.pickup_address}</p>}
+
+              <PsgcAddressSelector
+                title="Destination address"
+                value={toPsgcAddress(form, 'dropoff')}
+                onChange={(address) => {
+                  userEditedRef.current.add('dropoff_address')
+                  setForm((current) => ({ ...current, dropoff_location: '', ...fromPsgcAddress(address, 'dropoff') }))
+                  setFE((current) => ({ ...current, dropoff_address: undefined }))
+                }}
+                legacyAddress={isEdit ? form.dropoff_location : ''}
+              />
+              {fieldErrors.dropoff_address && <p className="notice error" style={{ gridColumn: '1/-1', margin: 0 }}>{fieldErrors.dropoff_address}</p>}
             </div>
 
             {!showRouteDetails ? (
@@ -1261,7 +1221,6 @@ function CreateJobOrderPage() {
           key={isEditing ? `edit-${formMode.order.id}` : 'create'}
           initial={isEditing ? formMode.order : null}
           options={masterData}
-          pickupLocationOptions={masterData.pickup_locations || []}
           clientsLoading={clientsLoading}
           onRefreshOptions={refreshOptions}
           onSaved={handleSaved}
