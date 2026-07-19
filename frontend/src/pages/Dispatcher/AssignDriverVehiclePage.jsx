@@ -9,7 +9,6 @@ import { formatJobStatus } from '../../utils/statusLabels'
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { formatJobSchedule } from '../../utils/driverAssignment'
 import { PaginationBar } from '../../components/ui'
-import JobOrderRouteMap from '../../components/JobOrderRouteMap'
 import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-react'
 
 // ─── Priority helpers ──────────────────────────────────────────────────────────
@@ -534,7 +533,7 @@ function AssignDriverVehiclePage() {
         </div>
 
         {/* ── Column 2: Recommended ── */}
-        <div className="dx-dispatch-grid__col dx-dispatch-center">
+        <div className="dx-dispatch-grid__col">
           {!selected ? (
             <div className="dx-dispatch-grid__scroll">
               <div style={{ background: '#fff', border: '1px dashed var(--stroke)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: 'var(--muted)' }}>
@@ -543,9 +542,8 @@ function AssignDriverVehiclePage() {
               </div>
             </div>
           ) : (
-            <>
-              <div className="dx-dispatch-center__hero dx-dispatch-grid__scroll">
-                <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '12px 16px', marginBottom: 12 }}>
+            <div className="dx-dispatch-grid__scroll">
+              <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '12px 16px', marginBottom: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                     <div>
                       <p style={{ margin: '0 0 2px', fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600 }}>
@@ -599,12 +597,7 @@ function AssignDriverVehiclePage() {
                     </a>
                   </div>
                 )}
-              </div>
-
-              <div className="dx-dispatch-center__map">
-                <JobOrderRouteMap key={selected.id} jobOrderId={selected.id} variant="dispatch" readOnly />
-              </div>
-            </>
+            </div>
           )}
         </div>
 
