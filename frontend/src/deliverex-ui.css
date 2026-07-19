@@ -6151,11 +6151,36 @@
 
 .dx-job-route-map--dispatch {
   margin-top: 0;
-  margin-bottom: 12px;
+  margin-bottom: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dx-dispatch-center__map .dx-job-route-map__layout {
+  flex: 1;
+  min-height: 0;
+}
+
+.dx-job-route-map--dispatch .dx-job-route-map__map-col {
+  flex: 1;
+  min-height: 0;
 }
 
 .dx-job-route-map--dispatch .dx-job-route-map__stage {
-  height: clamp(180px, 28vh, 260px);
+  position: relative;
+  flex: 1;
+  min-height: 200px;
+  height: auto;
+}
+
+.dx-job-route-map--dispatch .dx-job-route-map__stage .leaflet-container {
+  position: absolute;
+  inset: 0;
+  height: 100% !important;
+  width: 100% !important;
+  border-radius: 14px;
 }
 
 .dx-job-route-map__map-footer {

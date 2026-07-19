@@ -25,28 +25,28 @@ class JobOrderLocationService
         $geocodedPickup = false;
 
         if (! GpsCoordinateValidator::isUsable($jobOrder->pickup_latitude, $jobOrder->pickup_longitude)) {
-            $address = $this->resolvePickupAddress($jobOrder);
             $pickupCoords = null;
-            if ($address !== '') {
+            $pickupCandidates = $this->pickupGeocodeCandidates($jobOrder);
+
+            if ($pickupCandidates !== []) {
                 LocationPipelineLogger::log('geocode_pickup_request', [
                     'job_order_id' => $jobOrder->id,
-                    'address' => $address,
+                    'candidates' => $pickupCandidates,
                 ]);
-                $pickupCoords = $this->geocoder->geocode($address);
+                $pickupCoords = $this->geocoder->geocodeFirst($pickupCandidates);
                 if ($pickupCoords) {
                     $updates['pickup_latitude'] = $pickupCoords['lat'];
                     $updates['pickup_longitude'] = $pickupCoords['lng'];
                     $geocodedPickup = true;
                     LocationPipelineLogger::log('geocode_pickup_result', [
                         'job_order_id' => $jobOrder->id,
-                        'address' => $address,
                         'lat' => $pickupCoords['lat'],
                         'lng' => $pickupCoords['lng'],
                     ]);
                 } else {
                     Log::warning('Pickup geocoding failed', [
                         'job_order_id' => $jobOrder->id,
-                        'address' => $address,
+                        'candidates' => $pickupCandidates,
                     ]);
                 }
             }
@@ -65,27 +65,27 @@ class JobOrderLocationService
                 usleep(1_100_000);
             }
 
-            $address = $this->resolveDropoffAddress($jobOrder);
             $dropoffCoords = null;
-            if ($address !== '') {
+            $dropoffCandidates = $this->dropoffGeocodeCandidates($jobOrder);
+
+            if ($dropoffCandidates !== []) {
                 LocationPipelineLogger::log('geocode_destination_request', [
                     'job_order_id' => $jobOrder->id,
-                    'address' => $address,
+                    'candidates' => $dropoffCandidates,
                 ]);
-                $dropoffCoords = $this->geocoder->geocode($address);
+                $dropoffCoords = $this->geocoder->geocodeFirst($dropoffCandidates);
                 if ($dropoffCoords) {
                     $updates['dropoff_latitude'] = $dropoffCoords['lat'];
                     $updates['dropoff_longitude'] = $dropoffCoords['lng'];
                     LocationPipelineLogger::log('geocode_destination_result', [
                         'job_order_id' => $jobOrder->id,
-                        'address' => $address,
                         'lat' => $dropoffCoords['lat'],
                         'lng' => $dropoffCoords['lng'],
                     ]);
                 } else {
                     Log::warning('Destination geocoding failed', [
                         'job_order_id' => $jobOrder->id,
-                        'address' => $address,
+                        'candidates' => $dropoffCandidates,
                     ]);
                 }
             }
@@ -132,6 +132,7 @@ class JobOrderLocationService
         $this->warnIfDuplicateLocations($jobOrder->id, $pickup, $destination);
 
         $route = $this->routeBetween($pickup, $destination);
+        $geocodeWarnings = $this->buildGeocodeWarnings($pickupAddress, $destinationAddress, $pickup, $destination);
 
         LocationPipelineLogger::log('map_payload', [
             'job_order_id' => $jobOrder->id,
@@ -142,6 +143,7 @@ class JobOrderLocationService
             'route_source' => $route['source'] ?? null,
             'distance_label' => $route['distance_label'] ?? null,
             'duration_label' => $route['duration_label'] ?? null,
+            'geocode_warnings' => $geocodeWarnings,
         ]);
 
         return [
@@ -154,8 +156,139 @@ class JobOrderLocationService
                 'destination_resolved' => isset($destination['lat'], $destination['lng']),
                 'pickup_address' => $pickupAddress,
                 'destination_address' => $destinationAddress,
+                'warnings' => $geocodeWarnings,
             ],
         ];
+    }
+
+    /** @return list<string> */
+    private function pickupGeocodeCandidates(JobOrder $jobOrder): array
+    {
+        $candidates = [];
+
+        if ($jobOrder->quarry) {
+            $quarryAddress = trim((string) ($jobOrder->quarry->address ?? ''));
+            $quarryName = trim((string) ($jobOrder->quarry->quarry_name ?? ''));
+            $display = trim($jobOrder->display_pickup);
+            $legacy = trim((string) ($jobOrder->pickup_location ?? ''));
+
+            if ($quarryAddress !== ''
+                && ($display === '' || strcasecmp($display, $quarryName) === 0 || strcasecmp($legacy, $quarryName) === 0)) {
+                $candidates[] = $this->appendLandmark($quarryAddress, $jobOrder->pickup_landmark);
+            }
+        }
+
+        $display = trim($jobOrder->display_pickup);
+        if ($display !== '') {
+            $candidates[] = $this->appendLandmark($display, $jobOrder->pickup_landmark);
+        }
+
+        $structured = JobOrderAddressFormatter::formatParts([
+            $jobOrder->pickup_street,
+            $jobOrder->pickup_barangay,
+            $jobOrder->pickup_city,
+            $jobOrder->pickup_province,
+        ]);
+        if ($structured !== '') {
+            $candidates[] = $this->appendLandmark($structured, $jobOrder->pickup_landmark);
+        }
+
+        $legacy = trim((string) ($jobOrder->pickup_location ?? ''));
+        if ($legacy !== '') {
+            $candidates[] = $this->appendLandmark($legacy, $jobOrder->pickup_landmark);
+        }
+
+        if ($jobOrder->quarry) {
+            $quarryName = trim((string) ($jobOrder->quarry->quarry_name ?? ''));
+            if ($quarryName !== '') {
+                $candidates[] = $this->appendLandmark($quarryName, $jobOrder->pickup_landmark);
+            }
+        }
+
+        return $this->uniqueNonEmpty($candidates);
+    }
+
+    /** @return list<string> */
+    private function dropoffGeocodeCandidates(JobOrder $jobOrder): array
+    {
+        $candidates = [];
+
+        $display = trim($jobOrder->display_dropoff);
+        if ($display !== '') {
+            $candidates[] = $this->appendLandmark($display, $jobOrder->dropoff_landmark);
+        }
+
+        $structured = JobOrderAddressFormatter::formatParts([
+            $jobOrder->dropoff_street,
+            $jobOrder->dropoff_barangay,
+            $jobOrder->dropoff_city,
+            $jobOrder->dropoff_province,
+        ]);
+        if ($structured !== '') {
+            $candidates[] = $this->appendLandmark($structured, $jobOrder->dropoff_landmark);
+        }
+
+        $legacy = trim((string) ($jobOrder->dropoff_location ?? ''));
+        if ($legacy !== '') {
+            $candidates[] = $this->appendLandmark($legacy, $jobOrder->dropoff_landmark);
+        }
+
+        return $this->uniqueNonEmpty($candidates);
+    }
+
+    /**
+     * @param  list<string>  $values
+     * @return list<string>
+     */
+    private function uniqueNonEmpty(array $values): array
+    {
+        $seen = [];
+        $unique = [];
+
+        foreach ($values as $value) {
+            $value = trim($value);
+            if ($value === '') {
+                continue;
+            }
+
+            $key = strtolower($value);
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $unique[] = $value;
+        }
+
+        return $unique;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $pickup
+     * @param  array<string, mixed>|null  $destination
+     * @return list<string>
+     */
+    private function buildGeocodeWarnings(
+        string $pickupAddress,
+        string $destinationAddress,
+        ?array $pickup,
+        ?array $destination,
+    ): array {
+        $warnings = [];
+
+        if (! isset($pickup['lat'], $pickup['lng'])) {
+            $warnings[] = $pickupAddress === ''
+                ? 'Pickup address is missing for this job order.'
+                : "Could not map pickup location: {$pickupAddress}";
+        }
+
+        if (! isset($destination['lat'], $destination['lng'])) {
+            $warnings[] = $destinationAddress === ''
+                ? 'Destination address is missing for this job order.'
+                : "Could not map destination location: {$destinationAddress}";
+        }
+
+        return $warnings;
     }
 
     private function resolvePickupAddress(JobOrder $jobOrder): string

@@ -37,6 +37,36 @@ class AddressGeocoder
         return $result;
     }
 
+    /**
+     * Try multiple address strings in order until one geocodes successfully.
+     *
+     * @param  list<string>  $queries
+     * @return array{lat: float, lng: float}|null
+     */
+    public function geocodeFirst(array $queries): ?array
+    {
+        $attempted = false;
+
+        foreach ($queries as $query) {
+            $query = trim($query);
+            if ($query === '') {
+                continue;
+            }
+
+            if ($attempted) {
+                usleep(1_100_000);
+            }
+
+            $attempted = true;
+            $result = $this->geocode($query);
+            if ($result) {
+                return $result;
+            }
+        }
+
+        return null;
+    }
+
     private function normalizeQuery(string $address): string
     {
         $query = trim($address);

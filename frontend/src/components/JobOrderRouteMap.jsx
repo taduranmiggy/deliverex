@@ -22,6 +22,8 @@ const ROUTE_SOURCE_LABELS = {
   straight_line: 'Direct estimate (routing unavailable)',
 }
 
+const RETRY_DELAYS_MS = [1500, 2500]
+
 function sleep(ms) {
   return new Promise((resolve) => { setTimeout(resolve, ms) })
 }
@@ -54,13 +56,30 @@ function FitBounds({ points, polyline }) {
   return null
 }
 
-function MapInvalidateSize() {
+function MapInvalidateSize({ layoutKey }) {
   const map = useMap()
 
   useEffect(() => {
-    const timer = setTimeout(() => map.invalidateSize(), 120)
-    return () => clearTimeout(timer)
-  }, [map])
+    const invalidate = () => {
+      window.requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false })
+      })
+    }
+
+    const timer = window.setTimeout(invalidate, 120)
+    const container = map.getContainer()?.parentElement
+    const observer = container && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(invalidate)
+      : null
+    observer?.observe(container)
+    window.addEventListener('resize', invalidate)
+
+    return () => {
+      window.clearTimeout(timer)
+      observer?.disconnect()
+      window.removeEventListener('resize', invalidate)
+    }
+  }, [map, layoutKey])
 
   return null
 }
@@ -80,7 +99,21 @@ function formatCoords(point) {
   return `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`
 }
 
-function RouteInfoPanel({ data, showCoordinates, showWarning, warningMessage }) {
+function buildWarningMessage(geocode, mapUnavailable, partialGeocode) {
+  const warnings = geocode?.warnings ?? []
+  if (warnings.length > 0) {
+    return warnings.join(' ')
+  }
+  if (partialGeocode) {
+    return 'One location could not be mapped. Please verify the pickup or destination address.'
+  }
+  if (mapUnavailable) {
+    return MAP_UNAVAILABLE_MSG
+  }
+  return MAP_UNAVAILABLE_MSG
+}
+
+function RouteInfoPanel({ data, showCoordinates, showWarning, warningMessage, warnings = [] }) {
   const pickup = data?.pickup
   const destination = data?.destination
   const route = data?.route
@@ -88,9 +121,17 @@ function RouteInfoPanel({ data, showCoordinates, showWarning, warningMessage }) 
   return (
     <aside className="dx-job-route-map__info" aria-label="Route details">
       {showWarning && (
-        <div className="dx-job-route-map__warn" role="status">
+        <div className="dx-job-route-map__warn" role="alert">
           <AlertTriangle size={15} aria-hidden />
-          {warningMessage || MAP_UNAVAILABLE_MSG}
+          <div>
+            {warnings.length > 0 ? (
+              warnings.map((message) => (
+                <p key={message} style={{ margin: 0 }}>{message}</p>
+              ))
+            ) : (
+              <p style={{ margin: 0 }}>{warningMessage || MAP_UNAVAILABLE_MSG}</p>
+            )}
+          </div>
         </div>
       )}
 
@@ -140,8 +181,8 @@ async function loadMapPayload(jobOrderId, attempt = 0) {
   const hasBothAddresses = Boolean(geocode.pickup_address && geocode.destination_address)
   const fullyResolved = geocode.pickup_resolved && geocode.destination_resolved
 
-  if (hasBothAddresses && !fullyResolved && attempt < 1) {
-    await sleep(1500)
+  if (hasBothAddresses && !fullyResolved && attempt < RETRY_DELAYS_MS.length) {
+    await sleep(RETRY_DELAYS_MS[attempt])
     return loadMapPayload(jobOrderId, attempt + 1)
   }
 
@@ -195,11 +236,14 @@ export default function JobOrderRouteMap({
     return []
   }, [data, points])
 
+  const geocodeWarnings = data?.geocode?.warnings ?? []
   const hasBothAddresses = Boolean(
     data?.geocode?.pickup_address && data?.geocode?.destination_address,
   )
   const mapUnavailable = !loading && !error && hasBothAddresses && points.length === 0
   const partialGeocode = !loading && !error && hasBothAddresses && points.length === 1
+  const showWarning = mapUnavailable || partialGeocode || geocodeWarnings.length > 0
+  const warningMessage = buildWarningMessage(data?.geocode, mapUnavailable, partialGeocode)
 
   if (loading) {
     return (
@@ -213,15 +257,20 @@ export default function JobOrderRouteMap({
   if (error) {
     return (
       <div className={`dx-job-route-map dx-job-route-map--${variant}`}>
-        <div className="dx-job-route-map dx-job-route-map--error">{error}</div>
-        {data && (
-          <RouteInfoPanel
-            data={data}
-            showCoordinates={showCoordinates}
-            showWarning
-            warningMessage={MAP_UNAVAILABLE_MSG}
-          />
-        )}
+        <div className="dx-job-route-map__layout">
+          <div className="dx-job-route-map__stage dx-job-route-map__stage--empty dx-job-route-map--error">
+            {error}
+          </div>
+          {data && (
+            <RouteInfoPanel
+              data={data}
+              showCoordinates={showCoordinates}
+              showWarning
+              warningMessage={warningMessage}
+              warnings={geocodeWarnings}
+            />
+          )}
+        </div>
       </div>
     )
   }
@@ -240,7 +289,7 @@ export default function JobOrderRouteMap({
           {mapUnavailable ? (
             <div className="dx-job-route-map__stage dx-job-route-map__stage--empty">
               <AlertTriangle size={18} aria-hidden />
-              <span>{MAP_UNAVAILABLE_MSG}</span>
+              <span>{warningMessage}</span>
             </div>
           ) : (
             <div className="dx-job-route-map__stage">
@@ -255,7 +304,7 @@ export default function JobOrderRouteMap({
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                <MapInvalidateSize />
+                <MapInvalidateSize layoutKey={`${variant}-${points.length}`} />
                 <FitBounds points={points} polyline={polyline} />
 
                 {polyline.length > 1 && (
@@ -304,10 +353,9 @@ export default function JobOrderRouteMap({
         <RouteInfoPanel
           data={data}
           showCoordinates={showCoordinates}
-          showWarning={mapUnavailable || partialGeocode}
-          warningMessage={partialGeocode
-            ? 'One location could not be mapped. Please verify the pickup or destination address.'
-            : MAP_UNAVAILABLE_MSG}
+          showWarning={showWarning}
+          warningMessage={warningMessage}
+          warnings={geocodeWarnings}
         />
       </div>
     </div>

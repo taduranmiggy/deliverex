@@ -15,6 +15,8 @@ import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-r
 // ─── Priority helpers ──────────────────────────────────────────────────────────
 const LICENSE_WARNING = "This driver cannot be assigned because the driver's license information is incomplete or expired."
 
+const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 }
+
 const PRIORITY_BADGE = {
   urgent: { label: 'URGENT', color: '#7f1d1d', bg: '#fee2e2', border: '#fca5a5' },
   high:   { label: 'HIGH',   color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
@@ -532,74 +534,78 @@ function AssignDriverVehiclePage() {
         </div>
 
         {/* ── Column 2: Recommended ── */}
-        <div className="dx-dispatch-grid__col">
-          <div className="dx-dispatch-grid__scroll">
+        <div className="dx-dispatch-grid__col dx-dispatch-center">
           {!selected ? (
-            <div style={{ background: '#fff', border: '1px dashed var(--stroke)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: 'var(--muted)' }}>
-              <Zap size={28} style={{ marginBottom: 10, opacity: 0.3 }} />
-              <p style={{ margin: 0, fontWeight: 600 }}>Select a job order to see the Best-Fit recommendation</p>
+            <div className="dx-dispatch-grid__scroll">
+              <div style={{ background: '#fff', border: '1px dashed var(--stroke)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: 'var(--muted)' }}>
+                <Zap size={28} style={{ marginBottom: 10, opacity: 0.3 }} />
+                <p style={{ margin: 0, fontWeight: 600 }}>Select a job order to see the Best-Fit recommendation</p>
+              </div>
             </div>
           ) : (
             <>
-              <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '12px 16px', marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                  <div>
-                    <p style={{ margin: '0 0 2px', fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600 }}>
-                      {formatJobPublicId(selected.id)} · {selected.client?.client_name || selected.custom_client_name || buildDisplayName(selected)}
-                    </p>
-                    <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--muted)' }}>
-                      {[selected.material_type, selected.specification_size].filter(Boolean).join(' · ')}
-                      {(selected.load_volume_m3 || selected.volume_m3) ? ` · ${selected.load_volume_m3 ?? selected.volume_m3} m³` : ''}
-                    </p>
+              <div className="dx-dispatch-center__hero dx-dispatch-grid__scroll">
+                <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '12px 16px', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <div>
+                      <p style={{ margin: '0 0 2px', fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600 }}>
+                        {formatJobPublicId(selected.id)} · {selected.client?.client_name || selected.custom_client_name || buildDisplayName(selected)}
+                      </p>
+                      <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--muted)' }}>
+                        {[selected.material_type, selected.specification_size].filter(Boolean).join(' · ')}
+                        {(selected.load_volume_m3 || selected.volume_m3) ? ` · ${selected.load_volume_m3 ?? selected.volume_m3} m³` : ''}
+                      </p>
+                    </div>
+                    {(selected.scheduled_start || selected.scheduled_end) && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                        {formatJobSchedule(selected)}
+                      </span>
+                    )}
                   </div>
-                  {(selected.scheduled_start || selected.scheduled_end) && (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600, whiteSpace: 'nowrap', textAlign: 'right' }}>
-                      {formatJobSchedule(selected)}
-                    </span>
+
+                  {top?.load_efficiency_percent != null && (
+                    <div style={{
+                      marginTop: 10,
+                      display: 'flex', alignItems: 'center', gap: 7,
+                      padding: '7px 11px', borderRadius: 8,
+                      background: '#eff6ff', border: '1px solid #bfdbfe',
+                      fontSize: '0.75rem', color: '#1d4ed8', fontWeight: 600,
+                    }}>
+                      ✓ Load Efficiency: {top.load_efficiency_percent}%
+                    </div>
                   )}
                 </div>
 
-                {top?.load_efficiency_percent != null && (
-                  <div style={{
-                    marginTop: 10,
-                    display: 'flex', alignItems: 'center', gap: 7,
-                    padding: '7px 11px', borderRadius: 8,
-                    background: '#eff6ff', border: '1px solid #bfdbfe',
-                    fontSize: '0.75rem', color: '#1d4ed8', fontWeight: 600,
-                  }}>
-                    ✓ Load Efficiency: {top.load_efficiency_percent}%
+                {loading ? (
+                  <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                    <Loader2 size={20} style={{ animation: 'spin 0.7s linear infinite' }} />
+                    Analyzing fleet…
+                  </div>
+                ) : top ? (
+                  <CandidateCard
+                    item={top}
+                    isTop
+                    onAssign={() => openModal(top, false)}
+                    onOverride={() => openModal(top, false)}
+                  />
+                ) : (
+                  <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '32px 24px', textAlign: 'center' }}>
+                    <p style={{ fontWeight: 700, marginBottom: 8 }}>No recommendations available</p>
+                    <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginBottom: 14 }}>No available drivers or vehicles match the requirements.</p>
+                    <BestFitDiagnosticsPanel diagnostics={diagnostics} />
+                    <a href="/admin/master-data" target="_blank" rel="noopener noreferrer"
+                      style={{ color: 'var(--color-primary)', fontSize: '0.875rem', fontWeight: 600, display: 'inline-block', marginTop: 14 }}>
+                      Check fleet availability in Master Data →
+                    </a>
                   </div>
                 )}
               </div>
 
-              <JobOrderRouteMap key={selected.id} jobOrderId={selected.id} variant="dispatch" readOnly />
-
-              {loading ? (
-                <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  <Loader2 size={20} style={{ animation: 'spin 0.7s linear infinite' }} />
-                  Analyzing fleet…
-                </div>
-              ) : top ? (
-                <CandidateCard
-                  item={top}
-                  isTop
-                  onAssign={() => openModal(top, false)}
-                  onOverride={() => openModal(top, false)}
-                />
-              ) : (
-                <div style={{ background: '#fff', border: '1px solid var(--stroke)', borderRadius: 12, padding: '32px 24px', textAlign: 'center' }}>
-                  <p style={{ fontWeight: 700, marginBottom: 8 }}>No recommendations available</p>
-                  <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginBottom: 14 }}>No available drivers or vehicles match the requirements.</p>
-                  <BestFitDiagnosticsPanel diagnostics={diagnostics} />
-                  <a href="/admin/master-data" target="_blank" rel="noopener noreferrer"
-                    style={{ color: 'var(--color-primary)', fontSize: '0.875rem', fontWeight: 600, display: 'inline-block', marginTop: 14 }}>
-                    Check fleet availability in Master Data →
-                  </a>
-                </div>
-              )}
+              <div className="dx-dispatch-center__map">
+                <JobOrderRouteMap key={selected.id} jobOrderId={selected.id} variant="dispatch" readOnly />
+              </div>
             </>
           )}
-          </div>
         </div>
 
         {/* ── Column 3: Alternative Matches ── */}

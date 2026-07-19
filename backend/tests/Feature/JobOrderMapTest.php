@@ -60,9 +60,85 @@ class JobOrderMapTest extends TestCase
                     'pickup' => ['lat', 'lng', 'address'],
                     'destination' => ['lat', 'lng', 'address'],
                     'route' => ['distance_label', 'duration_label', 'polyline', 'source'],
-                    'geocode' => ['pickup_resolved', 'destination_resolved', 'pickup_address', 'destination_address'],
+                    'geocode' => ['pickup_resolved', 'destination_resolved', 'pickup_address', 'destination_address', 'warnings'],
                 ],
             ]);
+    }
+
+    public function test_map_returns_geocode_warnings_when_pickup_fails_but_destination_resolves(): void
+    {
+        Http::fake([
+            'nominatim.openstreetmap.org/*' => Http::sequence()
+                ->push([])
+                ->push([['lat' => '14.6760', 'lon' => '121.0437']]),
+        ]);
+
+        $quarry = Quarry::create([
+            'quarry_name' => 'Name Only Quarry',
+            'address' => '',
+            'status' => 'active',
+        ]);
+
+        $jobOrder = JobOrder::create([
+            'created_by' => $this->dispatcher->id,
+            'tracking_code' => 'MAPTEST005',
+            'customer_name' => 'Partial Client',
+            'quarry_id' => $quarry->id,
+            'dropoff_street' => '456 Market',
+            'dropoff_city' => 'Quezon City',
+            'dropoff_province' => 'Metro Manila',
+            'dropoff_location' => '456 Market, Quezon City',
+            'status' => 'pending',
+            'scheduled_start' => now()->addHour(),
+            'scheduled_end' => now()->addHours(3),
+        ]);
+
+        $response = $this->apiAs($this->dispatcher)->getJson("/api/job-orders/{$jobOrder->id}/map");
+
+        $response->assertOk()
+            ->assertJsonPath('data.geocode.pickup_resolved', false)
+            ->assertJsonPath('data.geocode.destination_resolved', true)
+            ->assertJsonPath('data.geocode.warnings.0', 'Could not map pickup location: Name Only Quarry');
+    }
+
+    public function test_map_geocodes_quarry_name_when_address_empty(): void
+    {
+        Http::fake([
+            'nominatim.openstreetmap.org/*' => Http::response([
+                ['lat' => '14.5500', 'lon' => '121.0200'],
+            ]),
+        ]);
+
+        $quarry = Quarry::create([
+            'quarry_name' => 'Fallback Quarry Site',
+            'address' => '',
+            'status' => 'active',
+        ]);
+
+        $jobOrder = JobOrder::create([
+            'created_by' => $this->dispatcher->id,
+            'tracking_code' => 'MAPTEST006',
+            'customer_name' => 'Fallback Client',
+            'quarry_id' => $quarry->id,
+            'dropoff_street' => '456 Market',
+            'dropoff_city' => 'Quezon City',
+            'dropoff_province' => 'Metro Manila',
+            'dropoff_location' => '456 Market, Quezon City',
+            'dropoff_latitude' => 14.6760,
+            'dropoff_longitude' => 121.0437,
+            'status' => 'pending',
+            'scheduled_start' => now()->addHour(),
+            'scheduled_end' => now()->addHours(3),
+        ]);
+
+        $response = $this->apiAs($this->dispatcher)->getJson("/api/job-orders/{$jobOrder->id}/map");
+
+        $response->assertOk()
+            ->assertJsonPath('data.geocode.pickup_resolved', true)
+            ->assertJsonPath('data.pickup.lat', 14.55);
+
+        $jobOrder->refresh();
+        $this->assertSame(14.55, (float) $jobOrder->pickup_latitude);
     }
 
     public function test_map_geocodes_legacy_addresses_when_coordinates_missing(): void
