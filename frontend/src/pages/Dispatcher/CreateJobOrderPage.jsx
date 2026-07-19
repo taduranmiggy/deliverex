@@ -25,7 +25,7 @@ import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X
 import { FilterSelect } from '../../components/ui'
 import JobOrderRouteMap from '../../components/JobOrderRouteMap'
 import PsgcAddressSelector from '../../components/PsgcAddressSelector'
-import { fromPsgcAddress, isCompletePsgcAddress, toPsgcAddress } from '../../utils/psgcAddress'
+import { fromPsgcAddress, getPsgcAddressFieldErrors, getPsgcAddressSummaryError, toPsgcAddress } from '../../utils/psgcAddress'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -593,11 +593,18 @@ const JobOrderForm = forwardRef(function JobOrderForm(
         errs.load_volume_m3 = 'Load volume is required.'
     }
     if (step === 3) {
-      if (!isCompletePsgcAddress(toPsgcAddress(form, 'pickup'))) {
-        errs.pickup_address = 'Complete the pickup address using the PSGC selections.'
+      const pickupAddress = toPsgcAddress(form, 'pickup')
+      const pickupFieldErrors = getPsgcAddressFieldErrors(pickupAddress)
+      if (Object.keys(pickupFieldErrors).length > 0) {
+        errs.pickup_address = getPsgcAddressSummaryError(pickupFieldErrors)
+        errs.pickup_address_fields = pickupFieldErrors
       }
-      if (!isCompletePsgcAddress(toPsgcAddress(form, 'dropoff'))) {
-        errs.dropoff_address = 'Complete the destination address using the PSGC selections.'
+
+      const dropoffAddress = toPsgcAddress(form, 'dropoff')
+      const dropoffFieldErrors = getPsgcAddressFieldErrors(dropoffAddress)
+      if (Object.keys(dropoffFieldErrors).length > 0) {
+        errs.dropoff_address = getPsgcAddressSummaryError(dropoffFieldErrors)
+        errs.dropoff_address_fields = dropoffFieldErrors
       }
     }
     if (step === 4) {
@@ -876,11 +883,17 @@ const JobOrderForm = forwardRef(function JobOrderForm(
 
               <PsgcAddressSelector
                 title="Pickup address"
+                idPrefix="pickup"
                 value={toPsgcAddress(form, 'pickup')}
+                fieldErrors={fieldErrors.pickup_address_fields || {}}
                 onChange={(address) => {
                   userEditedRef.current.add('pickup_address')
                   setForm((current) => ({ ...current, pickup_location: '', ...fromPsgcAddress(address, 'pickup') }))
-                  setFE((current) => ({ ...current, pickup_address: undefined }))
+                  setFE((current) => ({
+                    ...current,
+                    pickup_address: undefined,
+                    pickup_address_fields: undefined,
+                  }))
                 }}
                 legacyAddress={isEdit ? form.pickup_location : ''}
               />
@@ -888,11 +901,17 @@ const JobOrderForm = forwardRef(function JobOrderForm(
 
               <PsgcAddressSelector
                 title="Destination address"
+                idPrefix="dropoff"
                 value={toPsgcAddress(form, 'dropoff')}
+                fieldErrors={fieldErrors.dropoff_address_fields || {}}
                 onChange={(address) => {
                   userEditedRef.current.add('dropoff_address')
                   setForm((current) => ({ ...current, dropoff_location: '', ...fromPsgcAddress(address, 'dropoff') }))
-                  setFE((current) => ({ ...current, dropoff_address: undefined }))
+                  setFE((current) => ({
+                    ...current,
+                    dropoff_address: undefined,
+                    dropoff_address_fields: undefined,
+                  }))
                 }}
                 legacyAddress={isEdit ? form.dropoff_location : ''}
               />

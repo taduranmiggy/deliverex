@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   fetchPsgcBarangays,
   fetchPsgcCities,
@@ -6,55 +6,182 @@ import {
   fetchPsgcRegions,
 } from '../api/psgc'
 import { emptyPsgcAddress, isCompletePsgcAddress } from '../utils/psgcAddress'
+import {
+  findBestPsgcMatch,
+  normalizeSearchKey,
+  sanitizePsgcName,
+} from '../utils/textNormalize'
 
 const EMPTY_DOWNSTREAM = {
   province_code: '', province: '', city_code: '', city: '', barangay_code: '', barangay: '',
 }
 
-function SearchableDirectoryField({ label, options, name, onSelect, disabled, loading, required = true }) {
-  const listId = useId()
-  const [query, setQuery] = useState(name || '')
+function PsgcDirectoryCombobox({
+  label,
+  options,
+  selectedName,
+  onSelect,
+  disabled,
+  loading,
+  required = true,
+  error = '',
+  fieldKey,
+}) {
+  const listboxId = useId()
+  const rootRef = useRef(null)
+  const inputRef = useRef(null)
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(selectedName || '')
 
-  const exactMatch = (text) => options.find((option) =>
-    String(option.name || '').localeCompare(String(text || '').trim(), undefined, { sensitivity: 'accent' }) === 0
+  const sanitizedOptions = useMemo(
+    () => options.map((option) => ({
+      ...option,
+      name: sanitizePsgcName(option.name),
+    })),
+    [options],
   )
 
+  useEffect(() => {
+    if (!open) setQuery(selectedName || '')
+  }, [selectedName, open])
+
+  useEffect(() => {
+    const onDoc = (event) => {
+      if (rootRef.current && !rootRef.current.contains(event.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [])
+
+  const filtered = useMemo(() => {
+    const key = normalizeSearchKey(query)
+    if (!key) return sanitizedOptions.slice(0, 50)
+    return sanitizedOptions
+      .filter((option) => normalizeSearchKey(option.name).includes(key))
+      .slice(0, 50)
+  }, [sanitizedOptions, query])
+
+  const selectOption = (option) => {
+    onSelect(option)
+    setQuery(sanitizePsgcName(option.name))
+    setOpen(false)
+  }
+
+  const resolveSelection = () => {
+    const match = findBestPsgcMatch(query, sanitizedOptions)
+    if (match) {
+      selectOption(match)
+      return
+    }
+    setQuery(selectedName || '')
+    setOpen(false)
+  }
+
+  const handleInputChange = (event) => {
+    const next = event.target.value.toUpperCase()
+    setQuery(next)
+    setOpen(true)
+    const match = findBestPsgcMatch(next, sanitizedOptions)
+    if (match) onSelect(match)
+  }
+
+  const isDisabled = disabled || loading
+  const displayValue = selectedName || ''
+  const inputValue = open ? query : displayValue
+
   return (
-    <label className="dx-psgc-address__field">
+    <label className="dx-psgc-address__field" ref={rootRef}>
       <span className="dx-wiz-label-text">{label}{required ? ' *' : ''}</span>
-      <div className="dx-psgc-address__input-wrap">
+      <div className={`dx-psgc-address__input-wrap${open ? ' dx-psgc-address__input-wrap--open' : ''}`}>
         <input
-          list={listId}
-          className="dx-wiz-input dx-psgc-address__input"
-          value={query}
-          disabled={disabled || loading}
+          ref={inputRef}
+          id={fieldKey}
+          type="text"
+          role="combobox"
+          aria-expanded={open}
+          aria-autocomplete="list"
+          aria-controls={listboxId}
+          aria-invalid={error ? 'true' : undefined}
+          className={`dx-wiz-input dx-psgc-address__input${error ? ' dx-wiz-input--error' : ''}`}
+          value={inputValue}
+          disabled={isDisabled}
           required={required}
           autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          data-lpignore="true"
+          data-form-type="other"
+          data-1p-ignore="true"
           placeholder={loading ? `Loading ${label.toLowerCase()}…` : `Search ${label.toLowerCase()}…`}
-          onChange={(event) => {
-            const next = event.target.value
-            setQuery(next)
-            const match = exactMatch(next)
-            if (match) onSelect(match)
+          onFocus={() => {
+            if (isDisabled) return
+            setOpen(true)
+            setQuery(displayValue)
           }}
+          onChange={handleInputChange}
           onBlur={() => {
-            const match = exactMatch(query)
-            if (match) onSelect(match)
-            else setQuery(name || '')
+            window.setTimeout(resolveSelection, 120)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              const match = findBestPsgcMatch(query, sanitizedOptions) || (filtered.length === 1 ? filtered[0] : null)
+              if (match) selectOption(match)
+              else resolveSelection()
+            }
+            if (event.key === 'Escape') {
+              setOpen(false)
+              setQuery(displayValue)
+            }
           }}
         />
         <span className="dx-psgc-address__chevron" aria-hidden>
           {loading ? '⌛' : '⌄'}
         </span>
-        <datalist id={listId}>
-          {options.map((option) => <option key={option.code} value={option.name} />)}
-        </datalist>
+        {open && !isDisabled && (
+          <div id={listboxId} className="dx-psgc-address__dropdown" role="listbox">
+            {filtered.length === 0 ? (
+              <div className="dx-psgc-address__dropdown-empty">No matching {label.toLowerCase()} found.</div>
+            ) : (
+              filtered.map((option) => {
+                const selected = sanitizePsgcName(option.name) === displayValue
+                return (
+                  <button
+                    key={option.code}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    className={`dx-psgc-address__dropdown-option${selected ? ' dx-psgc-address__dropdown-option--selected' : ''}`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => selectOption(option)}
+                  >
+                    {sanitizePsgcName(option.name)}
+                  </button>
+                )
+              })
+            )}
+          </div>
+        )}
       </div>
+      {error && (
+        <span className="dx-psgc-address__field-error" role="alert">{error}</span>
+      )}
     </label>
   )
 }
 
-export default function PsgcAddressSelector({ value, onChange, title, required = true, legacyAddress = '' }) {
+export default function PsgcAddressSelector({
+  value,
+  onChange,
+  title,
+  required = true,
+  legacyAddress = '',
+  fieldErrors = {},
+  idPrefix = 'psgc',
+}) {
   const address = value || emptyPsgcAddress()
   const [regions, setRegions] = useState([])
   const [provinces, setProvinces] = useState([])
@@ -147,28 +274,73 @@ export default function PsgcAddressSelector({ value, onChange, title, required =
   const independentRegion = Boolean(address.region_code && !loading.provinces && provinces.length === 0)
   const formattedPreview = useMemo(() => {
     if (!isCompletePsgcAddress(address)) return ''
-    const barangay = /^(barangay|brgy\.?\s)/i.test(address.barangay) ? address.barangay : `Barangay ${address.barangay}`
+    const barangay = /^(barangay|brgy\.?\s)/i.test(address.barangay)
+      ? sanitizePsgcName(address.barangay)
+      : `Barangay ${sanitizePsgcName(address.barangay)}`
     return [address.street, barangay, address.city, address.province, address.region, 'Philippines']
       .filter(Boolean)
       .filter((part, index, parts) => parts.findIndex((candidate) => candidate.toLowerCase() === part.toLowerCase()) === index)
-      .map((part) => part.toUpperCase())
+      .map((part) => sanitizePsgcName(part))
       .join(', ')
   }, [address])
 
   const patch = (changes) => onChange({ ...address, ...changes })
 
+  const selectRegion = (option) => {
+    setProvinces([])
+    setCities([])
+    setBarangays([])
+    patch({
+      region_code: option.code,
+      region: sanitizePsgcName(option.name),
+      ...EMPTY_DOWNSTREAM,
+    })
+  }
+
+  const selectProvince = (option) => {
+    setCities([])
+    setBarangays([])
+    patch({
+      province_code: option.code,
+      province: sanitizePsgcName(option.name),
+      city_code: '',
+      city: '',
+      barangay_code: '',
+      barangay: '',
+    })
+  }
+
+  const selectCity = (option) => {
+    setBarangays([])
+    patch({
+      city_code: option.code,
+      city: sanitizePsgcName(option.name),
+      barangay_code: '',
+      barangay: '',
+    })
+  }
+
+  const selectBarangay = (option) => {
+    patch({
+      barangay_code: option.code,
+      barangay: sanitizePsgcName(option.name),
+    })
+  }
+
   return (
-    <fieldset className="dx-psgc-address dx-wiz-full">
+    <fieldset className="dx-psgc-address dx-wiz-full" autoComplete="off">
       {title && <legend className="dx-psgc-address__legend">{title}</legend>}
       <div className="dx-psgc-address__grid">
-        <SearchableDirectoryField
+        <PsgcDirectoryCombobox
           key={`region-${address.region_code}-${address.region}`}
-          label="Region" options={regions} name={address.region}
-          loading={loading.regions} required={required}
-          onSelect={(option) => {
-            setProvinces([]); setCities([]); setBarangays([])
-            patch({ region_code: option.code, region: option.name, ...EMPTY_DOWNSTREAM })
-          }}
+          fieldKey={`${idPrefix}-region`}
+          label="Region"
+          options={regions}
+          selectedName={address.region}
+          loading={loading.regions}
+          required={required}
+          error={fieldErrors.region}
+          onSelect={selectRegion}
         />
         {independentRegion ? (
           <label className="dx-psgc-address__field">
@@ -180,40 +352,57 @@ export default function PsgcAddressSelector({ value, onChange, title, required =
             />
           </label>
         ) : (
-          <SearchableDirectoryField
+          <PsgcDirectoryCombobox
             key={`province-${address.province_code}-${address.province}`}
-            label="Province" options={provinces} name={address.province}
-            disabled={!address.region_code} loading={loading.provinces} required={required}
-            onSelect={(option) => {
-              setCities([]); setBarangays([])
-              patch({ province_code: option.code, province: option.name, city_code: '', city: '', barangay_code: '', barangay: '' })
-            }}
+            fieldKey={`${idPrefix}-province`}
+            label="Province"
+            options={provinces}
+            selectedName={address.province}
+            disabled={!address.region_code}
+            loading={loading.provinces}
+            required={required}
+            error={fieldErrors.province}
+            onSelect={selectProvince}
           />
         )}
-        <SearchableDirectoryField
+        <PsgcDirectoryCombobox
           key={`city-${address.city_code}-${address.city}`}
-          label="City / Municipality" options={cities} name={address.city}
-          disabled={!address.region_code || (!independentRegion && !address.province_code)} loading={loading.cities} required={required}
-          onSelect={(option) => {
-            setBarangays([])
-            patch({ city_code: option.code, city: option.name, barangay_code: '', barangay: '' })
-          }}
+          fieldKey={`${idPrefix}-city`}
+          label="City / Municipality"
+          options={cities}
+          selectedName={address.city}
+          disabled={!address.region_code || (!independentRegion && !address.province_code)}
+          loading={loading.cities}
+          required={required}
+          error={fieldErrors.city}
+          onSelect={selectCity}
         />
-        <SearchableDirectoryField
+        <PsgcDirectoryCombobox
           key={`barangay-${address.barangay_code}-${address.barangay}`}
-          label="Barangay" options={barangays} name={address.barangay}
-          disabled={!address.city_code} loading={loading.barangays} required={required}
-          onSelect={(option) => patch({ barangay_code: option.code, barangay: option.name })}
+          fieldKey={`${idPrefix}-barangay`}
+          label="Barangay"
+          options={barangays}
+          selectedName={address.barangay}
+          disabled={!address.city_code}
+          loading={loading.barangays}
+          required={required}
+          error={fieldErrors.barangay}
+          onSelect={selectBarangay}
         />
         <label className="dx-psgc-address__field dx-psgc-address__field--full">
           <span className="dx-wiz-label-text">Street / Building / House No.{required ? ' *' : ''}</span>
           <input
-            className="dx-wiz-input dx-psgc-address__input"
+            id={`${idPrefix}-street`}
+            className={`dx-wiz-input dx-psgc-address__input${fieldErrors.street ? ' dx-wiz-input--error' : ''}`}
             required={required}
+            aria-invalid={fieldErrors.street ? 'true' : undefined}
             value={address.street || ''}
             onChange={(event) => patch({ street: event.target.value })}
             placeholder="e.g. 123 Rizal Avenue, Building A"
           />
+          {fieldErrors.street && (
+            <span className="dx-psgc-address__field-error" role="alert">{fieldErrors.street}</span>
+          )}
         </label>
       </div>
       {legacyAddress && !address.region_code && (

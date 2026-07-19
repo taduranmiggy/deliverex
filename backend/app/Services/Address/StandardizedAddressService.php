@@ -26,7 +26,7 @@ class StandardizedAddressService
         $provinceCode = trim((string) ($data["{$prefix}_province_code"] ?? '')) ?: null;
         $cityCode = trim((string) ($data["{$prefix}_city_code"] ?? ''));
         $barangayCode = trim((string) ($data["{$prefix}_barangay_code"] ?? ''));
-        $street = trim((string) ($data["{$prefix}_street"] ?? ''));
+        $street = mb_strtoupper(trim((string) ($data["{$prefix}_street"] ?? '')), 'UTF-8');
 
         $missing = [];
         foreach (['region_code' => $regionCode, 'city_code' => $cityCode, 'barangay_code' => $barangayCode, 'street' => $street] as $field => $value) {
@@ -46,12 +46,12 @@ class StandardizedAddressService
             ]);
         }
 
-        $region = trim((string) $resolved['region']['name']);
+        $region = mb_strtoupper(trim((string) $resolved['region']['name']), 'UTF-8');
         $province = isset($resolved['province']['name'])
-            ? trim((string) $resolved['province']['name'])
+            ? mb_strtoupper(trim((string) $resolved['province']['name']), 'UTF-8')
             : null;
-        $city = trim((string) $resolved['city']['name']);
-        $barangay = trim((string) $resolved['barangay']['name']);
+        $city = mb_strtoupper(trim((string) $resolved['city']['name']), 'UTF-8');
+        $barangay = mb_strtoupper(trim((string) $resolved['barangay']['name']), 'UTF-8');
         $formatted = $this->format($street, $barangay, $city, $province, $region);
         $coordinates = $this->geocoder->geocode($formatted);
 

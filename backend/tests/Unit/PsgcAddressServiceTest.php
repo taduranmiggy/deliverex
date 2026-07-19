@@ -56,6 +56,19 @@ class PsgcAddressServiceTest extends TestCase
         );
     }
 
+    public function test_psgc_client_sanitizes_mojibake_names_from_api(): void
+    {
+        Http::fake([
+            'https://psgc.test/api/v2/regions' => Http::response([
+                ['code' => '1300000000', 'name' => 'Santo NiÃ±o'],
+            ]),
+        ]);
+
+        $regions = app(PsgcClient::class)->regions();
+
+        $this->assertSame('SANTO NIÑO', $regions[0]['name']);
+    }
+
     public function test_standardized_address_uses_official_names_and_server_geocoding(): void
     {
         Http::fake([
@@ -87,9 +100,10 @@ class PsgcAddressServiceTest extends TestCase
             'pickup_province' => 'Metro Manila',
         ], 'pickup');
 
-        $this->assertSame('Bulacan', $normalized['pickup_province']);
-        $this->assertSame('City of Malolos', $normalized['pickup_city']);
-        $this->assertSame('Guinhawa', $normalized['pickup_barangay']);
+        $this->assertSame('BULACAN', $normalized['pickup_province']);
+        $this->assertSame('CITY OF MALOLOS', $normalized['pickup_city']);
+        $this->assertSame('GUINHAWA', $normalized['pickup_barangay']);
+        $this->assertSame('123 RIZAL AVENUE', $normalized['pickup_street']);
         $this->assertSame(
             '123 RIZAL AVENUE, BARANGAY GUINHAWA, CITY OF MALOLOS, BULACAN, CENTRAL LUZON, PHILIPPINES',
             $normalized['pickup_formatted_address'],

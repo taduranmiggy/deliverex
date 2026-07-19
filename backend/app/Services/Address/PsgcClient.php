@@ -2,6 +2,7 @@
 
 namespace App\Services\Address;
 
+use App\Support\Utf8Text;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -119,7 +120,7 @@ class PsgcClient
     private function get(string $path): array
     {
         $path = ltrim($path, '/');
-        $key = 'deliverex.psgc.v2.'.sha1($path);
+        $key = 'deliverex.psgc.v3.'.sha1($path);
 
         return Cache::remember($key, (int) config('psgc.cache_ttl', 604800), function () use ($path): array {
             $response = Http::acceptJson()
@@ -153,9 +154,15 @@ class PsgcClient
 
         $rows = array_is_list($payload) ? $payload : [$payload];
 
-        return array_values(array_filter($rows, static fn ($row): bool =>
-            is_array($row) && isset($row['code'], $row['name'])
-        ));
+        return array_values(array_filter(array_map(function ($row): ?array {
+            if (! is_array($row) || ! isset($row['code'], $row['name'])) {
+                return null;
+            }
+
+            $row['name'] = Utf8Text::displayUpper((string) $row['name']);
+
+            return $row;
+        }, $rows)));
     }
 
     /** @param list<array<string,mixed>> $rows */

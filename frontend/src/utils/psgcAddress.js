@@ -37,3 +37,40 @@ export function fromPsgcAddress(address, prefix = 'address') {
 export function isCompletePsgcAddress(address) {
   return Boolean(address?.region_code && address?.city_code && address?.barangay_code && address?.street?.trim())
 }
+
+/**
+ * @param {ReturnType<typeof emptyPsgcAddress>} address
+ * @param {{ requiresProvince?: boolean }} [options]
+ */
+export function getPsgcAddressFieldErrors(address, options = {}) {
+  const { requiresProvince = false } = options
+  const errors = {}
+
+  if (!address?.region_code) {
+    errors.region = 'Select a region from the list.'
+  }
+  if (requiresProvince && !address?.province_code) {
+    errors.province = 'Select a province from the list.'
+  }
+  if (!address?.city_code) {
+    errors.city = 'Select a city or municipality from the list.'
+  }
+  if (!address?.barangay_code) {
+    errors.barangay = 'Select a barangay from the list.'
+  }
+  if (!address?.street?.trim()) {
+    errors.street = 'Street / building / house no. is required.'
+  }
+
+  return errors
+}
+
+/**
+ * @param {ReturnType<typeof getPsgcAddressFieldErrors>} fieldErrors
+ */
+export function getPsgcAddressSummaryError(fieldErrors) {
+  const messages = Object.values(fieldErrors || {})
+  if (messages.length === 0) return ''
+  if (messages.length === 1) return messages[0]
+  return 'Complete the address using the PSGC selections.'
+}
