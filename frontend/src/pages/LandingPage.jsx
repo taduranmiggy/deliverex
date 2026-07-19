@@ -6,7 +6,6 @@ import DeliverexSiteFooter from '../components/customer/DeliverexSiteFooter'
 import InquiryForm from '../components/customer/InquiryForm'
 import PublicFaqSection from '../components/customer/PublicFaqSection'
 import PublicSiteNavBar from '../components/customer/PublicSiteNavBar'
-import LandingHeroScene from '../components/landing/LandingHeroScene'
 import {
   MotionButton,
   MotionCard,
@@ -109,10 +108,6 @@ function LandingPage() {
               </div>
             </MotionStaggerItem>
           </MotionStagger>
-
-          <div className="landing-hero__visual-wrap">
-            <LandingHeroScene />
-          </div>
         </div>
       </section>
 
