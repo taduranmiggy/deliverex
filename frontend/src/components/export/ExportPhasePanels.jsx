@@ -1,5 +1,5 @@
 import { CheckCircle2, Download, FolderOpen, Loader2 } from 'lucide-react'
-import { EXPORT_PROGRESS_STEPS } from '../utils/audit/exportConfig'
+import { EXPORT_PROGRESS_STEPS } from '../../utils/audit/exportConfig'
 
 export function ExportProgressPanel({ step = 0 }) {
   return (
