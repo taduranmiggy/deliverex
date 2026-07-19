@@ -6,6 +6,7 @@ import {
   fetchPsgcRegions,
 } from '../api/psgc'
 import { emptyPsgcAddress, isCompletePsgcAddress } from '../utils/psgcAddress'
+import { filterSelectablePsgcCities } from '../utils/psgcCityFilter'
 import {
   findBestPsgcMatch,
   normalizeSearchKey,
@@ -219,7 +220,7 @@ export default function PsgcAddressSelector({
           setLoading((state) => ({ ...state, cities: true }))
           try {
             const cityRows = await fetchPsgcCities(address.region_code)
-            if (active) setCities(cityRows)
+            if (active) setCities(filterSelectablePsgcCities(cityRows))
           } catch (err) {
             if (active) setError(err.message || 'Could not load PSGC cities and municipalities.')
           } finally {
@@ -243,7 +244,7 @@ export default function PsgcAddressSelector({
       setLoading((state) => ({ ...state, cities: true }))
       try {
         const rows = await fetchPsgcCities(address.region_code, address.province_code)
-        if (active) setCities(rows)
+        if (active) setCities(filterSelectablePsgcCities(rows))
       } catch (err) {
         if (active) setError(err.message || 'Could not load PSGC cities and municipalities.')
       } finally {

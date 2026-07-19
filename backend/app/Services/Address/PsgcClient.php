@@ -33,40 +33,19 @@ class PsgcClient
             )
             : sprintf('regions/%s/cities-municipalities', rawurlencode($regionCode));
 
-        return $this->get($path);
+        return $this->filterSelectableCities($this->get($path));
     }
 
     /** @return list<array<string, mixed>> */
     public function barangays(string $regionCode, ?string $provinceCode, string $cityCode): array
     {
-        $path = $provinceCode
-            ? sprintf(
-                'regions/%s/provinces/%s/cities-municipalities/%s/barangays',
-                rawurlencode($regionCode),
-                rawurlencode($provinceCode),
-                rawurlencode($cityCode),
-            )
-            : sprintf(
-                'regions/%s/cities-municipalities/%s/barangays',
-                rawurlencode($regionCode),
-                rawurlencode($cityCode),
-            );
+        $barangays = $this->fetchDirectBarangays($regionCode, $provinceCode, $cityCode);
 
-        try {
-            return $this->get($path);
-        } catch (RuntimeException $exception) {
-            // PSGC cities without a province (notably NCR) remain strictly
-            // validated by the region city list, while this canonical endpoint
-            // supplies their barangays across API deployments.
-            if ($provinceCode !== null) {
-                throw $exception;
-            }
-
-            return $this->get(sprintf(
-                'cities-municipalities/%s/barangays',
-                rawurlencode($cityCode),
-            ));
+        if ($barangays !== []) {
+            return $barangays;
         }
+
+        return $this->aggregateBarangaysFromSubMunicipalities($regionCode, $provinceCode, $cityCode);
     }
 
     /**
@@ -120,7 +99,7 @@ class PsgcClient
     private function get(string $path): array
     {
         $path = ltrim($path, '/');
-        $key = 'deliverex.psgc.v3.'.sha1($path);
+        $key = 'deliverex.psgc.v4.'.sha1($path);
 
         return Cache::remember($key, (int) config('psgc.cache_ttl', 604800), function () use ($path): array {
             $response = Http::acceptJson()
@@ -175,5 +154,128 @@ class PsgcClient
         }
 
         return null;
+    }
+
+    /**
+     * Composite cities such as City of Manila expose districts as SubMun rows
+     * instead of direct barangays. Hide the parent when districts are present.
+     *
+     * @param list<array<string,mixed>> $cities
+     * @return list<array<string,mixed>>
+     */
+    private function filterSelectableCities(array $cities): array
+    {
+        return array_values(array_filter(
+            $cities,
+            fn (array $city): bool => ! $this->isCompositeParentCity($city, $cities),
+        ));
+    }
+
+    /** @param list<array<string,mixed>> $cities */
+    private function isCompositeParentCity(array $city, array $cities): bool
+    {
+        $code = (string) ($city['code'] ?? '');
+        if (($city['type'] ?? '') !== 'City' || ! str_ends_with($code, '0000')) {
+            return false;
+        }
+
+        foreach ($cities as $candidate) {
+            if (($candidate['type'] ?? '') !== 'SubMun') {
+                continue;
+            }
+
+            $candidateCode = (string) ($candidate['code'] ?? '');
+            if ($candidateCode !== $code && $this->isSubMunicipalityOf($candidateCode, $code)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function aggregateBarangaysFromSubMunicipalities(
+        string $regionCode,
+        ?string $provinceCode,
+        string $cityCode,
+    ): array {
+        $path = $provinceCode
+            ? sprintf(
+                'regions/%s/provinces/%s/cities-municipalities',
+                rawurlencode($regionCode),
+                rawurlencode($provinceCode),
+            )
+            : sprintf('regions/%s/cities-municipalities', rawurlencode($regionCode));
+
+        $cities = $this->get($path);
+        $subMunicipalities = array_values(array_filter(
+            $cities,
+            fn (array $city): bool => ($city['type'] ?? '') === 'SubMun'
+                && $this->isSubMunicipalityOf((string) ($city['code'] ?? ''), $cityCode),
+        ));
+
+        if ($subMunicipalities === []) {
+            return [];
+        }
+
+        $barangays = [];
+        foreach ($subMunicipalities as $subMunicipality) {
+            $subCode = (string) $subMunicipality['code'];
+            $district = (string) $subMunicipality['name'];
+
+            foreach ($this->fetchDirectBarangays($regionCode, $provinceCode, $subCode) as $barangay) {
+                $barangays[] = [
+                    ...$barangay,
+                    'name' => $district.' — '.($barangay['name'] ?? ''),
+                    'district_code' => $subCode,
+                    'district' => $district,
+                ];
+            }
+        }
+
+        return $barangays;
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function fetchDirectBarangays(string $regionCode, ?string $provinceCode, string $cityCode): array
+    {
+        $path = $provinceCode
+            ? sprintf(
+                'regions/%s/provinces/%s/cities-municipalities/%s/barangays',
+                rawurlencode($regionCode),
+                rawurlencode($provinceCode),
+                rawurlencode($cityCode),
+            )
+            : sprintf(
+                'regions/%s/cities-municipalities/%s/barangays',
+                rawurlencode($regionCode),
+                rawurlencode($cityCode),
+            );
+
+        try {
+            return $this->get($path);
+        } catch (RuntimeException $exception) {
+            if ($provinceCode !== null) {
+                throw $exception;
+            }
+
+            return $this->get(sprintf(
+                'cities-municipalities/%s/barangays',
+                rawurlencode($cityCode),
+            ));
+        }
+    }
+
+    private function isSubMunicipalityOf(string $subCode, string $parentCityCode): bool
+    {
+        if (strlen($subCode) !== 10 || strlen($parentCityCode) !== 10) {
+            return false;
+        }
+
+        if ($subCode === $parentCityCode || ! str_ends_with($parentCityCode, '0000')) {
+            return false;
+        }
+
+        return str_starts_with($subCode, substr($parentCityCode, 0, 5));
     }
 }

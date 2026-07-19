@@ -144,4 +144,54 @@ class PsgcAddressServiceTest extends TestCase
         $this->assertNull($normalized['pickup_geocode_attempted_at']);
         $this->assertSame('123 RIZAL AVENUE', $normalized['pickup_street']);
     }
+
+    public function test_ncr_city_list_hides_city_of_manila_when_districts_exist(): void
+    {
+        Http::fake([
+            'https://psgc.test/api/v2/regions/1300000000/cities-municipalities' => Http::response([
+                ['code' => '1380600000', 'name' => 'City of Manila', 'type' => 'City'],
+                ['code' => '1380608000', 'name' => 'Ermita', 'type' => 'SubMun'],
+                ['code' => '1380500000', 'name' => 'City of Mandaluyong', 'type' => 'City'],
+            ]),
+        ]);
+
+        $cities = app(PsgcClient::class)->citiesMunicipalities('1300000000');
+
+        $this->assertSame(['1380608000', '1380500000'], array_column($cities, 'code'));
+    }
+
+    public function test_ermita_district_returns_direct_barangays(): void
+    {
+        Http::fake([
+            'https://psgc.test/api/v2/regions/1300000000/cities-municipalities/1380608000/barangays' => Http::response([
+                ['code' => '1380608001', 'name' => 'Barangay 1'],
+            ]),
+        ]);
+
+        $barangays = app(PsgcClient::class)->barangays('1300000000', null, '1380608000');
+
+        $this->assertCount(1, $barangays);
+        $this->assertSame('1380608001', $barangays[0]['code']);
+    }
+
+    public function test_city_of_manila_parent_aggregates_barangays_from_districts(): void
+    {
+        Http::fake([
+            'https://psgc.test/api/v2/cities-municipalities/1380600000/barangays' => Http::response(['data' => []]),
+            'https://psgc.test/api/v2/regions/1300000000/cities-municipalities/1380600000/barangays' => Http::response(['data' => []]),
+            'https://psgc.test/api/v2/regions/1300000000/cities-municipalities' => Http::response([
+                ['code' => '1380600000', 'name' => 'City of Manila', 'type' => 'City'],
+                ['code' => '1380608000', 'name' => 'Ermita', 'type' => 'SubMun'],
+            ]),
+            'https://psgc.test/api/v2/regions/1300000000/cities-municipalities/1380608000/barangays' => Http::response([
+                ['code' => '1380608001', 'name' => 'Barangay 1'],
+            ]),
+        ]);
+
+        $barangays = app(PsgcClient::class)->barangays('1300000000', null, '1380600000');
+
+        $this->assertCount(1, $barangays);
+        $this->assertSame('1380608001', $barangays[0]['code']);
+        $this->assertSame('ERMITA — BARANGAY 1', $barangays[0]['name']);
+    }
 }
