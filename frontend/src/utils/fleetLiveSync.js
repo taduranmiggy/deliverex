@@ -47,6 +47,12 @@ export function isDriverOffline(location) {
   return age >= DRIVER_OFFLINE_THRESHOLD_SEC || Boolean(location.is_stale)
 }
 
+export function coordPairChanged(a, b) {
+  if (a === b) return false
+  if (!a || !b) return Boolean(a) !== Boolean(b)
+  return a.lat !== b.lat || a.lng !== b.lng
+}
+
 export function deliveriesChanged(prev, next) {
   if (!Array.isArray(prev) || !Array.isArray(next)) return true
   if (prev.length !== next.length) return true
@@ -57,6 +63,9 @@ export function deliveriesChanged(prev, next) {
     if (!a || !b || a.id !== b.id) return true
     if (a.status !== b.status) return true
 
+    if (coordPairChanged(a.pickup, b.pickup)) return true
+    if (coordPairChanged(a.destination, b.destination)) return true
+
     const locA = a.location
     const locB = b.location
     if (Boolean(locA) !== Boolean(locB)) return true
@@ -64,6 +73,18 @@ export function deliveriesChanged(prev, next) {
       if (locA.lat !== locB.lat || locA.lng !== locB.lng || locA.at !== locB.at) return true
       if (locA.offline?.state !== locB.offline?.state) return true
     }
+
+    const routeA = a.route?.polyline?.length ?? 0
+    const routeB = b.route?.polyline?.length ?? 0
+    if (routeA !== routeB) return true
+
+    const deliveryRouteA = a.delivery_route?.polyline?.length ?? 0
+    const deliveryRouteB = b.delivery_route?.polyline?.length ?? 0
+    if (deliveryRouteA !== deliveryRouteB) return true
+
+    const warningsA = (a.location_status?.warnings ?? []).join('|')
+    const warningsB = (b.location_status?.warnings ?? []).join('|')
+    if (warningsA !== warningsB) return true
 
     const delayA = a.latest_delay_report
     const delayB = b.latest_delay_report

@@ -26,6 +26,7 @@
 .dx-fleet-map-stage {
   position: relative;
   min-height: 420px;
+  height: 420px;
   border-radius: 14px;
   overflow: hidden;
   background: var(--slate-100, #f1f5f9);
@@ -34,11 +35,32 @@
 }
 
 .dx-fleet-map-stage .leaflet-container {
-  height: 420px;
-  width: 100%;
+  position: absolute;
+  inset: 0;
+  height: 100% !important;
+  width: 100% !important;
   border-radius: 14px;
   z-index: 0;
   font-family: inherit;
+}
+
+.dx-fleet-location-warnings {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.dx-fleet-location-warnings p {
+  margin: 0;
+}
+
+.dx-fleet-location-warnings p + p {
+  margin-top: 8px;
 }
 
 /* ── Custom markers ───────────────────────────────────────── */

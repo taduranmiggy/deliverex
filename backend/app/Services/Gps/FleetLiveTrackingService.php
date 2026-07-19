@@ -75,6 +75,16 @@ class FleetLiveTrackingService
             : null;
 
         $route = null;
+        $deliveryRoute = null;
+        if ($pickup && $destination) {
+            $deliveryRoute = $this->directions->route(
+                $pickup['lat'],
+                $pickup['lng'],
+                $destination['lat'],
+                $destination['lng'],
+            );
+        }
+
         if ($latest && $destination) {
             $route = $this->directions->route(
                 (float) $latest->latitude,
@@ -84,16 +94,20 @@ class FleetLiveTrackingService
             );
         }
 
+        $locationStatus = $this->buildLocationStatus($jobOrder, $pickup, $destination);
+
         LocationPipelineLogger::log('fleet_live_delivery', [
             'assignment_id' => $assignment->id,
             'job_order_id' => $assignment->job_order_id,
             'tracking_code' => $jobOrder?->tracking_code,
-            'pickup_address' => $jobOrder?->display_pickup,
-            'destination_address' => $jobOrder?->display_dropoff,
+            'pickup_address' => $locationStatus['pickup_address'],
+            'destination_address' => $locationStatus['destination_address'],
             'pickup' => $pickup,
             'destination' => $destination,
             'driver_gps' => $location,
+            'location_warnings' => $locationStatus['warnings'],
             'route_source' => $route['source'] ?? null,
+            'delivery_route_source' => $deliveryRoute['source'] ?? null,
             'distance_label' => $route['distance_label'] ?? null,
             'duration_label' => $route['duration_label'] ?? null,
             'driver_gps_at' => $location['at'] ?? null,
@@ -108,11 +122,50 @@ class FleetLiveTrackingService
             'job_order' => $jobOrder,
             'pickup' => $pickup,
             'destination' => $destination,
+            'location_status' => $locationStatus,
             'latest_delay_report' => $assignment->latestDelayReport,
             'latest_arrived_status_log' => $assignment->latestArrivedStatusLog,
             'delivery_documents' => $assignment->deliveryDocuments,
             'location' => $location,
             'route' => $route,
+            'delivery_route' => $deliveryRoute,
+        ];
+    }
+
+    /**
+     * @param  array{lat: float, lng: float}|null  $pickup
+     * @param  array{lat: float, lng: float}|null  $destination
+     * @return array<string, mixed>
+     */
+    private function buildLocationStatus(?\App\Models\JobOrder $jobOrder, ?array $pickup, ?array $destination): array
+    {
+        $pickupAddress = $jobOrder
+            ? trim($jobOrder->display_pickup ?: (string) ($jobOrder->pickup_location ?? ''))
+            : '';
+        $destinationAddress = $jobOrder
+            ? trim($jobOrder->display_dropoff ?: (string) ($jobOrder->dropoff_location ?? ''))
+            : '';
+
+        $warnings = [];
+        if ($pickup === null) {
+            $warnings[] = $pickupAddress === ''
+                ? 'Pickup address is missing for this delivery.'
+                : "Could not map pickup location: {$pickupAddress}";
+        }
+        if ($destination === null) {
+            $warnings[] = $destinationAddress === ''
+                ? 'Destination address is missing for this delivery.'
+                : "Could not map destination location: {$destinationAddress}";
+        }
+
+        return [
+            'pickup_resolved' => $pickup !== null,
+            'destination_resolved' => $destination !== null,
+            'pickup_address' => $pickupAddress,
+            'destination_address' => $destinationAddress,
+            'pickup_coordinates' => $pickup,
+            'destination_coordinates' => $destination,
+            'warnings' => $warnings,
         ];
     }
 

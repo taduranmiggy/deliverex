@@ -81,35 +81,42 @@ function fmtStatus(s) {
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-function resolveTrackingContext(markers, selectedId) {
+function markerBelongsToAssignment(markerId, assignmentId) {
+  if (assignmentId == null || markerId == null) return false
+  const key = String(assignmentId)
+  const id = String(markerId)
+  return id === key || id === `pickup-${key}` || id === `destination-${key}`
+}
+
+function resolveTrackingContext(markers, selectedAssignmentId) {
   let driver = null
+  let pickup = null
   let destination = null
 
-  if (selectedId) {
-    const selected = markers.find((m) => m.id === selectedId)
-    if (selected?.kind === 'driver') driver = selected
-    if (selected?.kind === 'destination') {
-      destination = selected
-      const assignmentId = String(selectedId).replace(/^destination-/, '')
-      driver = markers.find((m) => m.kind === 'driver' && String(m.id) === assignmentId) ?? null
-    } else if (driver) {
-      destination = markers.find((m) => m.id === `destination-${driver.id}`) ?? null
-    }
+  if (selectedAssignmentId != null) {
+    const key = String(selectedAssignmentId)
+    driver = markers.find((m) => m.kind === 'driver' && String(m.id) === key) ?? null
+    pickup = markers.find((m) => m.id === `pickup-${key}`) ?? null
+    destination = markers.find((m) => m.id === `destination-${key}`) ?? null
   } else {
     const drivers = markers.filter((m) => m.kind === 'driver')
     const destinations = markers.filter((m) => m.kind === 'destination')
     if (drivers.length === 1) {
       driver = drivers[0]
       destination = destinations.find((d) => d.id === `destination-${driver.id}`) ?? destinations[0] ?? null
+      pickup = markers.find((m) => m.id === `pickup-${driver.id}`) ?? null
     } else if (drivers.length === 0 && destinations.length === 1) {
       destination = destinations[0]
+      const assignmentKey = String(destination.id).replace(/^destination-/, '')
+      pickup = markers.find((m) => m.id === `pickup-${assignmentKey}`) ?? null
     }
   }
 
   return {
     driver,
+    pickup,
     destination,
-    visible: Boolean(driver || destination),
+    visible: Boolean(driver || pickup || destination),
   }
 }
 
@@ -133,7 +140,73 @@ function formatLastGpsUpdate(marker) {
   }
 }
 
-function MapController({ markers, selectedId, markerRefs, initialViewRef }) {
+function MapInvalidateSize({ layoutKey }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const invalidate = () => {
+      window.requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false })
+      })
+    }
+
+    const timer = window.setTimeout(invalidate, 120)
+    const container = map.getContainer()?.parentElement
+    const observer = container && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(invalidate)
+      : null
+    observer?.observe(container)
+    window.addEventListener('resize', invalidate)
+
+    return () => {
+      window.clearTimeout(timer)
+      observer?.disconnect()
+      window.removeEventListener('resize', invalidate)
+    }
+  }, [map, layoutKey])
+
+  return null
+}
+
+function AutoFitBounds({ markers, routeLines, selectedAssignmentId }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const bounds = L.latLngBounds([])
+    let relevant = markers
+
+    if (selectedAssignmentId != null) {
+      relevant = markers.filter((m) => markerBelongsToAssignment(m.id, selectedAssignmentId))
+    }
+
+    relevant.forEach((m) => bounds.extend([m.lat, m.lng]))
+
+    const relevantLineIds = selectedAssignmentId != null
+      ? new Set([
+          `line-${selectedAssignmentId}`,
+          `delivery-route-${selectedAssignmentId}`,
+        ])
+      : null
+
+    routeLines.forEach((line) => {
+      if (relevantLineIds && !relevantLineIds.has(String(line.id))) return
+      if (Array.isArray(line.polyline) && line.polyline.length > 0) {
+        line.polyline.forEach((p) => bounds.extend(p))
+      } else if (Number.isFinite(line?.from?.lat) && Number.isFinite(line?.to?.lat)) {
+        bounds.extend([line.from.lat, line.from.lng])
+        bounds.extend([line.to.lat, line.to.lng])
+      }
+    })
+
+    if (!bounds.isValid()) return
+
+    map.fitBounds(bounds, { padding: [48, 48], maxZoom: 15, animate: true })
+  }, [map, markers, routeLines, selectedAssignmentId])
+
+  return null
+}
+
+function MapController({ markers, selectedAssignmentId, markerRefs, initialViewRef }) {
   const map = useMap()
 
   useEffect(() => {
@@ -146,19 +219,27 @@ function MapController({ markers, selectedId, markerRefs, initialViewRef }) {
   }, [map, initialViewRef])
 
   useEffect(() => {
-    if (!selectedId) return
-    const m = markers.find((mk) => mk.id === selectedId)
-    if (!m) return
+    if (selectedAssignmentId == null) return
 
-    map.flyTo([m.lat, m.lng], Math.max(map.getZoom(), 14), { duration: 0.7, easeLinearity: 0.5 })
+    const relevant = markers.filter((m) => markerBelongsToAssignment(m.id, selectedAssignmentId))
+    if (relevant.length === 0) return
 
-    const timer = setTimeout(() => {
-      const ref = markerRefs.current[selectedId]
+    if (relevant.length === 1) {
+      const [only] = relevant
+      map.flyTo([only.lat, only.lng], Math.max(map.getZoom(), 14), { duration: 0.7, easeLinearity: 0.5 })
+    }
+
+    const openId = relevant.find((m) => m.kind === 'driver')?.id
+      ?? relevant.find((m) => m.kind === 'pickup')?.id
+      ?? relevant[0]?.id
+
+    const timer = window.setTimeout(() => {
+      const ref = openId ? markerRefs.current[openId] : null
       if (ref) ref.openPopup()
-    }, 300)
+    }, 350)
 
-    return () => clearTimeout(timer)
-  }, [selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => window.clearTimeout(timer)
+  }, [selectedAssignmentId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null
 }
@@ -218,6 +299,12 @@ function MapLegend() {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
         </span>
         <span>Driver</span>
+      </div>
+      <div className="dx-fleet-map-legend__item">
+        <span className="dx-fleet-map-legend__swatch" style={{ color: PICKUP_COLOR }} aria-hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/></svg>
+        </span>
+        <span>Pickup</span>
       </div>
       <div className="dx-fleet-map-legend__item">
         <span className="dx-fleet-map-legend__swatch" style={{ color: '#dc2626' }} aria-hidden>
@@ -336,9 +423,20 @@ function MapSkeleton() {
   )
 }
 
-function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = [], historyPolylines = [], loading = false }) {
+function LiveFleetMap({
+  markers = [],
+  selectedId = null,
+  selectedAssignmentId = null,
+  onSelect,
+  routeLines = [],
+  historyPolylines = [],
+  loading = false,
+  hasActiveDeliveries = false,
+  locationWarnings = [],
+}) {
   const markerRefs = useRef({})
   const initialViewRef = useRef(null)
+  const activeAssignmentId = selectedAssignmentId ?? selectedId
 
   const valid = useMemo(
     () => markers.filter((m) => Number.isFinite(m.lat) && Number.isFinite(m.lng)),
@@ -377,11 +475,12 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
   )
 
   const trackingContext = useMemo(
-    () => resolveTrackingContext(valid, selectedId),
-    [valid, selectedId],
+    () => resolveTrackingContext(valid, activeAssignmentId),
+    [valid, activeAssignmentId],
   )
 
   const { driver: driverMarker, destination: destinationMarker, visible: showInfoPanel } = trackingContext
+  const layoutKey = showInfoPanel ? 'with-panel' : 'full'
 
   if (loading && valid.length === 0) {
     return <MapSkeleton />
@@ -390,11 +489,23 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
   if (valid.length === 0) {
     return (
       <div className="dx-fleet-map-empty">
-        No GPS coordinates yet.
-        <br />
-        <span style={{ fontSize: '0.8125rem' }}>
-          Drivers will appear on the map after their first location update.
-        </span>
+        {hasActiveDeliveries ? (
+          <>
+            Map markers could not be rendered for the active deliveries.
+            <br />
+            <span style={{ fontSize: '0.8125rem' }}>
+              Check the location warnings above for missing pickup, destination, or driver GPS data.
+            </span>
+          </>
+        ) : (
+          <>
+            No active deliveries to track.
+            <br />
+            <span style={{ fontSize: '0.8125rem' }}>
+              Assigned drivers will appear here once deliveries are in progress.
+            </span>
+          </>
+        )}
       </div>
     )
   }
@@ -412,9 +523,15 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
+          <MapInvalidateSize layoutKey={layoutKey} />
+          <AutoFitBounds
+            markers={valid}
+            routeLines={validRouteLines}
+            selectedAssignmentId={activeAssignmentId}
+          />
           <MapController
             markers={valid}
-            selectedId={selectedId}
+            selectedAssignmentId={activeAssignmentId}
             markerRefs={markerRefs}
             initialViewRef={initialViewRef}
           />
@@ -445,8 +562,9 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
                 positions={positions}
                 pathOptions={{
                   color,
-                  weight: 4.5,
-                  opacity: 0.88,
+                  weight: line.dashed ? 3 : 4.5,
+                  opacity: line.dashed ? 0.72 : 0.88,
+                  dashArray: line.dashed ? '8 10' : undefined,
                   lineCap: 'round',
                   lineJoin: 'round',
                 }}
@@ -455,7 +573,7 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
           })}
 
           {valid.map((m) => {
-            const isSelected = m.id === selectedId
+            const isSelected = markerBelongsToAssignment(m.id, activeAssignmentId)
             const markerKind = m.kind ?? 'driver'
             const popupTitle = markerKind === 'destination'
               ? 'Delivery Destination'
@@ -484,11 +602,11 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
                   <div className={`dx-map-popup${markerKind === 'destination' ? ' dx-map-popup--destination' : ''}`}>
                     <div className="dx-map-popup__title">{popupTitle}</div>
 
-                    {markerKind === 'destination' ? (
+                    {markerKind === 'destination' || markerKind === 'pickup' ? (
                       <>
                         <div className="dx-map-popup__row">
-                          <span className="dx-map-popup__label">Customer</span>
-                          <span>{m.customerName ?? '—'}</span>
+                          <span className="dx-map-popup__label">{markerKind === 'pickup' ? 'Pickup' : 'Customer'}</span>
+                          <span>{markerKind === 'destination' ? (m.customerName ?? '—') : (m.address ?? '—')}</span>
                         </div>
                         <div className="dx-map-popup__row">
                           <span className="dx-map-popup__label">Address</span>
@@ -575,13 +693,18 @@ function LiveFleetMap({ markers = [], selectedId = null, onSelect, routeLines = 
 }
 
 function LiveFleetMapWithUnavailableMessage(props) {
-  const { unavailableMessage } = props
+  const { unavailableMessage, locationWarnings = [] } = props
   return (
     <>
       <LiveFleetMap {...props} />
       {unavailableMessage ? (
         <p className="dx-fleet-map-unavailable" role="status">
           {unavailableMessage}
+        </p>
+      ) : null}
+      {locationWarnings.length > 0 && import.meta.env.DEV ? (
+        <p className="dx-fleet-map-unavailable" role="status">
+          {locationWarnings.length} location warning{locationWarnings.length === 1 ? '' : 's'} logged to the browser console.
         </p>
       ) : null}
     </>

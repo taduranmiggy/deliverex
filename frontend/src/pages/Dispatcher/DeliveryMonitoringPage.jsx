@@ -41,6 +41,42 @@ function buildOsmSearchUrl(query) {
   return `https://www.openstreetmap.org/search?query=${encodeURIComponent(query || '')}`
 }
 
+function resolveAssignmentId(markerId) {
+  if (markerId == null) return null
+  const raw = String(markerId)
+  const match = raw.match(/^(?:pickup|destination)-(\d+)$/)
+  if (match) return Number(match[1])
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : raw
+}
+
+function logTrackingDebug(assignment, pickupCoords, destCoords, gps) {
+  if (import.meta.env.PROD) return
+  const jobOrderId = assignment.job_order_id
+  const pickupAddress = buildDisplayAddress('pickup', assignment.job_order) || assignment.job_order?.pickup_location || '—'
+  const destinationAddress = buildDisplayAddress('dropoff', assignment.job_order) || assignment.job_order?.dropoff_location || '—'
+  const status = assignment.location_status ?? {}
+
+  console.groupCollapsed(`[Tracking] Job ${jobOrderId} / Assignment ${assignment.id}`)
+  console.log('Pickup Address:', pickupAddress)
+  console.log('Pickup Coordinates:', pickupCoords ?? status.pickup_coordinates ?? assignment.pickup ?? null)
+  console.log('Destination Address:', destinationAddress)
+  console.log('Destination Coordinates:', destCoords ?? status.destination_coordinates ?? assignment.destination ?? null)
+  console.log('Driver Coordinates:', gps ?? assignment.location ?? null)
+  console.log('API location_status:', status)
+  console.log('API Response slice:', {
+    pickup: assignment.pickup,
+    destination: assignment.destination,
+    location: assignment.location,
+    route: assignment.route,
+    delivery_route: assignment.delivery_route,
+  })
+  if ((status.warnings ?? []).length > 0) {
+    console.warn('Location warnings:', status.warnings)
+  }
+  console.groupEnd()
+}
+
 function locationToGpsMapEntry(location) {
   if (!location?.lat || !location?.lng) return null
   if (!isValidMapCoordinate(location.lat, location.lng)) return null
@@ -108,7 +144,8 @@ function DeliveryMonitoringPage() {
   }, [selectedId])
 
   const handleSelect = useCallback((id) => {
-    setSelectedId((prev) => (prev === id ? null : id))
+    const assignmentId = resolveAssignmentId(id)
+    setSelectedId((prev) => (prev === assignmentId ? null : assignmentId))
   }, [])
 
   const handleAcknowledge = async (reportId) => {
@@ -123,9 +160,10 @@ function DeliveryMonitoringPage() {
     }
   }
 
-  const { mapMarkers, routeLines, unavailableMessage } = useMemo(() => {
+  const { mapMarkers, routeLines, locationWarnings, unavailableMessage } = useMemo(() => {
     const markers = []
     const lines = []
+    const warnings = []
     let missingDriverGps = false
 
     assignments.forEach((a) => {
@@ -140,6 +178,12 @@ function DeliveryMonitoringPage() {
       const destinationAvailable = Number.isFinite(dropoffLat) && Number.isFinite(dropoffLng)
       const pickupAvailable = Number.isFinite(pickupLat) && Number.isFinite(pickupLng)
       const jobPublicId = formatJobPublicId(a.job_order_id)
+
+      logTrackingDebug(a, pickupCoords, destCoords, gps)
+
+      ;(a.location_status?.warnings ?? []).forEach((message) => {
+        warnings.push({ assignmentId: a.id, jobOrderId: a.job_order_id, message })
+      })
 
       if (pickupAvailable) {
         markers.push({
@@ -165,6 +209,20 @@ function DeliveryMonitoringPage() {
           customerName: buildDisplayName(a.job_order) || '—',
           address: destinationAddress,
           mapsUrl: buildOsmCoordinateUrl(dropoffLat, dropoffLng),
+        })
+      }
+
+      if (pickupAvailable && destinationAvailable) {
+        lines.push({
+          id: `delivery-route-${a.id}`,
+          from: { lat: pickupLat, lng: pickupLng },
+          to: { lat: dropoffLat, lng: dropoffLng },
+          status: a.status,
+          color: '#64748b',
+          dashed: true,
+          polyline: Array.isArray(a.delivery_route?.polyline) && a.delivery_route.polyline.length > 1
+            ? a.delivery_route.polyline
+            : undefined,
         })
       }
 
@@ -209,6 +267,7 @@ function DeliveryMonitoringPage() {
     return {
       mapMarkers: markers,
       routeLines: lines,
+      locationWarnings: warnings,
       unavailableMessage: missingDriverGps ? 'Driver location is currently unavailable.' : '',
     }
   }, [assignments, gpsMap, handleSelect])
@@ -234,13 +293,24 @@ function DeliveryMonitoringPage() {
       <div className="dx-split-bestfit">
         <div className="dx-panel" style={{ marginBottom: 0 }}>
           <h3 className="dx-panel-title">Last Known Locations</h3>
+          {locationWarnings.length > 0 && (
+            <div className="dx-fleet-location-warnings" role="alert">
+              {locationWarnings.map((item) => (
+                <p key={`${item.assignmentId}-${item.message}`}>
+                  <strong>Job {formatJobPublicId(item.jobOrderId)}:</strong> {item.message}
+                </p>
+              ))}
+            </div>
+          )}
           <LiveFleetMap
             markers={mapMarkers}
             routeLines={routeLines}
             unavailableMessage={unavailableMessage}
-            selectedId={selectedId}
+            locationWarnings={locationWarnings}
+            selectedAssignmentId={selectedId}
             onSelect={handleSelect}
             loading={initialLoading && assignments.length === 0}
+            hasActiveDeliveries={assignments.length > 0}
           />
         </div>
 

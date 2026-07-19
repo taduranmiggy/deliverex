@@ -80,6 +80,7 @@ class FleetLiveTrackingTest extends TestCase
                     ],
                 ]],
             ], 200),
+            'nominatim.openstreetmap.org/*' => Http::response([], 200),
         ]);
 
         $response = $this->apiAs($dispatcher)->getJson('/api/dispatch/fleet-live');
@@ -92,6 +93,9 @@ class FleetLiveTrackingTest extends TestCase
             ->assertJsonPath('data.0.pickup.lat', 14.5995)
             ->assertJsonPath('data.0.destination.lat', 14.676)
             ->assertJsonPath('data.0.route.source', 'osrm')
+            ->assertJsonPath('data.0.delivery_route.source', 'osrm')
+            ->assertJsonPath('data.0.location_status.pickup_resolved', true)
+            ->assertJsonPath('data.0.location_status.destination_resolved', true)
             ->assertJsonStructure([
                 'synced_at',
                 'data' => [[
@@ -101,6 +105,14 @@ class FleetLiveTrackingTest extends TestCase
                     'destination' => ['lat', 'lng'],
                     'location' => ['lat', 'lng', 'at', 'offline'],
                     'route' => ['polyline', 'distance_label', 'duration_label', 'source'],
+                    'delivery_route' => ['polyline', 'distance_label', 'duration_label', 'source'],
+                    'location_status' => [
+                        'pickup_resolved',
+                        'destination_resolved',
+                        'pickup_address',
+                        'destination_address',
+                        'warnings',
+                    ],
                     'driver',
                     'vehicle',
                     'job_order',
