@@ -72,6 +72,13 @@ return [
         'openrouteservice_url' => env('OPENROUTESERVICE_URL', 'https://api.openrouteservice.org/v2/directions/driving-car'),
     ],
 
+    'geocoding' => [
+        'openrouteservice_url' => env(
+            'OPENROUTESERVICE_GEOCODE_URL',
+            'https://api.openrouteservice.org/geocode/search',
+        ),
+    ],
+
     /** Log geocode, GPS, routing stages when true (debug only). */
     'debug_pipeline' => filter_var(env('GPS_DEBUG_PIPELINE', false), FILTER_VALIDATE_BOOL),
 

@@ -3,6 +3,7 @@
 namespace App\Services\Address;
 
 use App\Services\Delivery\AddressGeocoder;
+use App\Support\JobOrderAddressFormatter;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -53,7 +54,9 @@ class StandardizedAddressService
         $city = mb_strtoupper(trim((string) $resolved['city']['name']), 'UTF-8');
         $barangay = mb_strtoupper(trim((string) $resolved['barangay']['name']), 'UTF-8');
         $formatted = $this->format($street, $barangay, $city, $province, $region);
-        $coordinates = $this->geocoder->geocode($formatted);
+        $coordinates = $this->geocoder->geocodeFirst(
+            $this->geocodeCandidates($street, $barangay, $city, $province, $region, $formatted),
+        );
 
         if (! $coordinates) {
             throw ValidationException::withMessages([
@@ -118,5 +121,60 @@ class StandardizedAddressService
         }
 
         return implode(', ', array_values($unique));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function geocodeCandidates(
+        string $street,
+        string $barangay,
+        string $city,
+        ?string $province,
+        string $region,
+        string $formatted,
+    ): array {
+        $barangayLabel = preg_match('/^(barangay|brgy\.?\s)/i', $barangay)
+            ? $barangay
+            : 'Barangay '.$barangay;
+
+        return $this->uniqueNonEmpty([
+            $formatted,
+            JobOrderAddressFormatter::formatParts([$street, $barangayLabel, $city, $province, $region]),
+            JobOrderAddressFormatter::formatParts([$street, $barangay, $city, $province]),
+            JobOrderAddressFormatter::formatParts([$barangayLabel, $city, $province, $region]),
+            JobOrderAddressFormatter::formatParts([$barangay, $city, $province]),
+            JobOrderAddressFormatter::formatParts([$city, $province, $region]),
+            JobOrderAddressFormatter::formatParts([$city, $province]),
+            $city.', '.$region.', Philippines',
+            $city.', Philippines',
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $values
+     * @return list<string>
+     */
+    private function uniqueNonEmpty(array $values): array
+    {
+        $seen = [];
+        $unique = [];
+
+        foreach ($values as $value) {
+            $value = trim($value);
+            if ($value === '') {
+                continue;
+            }
+
+            $key = mb_strtolower($value);
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $unique[] = $value;
+        }
+
+        return $unique;
     }
 }

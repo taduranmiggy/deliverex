@@ -17,6 +17,7 @@ class PsgcAddressServiceTest extends TestCase
         Cache::flush();
         Http::preventStrayRequests();
         config()->set('psgc.base_url', 'https://psgc.test/api/v2');
+        config()->set('gps.routing.openrouteservice_api_key', null);
     }
 
     public function test_psgc_lists_are_cached(): void

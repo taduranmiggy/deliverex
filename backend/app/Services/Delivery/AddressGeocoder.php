@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\Log;
 class AddressGeocoder
 {
     /**
-     * Resolve latitude/longitude for an address via OpenStreetMap Nominatim.
-     * Successful lookups are cached to avoid repeated external requests.
+     * Resolve latitude/longitude for an address.
+     * Uses OpenRouteService when configured, then falls back to Nominatim.
      *
      * @return array{lat: float, lng: float}|null
      */
@@ -23,7 +23,7 @@ class AddressGeocoder
             return null;
         }
 
-        $cacheKey = 'deliverex.geocode.'.md5($query);
+        $cacheKey = 'deliverex.geocode.v2.'.md5($query);
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['lat'], $cached['lng'])) {
             return $cached;
@@ -54,7 +54,7 @@ class AddressGeocoder
             }
 
             if ($attempted) {
-                usleep(1_100_000);
+                usleep(350_000);
             }
 
             $attempted = true;
@@ -84,23 +84,87 @@ class AddressGeocoder
     /** @return array{lat: float, lng: float}|null */
     private function performLookup(string $query): ?array
     {
+        $openRoute = $this->performOpenRouteServiceLookup($query);
+        if ($openRoute) {
+            return $openRoute;
+        }
+
+        return $this->performNominatimLookup($query);
+    }
+
+    /** @return array{lat: float, lng: float}|null */
+    private function performOpenRouteServiceLookup(string $query): ?array
+    {
+        $apiKey = config('gps.routing.openrouteservice_api_key');
+        if (! $apiKey) {
+            return null;
+        }
+
+        try {
+            $url = config(
+                'gps.geocoding.openrouteservice_url',
+                'https://api.openrouteservice.org/geocode/search',
+            );
+
+            $response = Http::timeout(12)
+                ->withHeaders(['Authorization' => $apiKey])
+                ->get($url, [
+                    'text' => $query,
+                    'size' => 1,
+                    'boundary.country' => 'PH',
+                ]);
+
+            if (! $response->successful()) {
+                Log::warning('OpenRouteService geocoding HTTP failure', [
+                    'address' => $query,
+                    'status' => $response->status(),
+                ]);
+
+                return null;
+            }
+
+            $feature = $response->json()['features'][0] ?? null;
+            $coordinates = is_array($feature) ? ($feature['geometry']['coordinates'] ?? null) : null;
+            if (! is_array($coordinates) || count($coordinates) < 2) {
+                return null;
+            }
+
+            return $this->validateCoordinates(
+                (float) $coordinates[1],
+                (float) $coordinates[0],
+                $query,
+                'openrouteservice',
+            );
+        } catch (\Throwable $e) {
+            Log::warning('OpenRouteService geocoding failed', [
+                'address' => $query,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /** @return array{lat: float, lng: float}|null */
+    private function performNominatimLookup(string $query): ?array
+    {
         try {
             $response = Http::withHeaders([
                 'User-Agent' => 'Deliverex/1.0 (logistics capstone)',
             ])
                 ->timeout(10)
                 ->get('https://nominatim.openstreetmap.org/search', [
-                    'q'              => $query,
-                    'format'         => 'json',
-                    'limit'          => 1,
-                    'countrycodes'   => 'ph',
+                    'q' => $query,
+                    'format' => 'json',
+                    'limit' => 1,
+                    'countrycodes' => 'ph',
                     'addressdetails' => 0,
                 ]);
 
             if (! $response->successful()) {
                 Log::warning('Address geocoding HTTP failure', [
                     'address' => $query,
-                    'status'  => $response->status(),
+                    'status' => $response->status(),
                 ]);
 
                 return null;
@@ -111,35 +175,45 @@ class AddressGeocoder
                 return null;
             }
 
-            $coords = [
-                'lat' => (float) $results[0]['lat'],
-                'lng' => (float) $results[0]['lon'],
-            ];
-
-            if (! GpsCoordinateValidator::isUsable($coords['lat'], $coords['lng'])) {
-                Log::warning('Geocoder returned invalid coordinates', [
-                    'address' => $query,
-                    'lat' => $coords['lat'],
-                    'lng' => $coords['lng'],
-                ]);
-
-                return null;
-            }
-
-            LocationPipelineLogger::log('geocode_success', [
-                'address' => $query,
-                'lat' => $coords['lat'],
-                'lng' => $coords['lng'],
-            ]);
-
-            return $coords;
+            return $this->validateCoordinates(
+                (float) $results[0]['lat'],
+                (float) $results[0]['lon'],
+                $query,
+                'nominatim',
+            );
         } catch (\Throwable $e) {
             Log::warning('Address geocoding failed', [
                 'address' => $query,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
             return null;
         }
+    }
+
+    /** @return array{lat: float, lng: float}|null */
+    private function validateCoordinates(float $lat, float $lng, string $query, string $source): ?array
+    {
+        $coords = ['lat' => $lat, 'lng' => $lng];
+
+        if (! GpsCoordinateValidator::isUsable($coords['lat'], $coords['lng'])) {
+            Log::warning('Geocoder returned invalid coordinates', [
+                'address' => $query,
+                'source' => $source,
+                'lat' => $coords['lat'],
+                'lng' => $coords['lng'],
+            ]);
+
+            return null;
+        }
+
+        LocationPipelineLogger::log('geocode_success', [
+            'address' => $query,
+            'source' => $source,
+            'lat' => $coords['lat'],
+            'lng' => $coords['lng'],
+        ]);
+
+        return $coords;
     }
 }
