@@ -29,6 +29,7 @@ export function PhonePhInput({
         type="tel"
         inputMode="numeric"
         autoComplete="tel-national"
+        data-preserve-case="true"
         className={`dx-phone-ph__input${error ? ' dx-phone-ph__input--error' : ''}`}
         value={digits}
         onChange={handleChange}

@@ -171,6 +171,8 @@ function CustomerWebsiteDashboardPage() {
               <input
                 id="customer-web-track-id"
                 type="text"
+                data-preserve-case="true"
+                className="dx-preserve-case"
                 value={trackCode}
                 onChange={(e) => {
                   setTrackCode(e.target.value)

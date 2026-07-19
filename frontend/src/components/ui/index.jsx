@@ -5,6 +5,7 @@
 import { Children, useEffect, useState } from 'react'
 import { API_URL } from '../../config/api.js'
 import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
+import { withUppercaseChange } from '../../utils/autoUppercaseInput'
 import {
   Loader2, Package, Search, TrendingUp, TrendingDown,
 } from 'lucide-react'
@@ -228,20 +229,62 @@ export function LoadingSpinner({ size = 20, label = 'Loading…' }) {
 }
 
 /* ─── SearchInput ───────────────────────────────────────────── */
-export function SearchInput({ value, onChange, placeholder = 'Search…', style = {} }) {
+export function SearchInput({ value, onChange, placeholder = 'Search…', style = {}, preserveCase = false }) {
   return (
     <div style={{ position: 'relative', ...style }}>
       <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }} />
       <input
         type="search"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={withUppercaseChange(onChange, { preserveCase })}
         placeholder={placeholder}
+        {...(preserveCase ? { 'data-preserve-case': 'true', className: 'dx-preserve-case' } : {})}
         style={{ paddingLeft: 36, paddingRight: 12, paddingTop: 9, paddingBottom: 9, border: '1.5px solid var(--stroke)', borderRadius: 10, font: 'inherit', fontSize: '0.875rem', background: 'var(--surface)', width: '100%' }}
         onFocus={(e) => { e.target.style.borderColor = 'var(--color-primary)'; e.target.style.boxShadow = '0 0 0 3px rgba(37,99,235,0.1)'; }}
         onBlur={(e) => { e.target.style.borderColor = 'var(--stroke)'; e.target.style.boxShadow = 'none'; }}
       />
     </div>
+  )
+}
+
+/**
+ * Text input with explicit auto-uppercase (also covered globally by AutoUppercaseInputProvider).
+ * Set preserveCase for emails, tokens, tracking IDs, etc.
+ */
+export function UppercaseTextInput({
+  preserveCase = false,
+  onChange,
+  className = '',
+  ...props
+}) {
+  const cls = [className, preserveCase ? 'dx-preserve-case' : ''].filter(Boolean).join(' ')
+  return (
+    <input
+      {...props}
+      className={cls}
+      onChange={withUppercaseChange(onChange, { preserveCase })}
+      {...(preserveCase ? { 'data-preserve-case': 'true' } : {})}
+    />
+  )
+}
+
+/**
+ * Textarea with explicit auto-uppercase (also covered globally by AutoUppercaseInputProvider).
+ */
+export function UppercaseTextarea({
+  preserveCase = false,
+  onChange,
+  className = '',
+  ...props
+}) {
+  const cls = [className, preserveCase ? 'dx-preserve-case' : ''].filter(Boolean).join(' ')
+  return (
+    <textarea
+      {...props}
+      className={cls}
+      onChange={withUppercaseChange(onChange, { preserveCase })}
+      {...(preserveCase ? { 'data-preserve-case': 'true' } : {})}
+    />
   )
 }
 

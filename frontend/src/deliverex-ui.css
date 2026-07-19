@@ -6145,6 +6145,12 @@
   text-align: center;
 }
 
+.dx-job-route-map__stage--unavailable {
+  display: block;
+  padding: 0;
+  background: var(--slate-100);
+}
+
 .dx-job-route-map--detail .dx-job-route-map__stage {
   height: clamp(200px, 42vh, 340px);
 }

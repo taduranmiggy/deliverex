@@ -287,10 +287,10 @@ export default function JobOrderRouteMap({
       <div className="dx-job-route-map__layout">
         <div className="dx-job-route-map__map-col">
           {mapUnavailable ? (
-            <div className="dx-job-route-map__stage dx-job-route-map__stage--empty">
-              <AlertTriangle size={18} aria-hidden />
-              <span>{warningMessage}</span>
-            </div>
+            <div
+              className="dx-job-route-map__stage dx-job-route-map__stage--empty dx-job-route-map__stage--unavailable"
+              aria-hidden="true"
+            />
           ) : (
             <div className="dx-job-route-map__stage">
               <MapContainer

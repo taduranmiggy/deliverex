@@ -221,3 +221,5 @@ input, select, textarea { font: inherit; }
     animation: none !important;
   }
 }
+
+/* Auto-uppercase inputs: opt out with data-preserve-case="true" or class .dx-preserve-case */

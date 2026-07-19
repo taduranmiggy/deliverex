@@ -11,6 +11,7 @@ import './styles/accessibility.css'
 import './motion/motion.css'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
+import AutoUppercaseInputProvider from './components/AutoUppercaseInputProvider'
 import PwaSplashScreen from './components/customer/PwaSplashScreen'
 import AppRouter from './routes/AppRouter'
 
@@ -22,7 +23,9 @@ function App() {
       </a>
       <AuthProvider>
         <ToastProvider>
-          <AppRouter />
+          <AutoUppercaseInputProvider>
+            <AppRouter />
+          </AutoUppercaseInputProvider>
         </ToastProvider>
       </AuthProvider>
       <PwaSplashScreen />

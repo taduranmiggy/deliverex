@@ -79,10 +79,12 @@ function LandingPage() {
                 <div style={{ position: 'relative', flex: 1, minWidth: 240 }}>
                   <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.5)', pointerEvents: 'none' }} />
                   <input
+                    id="landing-tracking-code"
                     value={trackCode}
                     onChange={(e) => setTrackCode(e.target.value)}
                     placeholder="Enter tracking ID…"
-                    className="motion-focus-glow"
+                    data-preserve-case="true"
+                    className="motion-focus-glow dx-preserve-case"
                     style={{ width: '100%', padding: '14px 14px 14px 42px', borderRadius: 14, border: '1.5px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '1rem', backdropFilter: 'blur(10px)', outline: 'none' }}
                   />
                 </div>

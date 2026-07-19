@@ -130,7 +130,8 @@ function TrackingPage() {
                 <input
                   id="tid"
                   type="text"
-                  className="pwa-track-search__input"
+                  className="pwa-track-search__input dx-preserve-case"
+                  data-preserve-case="true"
                   placeholder="e.g. XKFP2NQRLA"
                   value={code}
                   onChange={(e) => {
