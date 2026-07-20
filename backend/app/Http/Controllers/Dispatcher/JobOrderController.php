@@ -181,8 +181,8 @@ class JobOrderController extends Controller
 
         // Official PSGC labels replace client-supplied labels. Coordinates are
         // always resolved and persisted by the server before the job is created.
-        $data = array_merge($data, $this->addresses->normalize($data, 'pickup', false, false));
-        $data = array_merge($data, $this->addresses->normalize($data, 'dropoff', false, false));
+        $data = array_merge($data, $this->addresses->normalize($data, 'pickup', true, false));
+        $data = array_merge($data, $this->addresses->normalize($data, 'dropoff', true, false));
 
         JobOrderAddressValidator::validatePayload($data);
 

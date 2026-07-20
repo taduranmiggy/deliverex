@@ -267,6 +267,45 @@ class AddressGeocoder
         return $best;
     }
 
+    /** @return array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}|null */
+    public function geocodePlaceId(string $placeId): ?array
+    {
+        $placeId = trim($placeId);
+        if ($placeId === '' || ! $this->googleMaps->isConfigured()) {
+            return null;
+        }
+
+        $cacheKey = 'deliverex.geocode.google.place.v1.'.hash('sha256', $placeId);
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && isset($cached['lat'], $cached['lng'])) {
+            return $cached;
+        }
+
+        try {
+            $response = $this->googleMaps->geocodePlaceId($placeId);
+        } catch (\Throwable $exception) {
+            Log::warning('Google place_id geocoding failed', [
+                'place_id' => $placeId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($response === null) {
+            return null;
+        }
+
+        $result = $this->pickBestResult($response['results'] ?? [], $placeId, new GeocodeAnchor, null);
+        if ($result) {
+            $result['place_id'] = $placeId;
+            Cache::put($cacheKey, $result, now()->addDays(30));
+            LogGeocodeSelection::log($placeId, $placeId, $result);
+        }
+
+        return $result;
+    }
+
     /** @param  array<string, mixed>  $result
      * @return list<string>
      */

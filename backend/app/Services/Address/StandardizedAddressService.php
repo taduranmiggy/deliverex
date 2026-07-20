@@ -70,20 +70,31 @@ class StandardizedAddressService
             $street,
         );
         $submitted = $this->submittedCoordinates($data, $prefix);
-        $coordinates = $confirmed ?: $submitted ?: $this->geocoder->geocodeFirst(
-            $this->geocodeCandidates($street, $barangay, $city, $province, $region, $formatted),
-            [
-                'city' => $city,
-                'province' => $province,
-                'region' => $region,
-                'barangay' => $barangay,
-                'region_code' => (string) ($resolved['region']['code'] ?? ''),
-            ],
-        );
+        $coordinates = $confirmed ?: $submitted;
+
+        if (! $coordinates) {
+            $placeId = trim((string) ($data["{$prefix}_coordinate_place_id"] ?? ''));
+            if ($placeId !== '') {
+                $coordinates = $this->geocoder->geocodePlaceId($placeId);
+            }
+        }
+
+        if (! $coordinates) {
+            $coordinates = $this->geocoder->geocodeFirst(
+                $this->geocodeCandidates($street, $barangay, $city, $province, $region, $formatted, $data, $prefix),
+                [
+                    'city' => $city,
+                    'province' => $province,
+                    'region' => $region,
+                    'barangay' => $barangay,
+                    'region_code' => (string) ($resolved['region']['code'] ?? ''),
+                ],
+            );
+        }
 
         if (! $coordinates && $requireGeocode) {
             throw ValidationException::withMessages([
-                "{$prefix}_address" => ['The standardized address could not be geocoded. Check the street details or try again when the geocoding service is available.'],
+                "{$prefix}_address" => ['Could not resolve map coordinates for this address. Pick a Google suggestion, or confirm GOOGLE_MAPS_API_KEY is set on the server. Zip codes are not required in the Philippines.'],
             ]);
         }
 
@@ -184,6 +195,8 @@ class StandardizedAddressService
         ?string $province,
         string $region,
         string $formatted,
+        array $data = [],
+        string $prefix = '',
     ): array {
         $barangayLabel = preg_match('/^(barangay|brgy\.?\s)/i', $barangay)
             ? $barangay
@@ -192,19 +205,25 @@ class StandardizedAddressService
         $streetVariants = StreetGeocodeHelper::geocodeStreetVariants($street);
         $candidates = [];
 
+        $label = trim((string) ($data["{$prefix}_coordinate_label"] ?? ''));
+        if ($label !== '') {
+            $candidates[] = $label;
+        }
+
         foreach ($streetVariants as $streetVariant) {
+            $candidates[] = JobOrderAddressFormatter::formatParts([$streetVariant, $barangay, $city, $province, 'Philippines']);
+            $candidates[] = JobOrderAddressFormatter::formatParts([$streetVariant, $city, $province, 'Philippines']);
+            $candidates[] = JobOrderAddressFormatter::formatParts([$streetVariant, $city, 'Philippines']);
             $candidates[] = $this->format($streetVariant, $barangay, $city, $province, $region);
             $candidates[] = JobOrderAddressFormatter::formatParts([$streetVariant, $barangayLabel, $city, $province, $region]);
             $candidates[] = JobOrderAddressFormatter::formatParts([$streetVariant, $barangay, $city, $province]);
         }
 
         return $this->uniqueNonEmpty(array_merge($candidates, [
-            JobOrderAddressFormatter::formatParts([$barangayLabel, $city, $province, $region]),
-            JobOrderAddressFormatter::formatParts([$barangay, $city, $province]),
-            JobOrderAddressFormatter::formatParts([$city, $province, $region]),
-            JobOrderAddressFormatter::formatParts([$city, $province]),
-            $city.', '.$region.', Philippines',
+            JobOrderAddressFormatter::formatParts([$barangay, $city, $province, 'Philippines']),
+            JobOrderAddressFormatter::formatParts([$city, $province, 'Philippines']),
             $city.', Philippines',
+            $formatted,
         ]));
     }
 
