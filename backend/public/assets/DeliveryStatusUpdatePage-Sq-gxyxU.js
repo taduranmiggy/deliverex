@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-CnSBKPes.js";import{a as t}from"./dist-DGXbI1bf.js";var n=e();function r(){return(0,n.jsx)(t,{to:`/driver`,replace:!0})}export{r as default};

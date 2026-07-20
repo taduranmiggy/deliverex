@@ -1,4 +1,5 @@
 import { apiRequest } from './client'
+import { curateBestFitResponse } from '../utils/bestFitResponse'
 
 export function fetchJobOrders(page = 1, perPage = 500)   { return apiRequest(`/dispatch/job-orders?page=${page}&per_page=${perPage}`) }
 export function fetchJobOrder(id)          { return apiRequest(`/dispatch/job-orders/${id}`) }
@@ -22,7 +23,7 @@ export function deleteJobOrder(id) {
 }
 
 export function getBestFit(jobOrderId) {
-  return apiRequest(`/dispatch/best-fit/${jobOrderId}`)
+  return apiRequest(`/dispatch/best-fit/${jobOrderId}`).then(curateBestFitResponse)
 }
 
 export function createAssignment(payload) {

@@ -1,5 +1,5 @@
-const CACHE = 'deliverex-customer-v9'
-const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg', '/customer', '/customer/login', '/customer/track', '/customer/support', '/customer/history', '/customer/about', '/customer/services']
+const CACHE = 'deliverex-customer-v19'
+const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.ico', '/favicon-16x16.png', '/favicon-32x32.png', '/apple-touch-icon.png', '/favicon-192x192.png', '/favicon-512x512.png', '/lottie/deliverex-splash.json', '/customer', '/customer/login', '/customer/track', '/customer/support', '/customer/history', '/customer/about', '/customer/services', '/customer/privacy-policy', '/customer/terms-and-conditions', '/customer/data-privacy-notice']
 
 // ─── Install: pre-cache app shell ────────────────────────────────
 self.addEventListener('install', (event) => {
@@ -18,7 +18,7 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-// ─── Fetch: cache-first for assets, network-first for navigation ─
+// ─── Fetch: network-first for navigations + hashed assets ─────────
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
 
@@ -41,12 +41,27 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Static assets: cache-first with background update
+  // Vite hashed bundles: network-first so deploys never pair new HTML with stale JS
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()))
+          }
+          return response
+        })
+        .catch(() => caches.match(event.request)),
+    )
+    return
+  }
+
+  // Other static assets: cache-first with background update
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const network = fetch(event.request)
         .then((response) => {
-          if (response.ok && /\.(js|css|svg|png|woff2?)$/i.test(url.pathname)) {
+          if (response.ok && /\.(js|css|svg|png|json|woff2?)$/i.test(url.pathname)) {
             caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()))
           }
           return response

@@ -1,0 +1,1 @@
+function e(e,t=new Date().getFullYear()){let n=Number(e)||0;return`J-${t}-${String(n).padStart(3,`0`)}`}export{e as t};
