@@ -19,6 +19,8 @@ use Illuminate\Support\Collection;
 
 class BestFitAssignmentService
 {
+    public const RECOMMENDATION_LIMIT = 12;
+
     private const SCORE_MAX = 100;
 
     private const WEIGHT_VEHICLE_CAPACITY = 25;
@@ -27,6 +29,8 @@ class BestFitAssignmentService
     private const WEIGHT_DISTANCE = 15;
     private const WEIGHT_VEHICLE_TYPE = 15;
     private const WEIGHT_SCHEDULE = 10;
+
+    private int $lastTotalScoredPairings = 0;
 
     public function __construct(
         private DriverAvailabilityService $driverAvailability,
@@ -126,7 +130,27 @@ class BestFitAssignmentService
             return $aLast <=> $bLast;
         });
 
-        return $this->diversifyByDriver($recommendations);
+        return $this->finalizeRecommendations($recommendations);
+    }
+
+    public function lastTotalScoredPairings(): int
+    {
+        return $this->lastTotalScoredPairings;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $recommendations
+     * @return list<array<string, mixed>>
+     */
+    private function finalizeRecommendations(array $recommendations): array
+    {
+        $this->lastTotalScoredPairings = count($recommendations);
+
+        return array_slice(
+            $this->diversifyByDriver($recommendations),
+            0,
+            self::RECOMMENDATION_LIMIT,
+        );
     }
 
     /**

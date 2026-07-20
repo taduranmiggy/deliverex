@@ -166,7 +166,7 @@ class BestFitPipelineDiagnosticTest extends TestCase
         $this->assertSame('No Expiry Driver', $report['drivers']['soft_scoring']['license_incomplete'][0]['name']);
     }
 
-    public function test_recommendations_are_not_capped_at_ten_drivers(): void
+    public function test_recommendations_are_capped_to_shortlist_while_preserving_unique_drivers(): void
     {
         $driverRole = Role::create(['name' => 'driver']);
         $type = VehicleType::create([
@@ -211,12 +211,60 @@ class BestFitPipelineDiagnosticTest extends TestCase
         $recommendations = $service->recommend($jobOrder);
         $uniqueDrivers = count(array_unique(array_column($recommendations, 'driver_id')));
 
-        $this->assertGreaterThan(10, count($recommendations));
+        $this->assertSame(12, count($recommendations));
         $this->assertSame(12, $uniqueDrivers);
+        $this->assertSame(12, $service->lastTotalScoredPairings());
 
         $override = $service->overrideOptions($jobOrder);
         $this->assertCount(12, $override['drivers']);
         $this->assertSame($vehicle->id, $recommendations[0]['vehicle_id']);
+    }
+
+    public function test_large_fleet_pairings_are_shortlisted_to_recommendation_limit(): void
+    {
+        $driverRole = Role::create(['name' => 'driver']);
+        $type = VehicleType::create([
+            'name' => 'ADT',
+            'wheel_type' => '12 Wheeler',
+            'min_cbm' => 30,
+            'max_cbm' => 40,
+            'status' => 'active',
+        ]);
+
+        for ($i = 1; $i <= 15; $i++) {
+            $user = User::factory()->create(['role_id' => $driverRole->id, 'email_verified_at' => now()]);
+            Driver::create([
+                'user_id' => $user->id,
+                'full_name' => "Driver {$i}",
+                'license_no' => "LIC-{$i}",
+                'license_expiry' => now()->addYear(),
+                'availability' => 'available',
+                'status' => 'available',
+            ]);
+        }
+
+        for ($i = 1; $i <= 5; $i++) {
+            Vehicle::create([
+                'plate_no' => "ADT-{$i}",
+                'type' => 'ADT',
+                'vehicle_type_id' => $type->id,
+                'cbm_capacity' => 35,
+                'status' => 'available',
+            ]);
+        }
+
+        $jobOrder = JobOrder::factory()->create([
+            'created_by' => $this->dispatcher->id,
+            'preferred_vehicle_type_id' => $type->id,
+            'load_volume_m3' => 30,
+            'status' => 'pending',
+        ]);
+
+        $service = app(BestFitAssignmentService::class);
+        $recommendations = $service->recommend($jobOrder);
+
+        $this->assertSame(BestFitAssignmentService::RECOMMENDATION_LIMIT, count($recommendations));
+        $this->assertSame(75, $service->lastTotalScoredPairings());
     }
 
     public function test_best_fit_api_includes_eligibility_meta(): void

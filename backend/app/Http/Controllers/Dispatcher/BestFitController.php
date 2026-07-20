@@ -38,6 +38,8 @@ class BestFitController extends Controller
             'meta' => [
                 ...$summary,
                 'recommendation_count' => count($recommendations),
+                'recommendation_limit' => BestFitAssignmentService::RECOMMENDATION_LIMIT,
+                'total_scored_pairings' => $this->service->lastTotalScoredPairings(),
                 'unique_recommended_drivers' => count(array_unique(array_column($recommendations, 'driver_id'))),
                 'override_driver_count' => count($overrideOptions['drivers'] ?? []),
                 'override_vehicle_count' => count($overrideOptions['vehicles'] ?? []),

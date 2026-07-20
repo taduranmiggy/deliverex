@@ -607,6 +607,8 @@ function AssignDriverVehiclePage() {
   const alternatives = recommendations.filter((r) =>
     !(top && r.driver_id === top.driver_id && r.vehicle_id === top.vehicle_id)
   )
+  const totalScoredPairings = fleetMeta?.total_scored_pairings ?? recommendations.length
+  const showingCuratedShortlist = totalScoredPairings > recommendations.length
 
   const pairTotalPages = Math.max(1, Math.ceil(overridePairings.length / pairPerPage))
   const safePairPage = Math.min(pairPage, pairTotalPages)
@@ -756,11 +758,18 @@ function AssignDriverVehiclePage() {
         <div className="dx-dispatch-grid__col">
           <div className="dx-dispatch-col-header">
             <p className="dx-dispatch-col-header__title">
-              {alternatives.length > 0 ? `${alternatives.length} alternative ${alternatives.length === 1 ? 'match' : 'matches'}` : 'Alternative Matches'}
+              {alternatives.length > 0
+                ? (showingCuratedShortlist
+                  ? `Top ${alternatives.length} alternative ${alternatives.length === 1 ? 'match' : 'matches'}`
+                  : `${alternatives.length} alternative ${alternatives.length === 1 ? 'match' : 'matches'}`)
+                : 'Alternative Matches'}
             </p>
             {fleetMeta && (
               <p className="dx-dispatch-col-header__meta">
                 Best-Fit: {fleetMeta.eligible_drivers}/{fleetMeta.total_drivers} drivers · {fleetMeta.eligible_vehicles}/{fleetMeta.total_vehicles} vehicles
+                {showingCuratedShortlist && (
+                  <> · Scored {totalScoredPairings} pairings · showing top {recommendations.length}</>
+                )}
                 {' · '}
                 Override: {fleetMeta.override_pairing_count ?? overridePairings.length} pairings
                 {' '}
@@ -768,7 +777,11 @@ function AssignDriverVehiclePage() {
               </p>
             )}
             {alternatives.length > 0 && (
-              <p className="dx-dispatch-col-header__meta">Override the recommendation by assigning any match below</p>
+              <p className="dx-dispatch-col-header__meta">
+                {showingCuratedShortlist
+                  ? 'Best next options after the top recommendation — use All Override for the full manual list'
+                  : 'Override the recommendation by assigning any match below'}
+              </p>
             )}
           </div>
 
