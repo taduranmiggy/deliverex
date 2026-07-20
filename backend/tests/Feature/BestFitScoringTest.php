@@ -92,6 +92,18 @@ class BestFitScoringTest extends TestCase
                 'completed_at' => now()->subDay(),
             ]);
 
+            for ($history = 1; $history <= $index; $history++) {
+                DispatchAssignment::create([
+                    'job_order_id' => JobOrder::factory()->create(['created_by' => $this->dispatcher->id])->id,
+                    'driver_id' => $driver->id,
+                    'vehicle_id' => $vehicle->id,
+                    'assigned_by' => $this->dispatcher->id,
+                    'status' => DeliveryStatus::COMPLETED,
+                    'assigned_at' => now()->subDays(10 + $history),
+                    'completed_at' => now()->subDays(9 + $history),
+                ]);
+            }
+
             TrackingLog::create([
                 'assignment_id' => $pastAssignment->id,
                 'latitude' => 14.60 + ($index * 0.05),
@@ -188,7 +200,7 @@ class BestFitScoringTest extends TestCase
         $this->assertNotContains($busyDriver->id, $driverIds);
     }
 
-    public function test_scenario_c_vehicle_type_mismatch_is_rejected(): void
+    public function test_scenario_c_vehicle_type_mismatch_is_scored_with_warning(): void
     {
         $driverRole = Role::create(['name' => 'driver']);
         $requiredType = VehicleType::create([
@@ -233,9 +245,26 @@ class BestFitScoringTest extends TestCase
             'status' => 'available',
         ]);
 
+        $correctVehicle = Vehicle::create([
+            'plate_no' => 'DT-8888',
+            'type' => 'Dump Truck',
+            'vehicle_type_id' => $requiredType->id,
+            'cbm_capacity' => 12,
+            'status' => 'available',
+        ]);
+
         $recommendations = app(BestFitAssignmentService::class)->recommend($jobOrder);
-        $this->assertFalse(collect($recommendations)->contains(fn ($rec) => $rec['vehicle_id'] === $wrongVehicle->id));
-        $this->assertFalse(collect($recommendations)->contains(fn ($rec) => $rec['driver_id'] === $driver->id && $rec['vehicle_id'] === $wrongVehicle->id));
+        $mismatch = collect($recommendations)->first(
+            fn ($rec) => $rec['driver_id'] === $driver->id && $rec['vehicle_id'] === $wrongVehicle->id,
+        );
+        $match = collect($recommendations)->first(
+            fn ($rec) => $rec['driver_id'] === $driver->id && $rec['vehicle_id'] === $correctVehicle->id,
+        );
+
+        $this->assertNotNull($mismatch, 'Mismatched vehicle type should still appear with a lower score.');
+        $this->assertNotNull($match, 'Matching vehicle type should appear in recommendations.');
+        $this->assertGreaterThan($mismatch['score'], $match['score']);
+        $this->assertNotEmpty($mismatch['warnings']);
     }
 
     public function test_scenario_d_schedule_conflict_is_rejected(): void

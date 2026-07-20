@@ -1,6 +1,9 @@
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 
 function formatScore(candidate) {
+  if (candidate?.score_percent != null) {
+    return `${candidate.score_percent}%`
+  }
   const score = candidate?.score
   const max = candidate?.score_max ?? 100
   if (score == null) return null
@@ -8,12 +11,12 @@ function formatScore(candidate) {
 }
 
 const VISIBLE_FACTOR_KEYS = new Set([
-  'vehicle_compatibility',
-  'capacity_efficiency',
-  'driver_availability',
-  'schedule_compatibility',
   'distance_to_pickup',
-  'workload_distribution',
+  'experience',
+  'performance',
+  'availability',
+  'cargo_compatibility',
+  'penalties',
 ])
 
 function visibleFactors(candidate) {
@@ -26,8 +29,9 @@ function BestFitExplainability({ candidate, compact = false }) {
 
   const scoreLabel = formatScore(candidate)
   const factors = visibleFactors(candidate)
+  const warnings = Array.isArray(candidate?.warnings) ? candidate.warnings : []
 
-  if (!scoreLabel && factors.length === 0) return null
+  if (!scoreLabel && factors.length === 0 && warnings.length === 0) return null
 
   return (
     <div
@@ -42,7 +46,7 @@ function BestFitExplainability({ candidate, compact = false }) {
         <>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, gap: 12 }}>
             <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>
-              Match Score Breakdown
+              Best Fit Score
             </p>
             {scoreLabel && (
               <span style={{ fontSize: compact ? '0.9375rem' : '1.125rem', fontWeight: 800, color: 'var(--color-primary)', letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
@@ -52,8 +56,15 @@ function BestFitExplainability({ candidate, compact = false }) {
           </div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: compact ? 8 : 10 }}>
             {factors.map((factor) => {
-              const Icon = factor.matched ? CheckCircle2 : XCircle
-              const iconColor = factor.matched ? 'var(--color-success)' : 'var(--color-error)'
+              const isPenalty = factor.key === 'penalties' || factor.contribution < 0
+              const Icon = isPenalty && factor.contribution < 0 ? AlertTriangle : factor.matched ? CheckCircle2 : XCircle
+              const iconColor = isPenalty && factor.contribution < 0
+                ? 'var(--color-warning)'
+                : factor.matched ? 'var(--color-success)' : 'var(--color-error)'
+              const contributionLabel = factor.contribution < 0
+                ? `${factor.contribution}`
+                : `+${factor.contribution}`
+
               return (
                 <li
                   key={factor.key}
@@ -73,14 +84,39 @@ function BestFitExplainability({ candidate, compact = false }) {
                       <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 2, lineHeight: 1.4 }}>{factor.detail}</div>
                     )}
                   </div>
-                  <span style={{ fontWeight: 700, color: factor.matched ? 'var(--color-primary)' : 'var(--muted)', whiteSpace: 'nowrap' }}>
-                    +{factor.contribution}/{factor.max}
+                  <span style={{ fontWeight: 700, color: factor.contribution >= 0 ? 'var(--color-primary)' : 'var(--color-warning)', whiteSpace: 'nowrap' }}>
+                    {contributionLabel}{factor.key !== 'penalties' ? `/${factor.max}` : ''}
                   </span>
                 </li>
               )
             })}
           </ul>
         </>
+      )}
+
+      {warnings.length > 0 && (
+        <div style={{ marginTop: factors.length > 0 ? 12 : 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {warnings.map((warning) => (
+            <p
+              key={warning}
+              style={{
+                margin: 0,
+                fontSize: '0.75rem',
+                color: '#92400e',
+                background: '#fffbeb',
+                border: '1px solid #fde68a',
+                borderRadius: 8,
+                padding: '6px 10px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 6,
+              }}
+            >
+              <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+              {warning}
+            </p>
+          ))}
+        </div>
       )}
     </div>
   )

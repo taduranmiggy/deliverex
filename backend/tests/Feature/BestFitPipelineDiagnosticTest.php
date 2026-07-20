@@ -130,7 +130,7 @@ class BestFitPipelineDiagnosticTest extends TestCase
         $this->assertSame($vehicle->id, $recommendations[0]['vehicle_id']);
     }
 
-    public function test_diagnostics_report_license_incomplete_removals(): void
+    public function test_diagnostics_report_license_incomplete_as_soft_scoring(): void
     {
         $driverRole = Role::create(['name' => 'driver']);
         $driverUser = User::factory()->create(['role_id' => $driverRole->id, 'email_verified_at' => now()]);
@@ -160,10 +160,10 @@ class BestFitPipelineDiagnosticTest extends TestCase
 
         $report = app(BestFitPipelineDiagnostic::class)->analyze($jobOrder);
 
-        $this->assertSame(0, $report['summary']['recommendation_count']);
-        $this->assertSame('all_drivers_filtered', $report['bottleneck']);
-        $this->assertCount(1, $report['drivers']['removed']['license_incomplete']);
-        $this->assertSame('No Expiry Driver', $report['drivers']['removed']['license_incomplete'][0]['name']);
+        $this->assertGreaterThan(0, $report['summary']['recommendation_count']);
+        $this->assertNull($report['bottleneck']);
+        $this->assertCount(1, $report['drivers']['soft_scoring']['license_incomplete']);
+        $this->assertSame('No Expiry Driver', $report['drivers']['soft_scoring']['license_incomplete'][0]['name']);
     }
 
     public function test_recommendations_are_not_capped_at_ten_drivers(): void

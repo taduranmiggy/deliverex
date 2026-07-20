@@ -85,11 +85,14 @@ class BestFitPipelineDiagnostic
         $removed = [
             'inactive_status'      => [],
             'license_missing'      => [],
-            'license_incomplete'   => [],
             'license_expired'      => [],
-            'admin_offline'        => [],
             'active_assignment'    => [],
-            'schedule_conflict'    => [],
+        ];
+
+        $softScoring = [
+            'license_incomplete' => [],
+            'admin_offline'      => [],
+            'schedule_conflict'  => [],
         ];
 
         $eligible = collect();
@@ -97,18 +100,14 @@ class BestFitPipelineDiagnostic
         foreach ($allDrivers as $driver) {
             $name = $driver->full_name ?: $driver->user?->name ?: ('Driver #'.$driver->id);
 
-            if ($driver->status === 'inactive') {
-                $removed['inactive_status'][] = $this->removal($name, $driver, 'status', $driver->status, '!= inactive');
+            if (in_array($driver->status, ['inactive', 'suspended', 'archived'], true)) {
+                $removed['inactive_status'][] = $this->removal($name, $driver, 'status', $driver->status, 'active');
                 continue;
             }
 
             $licenseStatus = DriverLicenseValidator::status($driver);
             if ($licenseStatus === DriverLicenseValidator::STATUS_MISSING) {
                 $removed['license_missing'][] = $this->removal($name, $driver, 'license_no', $driver->license_no, 'non-null non-empty');
-                continue;
-            }
-            if ($licenseStatus === DriverLicenseValidator::STATUS_INCOMPLETE) {
-                $removed['license_incomplete'][] = $this->removal($name, $driver, 'license_expiry', null, 'valid future date');
                 continue;
             }
             if ($licenseStatus === DriverLicenseValidator::STATUS_EXPIRED) {
@@ -122,18 +121,7 @@ class BestFitPipelineDiagnostic
                 continue;
             }
 
-            if ($this->driverAvailability->isAdminUnavailable($driver)) {
-                $removed['admin_offline'][] = $this->removal(
-                    $name,
-                    $driver,
-                    'availability/status',
-                    ($driver->availability ?? 'available').' / '.($driver->status ?? 'available'),
-                    'not offline/inactive',
-                );
-                continue;
-            }
-
-            if (! $this->driverAvailability->isAssignable($driver)) {
+            if ($this->driverAvailability->hasActiveAssignments($driver)) {
                 $blocking = DispatchAssignment::query()
                     ->where('driver_id', $driver->id)
                     ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
@@ -151,21 +139,28 @@ class BestFitPipelineDiagnostic
                 continue;
             }
 
+            if ($licenseStatus === DriverLicenseValidator::STATUS_INCOMPLETE) {
+                $softScoring['license_incomplete'][] = $this->removal($name, $driver, 'license_expiry', null, 'valid future date (scored with penalty)');
+            }
+
+            if ($this->driverAvailability->isAdminUnavailable($driver)) {
+                $softScoring['admin_offline'][] = $this->removal(
+                    $name,
+                    $driver,
+                    'availability/status',
+                    ($driver->availability ?? 'available').' / '.($driver->status ?? 'available'),
+                    'available (scored with lower availability)',
+                );
+            }
+
             if (AssignmentScheduleConflict::hasDriverConflict($driver->id, $jobOrder)) {
-                $removed['schedule_conflict'][] = $this->removal(
+                $softScoring['schedule_conflict'][] = $this->removal(
                     $name,
                     $driver,
                     'schedule_overlap',
                     'conflicts with active assignment window',
-                    'no overlap with '.($jobOrder->scheduled_start?->toDateTimeString() ?? 'open schedule'),
+                    'no overlap (scored with penalty)',
                 );
-                continue;
-            }
-
-            if (! $driver->user_id) {
-                // Still eligible for recommendations; flagged for assignment gate.
-                $eligible->push($driver);
-                continue;
             }
 
             $eligible->push($driver);
@@ -178,6 +173,8 @@ class BestFitPipelineDiagnostic
             'eligible_count' => $eligible->count(),
             'removed_counts' => $removedCounts,
             'removed' => $removed,
+            'soft_scoring' => $softScoring,
+            'soft_scoring_counts' => array_map('count', $softScoring),
             'eligible' => $eligible,
         ];
     }
@@ -190,10 +187,13 @@ class BestFitPipelineDiagnostic
         ?float $requiredVolume,
     ): array {
         $removed = [
-            'admin_locked'        => [],
-            'active_assignment'   => [],
-            'schedule_conflict'   => [],
+            'admin_locked'          => [],
+            'active_assignment'     => [],
             'capacity_insufficient' => [],
+        ];
+
+        $softScoring = [
+            'schedule_conflict'     => [],
             'vehicle_type_mismatch' => [],
         ];
 
@@ -202,12 +202,12 @@ class BestFitPipelineDiagnostic
         foreach ($allVehicles as $vehicle) {
             $label = $vehicle->plate_no ?: ('Vehicle #'.$vehicle->id);
 
-            if ($this->vehicleAvailability->isAdminLocked($vehicle)) {
-                $removed['admin_locked'][] = $this->removal($label, $vehicle, 'status', $vehicle->status, 'not maintenance/unavailable/inactive');
+            if (in_array($vehicle->status, ['maintenance', 'unavailable', 'inactive', 'archived'], true)) {
+                $removed['admin_locked'][] = $this->removal($label, $vehicle, 'status', $vehicle->status, 'active/available');
                 continue;
             }
 
-            if (! $this->vehicleAvailability->isAssignable($vehicle)) {
+            if ($this->vehicleAvailability->hasActiveAssignments($vehicle)) {
                 $blocking = DispatchAssignment::query()
                     ->where('vehicle_id', $vehicle->id)
                     ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
@@ -225,17 +225,6 @@ class BestFitPipelineDiagnostic
                 continue;
             }
 
-            if (AssignmentScheduleConflict::hasVehicleConflict($vehicle->id, $jobOrder)) {
-                $removed['schedule_conflict'][] = $this->removal(
-                    $label,
-                    $vehicle,
-                    'schedule_overlap',
-                    'conflicts with active assignment window',
-                    'no overlap',
-                );
-                continue;
-            }
-
             if (! $this->vehicleMeetsCapacity($vehicle, $requiredVolume)) {
                 $capacity = $this->vehicleVolumeCapacity($vehicle);
                 $removed['capacity_insufficient'][] = $this->removal(
@@ -248,8 +237,18 @@ class BestFitPipelineDiagnostic
                 continue;
             }
 
+            if (AssignmentScheduleConflict::hasVehicleConflict($vehicle->id, $jobOrder)) {
+                $softScoring['schedule_conflict'][] = $this->removal(
+                    $label,
+                    $vehicle,
+                    'schedule_overlap',
+                    'conflicts with active assignment window',
+                    'no overlap (scored with penalty)',
+                );
+            }
+
             if (! $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized, $jobOrder)) {
-                $removed['vehicle_type_mismatch'][] = $this->removal(
+                $softScoring['vehicle_type_mismatch'][] = $this->removal(
                     $label,
                     $vehicle,
                     'vehicle_type',
@@ -260,7 +259,6 @@ class BestFitPipelineDiagnostic
                         'required_type_id' => $jobOrder->preferred_vehicle_type_id,
                     ],
                 );
-                continue;
             }
 
             $eligible->push($vehicle);
@@ -271,6 +269,8 @@ class BestFitPipelineDiagnostic
             'eligible_count' => $eligible->count(),
             'removed_counts' => array_map('count', $removed),
             'removed' => $removed,
+            'soft_scoring' => $softScoring,
+            'soft_scoring_counts' => array_map('count', $softScoring),
             'eligible' => $eligible,
         ];
     }

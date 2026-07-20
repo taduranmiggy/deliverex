@@ -223,9 +223,10 @@ function JobRouteSummary({ order }) {
 function CandidateCard({ item, isTop, onAssign, onOverride }) {
   const topFactor = Array.isArray(item.factors) && item.factors.length > 0
     ? [...item.factors]
-      .filter((f) => f.key !== 'distance')
+      .filter((f) => f.key !== 'penalties' && (f.contribution ?? 0) > 0)
       .sort((a, b) => b.contribution - a.contribution)[0]
     : null
+  const warnings = item.warnings ?? []
   const noAccount = item.driver_has_account === false
 
   return (
@@ -275,6 +276,13 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
         )}
       </div>
 
+      {warnings.length > 0 && (
+        <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+          <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+          {warnings[0]}
+        </p>
+      )}
+
       {isTop && <BestFitExplainability candidate={item} compact />}
 
       <div className="dx-dispatch-candidate__actions">
@@ -295,19 +303,25 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
 const DRIVER_REMOVAL_LABELS = {
   inactive_status: 'Inactive account',
   license_missing: 'Missing license number',
-  license_incomplete: 'Incomplete license (no expiry date)',
   license_expired: 'Expired license',
-  admin_offline: 'Admin offline / inactive',
   active_assignment: 'Active assignment blocking',
-  schedule_conflict: 'Schedule conflict',
+}
+
+const DRIVER_SOFT_LABELS = {
+  license_incomplete: 'Incomplete license (scored with penalty)',
+  admin_offline: 'Admin offline (lower availability score)',
+  schedule_conflict: 'Schedule overlap (scored with penalty)',
 }
 
 const VEHICLE_REMOVAL_LABELS = {
   admin_locked: 'Maintenance / unavailable',
   active_assignment: 'Active assignment blocking',
-  schedule_conflict: 'Schedule conflict',
   capacity_insufficient: 'Insufficient capacity',
-  vehicle_type_mismatch: 'Vehicle type mismatch',
+}
+
+const VEHICLE_SOFT_LABELS = {
+  schedule_conflict: 'Schedule overlap (scored with penalty)',
+  vehicle_type_mismatch: 'Vehicle type mismatch (lower cargo score)',
 }
 
 function BestFitDiagnosticsPanel({ diagnostics }) {
@@ -355,12 +369,18 @@ function BestFitDiagnosticsPanel({ diagnostics }) {
           {drivers?.removed_counts && Object.entries(drivers.removed_counts).filter(([, c]) => c > 0).map(([k, c]) => (
             <div key={k} style={{ color: 'var(--muted)' }}>{DRIVER_REMOVAL_LABELS[k] || k}: −{c}</div>
           ))}
+          {drivers?.soft_scoring_counts && Object.entries(drivers.soft_scoring_counts).filter(([, c]) => c > 0).map(([k, c]) => (
+            <div key={`soft-${k}`} style={{ color: '#92400e' }}>{DRIVER_SOFT_LABELS[k] || k}: {c} (scored)</div>
+          ))}
         </div>
         <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid var(--stroke)', fontSize: '0.75rem' }}>
           <strong>Vehicles</strong>
           <div>{summary?.eligible_vehicles ?? 0} / {summary?.total_vehicles ?? 0} eligible</div>
           {vehicles?.removed_counts && Object.entries(vehicles.removed_counts).filter(([, c]) => c > 0).map(([k, c]) => (
             <div key={k} style={{ color: 'var(--muted)' }}>{VEHICLE_REMOVAL_LABELS[k] || k}: −{c}</div>
+          ))}
+          {vehicles?.soft_scoring_counts && Object.entries(vehicles.soft_scoring_counts).filter(([, c]) => c > 0).map(([k, c]) => (
+            <div key={`soft-${k}`} style={{ color: '#92400e' }}>{VEHICLE_SOFT_LABELS[k] || k}: {c} (scored)</div>
           ))}
         </div>
       </div>

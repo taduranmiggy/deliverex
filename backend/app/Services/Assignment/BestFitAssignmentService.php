@@ -19,12 +19,11 @@ class BestFitAssignmentService
 {
     private const SCORE_MAX = 100;
 
-    private const WEIGHT_VEHICLE = 40;
-    private const WEIGHT_CAPACITY = 20;
-    private const WEIGHT_AVAILABILITY = 15;
-    private const WEIGHT_SCHEDULE = 10;
-    private const WEIGHT_DISTANCE = 10;
-    private const WEIGHT_WORKLOAD = 5;
+    private const WEIGHT_DISTANCE = 25;
+    private const WEIGHT_EXPERIENCE = 20;
+    private const WEIGHT_PERFORMANCE = 20;
+    private const WEIGHT_AVAILABILITY = 20;
+    private const WEIGHT_CARGO = 15;
 
     public function __construct(
         private DriverAvailabilityService $driverAvailability,
@@ -93,7 +92,9 @@ class BestFitAssignmentService
                     'unused_capacity'         => $unusedCapacity,
                     'load_efficiency_percent' => $loadEfficiencyPercent,
                     'score_max'               => self::SCORE_MAX,
+                    'score_percent'           => (int) round($scored['score']),
                     'feasible'                => true,
+                    'warnings'                => $scored['warnings'] ?? [],
                     'driver_recent_assignments' => $context['recent_assignments'][$driver->id] ?? 0,
                     'driver_last_assigned_at'   => $context['last_assigned_at'][$driver->id] ?? null,
                     'driver_completed_today'    => $context['completed_today'][$driver->id] ?? 0,
@@ -429,13 +430,74 @@ class BestFitAssignmentService
 
         $maxCompletedToday = empty($completedToday) ? 0 : max($completedToday);
 
+        $completedTotal = DispatchAssignment::query()
+            ->selectRaw('driver_id, COUNT(*) as completed_count')
+            ->whereIn('driver_id', $driverIds)
+            ->where('status', DeliveryStatus::COMPLETED)
+            ->groupBy('driver_id')
+            ->pluck('completed_count', 'driver_id')
+            ->map(fn ($count) => (int) $count)
+            ->all();
+
+        $maxCompletedTotal = empty($completedTotal) ? 0 : max($completedTotal);
+
+        $outcomes = DispatchAssignment::query()
+            ->selectRaw('driver_id, status, COUNT(*) as outcome_count')
+            ->whereIn('driver_id', $driverIds)
+            ->whereIn('status', [DeliveryStatus::COMPLETED, DeliveryStatus::CANCELLED])
+            ->groupBy('driver_id', 'status')
+            ->get();
+
+        $completionRate = [];
+        foreach ($driverIds as $driverId) {
+            $completed = 0;
+            $cancelled = 0;
+            foreach ($outcomes as $row) {
+                if ((int) $row->driver_id !== (int) $driverId) {
+                    continue;
+                }
+                if ($row->status === DeliveryStatus::COMPLETED) {
+                    $completed = (int) $row->outcome_count;
+                }
+                if ($row->status === DeliveryStatus::CANCELLED) {
+                    $cancelled = (int) $row->outcome_count;
+                }
+            }
+            $completionRate[$driverId] = $completed / max(1, $completed + $cancelled);
+        }
+
+        $materialMatches = [];
+        if ($jobOrder->material_type_id || $jobOrder->material_type) {
+            $materialQuery = DispatchAssignment::query()
+                ->selectRaw('dispatch_assignments.driver_id, COUNT(*) as material_count')
+                ->join('job_orders', 'job_orders.id', '=', 'dispatch_assignments.job_order_id')
+                ->whereIn('dispatch_assignments.driver_id', $driverIds)
+                ->where('dispatch_assignments.status', DeliveryStatus::COMPLETED);
+
+            if ($jobOrder->material_type_id) {
+                $materialQuery->where('job_orders.material_type_id', $jobOrder->material_type_id);
+            } else {
+                $materialQuery->where('job_orders.material_type', $jobOrder->material_type);
+            }
+
+            $materialMatches = $materialQuery
+                ->groupBy('dispatch_assignments.driver_id')
+                ->pluck('material_count', 'driver_id')
+                ->map(fn ($count) => (int) $count)
+                ->all();
+        }
+
         return [
-            'recent_assignments'  => $recentAssignments,
-            'last_assigned_at'    => $lastAssignedAt,
-            'completed_today'   => $completedToday,
-            'max_completed_today' => $maxCompletedToday,
-            'latest_locations'    => $this->latestDriverLocations($driverIds),
-            'reference_coords'    => $this->resolveReferenceCoordinates($jobOrder),
+            'recent_assignments'    => $recentAssignments,
+            'last_assigned_at'      => $lastAssignedAt,
+            'completed_today'       => $completedToday,
+            'max_completed_today'   => $maxCompletedToday,
+            'completed_total'       => $completedTotal,
+            'max_completed_total'   => $maxCompletedTotal,
+            'completion_rate'       => $completionRate,
+            'material_matches'      => $materialMatches,
+            'latest_locations'      => $this->latestDriverLocations($driverIds),
+            'reference_coords'      => $this->resolveReferenceCoordinates($jobOrder),
         ];
     }
 
@@ -444,6 +506,14 @@ class BestFitAssignmentService
      */
     private function resolveReferenceCoordinates(JobOrder $jobOrder): ?array
     {
+        if ($jobOrder->pickup_latitude !== null && $jobOrder->pickup_longitude !== null) {
+            return [
+                'lat'    => (float) $jobOrder->pickup_latitude,
+                'lng'    => (float) $jobOrder->pickup_longitude,
+                'source' => 'pickup',
+            ];
+        }
+
         if ($jobOrder->dropoff_latitude !== null && $jobOrder->dropoff_longitude !== null) {
             return [
                 'lat'    => (float) $jobOrder->dropoff_latitude,
@@ -493,25 +563,21 @@ class BestFitAssignmentService
     {
         return Driver::query()
             ->with('user')
-            ->where(function ($q) {
-                $q->where('status', '!=', 'inactive')
+            ->where(function ($query) {
+                $query->whereNotIn('status', ['inactive', 'suspended', 'archived'])
                     ->orWhereNull('status');
             })
             ->get()
-            ->filter(function (Driver $driver) use ($jobOrder) {
-                if (! DriverLicenseValidator::isEligible($driver)) {
+            ->filter(function (Driver $driver) {
+                $licenseStatus = DriverLicenseValidator::status($driver);
+                if (in_array($licenseStatus, [
+                    DriverLicenseValidator::STATUS_MISSING,
+                    DriverLicenseValidator::STATUS_EXPIRED,
+                ], true)) {
                     return false;
                 }
 
-                if ($this->driverAvailability->isAdminUnavailable($driver)) {
-                    return false;
-                }
-
-                if (! $this->driverAvailability->isAssignable($driver)) {
-                    return false;
-                }
-
-                return ! AssignmentScheduleConflict::hasDriverConflict($driver->id, $jobOrder);
+                return ! $this->driverAvailability->hasActiveAssignments($driver);
             })
             ->values();
     }
@@ -523,27 +589,17 @@ class BestFitAssignmentService
     ): Collection {
         return Vehicle::query()
             ->with('vehicleType')
-            ->whereNotIn('status', ['maintenance', 'unavailable', 'inactive'])
+            ->where(function ($query) {
+                $query->whereNotIn('status', ['maintenance', 'unavailable', 'inactive', 'archived'])
+                    ->orWhereNull('status');
+            })
             ->get()
-            ->filter(function (Vehicle $vehicle) use ($jobOrder, $requiredTypeNormalized, $requiredVolume) {
-                if (! $this->vehicleAvailability->isAssignable($vehicle)) {
-                    return false;
-                }
-
-                if (AssignmentScheduleConflict::hasVehicleConflict($vehicle->id, $jobOrder)) {
-                    return false;
-                }
-
+            ->filter(function (Vehicle $vehicle) use ($requiredVolume) {
                 if (! $this->vehicleMeetsCapacity($vehicle, $requiredVolume)) {
                     return false;
                 }
 
-                if ($requiredTypeNormalized !== null
-                    && ! $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized, $jobOrder)) {
-                    return false;
-                }
-
-                return true;
+                return ! $this->vehicleAvailability->hasActiveAssignments($vehicle);
             })
             ->values();
     }
@@ -556,12 +612,8 @@ class BestFitAssignmentService
         ?string $requiredTypeNormalized,
         array $context,
     ): ?array {
-        if (! $this->driverAvailability->isAssignable($driver)) {
-            return null;
-        }
-
-        if (AssignmentScheduleConflict::hasDriverConflict($driver->id, $jobOrder)
-            || AssignmentScheduleConflict::hasVehicleConflict($vehicle->id, $jobOrder)) {
+        if ($this->driverAvailability->hasActiveAssignments($driver)
+            || $this->vehicleAvailability->hasActiveAssignments($vehicle)) {
             return null;
         }
 
@@ -569,99 +621,120 @@ class BestFitAssignmentService
             return null;
         }
 
-        if ($requiredTypeNormalized !== null
-            && ! $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized, $jobOrder)) {
-            return null;
-        }
-
+        $warnings = [];
+        $penalties = [];
         $factors = [];
 
-        // 1. Vehicle compatibility (40)
-        $vehicleMatched = $requiredTypeNormalized === null
-            || $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized, $jobOrder);
-        $vehicleContribution = $vehicleMatched ? self::WEIGHT_VEHICLE : 0;
-        $vehicleDetail = $requiredTypeNormalized === null
-            ? 'No specific vehicle type required for this job.'
-            : ($vehicleMatched
-                ? 'Vehicle type exactly matches the job requirement.'
-                : 'Vehicle type does not match the job requirement.');
-
-        $factors[] = $this->factor(
-            'vehicle_compatibility',
-            'Vehicle Match',
-            $vehicleMatched,
-            $vehicleContribution,
-            self::WEIGHT_VEHICLE,
-            $vehicleDetail,
-        );
-
-        // 2. Capacity efficiency (20)
-        [$capacityContribution, $capacityMatched, $capacityDetail] = $this->scoreCapacityEfficiency(
-            $vehicle,
-            $requiredVolume,
-        );
-        $factors[] = $this->factor(
-            'capacity_efficiency',
-            'Capacity Efficiency',
-            $capacityMatched,
-            $capacityContribution,
-            self::WEIGHT_CAPACITY,
-            $capacityDetail,
-        );
-
-        // 3. Driver availability (15) — hard gate, full points when eligible
-        $availabilityMatched = true;
-        $availabilityDetail = 'Driver is available with no blocking active assignments.';
-        $factors[] = $this->factor(
-            'driver_availability',
-            'Availability',
-            $availabilityMatched,
-            self::WEIGHT_AVAILABILITY,
-            self::WEIGHT_AVAILABILITY,
-            $availabilityDetail,
-        );
-
-        // 4. Schedule compatibility (10) — hard gate via eligible filters
-        $scheduleMatched = true;
-        $scheduleDetail = 'Driver and vehicle schedules do not conflict with this job window.';
-        if ($vehicle->status === 'assigned') {
-            $scheduleDetail = 'Vehicle is assigned elsewhere but the schedule window does not overlap.';
-        }
-        $factors[] = $this->factor(
-            'schedule_compatibility',
-            'Schedule',
-            $scheduleMatched,
-            self::WEIGHT_SCHEDULE,
-            self::WEIGHT_SCHEDULE,
-            $scheduleDetail,
-        );
-
-        // 5. Distance to pickup / job area (10)
-        [$distanceContribution, $distanceMatched, $distanceDetail] = $this->scoreDistance(
+        [$distanceContribution, $distanceMatched, $distanceDetail, $distanceKm] = $this->scoreDistance(
             $driver,
             $context,
         );
+        if ($distanceKm !== null && $distanceKm > 40) {
+            $warnings[] = 'Minor concern: Long travel distance to pickup';
+        }
         $factors[] = $this->factor(
             'distance_to_pickup',
-            'Distance',
+            'Distance to Pickup',
             $distanceMatched,
             $distanceContribution,
             self::WEIGHT_DISTANCE,
             $distanceDetail,
         );
 
-        // 6. Workload distribution (5)
-        [$workloadContribution, $workloadMatched, $workloadDetail] = $this->scoreWorkload(
+        [$experienceContribution, $experienceMatched, $experienceDetail] = $this->scoreExperience(
+            $driver,
+            $context,
+        );
+        if (! $experienceMatched) {
+            $warnings[] = 'Minor concern: Limited delivery experience';
+        }
+        $factors[] = $this->factor(
+            'experience',
+            'Experience',
+            $experienceMatched,
+            $experienceContribution,
+            self::WEIGHT_EXPERIENCE,
+            $experienceDetail,
+        );
+
+        [$performanceContribution, $performanceMatched, $performanceDetail] = $this->scorePerformance(
             $driver,
             $context,
         );
         $factors[] = $this->factor(
-            'workload_distribution',
-            'Workload',
-            $workloadMatched,
-            $workloadContribution,
-            self::WEIGHT_WORKLOAD,
-            $workloadDetail,
+            'performance',
+            'Past Performance',
+            $performanceMatched,
+            $performanceContribution,
+            self::WEIGHT_PERFORMANCE,
+            $performanceDetail,
+        );
+
+        [$availabilityContribution, $availabilityMatched, $availabilityDetail] = $this->scoreAvailability(
+            $driver,
+            $vehicle,
+            $jobOrder,
+            $context,
+            $warnings,
+            $penalties,
+        );
+        $factors[] = $this->factor(
+            'availability',
+            'Availability',
+            $availabilityMatched,
+            $availabilityContribution,
+            self::WEIGHT_AVAILABILITY,
+            $availabilityDetail,
+        );
+
+        [$cargoContribution, $cargoMatched, $cargoDetail] = $this->scoreCargoCompatibility(
+            $vehicle,
+            $jobOrder,
+            $driver,
+            $requiredVolume,
+            $requiredTypeNormalized,
+            $context,
+            $warnings,
+        );
+        $factors[] = $this->factor(
+            'cargo_compatibility',
+            'Cargo Compatibility',
+            $cargoMatched,
+            $cargoContribution,
+            self::WEIGHT_CARGO,
+            $cargoDetail,
+        );
+
+        if (DriverLicenseValidator::status($driver) === DriverLicenseValidator::STATUS_INCOMPLETE) {
+            $penalties[] = $this->penalty(
+                'license_incomplete',
+                'Incomplete license',
+                5,
+                'License expiry date is missing — verify before dispatch.',
+            );
+            $warnings[] = 'Minor concern: License expiry date missing';
+        }
+
+        if (! $driver->user_id) {
+            $penalties[] = $this->penalty(
+                'no_login_account',
+                'No login account',
+                3,
+                'Driver has no mobile login account linked.',
+            );
+            $warnings[] = 'Minor concern: No driver login account';
+        }
+
+        $penaltyTotal = array_sum(array_column($penalties, 'points'));
+        $factors[] = $this->factor(
+            'penalties',
+            'Penalties',
+            $penaltyTotal === 0,
+            -$penaltyTotal,
+            $penaltyTotal,
+            $penaltyTotal === 0
+                ? 'No additional penalties applied.'
+                : implode(' ', array_column($penalties, 'detail')),
         );
 
         $score = array_sum(array_column($factors, 'contribution'));
@@ -673,37 +746,34 @@ class BestFitAssignmentService
         )));
 
         return [
-            'score'    => $score,
-            'factors'  => $factors,
-            'reasons'  => $reasons,
+            'score'     => $score,
+            'factors'   => $factors,
+            'penalties' => $penalties,
+            'warnings'  => array_values(array_unique($warnings)),
+            'reasons'   => $reasons,
         ];
     }
 
     /**
      * @return array{0: int, 1: bool, 2: string}
      */
-    private function scoreCapacityEfficiency(Vehicle $vehicle, ?float $requiredVolume): array
+    private function scoreExperience(Driver $driver, array $context): array
     {
-        $capacity = $this->vehicleVolumeCapacity($vehicle);
+        $completed = (int) ($context['completed_total'][$driver->id] ?? 0);
+        $maxCompleted = (int) ($context['max_completed_total'] ?? 0);
 
-        if ($requiredVolume === null || $requiredVolume <= 0 || $capacity === null || $capacity <= 0) {
-            return [10, false, 'Capacity metadata unavailable; neutral efficiency score applied.'];
+        if ($maxCompleted === 0) {
+            return [8, false, 'No completed delivery history in the fleet yet.'];
         }
 
-        $utilization = min(1, $requiredVolume / $capacity);
-        $contribution = (int) round(self::WEIGHT_CAPACITY * min(1, $utilization / 0.85));
-        $contribution = max(0, min(self::WEIGHT_CAPACITY, $contribution));
-        $percent = (int) round($utilization * 100);
-        $unused = round($capacity - $requiredVolume, 2);
+        $ratio = min(1, $completed / max(1, $maxCompleted));
+        $contribution = (int) round(self::WEIGHT_EXPERIENCE * $ratio);
+        $contribution = max(0, min(self::WEIGHT_EXPERIENCE, $contribution));
+        $matched = $ratio >= 0.5;
 
-        $matched = $utilization >= 0.75;
-        $detail = "Load uses {$percent}% of vehicle capacity ({$unused} m³ unused).";
-
-        if ($utilization >= 0.85) {
-            $detail = "Excellent fit: {$percent}% utilization with {$unused} m³ unused.";
-        } elseif ($utilization < 0.55) {
-            $detail = "Oversized vehicle: only {$percent}% utilization ({$unused} m³ unused).";
-        }
+        $detail = $completed === 0
+            ? 'Driver has no completed deliveries on record.'
+            : "Driver completed {$completed} deliver".($completed === 1 ? 'y' : 'ies').' — '.(int) round($ratio * 100).'% of fleet peak experience.';
 
         return [$contribution, $matched, $detail];
     }
@@ -711,13 +781,153 @@ class BestFitAssignmentService
     /**
      * @return array{0: int, 1: bool, 2: string}
      */
+    private function scorePerformance(Driver $driver, array $context): array
+    {
+        $rate = (float) ($context['completion_rate'][$driver->id] ?? 1.0);
+        $contribution = (int) round(self::WEIGHT_PERFORMANCE * $rate);
+        $contribution = max(0, min(self::WEIGHT_PERFORMANCE, $contribution));
+        $matched = $rate >= 0.85;
+        $percent = (int) round($rate * 100);
+
+        $detail = $percent >= 90
+            ? "Excellent rating: {$percent}% successful completion rate."
+            : ($percent >= 75
+                ? "Solid track record: {$percent}% completion rate."
+                : "Completion rate is {$percent}% — review recent cancellations.");
+
+        return [$contribution, $matched, $detail];
+    }
+
+    /**
+     * @param  list<string>  $warnings
+     * @param  list<array<string, mixed>>  $penalties
+     * @return array{0: int, 1: bool, 2: string}
+     */
+    private function scoreAvailability(
+        Driver $driver,
+        Vehicle $vehicle,
+        JobOrder $jobOrder,
+        array $context,
+        array &$warnings,
+        array &$penalties,
+    ): array {
+        $multiplier = 1.0;
+        $notes = [];
+
+        if ($this->driverAvailability->isAdminUnavailable($driver)) {
+            $multiplier *= 0.55;
+            $notes[] = 'Driver is marked offline by admin.';
+            $warnings[] = 'Minor concern: Driver marked offline';
+        }
+
+        $driverScheduleConflict = AssignmentScheduleConflict::hasDriverConflict($driver->id, $jobOrder);
+        $vehicleScheduleConflict = AssignmentScheduleConflict::hasVehicleConflict($vehicle->id, $jobOrder);
+
+        if ($driverScheduleConflict || $vehicleScheduleConflict) {
+            $multiplier *= 0.35;
+            $notes[] = 'Schedule window overlaps another job.';
+            $warnings[] = 'Minor concern: Possible schedule overlap';
+            $penalties[] = $this->penalty(
+                'schedule_overlap',
+                'Schedule overlap',
+                8,
+                'Driver or vehicle may conflict with another scheduled job window.',
+            );
+        }
+
+        $recent = (int) ($context['recent_assignments'][$driver->id] ?? 0);
+        $maxRecent = empty($context['recent_assignments']) ? 0 : max($context['recent_assignments']);
+        if ($maxRecent > 0 && $recent >= (int) ceil($maxRecent * 0.75)) {
+            $multiplier *= 0.7;
+            $notes[] = "High recent workload ({$recent} assignments in 7 days).";
+            $warnings[] = 'Minor concern: High workload recently';
+        }
+
+        $completedToday = (int) ($context['completed_today'][$driver->id] ?? 0);
+        if ($completedToday > 0) {
+            $notes[] = "Completed {$completedToday} deliver".($completedToday === 1 ? 'y' : 'ies').' today.';
+        } else {
+            $notes[] = 'No completed deliveries today — good availability.';
+        }
+
+        $contribution = (int) round(self::WEIGHT_AVAILABILITY * $multiplier);
+        $contribution = max(0, min(self::WEIGHT_AVAILABILITY, $contribution));
+        $matched = $multiplier >= 0.85;
+
+        $detail = $notes === []
+            ? 'Driver and vehicle are available for this job window.'
+            : implode(' ', $notes);
+
+        return [$contribution, $matched, $detail];
+    }
+
+    /**
+     * @param  list<string>  $warnings
+     * @return array{0: int, 1: bool, 2: string}
+     */
+    private function scoreCargoCompatibility(
+        Vehicle $vehicle,
+        JobOrder $jobOrder,
+        Driver $driver,
+        ?float $requiredVolume,
+        ?string $requiredTypeNormalized,
+        array $context,
+        array &$warnings,
+    ): array {
+        $typeMatched = $requiredTypeNormalized === null
+            || $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized, $jobOrder);
+
+        $typePoints = $typeMatched ? (int) round(self::WEIGHT_CARGO * 0.35) : 0;
+        if (! $typeMatched && $requiredTypeNormalized !== null) {
+            $warnings[] = 'Minor concern: Not preferred vehicle type';
+        }
+
+        $capacityPoints = 0;
+        $capacityDetail = '';
+        $capacity = $this->vehicleVolumeCapacity($vehicle);
+
+        if ($requiredVolume === null || $requiredVolume <= 0 || $capacity === null || $capacity <= 0) {
+            $capacityPoints = (int) round(self::WEIGHT_CARGO * 0.25);
+            $capacityDetail = 'Capacity metadata limited; neutral utilization score applied.';
+        } else {
+            $utilization = min(1, $requiredVolume / $capacity);
+            $utilizationRatio = min(1, $utilization / 0.9);
+            $capacityPoints = (int) round(self::WEIGHT_CARGO * 0.55 * $utilizationRatio);
+            $percent = (int) round($utilization * 100);
+            $unused = round($capacity - $requiredVolume, 2);
+            $capacityDetail = "Load uses {$percent}% of vehicle capacity ({$unused} m³ unused).";
+            if ($utilization < 0.55) {
+                $warnings[] = 'Minor concern: Oversized vehicle for this load';
+            }
+        }
+
+        $materialPoints = 0;
+        $materialCount = (int) ($context['material_matches'][$driver->id] ?? 0);
+        if ($materialCount > 0) {
+            $materialPoints = min(3, $materialCount);
+            $capacityDetail .= " Driver has {$materialCount} prior delivery".($materialCount === 1 ? '' : 'ies').' with this cargo type.';
+        }
+
+        $contribution = min(self::WEIGHT_CARGO, $typePoints + $capacityPoints + $materialPoints);
+        $matched = $typeMatched && $contribution >= (int) round(self::WEIGHT_CARGO * 0.65);
+
+        $detail = $typeMatched
+            ? 'Vehicle type matches the job requirement. '.$capacityDetail
+            : 'Vehicle type differs from the preferred type. '.$capacityDetail;
+
+        return [$contribution, $matched, trim($detail)];
+    }
+
+    /**
+     * @return array{0: int, 1: bool, 2: string, 3: ?float}
+     */
     private function scoreDistance(Driver $driver, array $context): array
     {
         $reference = $context['reference_coords'] ?? null;
         $location = $context['latest_locations'][$driver->id] ?? null;
 
         if (! $reference || ! $location) {
-            return [5, false, 'Distance unavailable (missing driver GPS or job coordinates).'];
+            return [8, false, 'Distance unavailable (missing driver GPS or job coordinates).', null];
         }
 
         $distanceKm = $this->haversineKm(
@@ -729,38 +939,21 @@ class BestFitAssignmentService
 
         $contribution = (int) round(self::WEIGHT_DISTANCE * max(0, 1 - min(1, $distanceKm / 80)));
         $contribution = max(0, min(self::WEIGHT_DISTANCE, $contribution));
-        $matched = $distanceKm <= 40;
+        $matched = $distanceKm <= 25;
+
+        $referenceLabel = match ($reference['source'] ?? '') {
+            'pickup' => 'pickup',
+            'delivery_zone' => 'delivery zone',
+            default => 'job area',
+        };
 
         $detail = sprintf(
-            'Driver last known position is %.1f km from the %s reference point.',
+            'Driver last known position is %.1f km from the %s.',
             $distanceKm,
-            $reference['source'] === 'delivery_zone' ? 'delivery zone' : 'pickup area',
+            $referenceLabel,
         );
 
-        return [$contribution, $matched, $detail];
-    }
-
-    /**
-     * @return array{0: int, 1: bool, 2: string}
-     */
-    private function scoreWorkload(Driver $driver, array $context): array
-    {
-        $completedToday = (int) ($context['completed_today'][$driver->id] ?? 0);
-        $maxToday = (int) ($context['max_completed_today'] ?? 0);
-
-        if ($maxToday === 0) {
-            return [self::WEIGHT_WORKLOAD, true, 'No completed deliveries today across the candidate pool.'];
-        }
-
-        $contribution = (int) round(self::WEIGHT_WORKLOAD * (1 - ($completedToday / max(1, $maxToday))));
-        $contribution = max(0, min(self::WEIGHT_WORKLOAD, $contribution));
-        $matched = $completedToday <= (int) floor($maxToday / 2);
-
-        $detail = $completedToday === 0
-            ? 'Driver has no completed deliveries today.'
-            : "Driver completed {$completedToday} deliver".($completedToday === 1 ? 'y' : 'ies').' today.';
-
-        return [$contribution, $matched, $detail];
+        return [$contribution, $matched, $detail, $distanceKm];
     }
 
     private function driverDiversityStats(array $driverIds): array
@@ -893,9 +1086,20 @@ class BestFitAssignmentService
             'key'          => $key,
             'label'        => $label,
             'matched'      => $matched,
-            'contribution' => min($max, max(0, $contribution)),
+            'contribution' => min($max, max(-$max, $contribution)),
             'max'          => $max,
             'detail'       => $detail,
+        ];
+    }
+
+    /** @return array{key: string, label: string, points: int, detail: string} */
+    private function penalty(string $key, string $label, int $points, string $detail): array
+    {
+        return [
+            'key'    => $key,
+            'label'  => $label,
+            'points' => max(0, $points),
+            'detail' => $detail,
         ];
     }
 }

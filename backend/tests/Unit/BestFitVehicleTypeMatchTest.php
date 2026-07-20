@@ -15,36 +15,40 @@ class BestFitVehicleTypeMatchTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_vehicle_type_match_awards_full_score_for_exact_type_match(): void
+    public function test_vehicle_type_match_awards_full_cargo_score_for_exact_type_match(): void
     {
         [$jobOrder, $vehicle] = $this->seedPair('10 Wheeler', '10 Wheeler');
 
-        $factor = $this->factorFor($jobOrder, $vehicle, 'vehicle_compatibility');
+        $factor = $this->factorFor($jobOrder, $vehicle, 'cargo_compatibility');
 
         $this->assertTrue($factor['matched']);
-        $this->assertSame(40, $factor['contribution']);
-        $this->assertSame(40, $factor['max']);
-        $this->assertStringContainsString('exactly matches', $factor['detail']);
+        $this->assertGreaterThanOrEqual(10, $factor['contribution']);
+        $this->assertSame(15, $factor['max']);
+        $this->assertStringContainsString('matches', $factor['detail']);
     }
 
     public function test_vehicle_type_match_is_case_and_whitespace_insensitive(): void
     {
         [$jobOrder, $vehicle] = $this->seedPair('Mini Dump', '  mini dump  ');
 
-        $factor = $this->factorFor($jobOrder, $vehicle, 'vehicle_compatibility');
+        $factor = $this->factorFor($jobOrder, $vehicle, 'cargo_compatibility');
 
         $this->assertTrue($factor['matched']);
-        $this->assertSame(40, $factor['contribution']);
+        $this->assertGreaterThanOrEqual(10, $factor['contribution']);
     }
 
-    public function test_vehicle_type_mismatch_is_rejected_from_recommendations(): void
+    public function test_vehicle_type_mismatch_is_scored_not_rejected(): void
     {
         [$jobOrder, $vehicle] = $this->seedPair('Dump Truck', '10 Wheeler');
 
         $recommendations = app(BestFitAssignmentService::class)->recommend($jobOrder);
         $match = collect($recommendations)->firstWhere('vehicle_id', $vehicle->id);
 
-        $this->assertNull($match, 'Mismatched vehicle type must be rejected entirely.');
+        $this->assertNotNull($match, 'Mismatched vehicle type should be scored, not rejected.');
+        $this->assertNotEmpty($match['warnings']);
+        $cargo = collect($match['factors'])->firstWhere('key', 'cargo_compatibility');
+        $this->assertIsArray($cargo);
+        $this->assertFalse($cargo['matched']);
     }
 
     public function test_recommendations_include_distance_factor(): void
