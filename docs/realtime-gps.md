@@ -1,4 +1,4 @@
-# Real-Time GPS over WebSockets (Laravel Reverb)
+# Real-Time GPS over WebSockets
 
 Driver GPS pings are broadcast the instant they are saved — no polling.
 
@@ -8,70 +8,97 @@ Driver GPS pings are broadcast the instant they are saved — no polling.
 Driver app ──POST /api/driver/tracking──▶ TrackingService::record()
                                             ├─ save tracking_logs + driver_current_locations
                                             └─ broadcast DriverLocationUpdated  (ShouldBroadcastNow)
-                                                 ├─ private-fleet.live          (all dispatchers/managers/admins)
-                                                 └─ private-trip.{assignmentId} (per-trip subscribers)
+                                                 ├─ private-fleet.live
+                                                 └─ private-trip.{assignmentId}
 
-Web panel ──Echo (pusher protocol)──▶ marker animates immediately (AnimatedDriverMarker)
+Web panel ──Echo (Pusher protocol)──▶ marker animates immediately
 ```
 
-- **Event:** `driver.location.updated` — payload: `driver_id`, `trip_id`, `latitude`,
-  `longitude`, `timestamp`, `heading`, `speed`, plus the pre-formatted `location`
-  object used by the fleet map.
-- **Channel auth:** `POST /api/broadcasting/auth` behind the `auth.api` (JWT bearer)
-  middleware. Roles allowed on `fleet.live`: admin, dispatcher, manager.
-- **No queue worker needed:** the event implements `ShouldBroadcastNow`.
-- **Reconnect handling:** the frontend refetches one snapshot when the socket
-  reconnects, and shows "Waiting for driver connection…" per driver when no GPS
-  has arrived recently.
+## Production on Hostinger (recommended: Pusher)
 
-## Enabling in an environment
+Hostinger **shared hosting cannot run** `php artisan reverb:start`. Use hosted Pusher.
+
+### 1. Create a Pusher app
+
+1. Sign up at https://dashboard.pusher.com
+2. Create an app (cluster **ap1** is fine for PH/SG)
+3. Copy **App ID**, **Key**, **Secret**, **Cluster**
+
+### 2. Hostinger secrets (SSH once)
+
+Edit `~/domains/deliverexapp.com/shared/.deploy.secrets` and add:
+
+```bash
+BROADCAST_CONNECTION=pusher
+PUSHER_APP_ID=xxxxxx
+PUSHER_APP_KEY=xxxxxx
+PUSHER_APP_SECRET=xxxxxx
+PUSHER_APP_CLUSTER=ap1
+```
+
+Then sync into Laravel env:
+
+```bash
+cd ~/domains/deliverexapp.com/public_html
+bash scripts/provision-env.sh
+php artisan config:clear
+php artisan config:cache
+```
+
+### 3. GitHub Actions secrets (frontend build)
+
+In the GitHub repo → **Settings → Secrets and variables → Actions**, add:
+
+| Secret | Value |
+|--------|--------|
+| `VITE_PUSHER_APP_KEY` | same as `PUSHER_APP_KEY` |
+| `VITE_PUSHER_APP_CLUSTER` | `ap1` (or your cluster) |
+
+### 4. Redeploy
+
+Push to `main` (or re-run the Deploy workflow). After deploy, open Tracking — status should say **Live — real-time**.
+
+---
+
+## Local development (Reverb)
 
 Backend `.env`:
 
 ```
 BROADCAST_CONNECTION=reverb
 REVERB_APP_ID=deliverex
-REVERB_APP_KEY=<random-string>
-REVERB_APP_SECRET=<random-string>
-REVERB_HOST=127.0.0.1     # where the app server reaches Reverb
-REVERB_PORT=8080
+REVERB_APP_KEY=deliverex-local
+REVERB_APP_SECRET=deliverex-secret-local
+REVERB_HOST=localhost
+REVERB_PORT=6001
 REVERB_SCHEME=http
 ```
 
-Run the WebSocket server (long-running process):
+Frontend `.env`:
 
 ```
-php artisan reverb:start
+VITE_REVERB_APP_KEY=deliverex-local
+VITE_REVERB_HOST=localhost
+VITE_REVERB_PORT=6001
+VITE_REVERB_SCHEME=http
 ```
 
-Frontend build-time vars (must match the backend key):
+Three terminals:
 
+```powershell
+php artisan serve
+php artisan reverb:start --debug --host=127.0.0.1 --port=6001
+npx vite --host 127.0.0.1 --port 5173
 ```
-VITE_REVERB_APP_KEY=<same REVERB_APP_KEY>
-VITE_REVERB_HOST=deliverexapp.com   # public hostname browsers connect to
-VITE_REVERB_PORT=443
-VITE_REVERB_SCHEME=https
-```
 
-In production put Reverb behind the web server as a reverse proxy for
-`wss://deliverexapp.com/app/...` → `127.0.0.1:8080`.
+---
 
-## Fallback behavior
+## Fallback
 
-If `VITE_REVERB_APP_KEY` is **not** set at build time, the panel automatically
-falls back to the legacy HTTP polling (dispatcher 60s / manager 30s), so
-environments without a running Reverb server keep working unchanged. With
-`BROADCAST_CONNECTION=log` the backend simply logs broadcasts.
+If neither `VITE_PUSHER_APP_KEY` nor `VITE_REVERB_APP_KEY` is set at build time, the panel keeps HTTP polling. With `BROADCAST_CONNECTION=log`, the backend only logs broadcasts.
 
-> **Hostinger shared hosting cannot run `reverb:start`** (no long-running
-> processes / open ports). Options: move to a VPS, run Reverb on a small
-> separate host, or switch `BROADCAST_CONNECTION=pusher` with hosted Pusher
-> credentials — the frontend Echo client speaks the same protocol.
+## Event / channels
 
-## Local test
-
-1. `php artisan reverb:start --debug`
-2. Set the four `VITE_REVERB_*` vars in `frontend/.env`, restart `npm run dev`
-3. Log in as dispatcher → Tracking page (status pill shows "Live — real-time")
-4. POST a GPS ping as the driver — the truck marker glides to the new position
-   instantly on every open dispatcher tab.
+- Event name: `driver.location.updated`
+- Channels: `private-fleet.live`, `private-trip.{assignmentId}`
+- Auth: `POST /api/broadcasting/auth` (JWT bearer via `auth.api`)

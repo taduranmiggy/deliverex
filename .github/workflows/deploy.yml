@@ -46,7 +46,9 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         env:
-          # Real-time GPS (Laravel Reverb) — leave secrets unset to keep polling fallback.
+          # Hosted Pusher (preferred on Hostinger shared). Falls back to Reverb vars, else polling.
+          VITE_PUSHER_APP_KEY: ${{ secrets.VITE_PUSHER_APP_KEY }}
+          VITE_PUSHER_APP_CLUSTER: ${{ secrets.VITE_PUSHER_APP_CLUSTER }}
           VITE_REVERB_APP_KEY: ${{ secrets.VITE_REVERB_APP_KEY }}
           VITE_REVERB_HOST: ${{ secrets.VITE_REVERB_HOST }}
           VITE_REVERB_PORT: ${{ secrets.VITE_REVERB_PORT }}

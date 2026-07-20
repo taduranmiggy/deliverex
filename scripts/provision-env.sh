@@ -135,6 +135,14 @@ merge_secret_keys_into_env() {
     merge_env_var "RESEND_API_KEY" "$RESEND_API_KEY"
     log "Merged RESEND_API_KEY from secrets"
   fi
+  if [ -n "${PUSHER_APP_KEY:-}" ] && [ -n "${PUSHER_APP_SECRET:-}" ] && [ -n "${PUSHER_APP_ID:-}" ]; then
+    merge_env_var "BROADCAST_CONNECTION" "pusher"
+    merge_env_var "PUSHER_APP_ID" "$PUSHER_APP_ID"
+    merge_env_var "PUSHER_APP_KEY" "$PUSHER_APP_KEY"
+    merge_env_var "PUSHER_APP_SECRET" "$PUSHER_APP_SECRET"
+    merge_env_var "PUSHER_APP_CLUSTER" "${PUSHER_APP_CLUSTER:-ap1}"
+    log "Merged Pusher credentials — BROADCAST_CONNECTION=pusher"
+  fi
 }
 
 mkdir -p "$SHARED_ROOT" "$BACKEND"

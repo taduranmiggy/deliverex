@@ -3,18 +3,24 @@ import Pusher from 'pusher-js'
 import { apiRequest } from '../../api/client'
 
 /**
- * Singleton Laravel Echo client over the Pusher protocol (Laravel Reverb).
+ * Singleton Laravel Echo client for real-time GPS.
  *
- * Channel auth goes through apiRequest → POST /api/broadcasting/auth so the
- * JWT bearer token (and silent refresh) is reused for private channels.
+ * Supports:
+ * - Hosted Pusher (Hostinger-friendly): set VITE_PUSHER_APP_KEY + VITE_PUSHER_APP_CLUSTER
+ * - Self-hosted Laravel Reverb: set VITE_REVERB_APP_KEY (+ host/port/scheme)
+ *
+ * Channel auth uses apiRequest → POST /api/broadcasting/auth (JWT bearer).
  */
+
+const PUSHER_KEY = import.meta.env.VITE_PUSHER_APP_KEY || ''
+const PUSHER_CLUSTER = import.meta.env.VITE_PUSHER_APP_CLUSTER || 'ap1'
 
 const REVERB_KEY = import.meta.env.VITE_REVERB_APP_KEY || ''
 const REVERB_HOST =
   import.meta.env.VITE_REVERB_HOST ||
   (import.meta.env.PROD ? window.location.hostname : 'localhost')
 const REVERB_PORT = Number(
-  import.meta.env.VITE_REVERB_PORT || (import.meta.env.PROD ? 443 : 8080),
+  import.meta.env.VITE_REVERB_PORT || (import.meta.env.PROD ? 443 : 6001),
 )
 const REVERB_SCHEME =
   import.meta.env.VITE_REVERB_SCHEME || (import.meta.env.PROD ? 'https' : 'http')
@@ -29,7 +35,13 @@ export const CONNECTION_STATES = {
 let echoInstance = null
 
 export function isRealtimeConfigured() {
-  return Boolean(REVERB_KEY)
+  return Boolean(PUSHER_KEY || REVERB_KEY)
+}
+
+export function realtimeDriver() {
+  if (PUSHER_KEY) return 'pusher'
+  if (REVERB_KEY) return 'reverb'
+  return null
 }
 
 function authorizer(channel) {
@@ -54,19 +66,34 @@ export function getEcho() {
 
   window.Pusher = Pusher
 
-  echoInstance = new Echo({
-    broadcaster: 'reverb',
-    key: REVERB_KEY,
-    wsHost: REVERB_HOST,
-    wsPort: REVERB_PORT,
-    wssPort: REVERB_PORT,
-    forceTLS: REVERB_SCHEME === 'https',
-    enabledTransports: ['ws', 'wss'],
+  const driver = realtimeDriver()
+  const base = {
     authorizer,
-    // Reconnect aggressively — dispatch panels stay open all day.
     activityTimeout: 30_000,
     pongTimeout: 10_000,
-  })
+  }
+
+  if (driver === 'pusher') {
+    echoInstance = new Echo({
+      ...base,
+      broadcaster: 'pusher',
+      key: PUSHER_KEY,
+      cluster: PUSHER_CLUSTER,
+      forceTLS: true,
+      enabledTransports: ['ws', 'wss'],
+    })
+  } else {
+    echoInstance = new Echo({
+      ...base,
+      broadcaster: 'reverb',
+      key: REVERB_KEY,
+      wsHost: REVERB_HOST,
+      wsPort: REVERB_PORT,
+      wssPort: REVERB_PORT,
+      forceTLS: REVERB_SCHEME === 'https',
+      enabledTransports: ['ws', 'wss'],
+    })
+  }
 
   return echoInstance
 }
