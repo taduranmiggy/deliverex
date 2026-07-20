@@ -92,15 +92,21 @@ function locationToGpsMapEntry(location) {
   }
 }
 
-function FleetSyncStatus({ lastSyncedAt, secondsSinceSync, syncError, tick: _tick }) {
-  const isLive = !syncError && secondsSinceSync != null && secondsSinceSync < 90
+function FleetSyncStatus({ lastSyncedAt, secondsSinceSync, syncError, realtime, isSocketConnected, tick: _tick }) {
+  const isLive = realtime
+    ? isSocketConnected && !syncError
+    : !syncError && secondsSinceSync != null && secondsSinceSync < 90
+
+  const label = realtime
+    ? (isSocketConnected ? 'Live — real-time' : 'Reconnecting…')
+    : (isLive ? 'Live' : 'Sync paused')
 
   return (
     <div className="dx-fleet-sync-status" role="status" aria-live="polite">
       <span className={`dx-fleet-sync-status__dot${isLive ? ' dx-fleet-sync-status__dot--live' : ''}`} aria-hidden />
-      <span className="dx-fleet-sync-status__label">{isLive ? 'Live' : 'Sync paused'}</span>
+      <span className="dx-fleet-sync-status__label">{label}</span>
       <span className="dx-fleet-sync-status__meta">
-        Last synchronized:
+        Last update:
         {' '}
         {lastSyncedAt ? formatRelativeSeconds(secondsSinceSync) : '—'}
       </span>
@@ -120,6 +126,8 @@ function DeliveryMonitoringPage() {
     initialLoading,
     tick,
     resync,
+    realtime,
+    isSocketConnected,
   } = useFleetLiveSync()
 
   const [error, setError]               = useState('')
@@ -274,11 +282,18 @@ function DeliveryMonitoringPage() {
 
   return (
     <>
-      <PageHeader title="Tracking" subtitle="Live driver GPS synchronized from the mobile app every 60 seconds">
+      <PageHeader
+        title="Tracking"
+        subtitle={realtime
+          ? 'Live driver GPS streamed in real time over WebSockets'
+          : 'Live driver GPS synchronized from the mobile app every 60 seconds'}
+      >
         <FleetSyncStatus
           lastSyncedAt={lastSyncedAt}
           secondsSinceSync={secondsSinceSync}
           syncError={syncError}
+          realtime={realtime}
+          isSocketConnected={isSocketConnected}
           tick={tick}
         />
       </PageHeader>
@@ -373,14 +388,16 @@ function DeliveryMonitoringPage() {
                         <strong>Last Reported Status:</strong> {a.status?.replace(/_/g, ' ') ?? '—'}
                       </div>
 
-                      {gps && driverOffline && (
+                      {driverOffline && (
                         <div className="dx-fleet-offline-banner" role="status">
-                          <strong>Driver Offline</strong>
-                          <span>
-                            Last GPS received:
-                            {' '}
-                            {formatDriverGpsAge(gps.at)}
-                          </span>
+                          <strong>Waiting for driver connection…</strong>
+                          {gps && (
+                            <span>
+                              Last GPS received:
+                              {' '}
+                              {formatDriverGpsAge(gps.at)}
+                            </span>
+                          )}
                         </div>
                       )}
 

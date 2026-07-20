@@ -45,6 +45,12 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
+        env:
+          # Real-time GPS (Laravel Reverb) — leave secrets unset to keep polling fallback.
+          VITE_REVERB_APP_KEY: ${{ secrets.VITE_REVERB_APP_KEY }}
+          VITE_REVERB_HOST: ${{ secrets.VITE_REVERB_HOST }}
+          VITE_REVERB_PORT: ${{ secrets.VITE_REVERB_PORT }}
+          VITE_REVERB_SCHEME: ${{ secrets.VITE_REVERB_SCHEME }}
         run: |
           npm ci
           VITE_API_URL="$VITE_API_URL" npm run build

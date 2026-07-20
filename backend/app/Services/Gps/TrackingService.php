@@ -2,6 +2,7 @@
 
 namespace App\Services\Gps;
 
+use App\Events\DriverLocationUpdated;
 use App\Models\DispatchAssignment;
 use App\Models\TrackingLog;
 use App\Support\DeliveryStatus;
@@ -92,7 +93,29 @@ class TrackingService
 
         $this->driverLocationService->syncFromTrackingLog($log, $batteryLevel);
 
+        $this->broadcastLocationUpdate($log, $assignment);
+
         return ['log' => $log, 'skipped' => false, 'reason' => null];
+    }
+
+    /**
+     * Push the new position to WebSocket subscribers immediately.
+     * Broadcast failure must never reject the GPS ingest itself.
+     */
+    private function broadcastLocationUpdate(TrackingLog $log, DispatchAssignment $assignment): void
+    {
+        try {
+            broadcast(new DriverLocationUpdated(
+                $log,
+                $assignment->job_order_id,
+                $this->formatForFleet($log),
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('Driver location broadcast failed', [
+                'assignment_id' => $assignment->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function canAcceptTracking(DispatchAssignment $assignment, ?int $driverId): ?string

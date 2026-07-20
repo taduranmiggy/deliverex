@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiRequest } from '../../api/client'
 import LiveFleetMap from '../../components/LiveFleetMap'
+import {
+  CONNECTION_STATES,
+  getEcho,
+  isRealtimeConfigured,
+  onConnectionStateChange,
+} from '../../services/realtime/echo'
 import TripHistoryReplay from '../../components/TripHistoryReplay'
 import { PageHeader, StatusBadge } from '../../components/ui'
 import { ExternalLink, RefreshCw } from 'lucide-react'
@@ -44,6 +50,67 @@ function ManagerFleetTrackingPage() {
   }, [load])
 
   useEffect(() => {
+    // ── Real-time GPS over WebSockets (Laravel Reverb) ──────────────────
+    if (isRealtimeConfigured()) {
+      const echo = getEcho()
+      const channel = echo.private('fleet.live')
+
+      channel.listen('.driver.location.updated', (event) => {
+        const tripId = event?.trip_id ?? event?.assignment_id
+        if (tripId == null) return
+
+        setRows((prev) => {
+          const index = prev.findIndex((r) => r.id === tripId)
+          if (index === -1) {
+            // Unknown trip — a new dispatch happened; pull a fresh snapshot.
+            load()
+            return prev
+          }
+          const next = [...prev]
+          next[index] = {
+            ...next[index],
+            gps: {
+              ...(next[index].gps || {}),
+              lat: Number(event.latitude),
+              lng: Number(event.longitude),
+              at: event.timestamp ?? new Date().toISOString(),
+              heading: event.heading ?? null,
+              speed_kmh: event.speed_kmh ?? event.speed ?? null,
+              is_stale: false,
+              is_critical_stale: false,
+              offline: { state: 'online', label: null, age_seconds: 0 },
+              ...(event.location && typeof event.location === 'object' ? event.location : {}),
+            },
+          }
+          return next
+        })
+      })
+
+      let wasDisconnected = false
+      const unbindConnection = onConnectionStateChange((state) => {
+        if (state === CONNECTION_STATES.CONNECTED && wasDisconnected) {
+          load()
+          wasDisconnected = false
+        }
+        if (state === CONNECTION_STATES.UNAVAILABLE || state === CONNECTION_STATES.DISCONNECTED) {
+          wasDisconnected = true
+        }
+      })
+
+      const onVisibility = () => {
+        if (!document.hidden) load()
+      }
+      document.addEventListener('visibilitychange', onVisibility)
+
+      return () => {
+        channel.stopListening('.driver.location.updated')
+        echo.leave('fleet.live')
+        unbindConnection()
+        document.removeEventListener('visibilitychange', onVisibility)
+      }
+    }
+
+    // ── Legacy fallback when no Reverb key is configured ────────────────
     const timer = setInterval(() => {
       if (!document.hidden) {
         load()
