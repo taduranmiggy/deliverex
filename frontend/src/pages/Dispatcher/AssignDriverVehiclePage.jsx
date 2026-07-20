@@ -324,10 +324,55 @@ const VEHICLE_SOFT_LABELS = {
   vehicle_type_mismatch: 'Vehicle type mismatch (lower cargo score)',
 }
 
+function VehicleAuditPanel({ vehicleAudit }) {
+  if (!vehicleAudit?.vehicles?.length) return null
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <p style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: 8 }}>Vehicle filter audit</p>
+      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: 10 }}>
+        {vehicleAudit.summary?.eligible ?? 0} eligible · {vehicleAudit.summary?.hard_rejected ?? 0} hard rejected
+      </p>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflow: 'auto' }}>
+        {vehicleAudit.vehicles.map((vehicle) => (
+          <li
+            key={vehicle.vehicle_id}
+            style={{
+              padding: '10px 12px',
+              borderRadius: 8,
+              border: `1px solid ${vehicle.final === 'ELIGIBLE' ? '#bbf7d0' : '#fecaca'}`,
+              background: vehicle.final === 'ELIGIBLE' ? '#f0fdf4' : '#fef2f2',
+              fontSize: '0.75rem',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+              <strong>{vehicle.plate_no}</strong>
+              <span style={{ fontWeight: 800, color: vehicle.final === 'ELIGIBLE' ? '#166534' : '#991b1b' }}>{vehicle.final}</span>
+            </div>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {(vehicle.checks ?? []).map((check) => (
+                <li key={check.step} style={{ color: check.pass ? 'var(--text)' : '#991b1b' }}>
+                  <span style={{ fontWeight: 700 }}>{check.label}:</span>{' '}
+                  {check.comparison || (check.pass ? 'PASS' : 'FAIL')}
+                </li>
+              ))}
+            </ul>
+            {vehicle.soft_flags?.length > 0 && (
+              <p style={{ margin: '6px 0 0', color: '#92400e' }}>
+                Soft flags: {vehicle.soft_flags.join(', ')}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function BestFitDiagnosticsPanel({ diagnostics }) {
   if (!diagnostics) return null
 
-  const { summary, drivers, vehicles, bottleneck, job_requirements: req } = diagnostics
+  const { summary, drivers, vehicles, bottleneck, job_requirements: req, vehicle_audit: vehicleAudit } = diagnostics
 
   const renderRemovals = (removed, labels) => {
     const entries = Object.entries(removed || {}).flatMap(([key, items]) =>
@@ -391,6 +436,7 @@ function BestFitDiagnosticsPanel({ diagnostics }) {
       )}
       {renderRemovals(drivers?.removed, DRIVER_REMOVAL_LABELS)}
       {renderRemovals(vehicles?.removed, VEHICLE_REMOVAL_LABELS)}
+      <VehicleAuditPanel vehicleAudit={vehicleAudit} />
     </div>
   )
 }

@@ -11,6 +11,8 @@ use App\Services\Fleet\VehicleAvailabilityService;
 use App\Support\AssignmentScheduleConflict;
 use App\Support\DeliveryStatus;
 use App\Support\DriverLicenseValidator;
+use App\Support\VehicleTypeMatcher;
+use App\Support\VehicleVolumeResolver;
 
 class BestFitPipelineDiagnostic
 {
@@ -18,6 +20,7 @@ class BestFitPipelineDiagnostic
         private DriverAvailabilityService $driverAvailability,
         private VehicleAvailabilityService $vehicleAvailability,
         private BestFitAssignmentService $bestFit,
+        private BestFitVehicleFilterAudit $vehicleFilterAudit,
     ) {
     }
 
@@ -28,13 +31,14 @@ class BestFitPipelineDiagnostic
 
         $requiredVolume = $this->bestFitRequiredVolume($jobOrder);
         $requiredTypeName = $jobOrder->preferredVehicleType?->name ?? $jobOrder->vehicle_type_required;
-        $requiredTypeNormalized = $this->normalizeVehicleTypeName($requiredTypeName);
+        $requiredTypeNormalized = VehicleTypeMatcher::normalize($requiredTypeName);
 
         $allDrivers = Driver::query()->with('user')->get();
         $allVehicles = Vehicle::query()->with('vehicleType')->get();
 
         $driverStages = $this->analyzeDrivers($jobOrder, $allDrivers);
         $vehicleStages = $this->analyzeVehicles($jobOrder, $allVehicles, $requiredTypeNormalized, $requiredVolume);
+        $vehicleAudit = $this->vehicleFilterAudit->audit($jobOrder, $allVehicles);
 
         $eligibleDrivers = $driverStages['eligible'];
         $eligibleVehicles = $vehicleStages['eligible'];
@@ -67,6 +71,7 @@ class BestFitPipelineDiagnostic
             ],
             'drivers' => $this->serializeStage($driverStages),
             'vehicles' => $this->serializeStage($vehicleStages),
+            'vehicle_audit' => $vehicleAudit,
             'bottleneck' => $this->detectBottleneck($driverStages, $vehicleStages, $pairCount),
         ];
     }
@@ -226,13 +231,21 @@ class BestFitPipelineDiagnostic
             }
 
             if (! $this->vehicleMeetsCapacity($vehicle, $requiredVolume)) {
-                $capacity = $this->vehicleVolumeCapacity($vehicle);
-                $removed['capacity_insufficient'][] = $this->removal(
-                    $label,
-                    $vehicle,
-                    'cbm_capacity',
-                    $capacity,
-                    '>= '.$requiredVolume.' m³',
+                $capacityReport = VehicleVolumeResolver::meetsRequired($vehicle, $requiredVolume);
+                $removed['capacity_insufficient'][] = array_merge(
+                    $this->removal(
+                        $label,
+                        $vehicle,
+                        'capacity_m3',
+                        $capacityReport['resolved']['value_m3'],
+                        '>= '.$requiredVolume.' m³',
+                    ),
+                    [
+                        'comparison'     => $capacityReport['comparison'],
+                        'actual_sources' => $capacityReport['resolved']['candidates'],
+                        'primary_source' => $capacityReport['resolved']['primary_source'],
+                        'required_m3'    => $requiredVolume,
+                    ],
                 );
                 continue;
             }
@@ -248,15 +261,23 @@ class BestFitPipelineDiagnostic
             }
 
             if (! $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized, $jobOrder)) {
-                $softScoring['vehicle_type_mismatch'][] = $this->removal(
-                    $label,
-                    $vehicle,
-                    'vehicle_type',
-                    $vehicle->vehicleType?->name ?? $vehicle->type,
-                    $requiredTypeNormalized ?? 'any',
+                $typeReport = VehicleTypeMatcher::evaluate($vehicle, $jobOrder);
+                $softScoring['vehicle_type_mismatch'][] = array_merge(
+                    $this->removal(
+                        $label,
+                        $vehicle,
+                        'vehicle_type',
+                        $typeReport['vehicle']['vehicle_type_name'] ?? $vehicle->type,
+                        implode(' | ', $typeReport['required']['normalized_aliases']),
+                    ),
                     [
-                        'vehicle_type_id' => $vehicle->vehicle_type_id,
-                        'required_type_id' => $jobOrder->preferred_vehicle_type_id,
+                        'comparison'        => $typeReport['comparison'],
+                        'vehicle_aliases'   => $typeReport['vehicle']['normalized_aliases'],
+                        'required_aliases'  => $typeReport['required']['normalized_aliases'],
+                        'vehicle_type_id'   => $vehicle->vehicle_type_id,
+                        'required_type_id'  => $jobOrder->preferred_vehicle_type_id,
+                        'vehicle_wheel_type'=> $typeReport['vehicle']['vehicle_wheel_type'],
+                        'required_wheel_type'=> $typeReport['required']['preferred_wheel_type'],
                     ],
                 );
             }
@@ -318,55 +339,21 @@ class BestFitPipelineDiagnostic
 
     private function normalizeVehicleTypeName(?string $value): ?string
     {
-        if ($value === null) {
-            return null;
-        }
-
-        $normalized = mb_strtolower(trim($value));
-
-        return $normalized === '' ? null : $normalized;
+        return VehicleTypeMatcher::normalize($value);
     }
 
     private function vehicleVolumeCapacity(Vehicle $vehicle): ?float
     {
-        if ($vehicle->cbm_capacity !== null) {
-            return (float) $vehicle->cbm_capacity;
-        }
-        if ($vehicle->max_volume_m3 !== null) {
-            return (float) $vehicle->max_volume_m3;
-        }
-        if ($vehicle->rounded_cbm_capacity !== null) {
-            return (float) $vehicle->rounded_cbm_capacity;
-        }
-
-        return null;
+        return VehicleVolumeResolver::resolve($vehicle)['value_m3'];
     }
 
     private function vehicleMeetsCapacity(Vehicle $vehicle, ?float $requiredVolume): bool
     {
-        if ($requiredVolume === null || $requiredVolume <= 0) {
-            return true;
-        }
-
-        $maxVolume = $this->vehicleVolumeCapacity($vehicle);
-
-        return $maxVolume === null || $requiredVolume <= $maxVolume;
+        return VehicleVolumeResolver::meetsRequired($vehicle, $requiredVolume)['pass'];
     }
 
     private function vehicleMatchesRequiredType(Vehicle $vehicle, ?string $requiredTypeNormalized, JobOrder $jobOrder): bool
     {
-        if ($jobOrder->preferred_vehicle_type_id && $vehicle->vehicle_type_id) {
-            if ((int) $vehicle->vehicle_type_id === (int) $jobOrder->preferred_vehicle_type_id) {
-                return true;
-            }
-        }
-
-        if ($requiredTypeNormalized === null) {
-            return true;
-        }
-
-        $actual = $this->normalizeVehicleTypeName($vehicle->vehicleType?->name ?? $vehicle->type);
-
-        return $actual !== null && $actual === $requiredTypeNormalized;
+        return VehicleTypeMatcher::evaluate($vehicle, $jobOrder)['matched'];
     }
 }
