@@ -73,22 +73,8 @@ class StandardizedAddressService
         $coordinates = $confirmed ?: $submitted;
 
         if (! $coordinates) {
-            $placeId = trim((string) ($data["{$prefix}_coordinate_place_id"] ?? ''));
-            if ($placeId !== '') {
-                $coordinates = $this->geocoder->geocodePlaceId($placeId);
-            }
-        }
-
-        if (! $coordinates) {
-            $coordinates = $this->geocoder->geocodeFirst(
+            $coordinates = $this->geocoder->geocodeFirstPermissive(
                 $this->geocodeCandidates($street, $barangay, $city, $province, $region, $formatted, $data, $prefix),
-                [
-                    'city' => $city,
-                    'province' => $province,
-                    'region' => $region,
-                    'barangay' => $barangay,
-                    'region_code' => (string) ($resolved['region']['code'] ?? ''),
-                ],
             );
         }
 

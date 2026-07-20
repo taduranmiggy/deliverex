@@ -26,63 +26,32 @@ class GeocodingTraceTest extends TestCase
     {
         config()->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
         Http::fake([
-            'https://maps.googleapis.com/maps/api/place/autocomplete/json*' => Http::response([
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
                 'status' => 'OK',
-                'predictions' => [
+                'results' => [
                     [
                         'place_id' => 'ChIJ_FEU',
-                        'description' => 'FEU Institute of Technology, Sampaloc, Manila, Philippines',
-                        'structured_formatting' => [
-                            'main_text' => 'FEU Institute of Technology',
-                            'secondary_text' => 'Sampaloc, Manila, Philippines',
-                            'main_text_matched_substrings' => [['offset' => 0, 'length' => 3]],
+                        'formatted_address' => 'FEU Institute of Technology, Nicanor Reyes St, Sampaloc, Manila, Philippines',
+                        'geometry' => ['location' => ['lat' => 14.6042837, 'lng' => 120.9889112]],
+                        'types' => ['establishment', 'point_of_interest'],
+                        'address_components' => [
+                            ['long_name' => 'FEU Institute of Technology', 'types' => ['establishment', 'point_of_interest']],
+                            ['long_name' => 'Manila', 'types' => ['locality']],
+                            ['long_name' => 'Metro Manila', 'types' => ['administrative_area_level_1']],
                         ],
                     ],
                     [
                         'place_id' => 'ChIJ_FEU_QC',
-                        'description' => 'FEU Diliman, Quezon City, Philippines',
-                        'structured_formatting' => [
-                            'main_text' => 'FEU Diliman',
-                            'secondary_text' => 'Quezon City, Philippines',
+                        'formatted_address' => 'FEU Diliman, Quezon City, Philippines',
+                        'geometry' => ['location' => ['lat' => 14.6492, 'lng' => 121.0701]],
+                        'types' => ['establishment'],
+                        'address_components' => [
+                            ['long_name' => 'Quezon City', 'types' => ['locality']],
+                            ['long_name' => 'Metro Manila', 'types' => ['administrative_area_level_1']],
                         ],
                     ],
                 ],
             ]),
-            'https://maps.googleapis.com/maps/api/place/details/json*' => function ($request) {
-                $placeId = $request->data()['place_id'] ?? '';
-
-                return match ($placeId) {
-                    'ChIJ_FEU' => Http::response([
-                        'status' => 'OK',
-                        'result' => [
-                            'place_id' => 'ChIJ_FEU',
-                            'name' => 'FEU Institute of Technology',
-                            'formatted_address' => 'FEU Institute of Technology, Nicanor Reyes St, Sampaloc, Manila, Philippines',
-                            'geometry' => ['location' => ['lat' => 14.6042837, 'lng' => 120.9889112]],
-                            'types' => ['establishment', 'point_of_interest'],
-                            'address_components' => [
-                                ['long_name' => 'Manila', 'types' => ['locality']],
-                                ['long_name' => 'Metro Manila', 'types' => ['administrative_area_level_1']],
-                            ],
-                        ],
-                    ]),
-                    'ChIJ_FEU_QC' => Http::response([
-                        'status' => 'OK',
-                        'result' => [
-                            'place_id' => 'ChIJ_FEU_QC',
-                            'name' => 'FEU Diliman',
-                            'formatted_address' => 'FEU Diliman, Quezon City, Philippines',
-                            'geometry' => ['location' => ['lat' => 14.6492, 'lng' => 121.0701]],
-                            'types' => ['establishment'],
-                            'address_components' => [
-                                ['long_name' => 'Quezon City', 'types' => ['locality']],
-                                ['long_name' => 'Metro Manila', 'types' => ['administrative_area_level_1']],
-                            ],
-                        ],
-                    ]),
-                    default => Http::response(['status' => 'NOT_FOUND']),
-                };
-            },
         ]);
 
         $user = User::factory()->create([
@@ -99,14 +68,14 @@ class GeocodingTraceTest extends TestCase
         ])->assertOk()
             ->assertJsonCount(1, 'data.candidates')
             ->assertJsonPath('data.candidates.0.name', 'FEU Institute of Technology')
-            ->assertJsonPath('data.provider', 'google_places');
+            ->assertJsonPath('data.provider', 'google_geocoding');
 
         $trace = GeocodingTrace::findOrFail($search->json('data.trace_id'));
         $this->assertSame('FEU', $trace->raw_input);
         $this->assertStringContainsString('Sampaloc', $trace->normalized_address);
         $this->assertCount(2, $trace->candidates);
         $this->assertFalse($trace->candidates[1]['eligible']);
-        $this->assertSame('google_places', $trace->provider);
+        $this->assertSame('google_geocoding', $trace->provider);
 
         $candidate = $search->json('data.candidates.0');
         $confirmed = $this->apiAs($user)->postJson("/api/geocoding/traces/{$trace->id}/confirm", [

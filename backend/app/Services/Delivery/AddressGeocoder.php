@@ -57,6 +57,93 @@ class AddressGeocoder
     }
 
     /**
+     * Try multiple address strings; accept the first valid Philippines hit without PSGC anchor scoring.
+     *
+     * @param  list<string>  $queries
+     * @return array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}|null
+     */
+    public function geocodeFirstPermissive(array $queries): ?array
+    {
+        $attempted = false;
+
+        foreach ($queries as $query) {
+            $query = trim($query);
+            if ($query === '') {
+                continue;
+            }
+
+            if ($attempted) {
+                usleep(350_000);
+            }
+
+            $attempted = true;
+            $result = $this->geocodePermissive($query);
+            if ($result) {
+                return $result;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve coordinates from a single address string using only the Geocoding API.
+     *
+     * @return array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}|null
+     */
+    public function geocodePermissive(string $address): ?array
+    {
+        $query = $this->normalizeQuery($address);
+        if ($query === '') {
+            return null;
+        }
+
+        if (! $this->googleMaps->isConfigured()) {
+            Log::warning('Google Geocoding skipped because GOOGLE_MAPS_API_KEY is not configured.', [
+                'address' => $query,
+            ]);
+
+            return null;
+        }
+
+        $cacheKey = 'deliverex.geocode.google.permissive.v1.'.md5($query);
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && isset($cached['lat'], $cached['lng'])) {
+            return $cached;
+        }
+
+        try {
+            $response = $this->googleMaps->geocodeAddress($query);
+        } catch (\Throwable $exception) {
+            Log::warning('Google Geocoding failed', [
+                'address' => $query,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($response === null) {
+            return null;
+        }
+
+        $result = $this->pickFirstValidResult($response['results'] ?? [], $query);
+        if ($result) {
+            Cache::put($cacheKey, $result, now()->addDays(30));
+            LogGeocodeSelection::log($query, $query, $result);
+            LocationPipelineLogger::log('geocode_success', [
+                'address' => $query,
+                'source' => 'google_geocoding_permissive',
+                'lat' => $result['lat'],
+                'lng' => $result['lng'],
+                'place_id' => $result['place_id'] ?? null,
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
      * Try multiple address strings in order until one geocodes successfully.
      *
      * @param  list<string>  $queries
@@ -265,6 +352,43 @@ class AddressGeocoder
         }
 
         return $best;
+    }
+
+    /**
+     * @param  list<mixed>  $results
+     * @return array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}|null
+     */
+    private function pickFirstValidResult(array $results, string $query): ?array
+    {
+        foreach ($results as $result) {
+            if (! is_array($result)) {
+                continue;
+            }
+
+            $location = $result['geometry']['location'] ?? null;
+            if (! is_array($location) || ! isset($location['lat'], $location['lng'])) {
+                continue;
+            }
+
+            $coords = $this->validateCoordinates(
+                (float) $location['lat'],
+                (float) $location['lng'],
+                $query,
+                'google_geocoding_permissive',
+                false,
+            );
+
+            if (! $coords) {
+                continue;
+            }
+
+            return array_merge($coords, [
+                'place_id' => $result['place_id'] ?? null,
+                'formatted_address' => $result['formatted_address'] ?? null,
+            ]);
+        }
+
+        return null;
     }
 
     /** @return array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}|null */

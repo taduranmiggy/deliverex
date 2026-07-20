@@ -127,7 +127,7 @@ export default function PreciseLocationPicker({
         const data = response?.data ?? response
         setSuggestions(Array.isArray(data?.candidates) ? data.candidates : [])
         setTraceId(data?.trace_id || '')
-        setProvider(data?.provider || 'google_places')
+        setProvider(data?.provider || 'google_geocoding')
       } catch (err) {
         if (sequence === searchSequence.current) {
           setSuggestions([])
@@ -177,7 +177,7 @@ export default function PreciseLocationPicker({
       geocoding_trace_id: nextTraceId,
       coordinate_confirmation_token: '',
       coordinate_source: 'autocomplete_selection',
-      coordinate_provider: candidate.provider || provider || 'google_places',
+      coordinate_provider: candidate.provider || provider || 'google_geocoding',
       coordinate_place_id: candidate.place_id || '',
       coordinate_label: candidate.label || candidate.name || '',
       coordinate_confirmed_at: '',

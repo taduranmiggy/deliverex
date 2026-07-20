@@ -28,18 +28,8 @@ class LocationAutocompleteService
             throw new RuntimeException('Google Maps is not configured. Set GOOGLE_MAPS_API_KEY in the environment.');
         }
 
-        $requestParams = [
-            'input' => $normalized,
-            'components' => 'country:ph',
-            'language' => 'en',
-        ];
-
-        $response = $this->googleMaps->placeAutocomplete($normalized, [
-            'components' => 'country:ph',
-            'language' => 'en',
-        ]);
-
-        $parsed = $this->parseCandidates($response, $raw, $input);
+        $response = $this->googleMaps->geocodeAddress($normalized);
+        $parsed = $this->parseGeocodeResults($response, $raw, $input);
         $candidates = $parsed['eligible'];
         $allCandidates = $parsed['all'];
 
@@ -49,21 +39,20 @@ class LocationAutocompleteService
             'context' => trim((string) ($input['context'] ?? 'address')) ?: 'address',
             'raw_input' => $raw,
             'normalized_address' => $normalized,
-            'provider' => 'google_places',
-            'request_url' => 'https://maps.googleapis.com/maps/api/place/autocomplete/json',
-            'request_payload' => $requestParams,
+            'provider' => 'google_geocoding',
+            'request_url' => 'https://maps.googleapis.com/maps/api/geocode/json',
+            'request_payload' => ['address' => $normalized, 'region' => 'ph'],
             'response_payload' => [
                 'selected_provider_response' => $response,
                 'provider_attempts' => [[
-                    'provider' => 'google_places',
-                    'status' => $response['status'] ?? 'UNKNOWN',
-                    'cached' => false,
+                    'provider' => 'google_geocoding',
+                    'status' => is_array($response) ? ($response['status'] ?? 'ZERO_RESULTS') : 'ZERO_RESULTS',
                 ]],
             ],
             'candidates' => $allCandidates,
             'status' => $candidates === [] ? 'no_results' : 'searched',
-            'error_message' => ($response['status'] ?? '') === 'ZERO_RESULTS'
-                ? 'Google Places returned no matching addresses.'
+            'error_message' => $candidates === []
+                ? 'Google Geocoding returned no matching addresses.'
                 : null,
         ]);
 
@@ -88,38 +77,9 @@ class LocationAutocompleteService
         }
 
         $response = $this->googleMaps->geocodeAddress($normalized);
-        $candidate = null;
-        $allCandidates = [];
-
-        if ($response !== null) {
-            foreach ((array) ($response['results'] ?? []) as $index => $result) {
-                if (! is_array($result)) {
-                    continue;
-                }
-
-                $parsed = $this->googleGeocodeCandidate($result, $index);
-                if (! $parsed) {
-                    continue;
-                }
-
-                if (! $this->administrativelyCompatible($parsed, $input)) {
-                    $parsed['eligible'] = false;
-                    $parsed['rejection_reason'] = 'Candidate conflicts with the selected PSGC city or province.';
-                    $allCandidates[] = $parsed;
-
-                    continue;
-                }
-
-                $parsed['eligible'] = true;
-                $parsed['rejection_reason'] = null;
-                $parsed['score'] = $this->score($parsed, $raw, $input);
-                $allCandidates[] = $parsed;
-
-                if ($candidate === null) {
-                    $candidate = $parsed;
-                }
-            }
-        }
+        $parsed = $this->parseGeocodeResults($response, $raw, $input);
+        $candidate = $parsed['eligible'][0] ?? null;
+        $allCandidates = $parsed['all'];
 
         $trace = GeocodingTrace::create([
             'id' => (string) Str::uuid(),
@@ -152,22 +112,26 @@ class LocationAutocompleteService
     }
 
     /** @return array{eligible: list<array<string, mixed>>, all: list<array<string, mixed>>} */
-    private function parseCandidates(array $payload, string $raw, array $context): array
+    private function parseGeocodeResults(?array $response, string $raw, array $context): array
     {
-        $predictions = $payload['predictions'] ?? [];
-        if (! is_array($predictions)) {
+        if ($response === null) {
+            return ['eligible' => [], 'all' => []];
+        }
+
+        $results = $response['results'] ?? [];
+        if (! is_array($results) || $results === []) {
             return ['eligible' => [], 'all' => []];
         }
 
         $candidates = [];
         $allCandidates = [];
 
-        foreach (array_slice($predictions, 0, 8) as $index => $prediction) {
-            if (! is_array($prediction)) {
+        foreach (array_slice($results, 0, 8) as $index => $result) {
+            if (! is_array($result)) {
                 continue;
             }
 
-            $candidate = $this->googlePredictionCandidate($prediction, $index);
+            $candidate = $this->googleGeocodeCandidate($result, $index);
             if (! $candidate) {
                 continue;
             }
@@ -196,64 +160,6 @@ class LocationAutocompleteService
     }
 
     /** @return array<string, mixed>|null */
-    private function googlePredictionCandidate(array $prediction, int $index): ?array
-    {
-        $placeId = trim((string) ($prediction['place_id'] ?? ''));
-        if ($placeId === '') {
-            return null;
-        }
-
-        $details = $this->googleMaps->placeDetails($placeId);
-        if (! $details) {
-            return null;
-        }
-
-        $location = $details['geometry']['location'] ?? null;
-        if (! is_array($location) || ! isset($location['lat'], $location['lng'])) {
-            return null;
-        }
-
-        $pair = GpsCoordinateValidator::pair($location['lat'], $location['lng'], 'google_places');
-        if (! $pair) {
-            return null;
-        }
-
-        $structured = is_array($prediction['structured_formatting'] ?? null)
-            ? $prediction['structured_formatting']
-            : [];
-        $mainText = trim((string) ($structured['main_text'] ?? $details['name'] ?? ''));
-        $secondaryText = trim((string) ($structured['secondary_text'] ?? ''));
-        $formatted = trim((string) ($details['formatted_address'] ?? $prediction['description'] ?? ''));
-
-        $candidate = [
-            'provider' => 'google_places',
-            'place_id' => $placeId,
-            'name' => $mainText !== '' ? $mainText : $formatted,
-            'label' => $formatted,
-            'secondary_label' => $secondaryText,
-            'lat' => $pair['lat'],
-            'lng' => $pair['lng'],
-            'type' => $this->primaryType($details['types'] ?? []),
-            'confidence' => null,
-            'components' => $this->componentsFromGoogle($details),
-            'matched_substrings' => $structured['main_text_matched_substrings'] ?? [],
-        ];
-
-        $candidate['id'] = substr(hash('sha256', implode('|', [
-            'google_places',
-            $placeId,
-            $candidate['label'],
-            $candidate['lat'],
-            $candidate['lng'],
-            $index,
-        ])), 0, 24);
-
-        LogGeocodeSelection::log($prediction['description'] ?? $mainText, $placeId, $candidate);
-
-        return $candidate;
-    }
-
-    /** @return array<string, mixed>|null */
     private function googleGeocodeCandidate(array $result, int $index): ?array
     {
         $location = $result['geometry']['location'] ?? null;
@@ -268,13 +174,15 @@ class LocationAutocompleteService
 
         $placeId = trim((string) ($result['place_id'] ?? ''));
         $formatted = trim((string) ($result['formatted_address'] ?? ''));
+        $name = $this->primaryNameFromComponents($result);
+        $secondary = $this->secondaryLabelFromComponents($result, $formatted, $name);
 
         $candidate = [
             'provider' => 'google_geocoding',
             'place_id' => $placeId !== '' ? $placeId : null,
-            'name' => $this->primaryNameFromComponents($result),
+            'name' => $name !== '' ? $name : $formatted,
             'label' => $formatted,
-            'secondary_label' => '',
+            'secondary_label' => $secondary,
             'lat' => $pair['lat'],
             'lng' => $pair['lng'],
             'type' => $this->primaryType($result['types'] ?? []),
@@ -359,7 +267,42 @@ class LocationAutocompleteService
             }
         }
 
+        foreach ((array) ($result['address_components'] ?? []) as $component) {
+            if (! is_array($component)) {
+                continue;
+            }
+
+            $types = (array) ($component['types'] ?? []);
+            if (in_array('route', $types, true)) {
+                $streetNumber = '';
+                foreach ((array) ($result['address_components'] ?? []) as $streetComponent) {
+                    if (! is_array($streetComponent)) {
+                        continue;
+                    }
+                    if (in_array('street_number', (array) ($streetComponent['types'] ?? []), true)) {
+                        $streetNumber = trim((string) ($streetComponent['long_name'] ?? ''));
+                        break;
+                    }
+                }
+
+                $route = trim((string) ($component['long_name'] ?? ''));
+
+                return trim($streetNumber.' '.$route);
+            }
+        }
+
         return trim((string) ($result['formatted_address'] ?? ''));
+    }
+
+    private function secondaryLabelFromComponents(array $result, string $formatted, string $name): string
+    {
+        if ($formatted === '' || $name === '' || ! str_starts_with($formatted, $name)) {
+            return '';
+        }
+
+        $secondary = trim(substr($formatted, strlen($name)), " \t\n\r\0\x0B,");
+
+        return $secondary;
     }
 
     private function score(array $candidate, string $raw, array $context): float
@@ -389,7 +332,7 @@ class LocationAutocompleteService
 
     private function normalizedQuery(string $raw, array $context): string
     {
-        $parts = [$raw, $context['barangay'] ?? null, $context['city'] ?? null, $context['province'] ?? null, $context['region'] ?? null, 'Philippines'];
+        $parts = [$raw, $context['barangay'] ?? null, $context['city'] ?? null, $context['province'] ?? null, 'Philippines'];
         $seen = [];
         $unique = [];
         foreach ($parts as $part) {

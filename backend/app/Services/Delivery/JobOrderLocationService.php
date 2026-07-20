@@ -384,21 +384,6 @@ class JobOrderLocationService
         GeocodeAnchor $anchor,
         array $candidates,
     ): ?array {
-        $placeId = trim((string) ($jobOrder->{"{$prefix}_coordinate_place_id"} ?? ''));
-        if ($placeId !== '') {
-            $coords = $this->geocoder->geocodePlaceId($placeId);
-            if ($coords) {
-                LocationPipelineLogger::log("geocode_{$prefix}_place_id", [
-                    'job_order_id' => $jobOrder->id,
-                    'place_id' => $placeId,
-                    'lat' => $coords['lat'],
-                    'lng' => $coords['lng'],
-                ]);
-
-                return $coords;
-            }
-        }
-
         if ($candidates === []) {
             return null;
         }
@@ -408,11 +393,7 @@ class JobOrderLocationService
             'candidates' => $candidates,
         ]);
 
-        return $this->geocoder->geocodeFirst(
-            $candidates,
-            $anchor,
-            trim((string) ($jobOrder->{"{$prefix}_street"} ?? '')) !== '',
-        );
+        return $this->geocoder->geocodeFirstPermissive($candidates);
     }
 
     /**
