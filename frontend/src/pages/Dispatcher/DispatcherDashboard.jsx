@@ -6,7 +6,7 @@ import IssueReportsSection from '../../components/IssueReportsSection'
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from '../../components/ui'
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock, ListOrdered, MapPin, Truck } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
-import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
+import { buildDisplayName, buildRouteSummary } from '../../utils/jobOrderHelpers'
 import { getDelayReasonLabel } from '../../utils/driverAssignment'
 import { formatEventAt } from '../../utils/deliveryTimestamps'
 
@@ -151,9 +151,7 @@ function DispatcherDashboard() {
                     const delay = item.latest_delay_report
                     const arrivedLog = item.latest_arrived_status_log
                     const isPastDue = item.job_order?.scheduled_end && new Date(item.job_order.scheduled_end).getTime() < Date.now()
-                    const pickup = buildDisplayAddress('pickup', item.job_order) || '—'
-                    const dropoff = buildDisplayAddress('dropoff', item.job_order) || '—'
-                    const routeLabel = `${pickup} → ${dropoff}`
+                    const routeLabel = buildRouteSummary(item.job_order)
                     const priority = item.job_order?.priority ?? 'normal'
                     const priorityCls = priority === 'urgent' || priority === 'high'
                       ? 'badge-dx badge-dx--prio-high'

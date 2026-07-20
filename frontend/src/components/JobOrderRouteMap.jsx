@@ -9,6 +9,7 @@ import '../components/LiveFleetMap.css'
 import { fetchJobOrderMap } from '../api/jobOrders'
 import { reportRenderedLocation } from '../api/geocoding'
 import useAuth from '../hooks/useAuth'
+import { formatAddressForDisplay } from '../utils/jobOrderHelpers'
 import { AlertTriangle, Loader2, MapPin, Navigation } from 'lucide-react'
 
 const DEFAULT_CENTER = [14.5995, 120.9842]
@@ -132,7 +133,7 @@ function RouteInfoPanel({ data, showCoordinates, showWarning, warningMessage, wa
 
       <div className="dx-job-route-map__info-row">
         <span className="dx-job-route-map__info-label dx-job-route-map__info-label--pickup">Pickup</span>
-        <p className="dx-job-route-map__info-value">{pickup?.address || data?.geocode?.pickup_address || '—'}</p>
+        <p className="dx-job-route-map__info-value">{formatAddressForDisplay(pickup?.address || data?.geocode?.pickup_address) || '—'}</p>
         {showCoordinates && pickup?.lat != null && (
           <p className="dx-job-route-map__info-coords">{formatCoords(pickup)}</p>
         )}
@@ -140,7 +141,7 @@ function RouteInfoPanel({ data, showCoordinates, showWarning, warningMessage, wa
 
       <div className="dx-job-route-map__info-row">
         <span className="dx-job-route-map__info-label dx-job-route-map__info-label--dest">Destination</span>
-        <p className="dx-job-route-map__info-value">{destination?.address || data?.geocode?.destination_address || '—'}</p>
+        <p className="dx-job-route-map__info-value">{formatAddressForDisplay(destination?.address || data?.geocode?.destination_address) || '—'}</p>
         {showCoordinates && destination?.lat != null && (
           <p className="dx-job-route-map__info-coords">{formatCoords(destination)}</p>
         )}

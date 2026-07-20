@@ -18,7 +18,7 @@ import {
   toDatetimeLocalValue,
   validateJobSchedule,
 } from '../../utils/scheduleValidation'
-import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
+import { buildCompactRouteStop, buildDisplayAddress, buildDisplayName, buildRouteSummary } from '../../utils/jobOrderHelpers'
 import { companyDropoffFields } from '../../utils/companyAddress'
 import { formatJobSchedule } from '../../utils/driverAssignment'
 import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
@@ -1271,7 +1271,7 @@ function CreateJobOrderPage() {
         />
       )}
 
-      <div className="dx-split-bestfit" style={{ gridTemplateColumns: '1fr 360px', gap: 20, marginTop: 16 }}>
+      <div className="dx-split-bestfit dx-job-orders-split" style={{ marginTop: 16 }}>
         <div className="dx-panel" style={{ marginBottom: 0 }}>
 
           {/* ── Tab pills ── */}
@@ -1383,8 +1383,15 @@ function CreateJobOrderPage() {
                     >
                       <td><span className="job-link">{formatJobPublicId(order.id)}</span></td>
                       <td style={{ fontWeight: 500 }}>{order.client?.client_name || order.custom_client_name || buildDisplayName(order)}</td>
-                      <td style={{ fontSize: '0.8125rem', color: 'var(--muted)' }}>
-                        {buildDisplayAddress('pickup', order)} → {buildDisplayAddress('dropoff', order)}
+                      <td className="dx-job-orders-table__route">
+                        <span
+                          className="dx-table-route dx-table-route--split"
+                          title={buildRouteSummary(order)}
+                        >
+                          <span className="dx-route-stop dx-route-stop--pickup">{buildCompactRouteStop('pickup', order) || '—'}</span>
+                          <span className="dx-route-stop__arrow" aria-hidden>→</span>
+                          <span className="dx-route-stop dx-route-stop--dropoff">{buildCompactRouteStop('dropoff', order) || '—'}</span>
+                        </span>
                       </td>
                       <td style={{ textTransform: 'capitalize', fontSize: '0.875rem' }}>{order.priority}</td>
                       <td style={{ fontSize: '0.8125rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
@@ -1423,12 +1430,6 @@ function CreateJobOrderPage() {
               <>
                 <div className="dx-kv"><span>Client</span><strong>{selected.client?.client_name || selected.custom_client_name || buildDisplayName(selected)}</strong></div>
                 <div className="dx-kv"><span>Contact</span><strong>{selected.customer_contact ?? selected.customer_email ?? '—'}</strong></div>
-                <div className="dx-kv" style={{ alignItems: 'flex-start' }}>
-                  <span>Pickup</span><strong style={{ textAlign: 'right' }}>{buildDisplayAddress('pickup', selected) || '—'}</strong>
-                </div>
-                <div className="dx-kv" style={{ alignItems: 'flex-start' }}>
-                  <span>Destination</span><strong style={{ textAlign: 'right' }}>{buildDisplayAddress('dropoff', selected) || '—'}</strong>
-                </div>
                 <JobOrderRouteMap key={selected.id} jobOrderId={selected.id} variant="detail" readOnly />
                 {selected.material_type && (
                   <div className="dx-kv"><span>Material</span><strong>{selected.material_type}{selected.specification_size ? ` · ${selected.specification_size}` : ''}</strong></div>

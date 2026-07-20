@@ -881,6 +881,68 @@
   word-break: break-word;
 }
 
+.dx-table-route--split {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  -webkit-line-clamp: unset;
+  overflow: hidden;
+}
+
+.dx-route-stop {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.dx-route-stop--pickup::before {
+  content: 'Pickup · ';
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.dx-route-stop--dropoff::before {
+  content: 'Dropoff · ';
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.dx-route-stop__arrow {
+  display: none;
+}
+
+.dx-job-orders-table__route {
+  max-width: 0;
+  width: 38%;
+}
+
+.dx-job-orders-split {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1280px) {
+  .dx-job-orders-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dx-detail-panel .dx-job-route-map__info-value {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  text-transform: none;
+}
+
+.dx-detail-panel .dx-job-route-map__info-row + .dx-job-route-map__info-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--stroke);
+}
+
 .dx-dashboard-deliveries__status {
   white-space: nowrap;
 }
