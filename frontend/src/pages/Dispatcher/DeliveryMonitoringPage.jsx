@@ -10,7 +10,6 @@ import { getDelayReasonLabel } from '../../utils/driverAssignment'
 import { formatEventAt } from '../../utils/deliveryTimestamps'
 import {
   formatDriverGpsAge,
-  formatRelativeSeconds,
   isDriverOffline,
   isValidMapCoordinate,
 } from '../../utils/fleetLiveSync'
@@ -92,42 +91,12 @@ function locationToGpsMapEntry(location) {
   }
 }
 
-function FleetSyncStatus({ lastSyncedAt, secondsSinceSync, syncError, realtime, isSocketConnected, tick: _tick }) {
-  const isLive = realtime
-    ? isSocketConnected && !syncError
-    : !syncError && secondsSinceSync != null && secondsSinceSync < 90
-
-  const label = realtime
-    ? (isSocketConnected ? 'Live — real-time' : 'Reconnecting…')
-    : (isLive ? 'Live' : 'Sync paused')
-
-  return (
-    <div className="dx-fleet-sync-status" role="status" aria-live="polite">
-      <span className={`dx-fleet-sync-status__dot${isLive ? ' dx-fleet-sync-status__dot--live' : ''}`} aria-hidden />
-      <span className="dx-fleet-sync-status__label">{label}</span>
-      <span className="dx-fleet-sync-status__meta">
-        Last update:
-        {' '}
-        {lastSyncedAt ? formatRelativeSeconds(secondsSinceSync) : '—'}
-      </span>
-      {syncError && (
-        <span className="dx-fleet-sync-status__error">{syncError}</span>
-      )}
-    </div>
-  )
-}
-
 function DeliveryMonitoringPage() {
   const {
     deliveries: assignments,
-    lastSyncedAt,
-    secondsSinceSync,
-    syncError,
     initialLoading,
-    tick,
     resync,
     realtime,
-    isSocketConnected,
   } = useFleetLiveSync()
 
   const [error, setError]               = useState('')
@@ -287,16 +256,7 @@ function DeliveryMonitoringPage() {
         subtitle={realtime
           ? 'Live driver GPS streamed in real time over WebSockets'
           : 'Live driver GPS synchronized from the mobile app every 60 seconds'}
-      >
-        <FleetSyncStatus
-          lastSyncedAt={lastSyncedAt}
-          secondsSinceSync={secondsSinceSync}
-          syncError={syncError}
-          realtime={realtime}
-          isSocketConnected={isSocketConnected}
-          tick={tick}
-        />
-      </PageHeader>
+      />
       {error && <p className="notice error">{error}</p>}
 
       {assignments.length > 0 && (
