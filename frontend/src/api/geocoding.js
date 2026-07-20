@@ -7,6 +7,13 @@ export function searchPreciseLocations(payload) {
   })
 }
 
+export function geocodeManualAddress(payload) {
+  return apiRequest('/geocoding/geocode', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function confirmPreciseLocation(traceId, payload) {
   return apiRequest(`/geocoding/traces/${encodeURIComponent(traceId)}/confirm`, {
     method: 'POST',

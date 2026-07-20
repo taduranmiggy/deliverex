@@ -83,8 +83,8 @@ export function getPsgcAddressFieldErrors(address, options = {}) {
   if (!address?.street?.trim()) {
     errors.street = 'Street / building / house no. is required.'
   }
-  if (requirePreciseLocation && !address?.coordinate_confirmation_token) {
-    errors.coordinates = 'Select a suggestion or place the marker, then confirm the exact pin.'
+  if (requirePreciseLocation && !address?.coordinate_confirmation_token && (address?.latitude == null || address?.longitude == null)) {
+    errors.coordinates = 'Select an address suggestion or geocode the address before continuing.'
   }
 
   return errors

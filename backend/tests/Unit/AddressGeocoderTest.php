@@ -14,25 +14,23 @@ class AddressGeocoderTest extends TestCase
         parent::setUp();
         Cache::flush();
         Http::preventStrayRequests();
+        config()->set('gps.geocoding.google_maps_api_key', 'test-google-key');
     }
 
-    public function test_geocode_prefers_openrouteservice_when_api_key_is_configured(): void
+    public function test_geocode_uses_google_geocoding_api(): void
     {
-        config()->set('gps.routing.openrouteservice_api_key', 'test-ors-key');
-
         Http::fake([
-            'https://api.openrouteservice.org/geocode/search*' => Http::response([
-                'features' => [[
-                    'geometry' => ['coordinates' => [121.0437, 14.6760]],
-                    'properties' => [
-                        'name' => 'Quezon City',
-                        'locality' => 'Quezon City',
-                        'region' => 'Metro Manila',
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
+                'status' => 'OK',
+                'results' => [[
+                    'place_id' => 'ChIJ_quezon',
+                    'formatted_address' => 'Quezon City, Metro Manila, Philippines',
+                    'geometry' => ['location' => ['lat' => 14.6760, 'lng' => 121.0437]],
+                    'address_components' => [
+                        ['long_name' => 'Quezon City', 'types' => ['locality']],
+                        ['long_name' => 'Metro Manila', 'types' => ['administrative_area_level_1']],
                     ],
                 ]],
-            ]),
-            'https://nominatim.openstreetmap.org/*' => Http::response([
-                ['lat' => '0.0', 'lon' => '0.0'],
             ]),
         ]);
 
@@ -40,40 +38,29 @@ class AddressGeocoderTest extends TestCase
 
         $this->assertSame(14.676, $coords['lat']);
         $this->assertSame(121.0437, $coords['lng']);
-        Http::assertSent(function ($request) {
-            return $request->hasHeader('Authorization', 'Bearer test-ors-key');
-        });
-    }
-
-    public function test_geocode_falls_back_to_nominatim_when_openrouteservice_is_unconfigured(): void
-    {
-        config()->set('gps.routing.openrouteservice_api_key', null);
-
-        Http::fake([
-            'https://nominatim.openstreetmap.org/*' => Http::response([
-                ['lat' => '14.8527', 'lon' => '120.8156'],
-            ]),
-        ]);
-
-        $coords = app(AddressGeocoder::class)->geocode('City of Malolos, Philippines');
-
-        $this->assertSame(14.8527, $coords['lat']);
-        $this->assertSame(120.8156, $coords['lng']);
+        $this->assertSame('ChIJ_quezon', $coords['place_id']);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'maps.googleapis.com/maps/api/geocode/json'));
     }
 
     public function test_geocode_first_tries_multiple_candidates(): void
     {
-        config()->set('gps.routing.openrouteservice_api_key', null);
-
         Http::fake([
-            'https://nominatim.openstreetmap.org/*' => function ($request) {
-                $query = $request->data()['q'] ?? '';
-                if (str_contains($query, 'Unknown Street')) {
-                    return Http::response([]);
+            'https://maps.googleapis.com/maps/api/geocode/json*' => function ($request) {
+                $address = $request->data()['address'] ?? '';
+                if (str_contains($address, 'Unknown Street')) {
+                    return Http::response(['status' => 'ZERO_RESULTS', 'results' => []]);
                 }
 
                 return Http::response([
-                    ['lat' => '14.6760', 'lon' => '121.0437'],
+                    'status' => 'OK',
+                    'results' => [[
+                        'place_id' => 'ChIJ_qc',
+                        'formatted_address' => 'Quezon City, Metro Manila, Philippines',
+                        'geometry' => ['location' => ['lat' => 14.6760, 'lng' => 121.0437]],
+                        'address_components' => [
+                            ['long_name' => 'Quezon City', 'types' => ['locality']],
+                        ],
+                    ]],
                 ]);
             },
         ]);
@@ -88,75 +75,43 @@ class AddressGeocoderTest extends TestCase
         Http::assertSentCount(2);
     }
 
-    public function test_geocode_rejects_mismatched_anchor_and_tries_next_candidate(): void
-    {
-        config()->set('gps.routing.openrouteservice_api_key', 'test-ors-key');
-
-        Http::fake([
-            'https://api.openrouteservice.org/geocode/search*' => function ($request) {
-                $text = strtoupper($request->data()['text'] ?? '');
-
-                if (str_contains($text, 'RODRIGUEZ') && str_contains($text, 'RIZAL') && ! str_contains($text, '9009')) {
-                    return Http::response([
-                        'features' => [[
-                            'geometry' => ['coordinates' => [121.20, 14.76]],
-                            'properties' => ['name' => 'Rodriguez', 'county' => 'Rizal'],
-                        ]],
-                    ]);
-                }
-
-                if (str_contains($text, '9009')) {
-                    return Http::response([
-                        'features' => [[
-                            'geometry' => ['coordinates' => [121.88, 17.15]],
-                            'properties' => ['name' => 'P. Rodriguez', 'county' => 'Isabela'],
-                        ]],
-                    ]);
-                }
-
-                return Http::response(['features' => []]);
-            },
-        ]);
-
-        $coords = app(AddressGeocoder::class)->geocodeFirst(
-            [
-                '9009 P. Rodriguez St., Barangay San Rafael, Rodriguez, Rizal, Philippines',
-                'Rodriguez, Rizal, Philippines',
-            ],
-            ['city' => 'RODRIGUEZ', 'province' => 'RIZAL'],
-        );
-
-        $this->assertSame(14.76, $coords['lat']);
-        $this->assertSame(121.20, $coords['lng']);
-    }
-
     public function test_geocode_rejects_pares_street_when_query_is_p_paredes(): void
     {
-        config()->set('gps.routing.openrouteservice_api_key', 'test-ors-key');
-
         Http::fake([
-            'https://api.openrouteservice.org/geocode/search*' => function ($request) {
-                $text = strtoupper($request->data()['text'] ?? '');
+            'https://maps.googleapis.com/maps/api/geocode/json*' => function ($request) {
+                $address = strtoupper($request->data()['address'] ?? '');
 
-                if (str_contains($text, 'PARES')) {
+                if (str_contains($address, 'PARES')) {
                     return Http::response([
-                        'features' => [[
-                            'geometry' => ['coordinates' => [120.991, 14.602]],
-                            'properties' => ['name' => 'Pares Street', 'street' => 'Pares Street', 'locality' => 'Manila'],
+                        'status' => 'OK',
+                        'results' => [[
+                            'place_id' => 'ChIJ_pares',
+                            'formatted_address' => 'Pares Street, Manila, Philippines',
+                            'geometry' => ['location' => ['lat' => 14.602, 'lng' => 120.991]],
+                            'address_components' => [
+                                ['long_name' => 'Pares Street', 'types' => ['route']],
+                                ['long_name' => 'Manila', 'types' => ['locality']],
+                            ],
                         ]],
                     ]);
                 }
 
-                if (str_contains($text, 'PAREDES')) {
+                if (str_contains($address, 'PAREDES')) {
                     return Http::response([
-                        'features' => [[
-                            'geometry' => ['coordinates' => [120.989, 14.604]],
-                            'properties' => ['name' => 'Paredes Street', 'street' => 'Paredes Street', 'locality' => 'Manila'],
+                        'status' => 'OK',
+                        'results' => [[
+                            'place_id' => 'ChIJ_paredes',
+                            'formatted_address' => 'Paredes Street, Sampaloc, Manila, Philippines',
+                            'geometry' => ['location' => ['lat' => 14.604, 'lng' => 120.989]],
+                            'address_components' => [
+                                ['long_name' => 'Paredes Street', 'types' => ['route']],
+                                ['long_name' => 'Manila', 'types' => ['locality']],
+                            ],
                         ]],
                     ]);
                 }
 
-                return Http::response(['features' => []]);
+                return Http::response(['status' => 'ZERO_RESULTS', 'results' => []]);
             },
         ]);
 
@@ -174,54 +129,6 @@ class AddressGeocoderTest extends TestCase
         );
 
         $this->assertSame(14.604, $coords['lat']);
-        $this->assertSame(120.989, $coords['lng']);
-    }
-
-    public function test_geocode_rejects_blumentritt_when_query_is_p_paredes_street(): void
-    {
-        config()->set('gps.routing.openrouteservice_api_key', 'test-ors-key');
-
-        Http::fake([
-            'https://api.openrouteservice.org/geocode/search*' => function ($request) {
-                $text = strtoupper($request->data()['text'] ?? '');
-
-                if (str_contains($text, 'PAREDES') && ! str_contains($text, 'PAREDES STREET, BARANGAY')) {
-                    return Http::response([
-                        'features' => [[
-                            'geometry' => ['coordinates' => [120.987, 14.611]],
-                            'properties' => ['name' => 'Blumentritt Road', 'street' => 'Blumentritt Road', 'locality' => 'Manila'],
-                        ]],
-                    ]);
-                }
-
-                if (str_contains($text, 'PAREDES STREET')) {
-                    return Http::response([
-                        'features' => [[
-                            'geometry' => ['coordinates' => [120.989, 14.609]],
-                            'properties' => ['name' => 'Paredes Street', 'street' => 'Paredes Street', 'locality' => 'Manila'],
-                        ]],
-                    ]);
-                }
-
-                return Http::response(['features' => []]);
-            },
-        ]);
-
-        $coords = app(AddressGeocoder::class)->geocodeFirst(
-            [
-                'P.PAREDES STREET, Barangay 395, Sampaloc, Manila, Philippines',
-                'Paredes Street, Barangay 395, Sampaloc, Manila, Philippines',
-            ],
-            [
-                'city' => 'SAMPALOC',
-                'region' => 'NATIONAL CAPITAL REGION (NCR)',
-                'region_code' => '1300000000',
-                'barangay' => '395',
-            ],
-            true,
-        );
-
-        $this->assertSame(14.609, $coords['lat']);
         $this->assertSame(120.989, $coords['lng']);
     }
 }

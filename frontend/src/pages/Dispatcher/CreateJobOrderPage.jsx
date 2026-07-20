@@ -616,14 +616,14 @@ const JobOrderForm = forwardRef(function JobOrderForm(
     }
     if (step === 3) {
       const pickupAddress = toPsgcAddress(form, 'pickup')
-      const pickupFieldErrors = getPsgcAddressFieldErrors(pickupAddress, { requirePreciseLocation: true })
+      const pickupFieldErrors = getPsgcAddressFieldErrors(pickupAddress)
       if (Object.keys(pickupFieldErrors).length > 0) {
         errs.pickup_address = getPsgcAddressSummaryError(pickupFieldErrors)
         errs.pickup_address_fields = pickupFieldErrors
       }
 
       const dropoffAddress = toPsgcAddress(form, 'dropoff')
-      const dropoffFieldErrors = getPsgcAddressFieldErrors(dropoffAddress, { requirePreciseLocation: true })
+      const dropoffFieldErrors = getPsgcAddressFieldErrors(dropoffAddress)
       if (Object.keys(dropoffFieldErrors).length > 0) {
         errs.dropoff_address = getPsgcAddressSummaryError(dropoffFieldErrors)
         errs.dropoff_address_fields = dropoffFieldErrors

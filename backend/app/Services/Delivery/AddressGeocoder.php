@@ -2,28 +2,28 @@
 
 namespace App\Services\Delivery;
 
+use App\Services\Geocoding\GoogleMapsClient;
+use App\Services\Geocoding\LogGeocodeSelection;
 use App\Support\GeocodeAnchor;
 use App\Support\GeocodeResultScorer;
 use App\Support\GpsCoordinateValidator;
 use App\Support\LocationPipelineLogger;
-use App\Support\OpenRouteServiceAuth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class AddressGeocoder
 {
     public function __construct(
         private GeocodeResultScorer $scorer,
+        private GoogleMapsClient $googleMaps,
     ) {
     }
 
     /**
-     * Resolve latitude/longitude for an address.
-     * Uses OpenRouteService when configured, then falls back to Nominatim.
+     * Resolve latitude/longitude for an address using Google Geocoding API.
      *
      * @param  array{city?: string|null, province?: string|null, region?: string|null}|GeocodeAnchor|null  $anchor
-     * @return array{lat: float, lng: float}|null
+     * @return array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}|null
      */
     public function geocode(string $address, GeocodeAnchor|array|null $anchor = null): ?array
     {
@@ -33,7 +33,15 @@ class AddressGeocoder
             return null;
         }
 
-        $cacheKey = 'deliverex.geocode.v7.'.md5($query.$anchor->cacheKeySuffix());
+        if (! $this->googleMaps->isConfigured()) {
+            Log::warning('Google Maps geocoding skipped because GOOGLE_MAPS_API_KEY is not configured.', [
+                'address' => $query,
+            ]);
+
+            return null;
+        }
+
+        $cacheKey = 'deliverex.geocode.google.v1.'.md5($query.$anchor->cacheKeySuffix());
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['lat'], $cached['lng'])) {
             return $cached;
@@ -42,6 +50,7 @@ class AddressGeocoder
         $result = $this->performLookup($query, $anchor);
         if ($result) {
             Cache::put($cacheKey, $result, now()->addDays(30));
+            LogGeocodeSelection::log($query, $query, $result);
         }
 
         return $result;
@@ -52,7 +61,7 @@ class AddressGeocoder
      *
      * @param  list<string>  $queries
      * @param  array{city?: string|null, province?: string|null, region?: string|null}|GeocodeAnchor|null  $anchor
-     * @return array{lat: float, lng: float}|null
+     * @return array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}|null
      */
     public function geocodeFirst(
         array $queries,
@@ -147,17 +156,29 @@ class AddressGeocoder
         return $query;
     }
 
-    /** @return array{lat: float, lng: float}|null */
-    private function performLookup(string $query, GeocodeAnchor $anchor): ?array
+    /** @return array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}|null */
+    private function performLookup(string $query, GeocodeAnchor $anchor, bool $allowCentroid = true): ?array
     {
-        $centroid = $anchor->hasLocality() ? $this->resolveAnchorCentroid($anchor) : null;
+        $centroid = $allowCentroid && $anchor->hasLocality()
+            ? $this->resolveAnchorCentroid($anchor)
+            : null;
 
-        $openRoute = $this->performOpenRouteServiceLookup($query, $anchor, $centroid);
-        if ($openRoute) {
-            return $openRoute;
+        try {
+            $response = $this->googleMaps->geocodeAddress($query);
+        } catch (\Throwable $exception) {
+            Log::warning('Google Geocoding failed', [
+                'address' => $query,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
         }
 
-        return $this->performNominatimLookup($query, $anchor, $centroid);
+        if ($response === null) {
+            return null;
+        }
+
+        return $this->pickBestResult($response['results'] ?? [], $query, $anchor, $centroid);
     }
 
     /** @return array{lat: float, lng: float}|null */
@@ -176,14 +197,9 @@ class AddressGeocoder
             $anchor->centroidCacheKey(),
             now()->addDays(60),
             function () use ($localityQuery, $anchor): ?array {
-                $openRoute = $this->performOpenRouteServiceLookup($localityQuery, $anchor, null);
-                if ($openRoute && $this->scorer->coordsWithinExpectedArea($anchor, $openRoute)) {
-                    return $openRoute;
-                }
-
-                $nominatim = $this->performNominatimLookup($localityQuery, $anchor, null);
-                if ($nominatim && $this->scorer->coordsWithinExpectedArea($anchor, $nominatim)) {
-                    return $nominatim;
+                $result = $this->performLookup($localityQuery, $anchor, false);
+                if ($result && $this->scorer->coordsWithinExpectedArea($anchor, $result)) {
+                    return ['lat' => $result['lat'], 'lng' => $result['lng']];
                 }
 
                 return $anchor->fallbackCentroid();
@@ -191,185 +207,34 @@ class AddressGeocoder
         );
     }
 
-    /** @return array{lat: float, lng: float}|null */
-    private function performOpenRouteServiceLookup(
-        string $query,
-        GeocodeAnchor $anchor,
-        ?array $centroid,
-    ): ?array {
-        $apiKey = config('gps.routing.openrouteservice_api_key');
-        $authHeader = OpenRouteServiceAuth::authorizationHeader(is_string($apiKey) ? $apiKey : null);
-        if (! $authHeader) {
-            return null;
-        }
-
-        try {
-            $url = config(
-                'gps.geocoding.openrouteservice_url',
-                'https://api.openrouteservice.org/geocode/search',
-            );
-
-            $params = [
-                'text' => $query,
-                'size' => 5,
-                'boundary.country' => 'PH',
-            ];
-
-            if ($anchor->isNcr()) {
-                $focus = $anchor->focusPoint();
-                $params['focus.point.lat'] = $focus['lat'];
-                $params['focus.point.lon'] = $focus['lng'];
-            }
-
-            $response = Http::timeout(12)
-                ->withHeaders($authHeader)
-                ->get($url, $params);
-
-            if (! $response->successful()) {
-                Log::warning('OpenRouteService geocoding HTTP failure', [
-                    'address' => $query,
-                    'status' => $response->status(),
-                    'body' => $response->json(),
-                ]);
-
-                return null;
-            }
-
-            return $this->pickBestFeature(
-                $response->json()['features'] ?? [],
-                $query,
-                'openrouteservice',
-                $anchor,
-                $centroid,
-            );
-        } catch (\Throwable $e) {
-            Log::warning('OpenRouteService geocoding failed', [
-                'address' => $query,
-                'error' => $e->getMessage(),
-            ]);
-
-            return null;
-        }
-    }
-
-    /** @return array{lat: float, lng: float}|null */
-    private function performNominatimLookup(
-        string $query,
-        GeocodeAnchor $anchor,
-        ?array $centroid,
-    ): ?array {
-        try {
-            $params = [
-                'q' => $query,
-                'format' => 'json',
-                'limit' => 5,
-                'countrycodes' => 'ph',
-                'addressdetails' => 1,
-            ];
-
-            if ($anchor->isNcr()) {
-                $params['viewbox'] = '120.90,14.78,121.10,14.42';
-                $params['bounded'] = 1;
-            }
-
-            $response = Http::withHeaders([
-                'User-Agent' => 'Deliverex/1.0 (logistics capstone)',
-            ])
-                ->timeout(10)
-                ->get('https://nominatim.openstreetmap.org/search', $params);
-
-            if (! $response->successful()) {
-                Log::warning('Address geocoding HTTP failure', [
-                    'address' => $query,
-                    'status' => $response->status(),
-                ]);
-
-                return null;
-            }
-
-            $results = $response->json();
-            if (! is_array($results)) {
-                return null;
-            }
-
-            $best = null;
-            $bestScore = -1.0;
-
-            foreach ($results as $result) {
-                if (! is_array($result) || empty($result['lat']) || empty($result['lon'])) {
-                    continue;
-                }
-
-                $coords = $this->validateCoordinates(
-                    (float) $result['lat'],
-                    (float) $result['lon'],
-                    $query,
-                    'nominatim',
-                    false,
-                );
-
-                if (! $coords) {
-                    continue;
-                }
-
-                $labels = $this->extractNominatimLabels($result);
-                $score = $this->scorer->score($anchor, $coords, $labels, $centroid, $query);
-                if ($score > $bestScore) {
-                    $bestScore = $score;
-                    $best = $coords;
-                }
-            }
-
-            if ($best) {
-                LocationPipelineLogger::log('geocode_success', [
-                    'address' => $query,
-                    'source' => 'nominatim',
-                    'lat' => $best['lat'],
-                    'lng' => $best['lng'],
-                    'score' => $bestScore,
-                ]);
-            }
-
-            return $best;
-        } catch (\Throwable $e) {
-            Log::warning('Address geocoding failed', [
-                'address' => $query,
-                'error' => $e->getMessage(),
-            ]);
-
-            return null;
-        }
-    }
-
     /**
-     * @param  list<mixed>  $features
-     * @return array{lat: float, lng: float}|null
+     * @param  list<mixed>  $results
+     * @return array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}|null
      */
-    private function pickBestFeature(
-        array $features,
+    private function pickBestResult(
+        array $results,
         string $query,
-        string $source,
         GeocodeAnchor $anchor,
         ?array $centroid,
     ): ?array {
         $best = null;
         $bestScore = -1.0;
 
-        foreach ($features as $feature) {
-            if (! is_array($feature)) {
+        foreach ($results as $result) {
+            if (! is_array($result)) {
                 continue;
             }
 
-            $coordinates = $feature['geometry']['coordinates'] ?? null;
-            if (! is_array($coordinates) || count($coordinates) < 2) {
+            $location = $result['geometry']['location'] ?? null;
+            if (! is_array($location) || ! isset($location['lat'], $location['lng'])) {
                 continue;
             }
 
             $coords = $this->validateCoordinates(
-                (float) $coordinates[1],
-                (float) $coordinates[0],
+                (float) $location['lat'],
+                (float) $location['lng'],
                 $query,
-                $source,
+                'google_geocoding',
                 false,
             );
 
@@ -377,21 +242,24 @@ class AddressGeocoder
                 continue;
             }
 
-            $properties = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
-            $labels = $this->extractOpenRouteLabels($properties);
+            $labels = $this->extractGoogleLabels($result);
             $score = $this->scorer->score($anchor, $coords, $labels, $centroid, $query);
             if ($score > $bestScore) {
                 $bestScore = $score;
-                $best = $coords;
+                $best = array_merge($coords, [
+                    'place_id' => $result['place_id'] ?? null,
+                    'formatted_address' => $result['formatted_address'] ?? null,
+                ]);
             }
         }
 
         if ($best) {
             LocationPipelineLogger::log('geocode_success', [
                 'address' => $query,
-                'source' => $source,
+                'source' => 'google_geocoding',
                 'lat' => $best['lat'],
                 'lng' => $best['lng'],
+                'place_id' => $best['place_id'] ?? null,
                 'score' => $bestScore,
             ]);
         }
@@ -399,43 +267,31 @@ class AddressGeocoder
         return $best;
     }
 
-    /** @param  array<string, mixed>  $properties
-     * @return list<string>
-     */
-    private function extractOpenRouteLabels(array $properties): array
-    {
-        $labels = [];
-
-        foreach (['name', 'street', 'locality', 'localadmin', 'county', 'macrocounty', 'region', 'label'] as $field) {
-            $value = trim((string) ($properties[$field] ?? ''));
-            if ($value !== '') {
-                $labels[] = $value;
-            }
-        }
-
-        return $labels;
-    }
-
     /** @param  array<string, mixed>  $result
      * @return list<string>
      */
-    private function extractNominatimLabels(array $result): array
+    private function extractGoogleLabels(array $result): array
     {
         $labels = [];
-        $display = trim((string) ($result['display_name'] ?? ''));
-        if ($display !== '') {
-            $labels[] = $display;
+        $formatted = trim((string) ($result['formatted_address'] ?? ''));
+        if ($formatted !== '') {
+            $labels[] = $formatted;
         }
 
-        $address = is_array($result['address'] ?? null) ? $result['address'] : [];
-        foreach (['road', 'suburb', 'city', 'town', 'municipality', 'county', 'state', 'region'] as $field) {
-            $value = trim((string) ($address[$field] ?? ''));
-            if ($value !== '') {
-                $labels[] = $value;
+        foreach ((array) ($result['address_components'] ?? []) as $component) {
+            if (! is_array($component)) {
+                continue;
+            }
+
+            foreach (['long_name', 'short_name'] as $field) {
+                $value = trim((string) ($component[$field] ?? ''));
+                if ($value !== '') {
+                    $labels[] = $value;
+                }
             }
         }
 
-        return $labels;
+        return array_values(array_unique($labels));
     }
 
     /** @return array{lat: float, lng: float}|null */

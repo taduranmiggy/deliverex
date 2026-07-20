@@ -18,7 +18,7 @@ class PsgcAddressServiceTest extends TestCase
         Cache::flush();
         Http::preventStrayRequests();
         config()->set('psgc.base_url', 'https://psgc.test/api/v2');
-        config()->set('gps.routing.openrouteservice_api_key', null);
+        config()->set('gps.geocoding.google_maps_api_key', 'test-google-key');
     }
 
     public function test_psgc_lists_are_cached(): void
@@ -86,13 +86,18 @@ class PsgcAddressServiceTest extends TestCase
             'https://psgc.test/api/v2/regions/0300000000/provinces/0314000000/cities-municipalities/0314100000/barangays' => Http::response([
                 ['code' => '0314100001', 'name' => 'Guinhawa'],
             ]),
-            'https://nominatim.openstreetmap.org/*' => Http::response([
-                [
-                    'lat' => '14.8527',
-                    'lon' => '120.8156',
-                    'display_name' => 'Rizal Avenue, Guinhawa, City of Malolos, Bulacan, Philippines',
-                    'address' => ['road' => 'Rizal Avenue', 'city' => 'City of Malolos', 'state' => 'Bulacan'],
-                ],
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
+                'status' => 'OK',
+                'results' => [[
+                    'place_id' => 'ChIJ_malolos',
+                    'formatted_address' => 'Rizal Avenue, Guinhawa, City of Malolos, Bulacan, Philippines',
+                    'geometry' => ['location' => ['lat' => 14.8527, 'lng' => 120.8156]],
+                    'address_components' => [
+                        ['long_name' => 'Rizal Avenue', 'types' => ['route']],
+                        ['long_name' => 'City of Malolos', 'types' => ['locality']],
+                        ['long_name' => 'Bulacan', 'types' => ['administrative_area_level_2']],
+                    ],
+                ]],
             ]),
         ]);
 
@@ -112,7 +117,7 @@ class PsgcAddressServiceTest extends TestCase
         $this->assertSame('GUINHAWA', $normalized['pickup_barangay']);
         $this->assertSame('123 RIZAL AVENUE', $normalized['pickup_street']);
         $this->assertSame(
-            '123 RIZAL AVENUE, BARANGAY GUINHAWA, CITY OF MALOLOS, BULACAN, CENTRAL LUZON, PHILIPPINES',
+            'Rizal Avenue, Guinhawa, City of Malolos, Bulacan, Philippines',
             $normalized['pickup_formatted_address'],
         );
         $this->assertSame(14.8527, $normalized['pickup_latitude']);
@@ -134,7 +139,10 @@ class PsgcAddressServiceTest extends TestCase
             'https://psgc.test/api/v2/regions/0300000000/provinces/0314000000/cities-municipalities/0314100000/barangays' => Http::response([
                 ['code' => '0314100001', 'name' => 'Guinhawa'],
             ]),
-            'https://nominatim.openstreetmap.org/*' => Http::response([]),
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
+                'status' => 'ZERO_RESULTS',
+                'results' => [],
+            ]),
         ]);
 
         $normalized = app(StandardizedAddressService::class)->normalize([
@@ -175,7 +183,7 @@ class PsgcAddressServiceTest extends TestCase
             'lat' => 14.8527123,
             'lng' => 120.8156456,
             'source' => 'autocomplete_selection',
-            'provider' => 'geoapify',
+            'provider' => 'google_places',
             'place_id' => 'place-123',
             'label' => '123 Rizal Avenue, Malolos',
             'expires_at' => now()->addHour()->timestamp,
@@ -192,8 +200,8 @@ class PsgcAddressServiceTest extends TestCase
 
         $this->assertSame(14.8527123, $normalized['pickup_latitude']);
         $this->assertSame(120.8156456, $normalized['pickup_longitude']);
-        $this->assertSame('geoapify', $normalized['pickup_coordinate_provider']);
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'nominatim') || str_contains($request->url(), '/geocode/'));
+        $this->assertSame('google_places', $normalized['pickup_coordinate_provider']);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'maps.googleapis.com/maps/api/geocode/json'));
     }
 
     public function test_ncr_city_list_hides_city_of_manila_when_districts_exist(): void

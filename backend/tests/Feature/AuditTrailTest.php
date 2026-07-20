@@ -109,9 +109,6 @@ class AuditTrailTest extends TestCase
             'https://psgc.cloud/api/v2/regions/1300000000/cities-municipalities/1374030000/barangays' => Http::response([
                 ['code' => '1374030001', 'name' => 'San Antonio'],
             ]),
-            'https://nominatim.openstreetmap.org/*' => Http::response([
-                ['lat' => '14.5995', 'lon' => '120.9842'],
-            ]),
         ]);
 
         $company = Company::create([

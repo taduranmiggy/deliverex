@@ -33,6 +33,12 @@ class Company extends Model
         'address_latitude',
         'address_longitude',
         'address_geocode_attempted_at',
+        'address_geocoding_trace_id',
+        'address_coordinate_source',
+        'address_coordinate_provider',
+        'address_coordinate_place_id',
+        'address_coordinate_label',
+        'address_coordinate_confirmed_at',
         'status',
         'activation_token',
         'activation_expires_at',
@@ -44,6 +50,7 @@ class Company extends Model
         'address_latitude' => 'float',
         'address_longitude' => 'float',
         'address_geocode_attempted_at' => 'datetime',
+        'address_coordinate_confirmed_at' => 'datetime',
     ];
 
     protected $hidden = [

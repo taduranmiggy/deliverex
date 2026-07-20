@@ -46,18 +46,7 @@ class GeocodingController extends Controller
 
     public function autocomplete(Request $request)
     {
-        $data = $request->validate([
-            'query' => 'required|string|min:3|max:255',
-            'context' => 'nullable|string|max:40',
-            'region_code' => 'nullable|string|max:10',
-            'province_code' => 'nullable|string|max:10',
-            'city_code' => 'nullable|string|max:10',
-            'barangay_code' => 'nullable|string|max:10',
-            'region' => 'nullable|string|max:120',
-            'province' => 'nullable|string|max:120',
-            'city' => 'nullable|string|max:120',
-            'barangay' => 'nullable|string|max:120',
-        ]);
+        $data = $this->validatedLocationInput($request);
 
         try {
             $result = $this->autocomplete->search($data, $request->user());
@@ -73,6 +62,26 @@ class GeocodingController extends Controller
                 'candidates' => $result['candidates'],
             ],
         ]);
+    }
+
+    public function geocode(Request $request)
+    {
+        $data = $this->validatedLocationInput($request);
+
+        try {
+            $result = $this->autocomplete->geocodeManual($data, $request->user());
+        } catch (\RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 503);
+        }
+
+        return response()->json([
+            'data' => [
+                'trace_id' => $result['trace']->id,
+                'normalized_address' => $result['trace']->normalized_address,
+                'provider' => $result['trace']->provider,
+                'candidate' => $result['candidate'],
+            ],
+        ], $result['candidate'] ? 200 : 422);
     }
 
     public function confirm(Request $request, GeocodingTrace $trace)
@@ -199,6 +208,23 @@ class GeocodingController extends Controller
         ]);
 
         return response()->noContent();
+    }
+
+    /** @return array<string, mixed> */
+    private function validatedLocationInput(Request $request): array
+    {
+        return $request->validate([
+            'query' => 'required|string|min:3|max:500',
+            'context' => 'nullable|string|max:40',
+            'region_code' => 'nullable|string|max:10',
+            'province_code' => 'nullable|string|max:10',
+            'city_code' => 'nullable|string|max:10',
+            'barangay_code' => 'nullable|string|max:10',
+            'region' => 'nullable|string|max:120',
+            'province' => 'nullable|string|max:120',
+            'city' => 'nullable|string|max:120',
+            'barangay' => 'nullable|string|max:120',
+        ]);
     }
 
     private function assertTraceOwner(Request $request, GeocodingTrace $trace, bool $allowRecordViewer = false): void

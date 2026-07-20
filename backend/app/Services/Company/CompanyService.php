@@ -36,6 +36,9 @@ class CompanyService
             'address_region', 'address_region_code', 'address_province_code',
             'address_city_code', 'address_barangay_code', 'address_latitude',
             'address_longitude', 'address_geocode_attempted_at',
+            'address_geocoding_trace_id', 'address_coordinate_source',
+            'address_coordinate_provider', 'address_coordinate_place_id',
+            'address_coordinate_label', 'address_coordinate_confirmed_at',
         ]))));
 
         return $company->fresh();

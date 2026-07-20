@@ -7265,6 +7265,12 @@ textarea,
   border-radius: 12px;
   background: var(--surface, #fff);
   box-shadow: 0 14px 34px rgba(15, 23, 42, .12);
+  animation: dx-precise-location-drop .18s ease-out;
+}
+
+@keyframes dx-precise-location-drop {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .dx-precise-location__suggestions button {
@@ -7284,6 +7290,8 @@ textarea,
 
 .dx-precise-location__suggestions button:last-child { border-bottom: 0; }
 .dx-precise-location__suggestions button:hover { background: rgba(37, 99, 235, .07); }
+.dx-precise-location__suggestions button.is-active { background: rgba(37, 99, 235, .11); }
+.dx-precise-location__match { background: rgba(37, 99, 235, .18); color: inherit; padding: 0; }
 .dx-precise-location__suggestions button > svg { color: #2563eb; }
 .dx-precise-location__suggestions span { min-width: 0; display: grid; gap: 2px; }
 .dx-precise-location__suggestions strong,

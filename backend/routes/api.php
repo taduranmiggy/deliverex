@@ -108,6 +108,7 @@ Route::middleware('auth.api')->group(function () {
 
     Route::middleware('throttle:60,1')->prefix('geocoding')->group(function () {
         Route::post('/autocomplete', [GeocodingController::class, 'autocomplete']);
+        Route::post('/geocode', [GeocodingController::class, 'geocode']);
         Route::post('/traces/{trace}/confirm', [GeocodingController::class, 'confirm']);
         Route::post('/traces/{trace}/rendered', [GeocodingController::class, 'rendered']);
     });

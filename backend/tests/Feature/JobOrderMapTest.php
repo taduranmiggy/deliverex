@@ -111,9 +111,8 @@ class JobOrderMapTest extends TestCase
         Http::assertNotSent(static function ($request): bool {
             $url = $request->url();
 
-            return str_contains($url, '/geocode/')
-                || str_contains($url, 'nominatim.openstreetmap.org')
-                || str_contains($url, 'photon.komoot.io');
+            return str_contains($url, 'maps.googleapis.com/maps/api/geocode')
+                || str_contains($url, 'maps.googleapis.com/maps/api/place');
         });
     }
 }

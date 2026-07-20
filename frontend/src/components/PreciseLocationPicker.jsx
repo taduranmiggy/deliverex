@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { CheckCircle2, Loader2, MapPin, Search } from 'lucide-react'
-import { confirmPreciseLocation, searchPreciseLocations } from '../api/geocoding'
+import { confirmPreciseLocation, geocodeManualAddress, searchPreciseLocations } from '../api/geocoding'
 
 const PHILIPPINES_CENTER = [12.8797, 121.774]
 
@@ -35,6 +35,40 @@ function samePoint(a, b) {
   return Math.abs(a.lat - b.lat) < 0.000001 && Math.abs(a.lng - b.lng) < 0.000001
 }
 
+function highlightMatches(text, matchedSubstrings = []) {
+  if (!text || !Array.isArray(matchedSubstrings) || matchedSubstrings.length === 0) {
+    return text
+  }
+
+  const parts = []
+  let cursor = 0
+  const ranges = [...matchedSubstrings]
+    .map((match) => ({
+      start: Number(match.offset ?? 0),
+      end: Number(match.offset ?? 0) + Number(match.length ?? 0),
+    }))
+    .filter((range) => range.end > range.start)
+    .sort((a, b) => a.start - b.start)
+
+  ranges.forEach((range, index) => {
+    if (range.start > cursor) {
+      parts.push(<span key={`text-${index}-${cursor}`}>{text.slice(cursor, range.start)}</span>)
+    }
+    parts.push(
+      <mark key={`mark-${index}-${range.start}`} className="dx-precise-location__match">
+        {text.slice(range.start, range.end)}
+      </mark>,
+    )
+    cursor = range.end
+  })
+
+  if (cursor < text.length) {
+    parts.push(<span key={`tail-${cursor}`}>{text.slice(cursor)}</span>)
+  }
+
+  return parts
+}
+
 export default function PreciseLocationPicker({
   value,
   onChange,
@@ -48,9 +82,11 @@ export default function PreciseLocationPicker({
   const [provider, setProvider] = useState(value.coordinate_provider || '')
   const [loading, setLoading] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [manualGeocoding, setManualGeocoding] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [showMap, setShowMap] = useState(Boolean(value.latitude && value.longitude))
   const [selected, setSelected] = useState(null)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const [pin, setPin] = useState(
     value.latitude != null && value.longitude != null
       ? { lat: Number(value.latitude), lng: Number(value.longitude) }
@@ -58,10 +94,25 @@ export default function PreciseLocationPicker({
   )
   const searchSequence = useRef(0)
   const selectedQuery = useRef('')
+  const inputRef = useRef(null)
+  const listRef = useRef(null)
 
   const adminReady = Boolean(value.region_code && value.city_code && value.barangay_code)
   const query = String(value.street || '').trim()
   const confirmed = Boolean(value.coordinate_confirmation_token)
+
+  const locationContext = useMemo(() => ({
+    query,
+    context,
+    region_code: value.region_code,
+    province_code: value.province_code,
+    city_code: value.city_code,
+    barangay_code: value.barangay_code,
+    region: value.region,
+    province: value.province,
+    city: value.city,
+    barangay: value.barangay,
+  }), [context, query, value.barangay, value.barangay_code, value.city, value.city_code, value.province, value.province_code, value.region, value.region_code])
 
   useEffect(() => {
     if (!adminReady || query.length < 3 || selectedQuery.current === query) return undefined
@@ -69,24 +120,14 @@ export default function PreciseLocationPicker({
     const timer = window.setTimeout(async () => {
       setLoading(true)
       setSearchError('')
+      setActiveIndex(-1)
       try {
-        const response = await searchPreciseLocations({
-          query,
-          context,
-          region_code: value.region_code,
-          province_code: value.province_code,
-          city_code: value.city_code,
-          barangay_code: value.barangay_code,
-          region: value.region,
-          province: value.province,
-          city: value.city,
-          barangay: value.barangay,
-        })
+        const response = await searchPreciseLocations(locationContext)
         if (sequence !== searchSequence.current) return
         const data = response?.data ?? response
         setSuggestions(Array.isArray(data?.candidates) ? data.candidates : [])
         setTraceId(data?.trace_id || '')
-        setProvider(data?.provider || '')
+        setProvider(data?.provider || 'google_places')
       } catch (err) {
         if (sequence === searchSequence.current) {
           setSuggestions([])
@@ -101,11 +142,11 @@ export default function PreciseLocationPicker({
       } finally {
         if (sequence === searchSequence.current) setLoading(false)
       }
-    }, 500)
+    }, 400)
     return () => window.clearTimeout(timer)
-  }, [adminReady, context, query, value.barangay, value.barangay_code, value.city, value.city_code, value.province, value.province_code, value.region, value.region_code])
+  }, [adminReady, locationContext, query])
 
-  const clearConfirmation = (changes = {}) => onChange({
+  const clearConfirmation = useCallback((changes = {}) => onChange({
     ...value,
     latitude: null,
     longitude: null,
@@ -117,29 +158,33 @@ export default function PreciseLocationPicker({
     coordinate_label: '',
     coordinate_confirmed_at: '',
     ...changes,
-  })
+  }), [onChange, value])
 
-  const selectSuggestion = (candidate) => {
+  const applyCandidate = useCallback((candidate, nextTraceId = traceId) => {
     const nextPin = { lat: Number(candidate.lat), lng: Number(candidate.lng) }
-    selectedQuery.current = String(candidate.name || query).trim()
+    const displayName = String(candidate.name || query).trim()
+    selectedQuery.current = displayName
     setSelected(candidate)
     setPin(nextPin)
     setShowMap(true)
     setSuggestions([])
+    setActiveIndex(-1)
     onChange({
       ...value,
-      street: selectedQuery.current,
+      street: displayName,
       latitude: nextPin.lat,
       longitude: nextPin.lng,
-      geocoding_trace_id: traceId,
+      geocoding_trace_id: nextTraceId,
       coordinate_confirmation_token: '',
       coordinate_source: 'autocomplete_selection',
-      coordinate_provider: candidate.provider || provider,
+      coordinate_provider: candidate.provider || provider || 'google_places',
       coordinate_place_id: candidate.place_id || '',
       coordinate_label: candidate.label || candidate.name || '',
       coordinate_confirmed_at: '',
     })
-  }
+  }, [onChange, provider, query, traceId, value])
+
+  const selectSuggestion = (candidate) => applyCandidate(candidate)
 
   const movePin = (nextPin) => {
     setPin(nextPin)
@@ -153,19 +198,39 @@ export default function PreciseLocationPicker({
       coordinate_source: 'manual_pin',
       coordinate_provider: provider,
       coordinate_place_id: '',
-      coordinate_label: query,
+      coordinate_label: value.coordinate_label || query,
       coordinate_confirmed_at: '',
     })
   }
 
-  const startManualPin = () => {
-    const seed = pin || (suggestions[0]
-      ? { lat: Number(suggestions[0].lat), lng: Number(suggestions[0].lng) }
-      : { lat: PHILIPPINES_CENTER[0], lng: PHILIPPINES_CENTER[1] })
-    setPin(seed)
-    setSelected(null)
-    setShowMap(true)
-    movePin(seed)
+  const geocodeAndShowMap = async () => {
+    if (!adminReady || query.length < 3) return
+    setManualGeocoding(true)
+    setSearchError('')
+    try {
+      const response = await geocodeManualAddress(locationContext)
+      const data = response?.data ?? response
+      const candidate = data?.candidate
+      if (!candidate) {
+        setSearchError('Google could not geocode this address. Try a nearby landmark or adjust the text.')
+        return
+      }
+      applyCandidate(candidate, data?.trace_id || traceId)
+      setTraceId(data?.trace_id || traceId)
+      setProvider(data?.provider || 'google_geocoding')
+    } catch (err) {
+      setSearchError(err.message || 'Could not geocode this address.')
+    } finally {
+      setManualGeocoding(false)
+    }
+  }
+
+  const startManualPin = async () => {
+    if (suggestions[0]) {
+      applyCandidate(suggestions[0])
+      return
+    }
+    await geocodeAndShowMap()
   }
 
   const confirmPin = async () => {
@@ -191,8 +256,8 @@ export default function PreciseLocationPicker({
         coordinate_confirmation_token: data.confirmation_token,
         coordinate_source: data.source,
         coordinate_provider: selected?.provider || provider,
-        coordinate_place_id: selected?.place_id || '',
-        coordinate_label: selected?.label || query,
+        coordinate_place_id: selected?.place_id || value.coordinate_place_id || '',
+        coordinate_label: selected?.label || value.coordinate_label || query,
         coordinate_confirmed_at: new Date().toISOString(),
       })
     } catch (err) {
@@ -201,6 +266,36 @@ export default function PreciseLocationPicker({
       setConfirming(false)
     }
   }
+
+  const handleInputKeyDown = (event) => {
+    if (suggestions.length === 0) {
+      if (event.key === 'Enter' && query.length >= 3 && !showMap) {
+        event.preventDefault()
+        startManualPin()
+      }
+      return
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setActiveIndex((current) => (current + 1) % suggestions.length)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setActiveIndex((current) => (current <= 0 ? suggestions.length - 1 : current - 1))
+    } else if (event.key === 'Enter' && activeIndex >= 0) {
+      event.preventDefault()
+      selectSuggestion(suggestions[activeIndex])
+    } else if (event.key === 'Escape') {
+      setSuggestions([])
+      setActiveIndex(-1)
+    }
+  }
+
+  useEffect(() => {
+    if (activeIndex < 0 || !listRef.current) return
+    const option = listRef.current.querySelector(`[data-index="${activeIndex}"]`)
+    option?.scrollIntoView({ block: 'nearest' })
+  }, [activeIndex])
 
   const center = useMemo(() => pin ? [pin.lat, pin.lng] : PHILIPPINES_CENTER, [pin])
 
@@ -211,50 +306,83 @@ export default function PreciseLocationPicker({
         <div className="dx-precise-location__search-wrap">
           <Search size={16} aria-hidden />
           <input
+            ref={inputRef}
             id={`${idPrefix}-street`}
             className={`dx-wiz-input dx-psgc-address__input${error ? ' dx-wiz-input--error' : ''}`}
             required={required}
             aria-invalid={error ? 'true' : undefined}
+            aria-expanded={suggestions.length > 0}
+            aria-controls={suggestions.length > 0 ? `${idPrefix}-suggestions` : undefined}
+            aria-activedescendant={activeIndex >= 0 ? `${idPrefix}-suggestion-${activeIndex}` : undefined}
+            role="combobox"
             value={value.street || ''}
             disabled={!adminReady}
             autoComplete="off"
+            onKeyDown={handleInputKeyDown}
             onChange={(event) => {
               selectedQuery.current = ''
               setSelected(null)
               setPin(null)
               setShowMap(false)
+              setActiveIndex(-1)
               clearConfirmation({ street: event.target.value })
             }}
             placeholder={adminReady ? 'Search a place, school, building, or street (e.g. FEU)' : 'Select the barangay first'}
           />
-          {loading && <Loader2 size={17} className="dx-precise-location__spinner" aria-label="Searching" />}
+          {(loading || manualGeocoding) && (
+            <Loader2 size={17} className="dx-precise-location__spinner" aria-label="Searching" />
+          )}
         </div>
         {error && <span className="dx-psgc-address__field-error" role="alert">{error}</span>}
       </label>
 
       {suggestions.length > 0 && (
-        <div className="dx-precise-location__suggestions" role="listbox" aria-label="Address suggestions">
-          {suggestions.map((candidate) => (
-            <button key={candidate.id} type="button" role="option" onClick={() => selectSuggestion(candidate)}>
+        <div
+          ref={listRef}
+          id={`${idPrefix}-suggestions`}
+          className="dx-precise-location__suggestions"
+          role="listbox"
+          aria-label="Address suggestions"
+        >
+          {suggestions.map((candidate, index) => (
+            <button
+              key={candidate.id}
+              id={`${idPrefix}-suggestion-${index}`}
+              data-index={index}
+              type="button"
+              role="option"
+              aria-selected={activeIndex === index}
+              className={activeIndex === index ? 'is-active' : ''}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => selectSuggestion(candidate)}
+            >
               <MapPin size={16} aria-hidden />
-              <span><strong>{candidate.name || candidate.label}</strong><small>{candidate.label}</small></span>
+              <span>
+                <strong>{highlightMatches(candidate.name || candidate.label, candidate.matched_substrings)}</strong>
+                <small>{candidate.secondary_label || candidate.label}</small>
+              </span>
               <em>{candidate.type}</em>
             </button>
           ))}
         </div>
       )}
 
-      {adminReady && query.length >= 3 && traceId && !showMap && !loading && (
-        <button type="button" className="btn-dx-secondary btn-sm dx-precise-location__manual" onClick={startManualPin}>
-          No exact result? Place the pin manually
+      {adminReady && query.length >= 3 && !showMap && !loading && (
+        <button
+          type="button"
+          className="btn-dx-secondary btn-sm dx-precise-location__manual"
+          disabled={manualGeocoding}
+          onClick={startManualPin}
+        >
+          {manualGeocoding ? 'Geocoding address…' : 'No exact result? Geocode and place the pin manually'}
         </button>
       )}
 
       {showMap && pin && (
         <div className="dx-precise-location__map-card">
           <div className="dx-precise-location__map-copy">
-            <strong>Confirm the exact entrance or loading point</strong>
-            <span>Drag the marker or click the map. Routing will always reuse this saved point.</span>
+            <strong>Optional: refine the exact entrance or loading point</strong>
+            <span>Drag the marker for extra accuracy, or continue without confirming — Google coordinates from your selection will still be saved.</span>
           </div>
           <div className="dx-precise-location__map">
             <MapContainer center={center} zoom={17} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
@@ -283,7 +411,7 @@ export default function PreciseLocationPicker({
               <span className="dx-precise-location__confirmed"><CheckCircle2 size={16} /> Exact pin confirmed</span>
             ) : (
               <button type="button" className="btn-dx-primary btn-sm" disabled={confirming || !traceId} onClick={confirmPin}>
-                {confirming ? 'Confirming…' : 'Confirm this pin'}
+                {confirming ? 'Confirming…' : 'Confirm pin (optional)'}
               </button>
             )}
           </div>

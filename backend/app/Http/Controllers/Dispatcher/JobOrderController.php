@@ -100,7 +100,7 @@ class JobOrderController extends Controller
             'pickup_street'              => 'required|string|max:255',
             'pickup_landmark'            => 'nullable|string|max:255',
             'pickup_location'            => 'nullable|string',
-            'pickup_coordinate_confirmation_token' => 'required|string',
+            'pickup_coordinate_confirmation_token' => 'nullable|string',
             'dropoff_region_code'        => 'required|string|size:10',
             'dropoff_province_code'      => 'nullable|string|size:10',
             'dropoff_city_code'          => 'required|string|size:10',
@@ -111,7 +111,7 @@ class JobOrderController extends Controller
             'dropoff_street'             => 'required|string|max:255',
             'dropoff_landmark'           => 'nullable|string|max:255',
             'dropoff_location'           => 'nullable|string',
-            'dropoff_coordinate_confirmation_token' => 'required|string',
+            'dropoff_coordinate_confirmation_token' => 'nullable|string',
             'quarry_id'                  => 'nullable|exists:quarries,id',
             'preferred_vehicle_type_id'  => 'nullable|exists:vehicle_types,id',
             'material_type_id'           => 'nullable|exists:material_types,id',
@@ -181,8 +181,8 @@ class JobOrderController extends Controller
 
         // Official PSGC labels replace client-supplied labels. Coordinates are
         // always resolved and persisted by the server before the job is created.
-        $data = array_merge($data, $this->addresses->normalize($data, 'pickup', false, true));
-        $data = array_merge($data, $this->addresses->normalize($data, 'dropoff', false, true));
+        $data = array_merge($data, $this->addresses->normalize($data, 'pickup', false, false));
+        $data = array_merge($data, $this->addresses->normalize($data, 'dropoff', false, false));
 
         JobOrderAddressValidator::validatePayload($data);
 

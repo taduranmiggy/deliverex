@@ -80,7 +80,6 @@ class FleetLiveTrackingTest extends TestCase
                     ],
                 ]],
             ], 200),
-            'nominatim.openstreetmap.org/*' => Http::response([], 200),
         ]);
 
         $response = $this->apiAs($dispatcher)->getJson('/api/dispatch/fleet-live');
