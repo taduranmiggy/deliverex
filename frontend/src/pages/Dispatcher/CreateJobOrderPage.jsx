@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import {
   createJobOrder, createMaterialSpecification, createMaterialType,
   deleteJobOrder, fetchJobOrder, fetchJobOrders,
@@ -10,7 +10,6 @@ import CreatableCombobox from '../../components/CreatableCombobox'
 import { useToast } from '../../context/ToastContext'
 import useConfirmation from '../../hooks/useConfirmation'
 import { formatJobPublicId } from '../../utils/formatPhp'
-import { formatJobStatus, jobStatusBadgeClass } from '../../utils/statusLabels'
 import {
   formatScheduleReviewParts,
   minDatetimeLocalValue,
@@ -18,12 +17,11 @@ import {
   toDatetimeLocalValue,
   validateJobSchedule,
 } from '../../utils/scheduleValidation'
-import { buildCompactRouteStop, buildDisplayAddress, buildDisplayName, buildRouteSummary } from '../../utils/jobOrderHelpers'
+import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { companyDropoffFields } from '../../utils/companyAddress'
-import { formatJobSchedule } from '../../utils/driverAssignment'
 import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
 import { FilterSelect } from '../../components/ui'
-import JobOrderRouteMap from '../../components/JobOrderRouteMap'
+import JobOrderViewModal from '../../components/JobOrderViewModal'
 import PsgcAddressSelector from '../../components/PsgcAddressSelector'
 import { fromPsgcAddress, getPsgcAddressFieldErrors, getPsgcAddressSummaryError, toPsgcAddress } from '../../utils/psgcAddress'
 
@@ -1082,13 +1080,12 @@ const JobOrderForm = forwardRef(function JobOrderForm(
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function CreateJobOrderPage() {
-  const navigate  = useNavigate()
   const location  = useLocation()
   const toast     = useToast()
   const [orders, setOrders]         = useState([])
   const [masterData, setMasterData] = useState({ clients: [], material_types: [], quarries: [], vehicle_types: [], client_preferences: [], pickup_locations: [] })
   const [clientsLoading, setClientsLoading] = useState(true)
-  const [selected, setSelected]     = useState(null)
+  const [viewOrder, setViewOrder]     = useState(null)
   const [formMode, setFormMode]     = useState(null)
   const formPanelRef                = useRef(null)
   const [error, setError]           = useState('')
@@ -1180,12 +1177,12 @@ function CreateJobOrderPage() {
     setStatusFilter('all')
     setPage(1)
     // Deselect if the current selection is no longer in the new tab's results
-    if (selected) {
+    if (viewOrder) {
       const inTab = tab === 'all'       ? true
-        : tab === 'active'    ? ACTIVE_STATUSES.includes(selected.status)
-        : tab === 'completed' ? COMPLETED_STATUSES.includes(selected.status)
+        : tab === 'active'    ? ACTIVE_STATUSES.includes(viewOrder.status)
+        : tab === 'completed' ? COMPLETED_STATUSES.includes(viewOrder.status)
         : true
-      if (!inTab) setSelected(null)
+      if (!inTab) setViewOrder(null)
     }
   }
 
@@ -1199,7 +1196,7 @@ function CreateJobOrderPage() {
       'success',
     )
     load()
-    setSelected(savedOrder)
+    setViewOrder(savedOrder)
   }
 
   const handleDelete = (order) => {
@@ -1215,7 +1212,7 @@ function CreateJobOrderPage() {
         try {
           await deleteJobOrder(order.id)
           toast(`Job order ${publicId} deleted.`, 'warning')
-          setSelected(null)
+          setViewOrder(null)
           load()
         } catch (err) {
           toast(err.message || 'Failed to delete job order.', 'error')
@@ -1225,7 +1222,17 @@ function CreateJobOrderPage() {
     })
   }
 
-  const firstAssignment = selected?.assignments?.[0]
+  const handleViewEdit = async (order) => {
+    setViewOrder(null)
+    try {
+      const full = await fetchJobOrder(order.id)
+      const fullOrder = full?.data && typeof full.data === 'object' ? full.data : full
+      setFormMode({ order: fullOrder || order })
+    } catch {
+      setFormMode({ order })
+    }
+  }
+
   const isCreating = formMode === 'create'
   const isEditing  = Boolean(formMode?.order)
   const formOpen   = isCreating || isEditing
@@ -1248,7 +1255,7 @@ function CreateJobOrderPage() {
           type="button"
           style={{ height: 'fit-content', alignSelf: 'center' }}
           onClick={() => {
-            if (isCreating) { setFormMode(null) } else { setFormMode('create'); setSelected(null) }
+            if (isCreating) { setFormMode(null) } else { setFormMode('create'); setViewOrder(null) }
           }}
         >
           {isCreating ? '✕ Cancel New Order' : '+ New Job Order'}
@@ -1271,8 +1278,7 @@ function CreateJobOrderPage() {
         />
       )}
 
-      <div className="dx-split-bestfit dx-job-orders-split" style={{ marginTop: 16 }}>
-        <div className="dx-panel" style={{ marginBottom: 0 }}>
+      <div className="dx-panel" style={{ marginTop: 16, marginBottom: 0 }}>
 
           {/* ── Tab pills ── */}
           <div className="dx-filter-bar">
@@ -1348,21 +1354,22 @@ function CreateJobOrderPage() {
             <table className="dx-data-table">
               <thead>
                 <tr>
-                  <th>Job ID</th><th>Client</th><th>Route</th><th>Priority</th>
-                  <th>Schedule</th><th>Status</th>
+                  <th>Job ID</th>
+                  <th>Client</th>
+                  <th className="dx-job-orders-table__actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {clientsLoading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 6 }).map((_, j) => (
+                      {Array.from({ length: 3 }).map((_, j) => (
                         <td key={j}><div style={{ height: 14, borderRadius: 6, background: 'var(--slate-200)', width: j === 0 ? '70%' : '55%', animation: 'shimmer 1.4s infinite' }} /></td>
                       ))}
                     </tr>
                   ))
                 ) : filteredOrders.length === 0 ? (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0' }}>
+                  <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0' }}>
                     {orders.length === 0
                       ? <>No job orders yet.{' '}
                           <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline', padding: 0 }}
@@ -1375,29 +1382,18 @@ function CreateJobOrderPage() {
                   </td></tr>
                 ) : (
                   pagedOrders.map((order) => (
-                    <tr key={order.id} role="button" tabIndex={0}
-                      onClick={() => { setSelected(order); setFormMode(null) }}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(order); setFormMode(null) } }}
-                      className={selected?.id === order.id ? 'is-selected' : undefined}
-                      style={{ cursor: 'pointer' }}
-                    >
+                    <tr key={order.id}>
                       <td><span className="job-link">{formatJobPublicId(order.id)}</span></td>
                       <td style={{ fontWeight: 500 }}>{order.client?.client_name || order.custom_client_name || buildDisplayName(order)}</td>
-                      <td className="dx-job-orders-table__route">
-                        <span
-                          className="dx-table-route dx-table-route--split"
-                          title={buildRouteSummary(order)}
+                      <td className="dx-job-orders-table__actions">
+                        <button
+                          type="button"
+                          className="btn-dx-secondary btn-sm"
+                          onClick={() => { setViewOrder(order); setFormMode(null) }}
                         >
-                          <span className="dx-route-stop dx-route-stop--pickup">{buildCompactRouteStop('pickup', order) || '—'}</span>
-                          <span className="dx-route-stop__arrow" aria-hidden>→</span>
-                          <span className="dx-route-stop dx-route-stop--dropoff">{buildCompactRouteStop('dropoff', order) || '—'}</span>
-                        </span>
+                          View
+                        </button>
                       </td>
-                      <td style={{ textTransform: 'capitalize', fontSize: '0.875rem' }}>{order.priority}</td>
-                      <td style={{ fontSize: '0.8125rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                        {formatJobSchedule(order)}
-                      </td>
-                      <td><span className={jobStatusBadgeClass(order.status)}>{formatJobStatus(order.status)}</span></td>
                     </tr>
                   ))
                 )}
@@ -1415,78 +1411,14 @@ function CreateJobOrderPage() {
           )}
         </div>
 
-        {/* ── Detail panel ── */}
-        <div className="dx-detail-panel" style={{ marginBottom: 0 }}>
-          <div className="dx-detail-panel__top">
-            <h2 style={{ margin: 0, fontSize: '1.0625rem' }}>
-              {selected ? formatJobPublicId(selected.id) : 'Job details'}
-            </h2>
-            {selected && (
-              <button type="button" className="dx-detail-panel__close" aria-label="Clear selection" onClick={() => setSelected(null)}>×</button>
-            )}
-          </div>
-          <div className="dx-detail-panel__body">
-            {selected ? (
-              <>
-                <div className="dx-kv"><span>Client</span><strong>{selected.client?.client_name || selected.custom_client_name || buildDisplayName(selected)}</strong></div>
-                <div className="dx-kv"><span>Contact</span><strong>{selected.customer_contact ?? selected.customer_email ?? '—'}</strong></div>
-                <JobOrderRouteMap key={selected.id} jobOrderId={selected.id} variant="detail" readOnly />
-                {selected.material_type && (
-                  <div className="dx-kv"><span>Material</span><strong>{selected.material_type}{selected.specification_size ? ` · ${selected.specification_size}` : ''}</strong></div>
-                )}
-                <div className="dx-kv"><span>Load</span>
-                  <strong>{selected.load_volume_m3 || selected.volume_m3 ? `${selected.load_volume_m3 ?? selected.volume_m3} m³` : '—'}</strong>
-                </div>
-                <div className="dx-kv"><span>Schedule</span>
-                  <strong>{formatJobSchedule(selected)}</strong>
-                </div>
-                <div className="dx-kv"><span>Priority</span><strong style={{ textTransform: 'capitalize' }}>{selected.priority}</strong></div>
-                <div style={{ marginBottom: 4 }}><span className={jobStatusBadgeClass(selected.status)}>{formatJobStatus(selected.status)}</span></div>
-                <div className="dx-kv"><span>Tracking</span><strong style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>{selected.tracking_code}</strong></div>
-                <div className="dx-kv"><span>Driver</span><strong>{firstAssignment?.driver?.user?.name ?? '—'}</strong></div>
-                <div className="dx-kv"><span>Vehicle</span><strong>{firstAssignment?.vehicle?.plate_no ?? '—'}</strong></div>
-                {selected.job_requirements && (
-                  <div className="dx-kv" style={{ alignItems: 'flex-start' }}>
-                    <span>Handling</span><strong>{selected.job_requirements}</strong>
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="btn-dx-secondary"
-                    style={{ fontSize: '0.8rem', padding: '6px 12px' }}
-                    onClick={async () => {
-                      try {
-                        const full = await fetchJobOrder(selected.id)
-                        const fullOrder = full?.data && typeof full.data === 'object' ? full.data : full
-                        setFormMode({ order: fullOrder || selected })
-                      } catch {
-                        // Fallback to the selected row payload if detail fetch fails.
-                        setFormMode({ order: selected })
-                      }
-                    }}
-                  >
-                    Edit
-                  </button>
-                  {selected.status === 'pending' && (
-                    <Link to="/dispatcher/dispatch" state={{ jobOrderId: selected.id }} className="btn-dx-primary" style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
-                      ⚡ Dispatch
-                    </Link>
-                  )}
-                  {['pending', 'cancelled'].includes(selected.status) && (
-                    <button type="button" style={{ fontSize: '0.8rem', padding: '6px 12px', color: 'var(--error, #dc2626)', border: '1px solid currentColor', borderRadius: 8, background: 'none', cursor: 'pointer' }}
-                      onClick={() => handleDelete(selected)}>
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p style={{ margin: 0, color: 'var(--muted)' }}>Select a job to view details.</p>
-            )}
-          </div>
-        </div>
-      </div>
+      {viewOrder && (
+        <JobOrderViewModal
+          order={viewOrder}
+          onClose={() => setViewOrder(null)}
+          onEdit={handleViewEdit}
+          onDelete={handleDelete}
+        />
+      )}
       {confirmationModal}
     </section>
   )
