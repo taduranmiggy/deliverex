@@ -21,7 +21,7 @@ class JobOrderLocationService
     ) {
     }
 
-    public function ensureCoordinates(JobOrder $jobOrder): JobOrder
+    public function ensureCoordinates(JobOrder $jobOrder, bool $retryMissing = false): JobOrder
     {
         $jobOrder->loadMissing('quarry');
         $updates = [];
@@ -47,42 +47,30 @@ class JobOrderLocationService
         }
 
         if (! GpsCoordinateValidator::isUsable($jobOrder->pickup_latitude, $jobOrder->pickup_longitude)
-            && $jobOrder->pickup_geocode_attempted_at === null) {
+            && ($jobOrder->pickup_geocode_attempted_at === null || $retryMissing)) {
             $updates['pickup_geocode_attempted_at'] = now();
-            $pickupCoords = null;
-            $pickupCandidates = $this->pickupGeocodeCandidates(
+            $pickupCoords = $this->resolveSideCoordinates(
                 $jobOrder,
-                trim((string) ($jobOrder->pickup_street ?? '')) !== '',
+                'pickup',
+                $pickupAnchor,
+                $this->pickupGeocodeCandidates(
+                    $jobOrder,
+                    trim((string) ($jobOrder->pickup_street ?? '')) !== '',
+                ),
             );
 
-            if ($pickupCandidates !== []) {
-                LocationPipelineLogger::log('geocode_pickup_request', [
+            if ($pickupCoords) {
+                $updates = array_merge($updates, $this->coordinateUpdates('pickup', $pickupCoords));
+                $geocodedPickup = true;
+                LocationPipelineLogger::log('geocode_pickup_result', [
                     'job_order_id' => $jobOrder->id,
-                    'candidates' => $pickupCandidates,
+                    'lat' => $pickupCoords['lat'],
+                    'lng' => $pickupCoords['lng'],
                 ]);
-                $pickupCoords = $this->geocoder->geocodeFirst(
-                    $pickupCandidates,
-                    $pickupAnchor,
-                    trim((string) ($jobOrder->pickup_street ?? '')) !== '',
-                );
-                if ($pickupCoords) {
-                    $updates['pickup_latitude'] = $pickupCoords['lat'];
-                    $updates['pickup_longitude'] = $pickupCoords['lng'];
-                    $geocodedPickup = true;
-                    LocationPipelineLogger::log('geocode_pickup_result', [
-                        'job_order_id' => $jobOrder->id,
-                        'lat' => $pickupCoords['lat'],
-                        'lng' => $pickupCoords['lng'],
-                    ]);
-                } else {
-                    Log::warning('Pickup geocoding failed', [
-                        'job_order_id' => $jobOrder->id,
-                        'candidates' => $pickupCandidates,
-                    ]);
-                }
-            }
-
-            if (! $pickupCoords) {
+            } else {
+                Log::warning('Pickup geocoding failed', [
+                    'job_order_id' => $jobOrder->id,
+                ]);
                 $updates = array_merge($updates, $this->clearInvalidCoordinateColumns(
                     $jobOrder->pickup_latitude,
                     $jobOrder->pickup_longitude,
@@ -111,45 +99,33 @@ class JobOrderLocationService
         }
 
         if (! GpsCoordinateValidator::isUsable($jobOrder->dropoff_latitude, $jobOrder->dropoff_longitude)
-            && $jobOrder->dropoff_geocode_attempted_at === null) {
+            && ($jobOrder->dropoff_geocode_attempted_at === null || $retryMissing)) {
             $updates['dropoff_geocode_attempted_at'] = now();
             if ($geocodedPickup) {
                 usleep(1_100_000);
             }
 
-            $dropoffCoords = null;
-            $dropoffCandidates = $this->dropoffGeocodeCandidates(
+            $dropoffCoords = $this->resolveSideCoordinates(
                 $jobOrder,
-                trim((string) ($jobOrder->dropoff_street ?? '')) !== '',
+                'dropoff',
+                $dropoffAnchor,
+                $this->dropoffGeocodeCandidates(
+                    $jobOrder,
+                    trim((string) ($jobOrder->dropoff_street ?? '')) !== '',
+                ),
             );
 
-            if ($dropoffCandidates !== []) {
-                LocationPipelineLogger::log('geocode_destination_request', [
+            if ($dropoffCoords) {
+                $updates = array_merge($updates, $this->coordinateUpdates('dropoff', $dropoffCoords));
+                LocationPipelineLogger::log('geocode_destination_result', [
                     'job_order_id' => $jobOrder->id,
-                    'candidates' => $dropoffCandidates,
+                    'lat' => $dropoffCoords['lat'],
+                    'lng' => $dropoffCoords['lng'],
                 ]);
-                $dropoffCoords = $this->geocoder->geocodeFirst(
-                    $dropoffCandidates,
-                    $dropoffAnchor,
-                    trim((string) ($jobOrder->dropoff_street ?? '')) !== '',
-                );
-                if ($dropoffCoords) {
-                    $updates['dropoff_latitude'] = $dropoffCoords['lat'];
-                    $updates['dropoff_longitude'] = $dropoffCoords['lng'];
-                    LocationPipelineLogger::log('geocode_destination_result', [
-                        'job_order_id' => $jobOrder->id,
-                        'lat' => $dropoffCoords['lat'],
-                        'lng' => $dropoffCoords['lng'],
-                    ]);
-                } else {
-                    Log::warning('Destination geocoding failed', [
-                        'job_order_id' => $jobOrder->id,
-                        'candidates' => $dropoffCandidates,
-                    ]);
-                }
-            }
-
-            if (! $dropoffCoords) {
+            } else {
+                Log::warning('Destination geocoding failed', [
+                    'job_order_id' => $jobOrder->id,
+                ]);
                 $updates = array_merge($updates, $this->clearInvalidCoordinateColumns(
                     $jobOrder->dropoff_latitude,
                     $jobOrder->dropoff_longitude,
@@ -189,6 +165,12 @@ class JobOrderLocationService
     /** @return array<string, mixed> */
     public function mapPayload(JobOrder $jobOrder): array
     {
+        $needsPickup = ! GpsCoordinateValidator::isUsable($jobOrder->pickup_latitude, $jobOrder->pickup_longitude);
+        $needsDropoff = ! GpsCoordinateValidator::isUsable($jobOrder->dropoff_latitude, $jobOrder->dropoff_longitude);
+        if ($needsPickup || $needsDropoff) {
+            $jobOrder = $this->ensureCoordinates($jobOrder, retryMissing: true);
+        }
+
         $pickupAddress = $this->resolvePickupAddress($jobOrder);
         $destinationAddress = $this->resolveDropoffAddress($jobOrder);
 
@@ -252,6 +234,11 @@ class JobOrderLocationService
     {
         $candidates = [];
 
+        $label = trim((string) ($jobOrder->pickup_coordinate_label ?? ''));
+        if ($label !== '') {
+            $candidates[] = $this->appendLandmark($label, $jobOrder->pickup_landmark);
+        }
+
         foreach ($this->structuredStreetCandidates(
             $jobOrder->pickup_street,
             $jobOrder->pickup_barangay,
@@ -303,6 +290,11 @@ class JobOrderLocationService
     {
         $candidates = [];
 
+        $label = trim((string) ($jobOrder->dropoff_coordinate_label ?? ''));
+        if ($label !== '') {
+            $candidates[] = $this->appendLandmark($label, $jobOrder->dropoff_landmark);
+        }
+
         foreach ($this->structuredStreetCandidates(
             $jobOrder->dropoff_street,
             $jobOrder->dropoff_barangay,
@@ -345,21 +337,109 @@ class JobOrderLocationService
             return [];
         }
 
+        $barangayText = trim((string) ($barangay ?? ''));
+        $cityText = trim((string) ($city ?? ''));
+        $provinceText = trim((string) ($province ?? ''));
+        $regionText = trim((string) ($region ?? ''));
+        $barangayLabel = preg_match('/^(barangay|brgy\.?\s)/i', $barangayText)
+            ? $barangayText
+            : ($barangayText !== '' ? 'Barangay '.$barangayText : '');
+
         $candidates = [];
         foreach (StreetGeocodeHelper::geocodeStreetVariants($streetText) as $streetVariant) {
-            $formatted = JobOrderAddressFormatter::formatParts([
-                $streetVariant,
-                $barangay,
-                $city,
-                $province,
-                $region,
-            ]);
-            if ($formatted !== '') {
-                $candidates[] = $formatted;
+            foreach ([
+                JobOrderAddressFormatter::formatParts([$streetVariant, $barangayText, $cityText, $provinceText, 'Philippines']),
+                JobOrderAddressFormatter::formatParts([$streetVariant, $cityText, $provinceText, 'Philippines']),
+                JobOrderAddressFormatter::formatParts([$streetVariant, $cityText, 'Philippines']),
+                JobOrderAddressFormatter::formatParts([$streetVariant, $barangayLabel, $cityText, $provinceText]),
+                JobOrderAddressFormatter::formatParts([$streetVariant, $barangayText, $cityText, $provinceText]),
+                JobOrderAddressFormatter::formatParts([$streetVariant, $barangayText, $cityText, $provinceText, $regionText]),
+            ] as $formatted) {
+                if ($formatted !== '') {
+                    $candidates[] = $formatted;
+                }
+            }
+        }
+
+        foreach ([
+            JobOrderAddressFormatter::formatParts([$barangayText, $cityText, $provinceText, 'Philippines']),
+            JobOrderAddressFormatter::formatParts([$cityText, $provinceText, 'Philippines']),
+            $cityText !== '' ? $cityText.', Philippines' : '',
+        ] as $fallback) {
+            if ($fallback !== '') {
+                $candidates[] = $fallback;
             }
         }
 
         return $this->uniqueNonEmpty($candidates);
+    }
+
+    /**
+     * @param  list<string>  $candidates
+     * @return array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}|null
+     */
+    private function resolveSideCoordinates(
+        JobOrder $jobOrder,
+        string $prefix,
+        GeocodeAnchor $anchor,
+        array $candidates,
+    ): ?array {
+        $placeId = trim((string) ($jobOrder->{"{$prefix}_coordinate_place_id"} ?? ''));
+        if ($placeId !== '') {
+            $coords = $this->geocoder->geocodePlaceId($placeId);
+            if ($coords) {
+                LocationPipelineLogger::log("geocode_{$prefix}_place_id", [
+                    'job_order_id' => $jobOrder->id,
+                    'place_id' => $placeId,
+                    'lat' => $coords['lat'],
+                    'lng' => $coords['lng'],
+                ]);
+
+                return $coords;
+            }
+        }
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        LocationPipelineLogger::log("geocode_{$prefix}_request", [
+            'job_order_id' => $jobOrder->id,
+            'candidates' => $candidates,
+        ]);
+
+        return $this->geocoder->geocodeFirst(
+            $candidates,
+            $anchor,
+            trim((string) ($jobOrder->{"{$prefix}_street"} ?? '')) !== '',
+        );
+    }
+
+    /**
+     * @param  array{lat: float, lng: float, place_id?: string|null, formatted_address?: string|null}  $coords
+     * @return array<string, mixed>
+     */
+    private function coordinateUpdates(string $prefix, array $coords): array
+    {
+        $updates = [
+            "{$prefix}_latitude" => $coords['lat'],
+            "{$prefix}_longitude" => $coords['lng'],
+        ];
+
+        $placeId = trim((string) ($coords['place_id'] ?? ''));
+        if ($placeId !== '') {
+            $updates["{$prefix}_coordinate_place_id"] = $placeId;
+            $updates["{$prefix}_coordinate_provider"] = 'google_geocoding';
+        }
+
+        $formatted = trim((string) ($coords['formatted_address'] ?? ''));
+        if ($formatted !== '') {
+            $updates["{$prefix}_coordinate_label"] = $formatted;
+            $updates["{$prefix}_formatted_address"] = $formatted;
+            $updates["{$prefix}_location"] = $formatted;
+        }
+
+        return $updates;
     }
 
     /**

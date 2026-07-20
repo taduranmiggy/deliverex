@@ -18,6 +18,7 @@ class JobOrderMapTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config()->set('gps.geocoding.google_maps_api_key', 'test-google-key');
         $this->dispatcher = User::factory()->create([
             'role_id' => Role::create(['name' => 'dispatcher'])->id,
             'email_verified_at' => now(),
@@ -48,21 +49,61 @@ class JobOrderMapTest extends TestCase
         $this->assertSame(120.9846219, $jobOrder->dropoff_longitude);
     }
 
-    public function test_map_with_missing_coordinates_is_read_only_and_never_geocodes_text(): void
+    public function test_map_geocodes_missing_coordinates_once_and_persists_them(): void
     {
-        Http::fake();
+        Http::fake([
+            'https://maps.googleapis.com/maps/api/geocode/json*' => function ($request) {
+                $address = strtoupper($request->data()['address'] ?? '');
+
+                if (str_contains($address, 'FEU INSTITUTE')) {
+                    return Http::response([
+                        'status' => 'OK',
+                        'results' => [[
+                            'place_id' => 'ChIJ_pickup',
+                            'formatted_address' => 'FEU Institute of Technology, Manila, Philippines',
+                            'geometry' => ['location' => ['lat' => 14.6042837, 'lng' => 120.9889112]],
+                            'address_components' => [
+                                ['long_name' => 'Manila', 'types' => ['locality']],
+                            ],
+                        ]],
+                    ]);
+                }
+
+                if (str_contains($address, 'MANILA CITY HALL')) {
+                    return Http::response([
+                        'status' => 'OK',
+                        'results' => [[
+                            'place_id' => 'ChIJ_dropoff',
+                            'formatted_address' => 'Manila City Hall, Manila, Philippines',
+                            'geometry' => ['location' => ['lat' => 14.5996214, 'lng' => 120.9846219]],
+                            'address_components' => [
+                                ['long_name' => 'Manila', 'types' => ['locality']],
+                            ],
+                        ]],
+                    ]);
+                }
+
+                return Http::response(['status' => 'ZERO_RESULTS', 'results' => []]);
+            },
+        ]);
+
         $jobOrder = $this->jobOrder();
 
         $response = $this->apiAs($this->dispatcher)->getJson("/api/job-orders/{$jobOrder->id}/map");
 
         $response->assertOk()
-            ->assertJsonPath('data.pickup', null)
-            ->assertJsonPath('data.destination', null)
-            ->assertJsonPath('data.geocode.pickup_resolved', false)
-            ->assertJsonPath('data.geocode.destination_resolved', false);
-        Http::assertNothingSent();
-        $this->assertNull($jobOrder->fresh()->pickup_latitude);
-        $this->assertNull($jobOrder->fresh()->dropoff_longitude);
+            ->assertJsonPath('data.pickup.lat', 14.6042837)
+            ->assertJsonPath('data.pickup.lng', 120.9889112)
+            ->assertJsonPath('data.destination.lat', 14.5996214)
+            ->assertJsonPath('data.destination.lng', 120.9846219)
+            ->assertJsonPath('data.geocode.pickup_resolved', true)
+            ->assertJsonPath('data.geocode.destination_resolved', true);
+
+        $jobOrder->refresh();
+        $this->assertSame(14.6042837, $jobOrder->pickup_latitude);
+        $this->assertSame(120.9846219, $jobOrder->dropoff_longitude);
+        $this->assertNotNull($jobOrder->pickup_geocode_attempted_at);
+        $this->assertNotNull($jobOrder->dropoff_geocode_attempted_at);
     }
 
     public function test_tracking_read_does_not_generate_or_replace_job_coordinates(): void

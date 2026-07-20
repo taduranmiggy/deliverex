@@ -17,22 +17,20 @@ Artisan::command('addresses:geocode-legacy {--limit=500}', function () {
     JobOrder::query()
         ->where(function ($query) {
             $query->where(function ($pickup) {
-                $pickup->whereNull('pickup_geocode_attempted_at')
-                    ->where(function ($coordinates) {
-                        $coordinates->whereNull('pickup_latitude')->orWhereNull('pickup_longitude');
-                    });
+                $pickup->where(function ($coordinates) {
+                    $coordinates->whereNull('pickup_latitude')->orWhereNull('pickup_longitude');
+                });
             })->orWhere(function ($dropoff) {
-                $dropoff->whereNull('dropoff_geocode_attempted_at')
-                    ->where(function ($coordinates) {
-                        $coordinates->whereNull('dropoff_latitude')->orWhereNull('dropoff_longitude');
-                    });
+                $dropoff->where(function ($coordinates) {
+                    $coordinates->whereNull('dropoff_latitude')->orWhereNull('dropoff_longitude');
+                });
             });
         })
         ->orderBy('id')
         ->limit($limit)
         ->get()
         ->each(function (JobOrder $jobOrder) use ($service, &$processed) {
-            $service->ensureCoordinates($jobOrder);
+            $service->ensureCoordinates($jobOrder, retryMissing: true);
             $processed++;
             $this->line("Processed job order {$jobOrder->id}.");
         });

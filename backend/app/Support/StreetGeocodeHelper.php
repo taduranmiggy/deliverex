@@ -21,6 +21,7 @@ final class StreetGeocodeHelper
         $street = self::normalizeCompactPrefixes($street);
         $street = preg_replace('/\bCOL\.?\s+S\.?\s+CRUZ\b/iu', 'Col. S. Cruz Street', $street) ?? $street;
         $street = preg_replace('/\bM\.?\s+CONCEPCION\b/iu', 'M. Concepcion', $street) ?? $street;
+        $street = preg_replace('/\bAVE\.?\b/iu', 'Avenue', $street) ?? $street;
 
         // 865 P. Paredes St. → 865 Paredes Street
         $expanded = preg_replace(
