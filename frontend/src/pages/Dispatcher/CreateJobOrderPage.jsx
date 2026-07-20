@@ -1386,13 +1386,22 @@ function CreateJobOrderPage() {
                       <td><span className="job-link">{formatJobPublicId(order.id)}</span></td>
                       <td style={{ fontWeight: 500 }}>{order.client?.client_name || order.custom_client_name || buildDisplayName(order)}</td>
                       <td className="dx-job-orders-table__actions">
-                        <button
-                          type="button"
-                          className="btn-dx-secondary btn-sm"
-                          onClick={() => { setViewOrder(order); setFormMode(null) }}
-                        >
-                          View
-                        </button>
+                        <div className="dx-job-orders-table__actions-group">
+                          <button
+                            type="button"
+                            className="btn-dx-secondary btn-sm"
+                            onClick={() => { setViewOrder(order); setFormMode(null) }}
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            className="dx-job-orders-table__delete btn-sm"
+                            onClick={() => handleDelete(order)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

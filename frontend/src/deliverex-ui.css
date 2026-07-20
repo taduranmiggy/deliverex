@@ -6460,9 +6460,31 @@
 }
 
 .dx-job-orders-table__actions {
-  width: 96px;
+  width: 168px;
   text-align: right;
   white-space: nowrap;
+}
+
+.dx-job-orders-table__actions-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.dx-job-orders-table__delete {
+  font-size: 0.8125rem;
+  padding: 5px 12px;
+  color: var(--error, #dc2626);
+  border: 1px solid rgba(220, 38, 38, 0.45);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.dx-job-orders-table__delete:hover {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: var(--error, #dc2626);
 }
 
 .btn-sm {
