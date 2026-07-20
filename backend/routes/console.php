@@ -39,3 +39,37 @@ Artisan::command('addresses:geocode-legacy {--limit=500}', function () {
 
     $this->info("Legacy geocoding finished: {$processed} job order(s) attempted.");
 })->purpose('Attempt missing legacy job-order coordinates once and persist the result');
+
+Artisan::command('drivers:backfill-licenses {--dry-run : Preview generated numbers without saving}', function () {
+    $dryRun = (bool) $this->option('dry-run');
+    $result = app(\App\Services\Driver\DriverLicenseBackfillService::class)->backfillMissingLicenses($dryRun);
+
+    if ($result['updated'] === 0) {
+        $this->info('No drivers needed a generated license number.');
+
+        return 0;
+    }
+
+    $this->table(
+        ['Driver ID', 'Name', 'License No.'],
+        collect($result['licenses'])->map(fn (array $row) => [
+            $row['driver_id'],
+            $row['full_name'] ?? '—',
+            $row['license_no'],
+        ])->all(),
+    );
+
+    $verb = $dryRun ? 'Would update' : 'Updated';
+    $this->info(sprintf(
+        '%s %d driver(s); skipped %d with existing license numbers.',
+        $verb,
+        $result['updated'],
+        $result['skipped'],
+    ));
+
+    if ($dryRun) {
+        $this->comment('Run without --dry-run to save changes.');
+    }
+
+    return 0;
+})->purpose('Generate Philippine-format LTO license numbers for drivers missing license_no');
