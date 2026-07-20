@@ -52,6 +52,56 @@ function PriorityBadge({ priority }) {
   )
 }
 
+function OverridePairingCard({ pairing, onOverride }) {
+  const warnings = pairing.warnings ?? []
+  const capacityOk = pairing.meets_capacity !== false
+  const typeOk = pairing.meets_type !== false
+
+  return (
+    <div className="dx-dispatch-candidate">
+      {pairing.is_preferred_pair && (
+        <span className="dx-dispatch-candidate__badge" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+          Preferred driver–vehicle link
+        </span>
+      )}
+      <div className="dx-dispatch-candidate__grid">
+        <div>
+          <p className="dx-dispatch-candidate__field-label"><User size={10} /> Driver</p>
+          <p className="dx-dispatch-candidate__field-value">{pairing.driver_name}</p>
+          {!pairing.driver_has_account && (
+            <span style={{ display: 'inline-block', marginTop: 6, fontSize: '0.6875rem', fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 99 }}>
+              No login account
+            </span>
+          )}
+        </div>
+        <div>
+          <p className="dx-dispatch-candidate__field-label"><Truck size={10} /> Vehicle</p>
+          <p className="dx-dispatch-candidate__field-value">{pairing.vehicle_plate}</p>
+          <p className="dx-dispatch-candidate__field-sub">
+            {[pairing.vehicle_type, pairing.vehicle_cbm_capacity != null ? `${pairing.vehicle_cbm_capacity} m³` : null].filter(Boolean).join(' · ') || '—'}
+          </p>
+        </div>
+      </div>
+      {(!capacityOk || !typeOk) && (
+        <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: '#92400e' }}>
+          {!capacityOk && !typeOk ? 'Type and capacity mismatch vs job requirement' : !capacityOk ? 'Below required load volume' : 'Vehicle type mismatch'}
+          {' '}(allowed on manual override)
+        </p>
+      )}
+      {warnings.length > 0 && (
+        <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: 'var(--muted)' }}>
+          {warnings[0]}
+        </p>
+      )}
+      <div className="dx-dispatch-candidate__actions">
+        <button type="button" className="btn-dx-secondary" style={{ flex: 1, justifyContent: 'center', fontSize: '0.875rem' }} onClick={onOverride}>
+          <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} /> Override &amp; Assign
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* ── Confirm / Override Modal ──────────────────────────────── */
 function AssignConfirmModal({ job, candidate, recommendedTop, isOverride, overrideReason, onOverrideReasonChange, onConfirm, onCancel, submitting, error }) {
   return (
@@ -317,7 +367,7 @@ function AssignDriverVehiclePage() {
   const [selected, setSelected] = useState(null)
   const [recommended, setRecommended] = useState(null)
   const [recommendations, setRecommendations] = useState([])
-  const [overrideOptions, setOverrideOptions] = useState({ drivers: [], vehicles: [] })
+  const [overrideOptions, setOverrideOptions] = useState({ drivers: [], vehicles: [], pairings: [] })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -329,7 +379,9 @@ function AssignDriverVehiclePage() {
   const [manualVehicleId, setManualVehicleId] = useState('')
   const [overrideTab, setOverrideTab] = useState('suggested')
   const [altPage, setAltPage] = useState(1)
+  const [pairPage, setPairPage] = useState(1)
   const [altPerPage] = useState(6)
+  const [pairPerPage] = useState(8)
   const [diagnostics, setDiagnostics] = useState(null)
   const [fleetMeta, setFleetMeta] = useState(null)
 
@@ -370,18 +422,19 @@ function AssignDriverVehiclePage() {
     setLoading(true)
     setRecommended(null)
     setRecommendations([])
-    setOverrideOptions({ drivers: [], vehicles: [] })
+    setOverrideOptions({ drivers: [], vehicles: [], pairings: [] })
     setManualDriverId('')
     setManualVehicleId('')
     setOverrideTab('suggested')
     setAltPage(1)
+    setPairPage(1)
     setDiagnostics(null)
     setFleetMeta(null)
     getBestFit(selected.id)
       .then((res) => {
         setRecommended(res.recommended || null)
         setRecommendations(res.recommendations || [])
-        setOverrideOptions(res.override_options || { drivers: [], vehicles: [] })
+        setOverrideOptions(res.override_options || { drivers: [], vehicles: [], pairings: [] })
         setDiagnostics(res.diagnostics || null)
         setFleetMeta(res.meta || null)
       })
@@ -435,7 +488,7 @@ function AssignDriverVehiclePage() {
     }
 
     if (driver.override_selectable === false) {
-      setError('Selected driver is not available for override (busy, offline, or missing login account).')
+      setError('Selected driver cannot be overridden (offline or schedule conflict).')
       return
     }
 
@@ -462,9 +515,32 @@ function AssignDriverVehiclePage() {
     openModal(candidate, true)
   }
 
+  const openPairingOverride = (pairing) => {
+    openModal({
+      driver_id: pairing.driver_id,
+      driver_name: pairing.driver_name,
+      driver_has_account: pairing.driver_has_account,
+      vehicle_id: pairing.vehicle_id,
+      vehicle_plate: pairing.vehicle_plate,
+      vehicle_type: pairing.vehicle_type,
+      vehicle_cbm_capacity: pairing.vehicle_cbm_capacity,
+      factors: [],
+      reasons: ['Manual override pairing', ...(pairing.warnings ?? [])],
+    }, true)
+  }
+
+  const overridePairings = overrideOptions.pairings ?? []
   const top = recommended || recommendations[0]
   const alternatives = recommendations.filter((r) =>
     !(top && r.driver_id === top.driver_id && r.vehicle_id === top.vehicle_id)
+  )
+
+  const pairTotalPages = Math.max(1, Math.ceil(overridePairings.length / pairPerPage))
+  const safePairPage = Math.min(pairPage, pairTotalPages)
+
+  const paginatedPairings = useMemo(
+    () => overridePairings.slice((safePairPage - 1) * pairPerPage, safePairPage * pairPerPage),
+    [overridePairings, safePairPage, pairPerPage],
   )
 
   const altTotalPages = Math.max(1, Math.ceil(alternatives.length / altPerPage))
@@ -474,6 +550,10 @@ function AssignDriverVehiclePage() {
     () => alternatives.slice((safeAltPage - 1) * altPerPage, safeAltPage * altPerPage),
     [alternatives, safeAltPage, altPerPage],
   )
+
+  useEffect(() => {
+    if (pairPage > pairTotalPages) setPairPage(pairTotalPages)
+  }, [pairPage, pairTotalPages])
 
   useEffect(() => {
     if (altPage > altTotalPages) setAltPage(altTotalPages)
@@ -607,11 +687,11 @@ function AssignDriverVehiclePage() {
             </p>
             {fleetMeta && (
               <p className="dx-dispatch-col-header__meta">
-                {fleetMeta.eligible_drivers} of {fleetMeta.total_drivers} drivers Best-Fit eligible
+                Best-Fit: {fleetMeta.eligible_drivers}/{fleetMeta.total_drivers} drivers · {fleetMeta.eligible_vehicles}/{fleetMeta.total_vehicles} vehicles
                 {' · '}
-                {fleetMeta.override_selectable_driver_count ?? overrideOptions.drivers.filter((d) => d.override_selectable).length}
-                {' of '}
-                {fleetMeta.override_driver_count ?? overrideOptions.drivers.length} selectable in All Drivers
+                Override: {fleetMeta.override_pairing_count ?? overridePairings.length} pairings
+                {' '}
+                ({fleetMeta.override_selectable_driver_count ?? 0} drivers × {fleetMeta.override_selectable_vehicle_count ?? 0} vehicles)
               </p>
             )}
             {alternatives.length > 0 && (
@@ -637,8 +717,8 @@ function AssignDriverVehiclePage() {
               className={`dx-filter-tab${overrideTab === 'all' ? ' dx-filter-tab--active' : ''}`}
               onClick={() => setOverrideTab('all')}
             >
-              All Drivers
-              <span className="dx-filter-tab__badge">{overrideOptions.drivers.length}</span>
+              All Override
+              <span className="dx-filter-tab__badge">{overridePairings.length}</span>
             </button>
           </div>
 
@@ -646,45 +726,59 @@ function AssignDriverVehiclePage() {
           {/* Safe manual override selector (uses same assignment endpoint) */}
           {!!selected && !loading && overrideTab === 'all' && (
             <div className="dx-dispatch-manual">
-              <p className="dx-dispatch-manual__title">All Available Drivers</p>
+              <p className="dx-dispatch-manual__title">Manual Override Pairings</p>
               <p className="dx-dispatch-manual__hint">
-                Pick any driver and vehicle that are not busy. Type, capacity, and license gaps are allowed with an override reason.
+                Best-Fit stays strict (type + capacity). Override allows any driver/vehicle pair that is not offline or schedule-conflicted — including 14 m³ trucks on a 35 m³ job with a documented reason.
               </p>
-              <div className="dx-dispatch-manual__fields">
-                <select
-                  value={manualDriverId}
-                  onChange={(e) => setManualDriverId(e.target.value)}
-                  style={{ padding: '8px 10px', borderRadius: 9, border: '1.5px solid var(--stroke)', fontSize: '0.8125rem' }}
-                >
-                  <option value="">Select driver…</option>
-                  {overrideOptions.drivers.map((d) => (
-                    <option key={d.id} value={d.id} disabled={d.override_selectable === false}>
-                      {formatOverrideDriverLabel(d)}
-                    </option>
+              {overridePairings.length === 0 ? (
+                <div className="dx-dispatch-empty" style={{ padding: '20px 12px' }}>
+                  No override pairings available. Check diagnostics — drivers may be offline or all vehicles on active jobs.
+                </div>
+              ) : (
+                <div className="dx-dispatch-alt-list">
+                  {paginatedPairings.map((pairing) => (
+                    <OverridePairingCard
+                      key={`${pairing.driver_id}-${pairing.vehicle_id}`}
+                      pairing={pairing}
+                      onOverride={() => openPairingOverride(pairing)}
+                    />
                   ))}
-                </select>
-                <select
-                  value={manualVehicleId}
-                  onChange={(e) => setManualVehicleId(e.target.value)}
-                  style={{ padding: '8px 10px', borderRadius: 9, border: '1.5px solid var(--stroke)', fontSize: '0.8125rem' }}
-                >
-                  <option value="">Select vehicle…</option>
-                  {overrideOptions.vehicles.map((v) => (
-                    <option key={v.id} value={v.id} disabled={v.override_selectable === false}>
-                      {formatOverrideVehicleLabel(v)}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="btn-dx-secondary"
-                  onClick={openManualOverride}
-                  disabled={!manualDriverId || !manualVehicleId}
-                  style={{ justifyContent: 'center', fontSize: '0.8125rem' }}
-                >
-                  <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} /> Review Manual Override
-                </button>
-              </div>
+                </div>
+              )}
+              <details style={{ marginTop: 12, fontSize: '0.8125rem' }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Advanced: pick driver and vehicle separately</summary>
+                <div className="dx-dispatch-manual__fields" style={{ marginTop: 10 }}>
+                  <select
+                    value={manualDriverId}
+                    onChange={(e) => setManualDriverId(e.target.value)}
+                    style={{ padding: '8px 10px', borderRadius: 9, border: '1.5px solid var(--stroke)', fontSize: '0.8125rem' }}
+                  >
+                    <option value="">Select driver…</option>
+                    {overrideOptions.drivers.filter((d) => d.override_selectable).map((d) => (
+                      <option key={d.id} value={d.id}>{formatOverrideDriverLabel(d)}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={manualVehicleId}
+                    onChange={(e) => setManualVehicleId(e.target.value)}
+                    style={{ padding: '8px 10px', borderRadius: 9, border: '1.5px solid var(--stroke)', fontSize: '0.8125rem' }}
+                  >
+                    <option value="">Select vehicle…</option>
+                    {overrideOptions.vehicles.filter((v) => v.override_selectable).map((v) => (
+                      <option key={v.id} value={v.id}>{formatOverrideVehicleLabel(v)}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-dx-secondary"
+                    onClick={openManualOverride}
+                    disabled={!manualDriverId || !manualVehicleId}
+                    style={{ justifyContent: 'center', fontSize: '0.8125rem' }}
+                  >
+                    <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} /> Review Manual Override
+                  </button>
+                </div>
+              </details>
             </div>
           )}
 
@@ -709,6 +803,16 @@ function AssignDriverVehiclePage() {
             </div>
           )}
           </div>
+          {overrideTab === 'all' && overridePairings.length > 0 && (
+            <div className="dx-dispatch-grid__col-footer">
+              <PaginationBar
+                page={safePairPage}
+                perPage={pairPerPage}
+                total={overridePairings.length}
+                onPage={setPairPage}
+              />
+            </div>
+          )}
           {overrideTab === 'suggested' && alternatives.length > 0 && (
             <div className="dx-dispatch-grid__col-footer">
               <PaginationBar

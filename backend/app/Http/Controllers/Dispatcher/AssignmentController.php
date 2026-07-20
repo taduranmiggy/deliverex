@@ -87,6 +87,15 @@ class AssignmentController extends Controller
             return response()->json(['message' => 'This job order already has an active assignment.'], 422);
         }
 
+        $overrideReason = trim((string) ($data['override_reason'] ?? ''));
+        $isManualOverride = $overrideReason !== '';
+
+        if ($isManualOverride) {
+            $this->resourceSync->repairStaleBlockingAssignments('manual_override_attempt');
+            $driver->refresh();
+            $vehicle->refresh();
+        }
+
         if ($this->driverAvailability->isAdminUnavailable($driver)) {
             return response()->json(['message' => 'Driver is offline and cannot be assigned.'], 422);
         }
@@ -99,14 +108,11 @@ class AssignmentController extends Controller
             return response()->json(['message' => 'Vehicle must be available before assignment.'], 422);
         }
 
-        if (! $driver->user_id) {
+        if (! $driver->user_id && ! $isManualOverride) {
             return response()->json([
                 'message' => 'Driver has no login account. Admin must Generate Account in Master Data.',
             ], 422);
         }
-
-        $overrideReason = trim((string) ($data['override_reason'] ?? ''));
-        $isManualOverride = $overrideReason !== '';
 
         if (! $isManualOverride && ! DriverLicenseValidator::isEligible($driver)) {
             return response()->json(['message' => DriverLicenseValidator::INELIGIBILITY_MESSAGE], 422);
@@ -198,6 +204,7 @@ class AssignmentController extends Controller
             'override'          => $isOverride,
             'override_reason'   => $auditTrail->override_reason,
             'license_override'  => $isManualOverride && ! DriverLicenseValidator::isEligible($driver),
+            'account_missing'   => $isManualOverride && ! $driver->user_id,
             'audit_trail_id'    => $auditTrail->id,
         ], $request);
 

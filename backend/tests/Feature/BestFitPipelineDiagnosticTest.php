@@ -360,5 +360,7 @@ class BestFitPipelineDiagnosticTest extends TestCase
         $this->assertTrue($mismatchVehicle['override_selectable']);
         $this->assertFalse($mismatchVehicle['meets_type']);
         $this->assertFalse($mismatchVehicle['meets_capacity']);
+
+        $this->assertCount(4, $options['pairings']);
     }
 }

@@ -49,6 +49,7 @@ class BestFitController extends Controller
                     $overrideOptions['vehicles'] ?? [],
                     fn (array $row): bool => (bool) ($row['override_selectable'] ?? false),
                 )),
+                'override_pairing_count' => count($overrideOptions['pairings'] ?? []),
                 'stale_assignments_repaired' => true,
             ],
         ];

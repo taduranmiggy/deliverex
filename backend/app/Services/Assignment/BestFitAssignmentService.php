@@ -4,6 +4,7 @@ namespace App\Services\Assignment;
 
 use App\Models\DispatchAssignment;
 use App\Models\Driver;
+use App\Models\DriverVehicleAssignment;
 use App\Models\JobOrder;
 use App\Models\TrackingLog;
 use App\Models\Vehicle;
@@ -188,9 +189,121 @@ class BestFitAssignmentService
             ->all();
 
         return [
-            'drivers'  => $drivers,
-            'vehicles' => $vehicles,
+            'drivers'   => $drivers,
+            'vehicles'  => $vehicles,
+            'pairings'  => $this->buildOverridePairings($drivers, $vehicles),
         ];
+    }
+
+    /**
+     * Manual override pairings — relaxed vs Best-Fit (type/capacity/busy are warnings, not hard filters).
+     *
+     * @param  list<array<string,mixed>>  $drivers
+     * @param  list<array<string,mixed>>  $vehicles
+     * @return list<array<string,mixed>>
+     */
+    public function buildOverridePairings(array $drivers, array $vehicles, int $limit = 150): array
+    {
+        $selectableDrivers = array_values(array_filter(
+            $drivers,
+            fn (array $row): bool => (bool) ($row['override_selectable'] ?? false),
+        ));
+        $selectableVehicles = array_values(array_filter(
+            $vehicles,
+            fn (array $row): bool => (bool) ($row['override_selectable'] ?? false),
+        ));
+
+        if ($selectableDrivers === [] || $selectableVehicles === []) {
+            return [];
+        }
+
+        $vehicleById = [];
+        foreach ($selectableVehicles as $vehicle) {
+            $vehicleById[(int) $vehicle['id']] = $vehicle;
+        }
+
+        $seen = [];
+        $pairings = [];
+
+        $appendPair = function (array $driver, array $vehicle, bool $preferred = false) use (&$pairings, &$seen, $limit): bool {
+            $key = $driver['id'].'-'.$vehicle['id'];
+            if (isset($seen[$key])) {
+                return count($pairings) >= $limit;
+            }
+
+            $seen[$key] = true;
+            $warnings = array_values(array_unique(array_merge(
+                $driver['override_warnings'] ?? [],
+                $vehicle['override_warnings'] ?? [],
+            )));
+
+            $pairings[] = [
+                'driver_id'            => $driver['id'],
+                'driver_name'          => $driver['name'],
+                'driver_has_account'   => (bool) ($driver['has_login_account'] ?? false),
+                'vehicle_id'           => $vehicle['id'],
+                'vehicle_plate'        => $vehicle['plate_no'],
+                'vehicle_type'         => $vehicle['vehicle_type'] ?? null,
+                'vehicle_cbm_capacity' => $vehicle['cbm_capacity'] ?? null,
+                'meets_capacity'       => (bool) ($vehicle['meets_capacity'] ?? true),
+                'meets_type'           => (bool) ($vehicle['meets_type'] ?? true),
+                'warnings'             => $warnings,
+                'is_preferred_pair'    => $preferred,
+            ];
+
+            return count($pairings) >= $limit;
+        };
+
+        $preferredLinks = DriverVehicleAssignment::query()
+            ->where('status', 'active')
+            ->orderByDesc('is_primary')
+            ->get(['driver_id', 'vehicle_id']);
+
+        foreach ($preferredLinks as $link) {
+            $driver = collect($selectableDrivers)->firstWhere('id', $link->driver_id);
+            $vehicle = $vehicleById[(int) $link->vehicle_id] ?? null;
+            if (! $driver || ! $vehicle) {
+                continue;
+            }
+
+            if ($appendPair($driver, $vehicle, true)) {
+                return $this->markPreferredPairings($pairings);
+            }
+        }
+
+        foreach ($selectableDrivers as $driver) {
+            foreach ($selectableVehicles as $vehicle) {
+                if ($appendPair($driver, $vehicle)) {
+                    return $this->markPreferredPairings($pairings);
+                }
+            }
+        }
+
+        return $this->markPreferredPairings($pairings);
+    }
+
+    /**
+     * @param  list<array<string,mixed>>  $pairings
+     * @return list<array<string,mixed>>
+     */
+    private function markPreferredPairings(array $pairings): array
+    {
+        usort($pairings, function (array $a, array $b): int {
+            $pref = ((int) ($b['is_preferred_pair'] ?? false)) <=> ((int) ($a['is_preferred_pair'] ?? false));
+            if ($pref !== 0) {
+                return $pref;
+            }
+
+            $fitA = ((int) ($a['meets_type'] ?? false)) + ((int) ($a['meets_capacity'] ?? false));
+            $fitB = ((int) ($b['meets_type'] ?? false)) + ((int) ($b['meets_capacity'] ?? false));
+            if ($fitB !== $fitA) {
+                return $fitB <=> $fitA;
+            }
+
+            return strcasecmp((string) ($a['driver_name'] ?? ''), (string) ($b['driver_name'] ?? ''));
+        });
+
+        return $pairings;
     }
 
     /** @return array<string, mixed> */
@@ -213,13 +326,17 @@ class BestFitAssignmentService
         }
 
         $warnings = [];
+        if (! $driver->user_id) {
+            $warnings[] = 'No login account — driver will not receive mobile app notifications until an account is generated.';
+        }
+        if (! $this->driverAvailability->isAssignable($driver)) {
+            $warnings[] = 'Driver appears busy on another assignment. Stale assignments are repaired automatically before dispatch.';
+        }
         if (! $license['eligible']) {
             $warnings[] = $license['message'] ?? DriverLicenseValidator::INELIGIBILITY_MESSAGE;
         }
 
-        $overrideSelectable = $driver->user_id
-            && ! $this->driverAvailability->isAdminUnavailable($driver)
-            && $this->driverAvailability->isAssignable($driver)
+        $overrideSelectable = ! $this->driverAvailability->isAdminUnavailable($driver)
             && ! AssignmentScheduleConflict::hasDriverConflict($driver->id, $jobOrder);
 
         return [
@@ -267,8 +384,11 @@ class BestFitAssignmentService
         if (! $meetsType) {
             $warnings[] = 'Vehicle type does not match the job requirement.';
         }
+        if (! $this->vehicleAvailability->isAssignable($vehicle)) {
+            $warnings[] = 'Vehicle appears busy on another assignment. Stale assignments are repaired automatically before dispatch.';
+        }
 
-        $overrideSelectable = $this->vehicleAvailability->isAssignable($vehicle)
+        $overrideSelectable = ! $this->vehicleAvailability->isAdminLocked($vehicle)
             && ! AssignmentScheduleConflict::hasVehicleConflict($vehicle->id, $jobOrder);
 
         return [
