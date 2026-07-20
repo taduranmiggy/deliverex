@@ -264,7 +264,9 @@ class BestFitScoringTest extends TestCase
         $this->assertNotNull($mismatch, 'Mismatched vehicle type should still appear with a lower score.');
         $this->assertNotNull($match, 'Matching vehicle type should appear in recommendations.');
         $this->assertGreaterThan($mismatch['score'], $match['score']);
-        $this->assertNotEmpty($mismatch['warnings']);
+        $mismatchType = collect($mismatch['factors'])->firstWhere('key', 'vehicle_type_match');
+        $this->assertIsArray($mismatchType);
+        $this->assertFalse($mismatchType['matched']);
     }
 
     public function test_scenario_d_schedule_conflict_is_rejected(): void

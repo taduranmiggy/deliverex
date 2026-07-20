@@ -15,26 +15,26 @@ class BestFitVehicleTypeMatchTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_vehicle_type_match_awards_full_cargo_score_for_exact_type_match(): void
+    public function test_vehicle_type_match_awards_full_score_for_exact_type_match(): void
     {
         [$jobOrder, $vehicle] = $this->seedPair('10 Wheeler', '10 Wheeler');
 
-        $factor = $this->factorFor($jobOrder, $vehicle, 'cargo_compatibility');
+        $factor = $this->factorFor($jobOrder, $vehicle, 'vehicle_type_match');
 
         $this->assertTrue($factor['matched']);
-        $this->assertGreaterThanOrEqual(10, $factor['contribution']);
+        $this->assertSame(15, $factor['contribution']);
         $this->assertSame(15, $factor['max']);
-        $this->assertStringContainsString('matches', $factor['detail']);
+        $this->assertStringContainsString('exactly matches', $factor['detail']);
     }
 
     public function test_vehicle_type_match_is_case_and_whitespace_insensitive(): void
     {
         [$jobOrder, $vehicle] = $this->seedPair('Mini Dump', '  mini dump  ');
 
-        $factor = $this->factorFor($jobOrder, $vehicle, 'cargo_compatibility');
+        $factor = $this->factorFor($jobOrder, $vehicle, 'vehicle_type_match');
 
         $this->assertTrue($factor['matched']);
-        $this->assertGreaterThanOrEqual(10, $factor['contribution']);
+        $this->assertSame(15, $factor['contribution']);
     }
 
     public function test_vehicle_type_mismatch_is_scored_not_rejected(): void
@@ -45,10 +45,10 @@ class BestFitVehicleTypeMatchTest extends TestCase
         $match = collect($recommendations)->firstWhere('vehicle_id', $vehicle->id);
 
         $this->assertNotNull($match, 'Mismatched vehicle type should be scored, not rejected.');
-        $this->assertNotEmpty($match['warnings']);
-        $cargo = collect($match['factors'])->firstWhere('key', 'cargo_compatibility');
-        $this->assertIsArray($cargo);
-        $this->assertFalse($cargo['matched']);
+        $typeFactor = collect($match['factors'])->firstWhere('key', 'vehicle_type_match');
+        $this->assertIsArray($typeFactor);
+        $this->assertFalse($typeFactor['matched']);
+        $this->assertLessThan(15, $typeFactor['contribution']);
     }
 
     public function test_recommendations_include_distance_factor(): void
@@ -60,7 +60,7 @@ class BestFitVehicleTypeMatchTest extends TestCase
 
         $this->assertNotNull($match);
         $this->assertSame(100, $match['score_max']);
-        $this->assertTrue(collect($match['factors'])->contains(fn ($f) => ($f['key'] ?? null) === 'distance_to_pickup'));
+        $this->assertTrue(collect($match['factors'])->contains(fn ($f) => ($f['key'] ?? null) === 'distance'));
     }
 
     public function test_factor_contributions_sum_to_reported_score(): void
@@ -73,6 +73,28 @@ class BestFitVehicleTypeMatchTest extends TestCase
         $this->assertNotNull($match);
         $sum = collect($match['factors'])->sum('contribution');
         $this->assertSame($match['score'], $sum);
+    }
+
+    public function test_recommendations_include_all_six_official_criteria(): void
+    {
+        [$jobOrder, $vehicle] = $this->seedPair('10 Wheeler', '10 Wheeler');
+
+        $recommendations = app(BestFitAssignmentService::class)->recommend($jobOrder);
+        $match = collect($recommendations)->firstWhere('vehicle_id', $vehicle->id);
+
+        $this->assertNotNull($match);
+        $keys = collect($match['factors'])->pluck('key')->all();
+        $this->assertSame(
+            [
+                'vehicle_capacity_match',
+                'driver_availability',
+                'load_efficiency',
+                'distance',
+                'vehicle_type_match',
+                'schedule_match',
+            ],
+            $keys,
+        );
     }
 
     public function test_vehicle_type_matches_by_id_when_free_text_labels_differ(): void

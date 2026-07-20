@@ -223,10 +223,9 @@ function JobRouteSummary({ order }) {
 function CandidateCard({ item, isTop, onAssign, onOverride }) {
   const topFactor = Array.isArray(item.factors) && item.factors.length > 0
     ? [...item.factors]
-      .filter((f) => f.key !== 'penalties' && (f.contribution ?? 0) > 0)
+      .filter((f) => (f.contribution ?? 0) > 0)
       .sort((a, b) => b.contribution - a.contribution)[0]
     : null
-  const warnings = item.warnings ?? []
   const noAccount = item.driver_has_account === false
 
   return (
@@ -275,13 +274,6 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
           </span>
         )}
       </div>
-
-      {warnings.length > 0 && (
-        <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-          <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
-          {warnings[0]}
-        </p>
-      )}
 
       {isTop && <BestFitExplainability candidate={item} compact />}
 
