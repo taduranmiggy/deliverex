@@ -31,8 +31,17 @@ final class GeocodeResultScorer
      * @param  array{lat: float, lng: float}  $coords
      * @param  list<string>  $labels
      */
-    public function accepts(GeocodeAnchor $anchor, array $coords, array $labels, ?array $centroid): bool
-    {
+    public function accepts(
+        GeocodeAnchor $anchor,
+        array $coords,
+        array $labels,
+        ?array $centroid,
+        ?string $query = null,
+    ): bool {
+        if ($query !== null && StreetGeocodeHelper::resultConflictsWithQuery($query, $labels)) {
+            return false;
+        }
+
         if (! $anchor->hasLocality()) {
             return true;
         }
@@ -119,9 +128,14 @@ final class GeocodeResultScorer
      * @param  array{lat: float, lng: float}  $coords
      * @param  list<string>  $labels
      */
-    public function score(GeocodeAnchor $anchor, array $coords, array $labels, ?array $centroid): float
-    {
-        if (! $this->accepts($anchor, $coords, $labels, $centroid)) {
+    public function score(
+        GeocodeAnchor $anchor,
+        array $coords,
+        array $labels,
+        ?array $centroid,
+        ?string $query = null,
+    ): float {
+        if (! $this->accepts($anchor, $coords, $labels, $centroid, $query)) {
             return -1.0;
         }
 

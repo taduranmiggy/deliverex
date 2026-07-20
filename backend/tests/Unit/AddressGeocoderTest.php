@@ -129,4 +129,51 @@ class AddressGeocoderTest extends TestCase
         $this->assertSame(14.76, $coords['lat']);
         $this->assertSame(121.20, $coords['lng']);
     }
+
+    public function test_geocode_rejects_pares_street_when_query_is_p_paredes(): void
+    {
+        config()->set('gps.routing.openrouteservice_api_key', 'test-ors-key');
+
+        Http::fake([
+            'https://api.openrouteservice.org/geocode/search*' => function ($request) {
+                $text = strtoupper($request->data()['text'] ?? '');
+
+                if (str_contains($text, 'PARES')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [120.991, 14.602]],
+                            'properties' => ['name' => 'Pares Street', 'street' => 'Pares Street', 'locality' => 'Manila'],
+                        ]],
+                    ]);
+                }
+
+                if (str_contains($text, 'PAREDES')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [120.989, 14.604]],
+                            'properties' => ['name' => 'Paredes Street', 'street' => 'Paredes Street', 'locality' => 'Manila'],
+                        ]],
+                    ]);
+                }
+
+                return Http::response(['features' => []]);
+            },
+        ]);
+
+        $coords = app(AddressGeocoder::class)->geocodeFirst(
+            [
+                '865 P. Paredes St., Barangay 410, Sampaloc, Manila, Philippines',
+                '865 Paredes Street, Barangay 410, Sampaloc, Manila, Philippines',
+            ],
+            [
+                'city' => 'SAMPALOC',
+                'region' => 'NATIONAL CAPITAL REGION (NCR)',
+                'region_code' => '1300000000',
+                'barangay' => '410',
+            ],
+        );
+
+        $this->assertSame(14.604, $coords['lat']);
+        $this->assertSame(120.989, $coords['lng']);
+    }
 }

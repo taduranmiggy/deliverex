@@ -8,6 +8,7 @@ use App\Support\GeocodeAnchor;
 use App\Support\GpsCoordinateValidator;
 use App\Support\JobOrderAddressFormatter;
 use App\Support\LocationPipelineLogger;
+use App\Support\StreetGeocodeHelper;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -140,6 +141,26 @@ class JobOrderLocationService
                     'dropoff',
                 ));
             }
+        } else {
+            $dropoffReconcile = $this->reconcileStoredCoordinates(
+                $jobOrder,
+                'dropoff',
+                $dropoffAnchor,
+                $this->dropoffGeocodeCandidates($jobOrder),
+            );
+            if ($dropoffReconcile !== null) {
+                $updates = array_merge($updates, $dropoffReconcile);
+            }
+        }
+
+        $pickupReconcile = $this->reconcileStoredCoordinates(
+            $jobOrder,
+            'pickup',
+            $pickupAnchor,
+            $this->pickupGeocodeCandidates($jobOrder),
+        );
+        if ($pickupReconcile !== null) {
+            $updates = array_merge($updates, $pickupReconcile);
         }
 
         if ($updates !== []) {
@@ -209,14 +230,13 @@ class JobOrderLocationService
     {
         $candidates = [];
 
-        $structured = JobOrderAddressFormatter::formatParts([
+        foreach ($this->structuredStreetCandidates(
             $jobOrder->pickup_street,
             $jobOrder->pickup_barangay,
             $jobOrder->pickup_city,
             $jobOrder->pickup_province,
             $jobOrder->pickup_region,
-        ]);
-        if ($structured !== '') {
+        ) as $structured) {
             $candidates[] = $this->appendLandmark($structured, $jobOrder->pickup_landmark);
         }
 
@@ -257,14 +277,13 @@ class JobOrderLocationService
     {
         $candidates = [];
 
-        $structured = JobOrderAddressFormatter::formatParts([
+        foreach ($this->structuredStreetCandidates(
             $jobOrder->dropoff_street,
             $jobOrder->dropoff_barangay,
             $jobOrder->dropoff_city,
             $jobOrder->dropoff_province,
             $jobOrder->dropoff_region,
-        ]);
-        if ($structured !== '') {
+        ) as $structured) {
             $candidates[] = $this->appendLandmark($structured, $jobOrder->dropoff_landmark);
         }
 
@@ -279,6 +298,101 @@ class JobOrderLocationService
         }
 
         return $this->uniqueNonEmpty($candidates);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function structuredStreetCandidates(
+        mixed $street,
+        mixed $barangay,
+        mixed $city,
+        mixed $province,
+        mixed $region,
+    ): array {
+        $streetText = trim((string) ($street ?? ''));
+        if ($streetText === '') {
+            return [];
+        }
+
+        $candidates = [];
+        foreach (StreetGeocodeHelper::geocodeStreetVariants($streetText) as $streetVariant) {
+            $formatted = JobOrderAddressFormatter::formatParts([
+                $streetVariant,
+                $barangay,
+                $city,
+                $province,
+                $region,
+            ]);
+            if ($formatted !== '') {
+                $candidates[] = $formatted;
+            }
+        }
+
+        return $this->uniqueNonEmpty($candidates);
+    }
+
+    /**
+     * Replace stored coordinates when a structured street geocodes to a meaningfully different point.
+     *
+     * @param  list<string>  $candidates
+     * @return array<string, mixed>|null
+     */
+    private function reconcileStoredCoordinates(
+        JobOrder $jobOrder,
+        string $prefix,
+        GeocodeAnchor $anchor,
+        array $candidates,
+    ): ?array {
+        $street = trim((string) ($jobOrder->{"{$prefix}_street"} ?? ''));
+        if ($street === '' || $candidates === []) {
+            return null;
+        }
+
+        if (StreetGeocodeHelper::expandForGeocode($street) === $street
+            && ! preg_match('/\bP\.\s+[A-Za-zÀ-ÿ]/iu', $street)) {
+            return null;
+        }
+
+        $stored = GpsCoordinateValidator::pair(
+            $jobOrder->{"{$prefix}_latitude"},
+            $jobOrder->{"{$prefix}_longitude"},
+            "{$prefix}_reconcile",
+        );
+        if (! $stored) {
+            return null;
+        }
+
+        $fresh = $this->geocoder->geocodeFirst($candidates, $anchor);
+        if (! $fresh) {
+            return null;
+        }
+
+        $distanceMeters = GpsCoordinateValidator::distanceMeters(
+            $stored['lat'],
+            $stored['lng'],
+            $fresh['lat'],
+            $fresh['lng'],
+        );
+
+        if ($distanceMeters <= 250) {
+            return null;
+        }
+
+        LocationPipelineLogger::log('geocode_reconciled', [
+            'job_order_id' => $jobOrder->id,
+            'prefix' => $prefix,
+            'street' => $street,
+            'previous' => $stored,
+            'next' => $fresh,
+            'distance_meters' => $distanceMeters,
+        ]);
+
+        return [
+            "{$prefix}_latitude" => $fresh['lat'],
+            "{$prefix}_longitude" => $fresh['lng'],
+            "{$prefix}_geocode_attempted_at" => now(),
+        ];
     }
 
     /**

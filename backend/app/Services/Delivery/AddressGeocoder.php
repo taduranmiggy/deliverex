@@ -33,7 +33,7 @@ class AddressGeocoder
             return null;
         }
 
-        $cacheKey = 'deliverex.geocode.v5.'.md5($query.$anchor->cacheKeySuffix());
+        $cacheKey = 'deliverex.geocode.v6.'.md5($query.$anchor->cacheKeySuffix());
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['lat'], $cached['lng'])) {
             return $cached;
@@ -308,7 +308,7 @@ class AddressGeocoder
                 }
 
                 $labels = $this->extractNominatimLabels($result);
-                $score = $this->scorer->score($anchor, $coords, $labels, $centroid);
+                $score = $this->scorer->score($anchor, $coords, $labels, $centroid, $query);
                 if ($score > $bestScore) {
                     $bestScore = $score;
                     $best = $coords;
@@ -374,7 +374,7 @@ class AddressGeocoder
 
             $properties = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
             $labels = $this->extractOpenRouteLabels($properties);
-            $score = $this->scorer->score($anchor, $coords, $labels, $centroid);
+            $score = $this->scorer->score($anchor, $coords, $labels, $centroid, $query);
             if ($score > $bestScore) {
                 $bestScore = $score;
                 $best = $coords;

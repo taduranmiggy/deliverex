@@ -4,6 +4,7 @@ namespace App\Services\Address;
 
 use App\Services\Delivery\AddressGeocoder;
 use App\Support\JobOrderAddressFormatter;
+use App\Support\StreetGeocodeHelper;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -145,17 +146,23 @@ class StandardizedAddressService
             ? $barangay
             : 'Barangay '.$barangay;
 
-        return $this->uniqueNonEmpty([
-            $formatted,
-            JobOrderAddressFormatter::formatParts([$street, $barangayLabel, $city, $province, $region]),
-            JobOrderAddressFormatter::formatParts([$street, $barangay, $city, $province]),
+        $streetVariants = StreetGeocodeHelper::geocodeStreetVariants($street);
+        $candidates = [];
+
+        foreach ($streetVariants as $streetVariant) {
+            $candidates[] = $this->format($streetVariant, $barangay, $city, $province, $region);
+            $candidates[] = JobOrderAddressFormatter::formatParts([$streetVariant, $barangayLabel, $city, $province, $region]);
+            $candidates[] = JobOrderAddressFormatter::formatParts([$streetVariant, $barangay, $city, $province]);
+        }
+
+        return $this->uniqueNonEmpty(array_merge($candidates, [
             JobOrderAddressFormatter::formatParts([$barangayLabel, $city, $province, $region]),
             JobOrderAddressFormatter::formatParts([$barangay, $city, $province]),
             JobOrderAddressFormatter::formatParts([$city, $province, $region]),
             JobOrderAddressFormatter::formatParts([$city, $province]),
             $city.', '.$region.', Philippines',
             $city.', Philippines',
-        ]);
+        ]));
     }
 
     /**

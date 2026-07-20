@@ -325,7 +325,25 @@ class JobOrderMapTest extends TestCase
             'https://api.openrouteservice.org/geocode/search*' => function ($request) {
                 $text = strtoupper($request->data()['text'] ?? '');
 
-                if (str_contains($text, 'SAMPALOC') || str_contains($text, 'PAREDES')) {
+                if (str_contains($text, 'PARES') && ! str_contains($text, 'PAREDES')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [120.991, 14.602]],
+                            'properties' => ['name' => 'Pares Street', 'street' => 'Pares Street', 'locality' => 'Manila'],
+                        ]],
+                    ]);
+                }
+
+                if (str_contains($text, 'PAREDES')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [120.989, 14.604]],
+                            'properties' => ['name' => 'Paredes Street', 'street' => 'Paredes Street', 'locality' => 'Manila'],
+                        ]],
+                    ]);
+                }
+
+                if (str_contains($text, 'SAMPALOC')) {
                     return Http::response([
                         'features' => [[
                             'geometry' => ['coordinates' => [120.989, 14.604]],
@@ -340,8 +358,8 @@ class JobOrderMapTest extends TestCase
                 [
                     'lat' => '14.6040',
                     'lon' => '120.9890',
-                    'display_name' => 'Sampaloc, Manila, Metro Manila, Philippines',
-                    'address' => ['suburb' => 'Sampaloc', 'city' => 'Manila', 'state' => 'Metro Manila'],
+                    'display_name' => 'Paredes Street, Sampaloc, Manila, Metro Manila, Philippines',
+                    'address' => ['road' => 'Paredes Street', 'suburb' => 'Sampaloc', 'city' => 'Manila', 'state' => 'Metro Manila'],
                 ],
             ]),
         ]);
@@ -356,13 +374,13 @@ class JobOrderMapTest extends TestCase
             'pickup_latitude' => 14.76,
             'pickup_longitude' => 121.20,
             'dropoff_street' => '865 P. Paredes St.',
-            'dropoff_barangay' => '396',
+            'dropoff_barangay' => '410',
             'dropoff_city' => 'Sampaloc',
             'dropoff_region' => 'NATIONAL CAPITAL REGION (NCR)',
             'dropoff_region_code' => '1300000000',
-            'dropoff_location' => '865 P. Paredes St., Barangay 396, Sampaloc, Manila',
-            'dropoff_latitude' => 14.498,
-            'dropoff_longitude' => 121.364,
+            'dropoff_location' => '865 P. Paredes St., Barangay 410, Sampaloc, Manila',
+            'dropoff_latitude' => 14.602,
+            'dropoff_longitude' => 120.991,
             'dropoff_geocode_attempted_at' => now()->subDay(),
             'status' => 'pending',
             'scheduled_start' => now()->addHour(),
