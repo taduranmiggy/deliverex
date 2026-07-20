@@ -745,13 +745,13 @@ function AssignDriverVehiclePage() {
                   ))}
                 </div>
               )}
-              <details style={{ marginTop: 12, fontSize: '0.8125rem' }}>
-                <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Advanced: pick driver and vehicle separately</summary>
-                <div className="dx-dispatch-manual__fields" style={{ marginTop: 10 }}>
+              <details className="dx-dispatch-manual__advanced">
+                <summary className="dx-dispatch-manual__advanced-summary">Advanced: pick driver and vehicle separately</summary>
+                <div className="dx-dispatch-manual__fields">
                   <select
+                    className="dx-dispatch-manual__select"
                     value={manualDriverId}
                     onChange={(e) => setManualDriverId(e.target.value)}
-                    style={{ padding: '8px 10px', borderRadius: 9, border: '1.5px solid var(--stroke)', fontSize: '0.8125rem' }}
                   >
                     <option value="">Select driver…</option>
                     {overrideOptions.drivers.filter((d) => d.override_selectable).map((d) => (
@@ -759,9 +759,9 @@ function AssignDriverVehiclePage() {
                     ))}
                   </select>
                   <select
+                    className="dx-dispatch-manual__select"
                     value={manualVehicleId}
                     onChange={(e) => setManualVehicleId(e.target.value)}
-                    style={{ padding: '8px 10px', borderRadius: 9, border: '1.5px solid var(--stroke)', fontSize: '0.8125rem' }}
                   >
                     <option value="">Select vehicle…</option>
                     {overrideOptions.vehicles.filter((v) => v.override_selectable).map((v) => (
@@ -773,7 +773,6 @@ function AssignDriverVehiclePage() {
                     className="btn-dx-secondary"
                     onClick={openManualOverride}
                     disabled={!manualDriverId || !manualVehicleId}
-                    style={{ justifyContent: 'center', fontSize: '0.8125rem' }}
                   >
                     <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} /> Review Manual Override
                   </button>

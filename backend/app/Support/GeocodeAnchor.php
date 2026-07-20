@@ -10,6 +10,7 @@ final class GeocodeAnchor
         public readonly ?string $city = null,
         public readonly ?string $province = null,
         public readonly ?string $region = null,
+        public readonly ?string $barangay = null,
     ) {
     }
 
@@ -19,22 +20,42 @@ final class GeocodeAnchor
             city: self::nonEmpty($jobOrder->{"{$prefix}_city"} ?? null),
             province: self::nonEmpty($jobOrder->{"{$prefix}_province"} ?? null),
             region: self::nonEmpty($jobOrder->{"{$prefix}_region"} ?? null),
+            barangay: self::nonEmpty($jobOrder->{"{$prefix}_barangay"} ?? null),
         );
     }
 
-    /** @param array{city?: string|null, province?: string|null, region?: string|null} $anchor */
+    /** @param array{city?: string|null, province?: string|null, region?: string|null, barangay?: string|null} $anchor */
     public static function fromArray(array $anchor): self
     {
         return new self(
             city: self::nonEmpty($anchor['city'] ?? null),
             province: self::nonEmpty($anchor['province'] ?? null),
             region: self::nonEmpty($anchor['region'] ?? null),
+            barangay: self::nonEmpty($anchor['barangay'] ?? null),
         );
     }
 
     public function hasLocality(): bool
     {
         return ($this->city ?? '') !== '';
+    }
+
+    public function isNcr(): bool
+    {
+        foreach ([$this->region, $this->province] as $label) {
+            $normalized = self::normalizePlaceName($label);
+            if ($normalized === '') {
+                continue;
+            }
+
+            if (str_contains($normalized, 'ncr')
+                || str_contains($normalized, 'national capital')
+                || str_contains($normalized, 'metro manila')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function cacheKeySuffix(): string
@@ -47,12 +68,13 @@ final class GeocodeAnchor
             $this->city ?? '',
             $this->province ?? '',
             $this->region ?? '',
+            $this->barangay ?? '',
         ])));
     }
 
     public function centroidCacheKey(): string
     {
-        return 'deliverex.geocode.centroid.v1.'.$this->cacheKeySuffix();
+        return 'deliverex.geocode.centroid.v2.'.$this->cacheKeySuffix();
     }
 
     public function localityQuery(): ?string
@@ -61,10 +83,18 @@ final class GeocodeAnchor
             return null;
         }
 
+        $barangay = self::formatBarangayLabel($this->barangay);
+        $province = $this->province;
+
+        if ($this->isNcr() && ($province === null || $province === '')) {
+            $province = 'Metro Manila';
+        }
+
         $parts = array_values(array_filter([
+            $barangay,
             $this->city,
-            $this->province,
-            $this->region,
+            $province,
+            $this->isNcr() ? null : $this->region,
             'Philippines',
         ], static fn (?string $value): bool => ($value ?? '') !== ''));
 
@@ -76,11 +106,16 @@ final class GeocodeAnchor
     {
         $tokens = [];
 
-        foreach ([$this->city, $this->province, $this->region] as $label) {
+        foreach ([$this->barangay, $this->city, $this->province, $this->region] as $label) {
             $normalized = self::normalizePlaceName($label);
-            if ($normalized !== '') {
+            if ($normalized !== '' && ! self::isNumericBarangayToken($normalized)) {
                 $tokens[] = $normalized;
             }
+        }
+
+        if ($this->isNcr()) {
+            $tokens[] = 'metro manila';
+            $tokens[] = 'manila';
         }
 
         return array_values(array_unique($tokens));
@@ -96,10 +131,30 @@ final class GeocodeAnchor
         $value = preg_replace('/\(([^)]+)\)/', ' $1 ', $value) ?? $value;
         $value = preg_replace('/\b(city of|municipality of|municipalities of)\b/', '', $value) ?? $value;
         $value = preg_replace('/\b(province of|region of)\b/', '', $value) ?? $value;
+        $value = preg_replace('/\b(barangay|brgy\.?\s*)/', '', $value) ?? $value;
         $value = preg_replace('/[^a-z0-9\s]/', ' ', $value) ?? $value;
         $value = preg_replace('/\s+/', ' ', $value) ?? $value;
 
         return trim($value);
+    }
+
+    private static function formatBarangayLabel(?string $barangay): ?string
+    {
+        $barangay = trim((string) ($barangay ?? ''));
+        if ($barangay === '') {
+            return null;
+        }
+
+        if (preg_match('/^(barangay|brgy\.?\s)/i', $barangay)) {
+            return $barangay;
+        }
+
+        return 'Barangay '.$barangay;
+    }
+
+    private static function isNumericBarangayToken(string $token): bool
+    {
+        return preg_match('/^\d+$/', $token) === 1;
     }
 
     private static function nonEmpty(mixed $value): ?string

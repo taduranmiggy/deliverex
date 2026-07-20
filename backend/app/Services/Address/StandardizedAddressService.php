@@ -56,7 +56,12 @@ class StandardizedAddressService
         $formatted = $this->format($street, $barangay, $city, $province, $region);
         $coordinates = $this->geocoder->geocodeFirst(
             $this->geocodeCandidates($street, $barangay, $city, $province, $region, $formatted),
-            ['city' => $city, 'province' => $province, 'region' => $region],
+            [
+                'city' => $city,
+                'province' => $province,
+                'region' => $region,
+                'barangay' => $barangay,
+            ],
         );
 
         if (! $coordinates && $requireGeocode) {

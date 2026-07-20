@@ -304,6 +304,11 @@ body.dx-nav-locked {
   grid-template-columns: minmax(260px, 300px) minmax(340px, 1fr) minmax(300px, 400px);
   gap: 22px;
   align-items: stretch;
+  min-width: 0;
+}
+
+.dx-dispatch-grid__col {
+  min-width: 0;
 }
 
 @media (min-width: 901px) {
@@ -321,6 +326,7 @@ body.dx-nav-locked {
   .dx-dispatch-grid__scroll {
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
     overflow-y: auto;
     overflow-x: hidden;
     overscroll-behavior: contain;

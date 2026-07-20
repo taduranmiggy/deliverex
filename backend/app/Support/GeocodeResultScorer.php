@@ -4,9 +4,24 @@ namespace App\Support;
 
 final class GeocodeResultScorer
 {
-    private const MAX_DISTANCE_KM = 45.0;
+    private const DEFAULT_MAX_DISTANCE_KM = 35.0;
+
+    private const NCR_MAX_DISTANCE_KM = 15.0;
+
+    /** @var list<string> */
+    private const NCR_CONFLICT_PROVINCES = [
+        'rizal',
+        'bulacan',
+        'cavite',
+        'laguna',
+        'batangas',
+        'pampanga',
+        'zambales',
+    ];
 
     /**
+     * Validate a fresh geocoder result against the PSGC anchor.
+     *
      * @param  array{lat: float, lng: float}  $coords
      * @param  list<string>  $labels
      */
@@ -16,31 +31,55 @@ final class GeocodeResultScorer
             return true;
         }
 
-        if ($centroid && $this->distanceKm($coords, $centroid) > self::MAX_DISTANCE_KM) {
+        if ($this->conflictsWithAnchor($anchor, $labels)) {
             return false;
         }
 
-        $tokens = $anchor->localityTokens();
-        if ($tokens === []) {
+        if (! $centroid) {
+            return $this->labelsMatchAnchor($anchor, $labels);
+        }
+
+        $distanceKm = $this->distanceKm($coords, $centroid);
+        if ($distanceKm > $this->maxAllowedDistanceKm($anchor)) {
+            return false;
+        }
+
+        if ($distanceKm <= 8.0) {
             return true;
         }
 
-        $haystack = implode(' ', array_map(
-            static fn (string $label): string => GeocodeAnchor::normalizePlaceName($label),
-            $labels,
-        ));
+        return $this->labelsMatchAnchor($anchor, $labels);
+    }
 
-        if ($haystack === '') {
-            return $centroid !== null;
+    /**
+     * Validate already stored coordinates using distance from the anchor centroid only.
+     *
+     * @param  array{lat: float, lng: float}  $coords
+     */
+    public function storedCoordinatesMatch(GeocodeAnchor $anchor, array $coords, ?array $centroid): bool
+    {
+        if (! $anchor->hasLocality()) {
+            return true;
         }
 
-        foreach ($tokens as $token) {
-            if (str_contains($haystack, $token)) {
-                return true;
-            }
+        if (! $centroid) {
+            return false;
         }
 
-        return $centroid !== null && $this->distanceKm($coords, $centroid) <= 25.0;
+        return $this->distanceKm($coords, $centroid) <= $this->maxAllowedDistanceKm($anchor);
+    }
+
+    public function maxAllowedDistanceKm(GeocodeAnchor $anchor): float
+    {
+        if ($anchor->isNcr()) {
+            return self::NCR_MAX_DISTANCE_KM;
+        }
+
+        if (($anchor->barangay ?? '') !== '') {
+            return 25.0;
+        }
+
+        return self::DEFAULT_MAX_DISTANCE_KM;
     }
 
     /**
@@ -69,10 +108,7 @@ final class GeocodeResultScorer
             $score -= min(80.0, $distanceKm * 1.6);
         }
 
-        $haystack = implode(' ', array_map(
-            static fn (string $label): string => GeocodeAnchor::normalizePlaceName($label),
-            $labels,
-        ));
+        $haystack = $this->normalizedLabelHaystack($labels);
 
         foreach ($anchor->localityTokens() as $token) {
             if ($token !== '' && str_contains($haystack, $token)) {
@@ -81,5 +117,49 @@ final class GeocodeResultScorer
         }
 
         return $score;
+    }
+
+    /** @param  list<string>  $labels */
+    public function conflictsWithAnchor(GeocodeAnchor $anchor, array $labels): bool
+    {
+        if (! $anchor->isNcr()) {
+            return false;
+        }
+
+        $haystack = $this->normalizedLabelHaystack($labels);
+
+        foreach (self::NCR_CONFLICT_PROVINCES as $province) {
+            if (preg_match('/\b'.preg_quote($province, '/').'\b/', $haystack) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param  list<string>  $labels */
+    private function labelsMatchAnchor(GeocodeAnchor $anchor, array $labels): bool
+    {
+        $haystack = $this->normalizedLabelHaystack($labels);
+        if ($haystack === '') {
+            return false;
+        }
+
+        foreach ($anchor->localityTokens() as $token) {
+            if (mb_strlen($token) >= 4 && str_contains($haystack, $token)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param  list<string>  $labels */
+    private function normalizedLabelHaystack(array $labels): string
+    {
+        return implode(' ', array_map(
+            static fn (string $label): string => GeocodeAnchor::normalizePlaceName($label),
+            $labels,
+        ));
     }
 }

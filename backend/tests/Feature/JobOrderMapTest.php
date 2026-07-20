@@ -315,4 +315,67 @@ class JobOrderMapTest extends TestCase
         $this->assertSame(14.76, round((float) $jobOrder->pickup_latitude, 2));
         $this->assertSame(121.20, round((float) $jobOrder->pickup_longitude, 2));
     }
+
+    public function test_map_regeocodes_dropoff_when_stored_coordinates_are_in_rizal_but_destination_is_manila(): void
+    {
+        Http::preventStrayRequests();
+        config()->set('gps.routing.openrouteservice_api_key', 'test-ors-key');
+
+        Http::fake([
+            'https://api.openrouteservice.org/geocode/search*' => function ($request) {
+                $text = strtoupper($request->data()['text'] ?? '');
+
+                if (str_contains($text, 'SAMPALOC') || str_contains($text, 'PAREDES')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [120.989, 14.604]],
+                            'properties' => ['name' => 'Sampaloc', 'locality' => 'Manila', 'region' => 'Metro Manila'],
+                        ]],
+                    ]);
+                }
+
+                return Http::response(['features' => []]);
+            },
+            'https://nominatim.openstreetmap.org/*' => Http::response([
+                [
+                    'lat' => '14.6040',
+                    'lon' => '120.9890',
+                    'display_name' => 'Sampaloc, Manila, Metro Manila, Philippines',
+                    'address' => ['suburb' => 'Sampaloc', 'city' => 'Manila', 'state' => 'Metro Manila'],
+                ],
+            ]),
+        ]);
+
+        $jobOrder = JobOrder::create([
+            'created_by' => $this->dispatcher->id,
+            'tracking_code' => 'MAPTEST007',
+            'customer_name' => 'Manila Client',
+            'pickup_street' => '9009 P. Rodriguez St.',
+            'pickup_city' => 'Rodriguez',
+            'pickup_province' => 'Rizal',
+            'pickup_latitude' => 14.76,
+            'pickup_longitude' => 121.20,
+            'dropoff_street' => '865 P. Paredes St.',
+            'dropoff_barangay' => '396',
+            'dropoff_city' => 'Sampaloc',
+            'dropoff_region' => 'NATIONAL CAPITAL REGION (NCR)',
+            'dropoff_location' => '865 P. Paredes St., Barangay 396, Sampaloc, Manila',
+            'dropoff_latitude' => 14.498,
+            'dropoff_longitude' => 121.364,
+            'dropoff_geocode_attempted_at' => now()->subDay(),
+            'status' => 'pending',
+            'scheduled_start' => now()->addHour(),
+            'scheduled_end' => now()->addHours(3),
+        ]);
+
+        $response = $this->apiAs($this->dispatcher)->getJson("/api/job-orders/{$jobOrder->id}/map");
+
+        $response->assertOk()
+            ->assertJsonPath('data.destination.lat', 14.604)
+            ->assertJsonPath('data.destination.lng', 120.989);
+
+        $jobOrder->refresh();
+        $this->assertSame(14.604, round((float) $jobOrder->dropoff_latitude, 3));
+        $this->assertSame(120.989, round((float) $jobOrder->dropoff_longitude, 3));
+    }
 }

@@ -6661,6 +6661,9 @@
   border-radius: 14px;
   padding: 16px;
   margin-bottom: 12px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .dx-dispatch-manual__title {
@@ -6677,10 +6680,45 @@
   color: var(--muted);
 }
 
+.dx-dispatch-manual__advanced {
+  margin-top: 12px;
+  font-size: 0.8125rem;
+  min-width: 0;
+}
+
+.dx-dispatch-manual__advanced-summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
 .dx-dispatch-manual__fields {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  margin-top: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.dx-dispatch-manual__select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1.5px solid var(--stroke);
+  font-size: 0.8125rem;
+  background: #fff;
+}
+
+.dx-dispatch-manual__fields .btn-dx-secondary {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  justify-content: center;
+  font-size: 0.8125rem;
 }
 
 .dx-dispatch-loading {

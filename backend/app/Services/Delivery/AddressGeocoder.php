@@ -33,7 +33,7 @@ class AddressGeocoder
             return null;
         }
 
-        $cacheKey = 'deliverex.geocode.v3.'.md5($query.$anchor->cacheKeySuffix());
+        $cacheKey = 'deliverex.geocode.v4.'.md5($query.$anchor->cacheKeySuffix());
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['lat'], $cached['lng'])) {
             return $cached;
@@ -97,9 +97,8 @@ class AddressGeocoder
         }
 
         $centroid = $this->resolveAnchorCentroid($anchor);
-        $labels = [$anchor->city ?? '', $anchor->province ?? '', $anchor->region ?? ''];
 
-        if ($this->scorer->accepts($anchor, $pair, $labels, $centroid)) {
+        if ($this->scorer->storedCoordinatesMatch($anchor, $pair, $centroid)) {
             return $pair;
         }
 
