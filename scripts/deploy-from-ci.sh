@@ -25,6 +25,30 @@ fi
 
 cd "$DEPLOY_PATH"
 
+publish_frontend_from_bundle() {
+  local bundle="$1"
+  local public_dir="$DEPLOY_PATH/backend/public"
+
+  echo "Publishing frontend build to backend/public ..."
+  mkdir -p "$public_dir/assets"
+  tar -xzf "$bundle" -C "$public_dir" frontend-dist --strip-components=1
+
+  if [ ! -f "$public_dir/index.html" ]; then
+    echo "ERROR: frontend index.html missing after extract" >&2
+    return 1
+  fi
+
+  local main_js
+  main_js="$(grep -oE 'src="/assets/index-[^"]+\.js"' "$public_dir/index.html" | head -1 | sed -E 's/^src="(\/assets\/[^"]+)".*/\1/')"
+  if [ -z "$main_js" ] || [ ! -f "$public_dir$main_js" ]; then
+    echo "ERROR: index.html references missing bundle: ${main_js:-<none>}" >&2
+    return 1
+  fi
+
+  echo "Frontend entry bundle: $main_js"
+  return 0
+}
+
 if [ -f "$DEPLOY_BUNDLE" ]; then
   echo "Extracting application code from CI bundle..."
   tar -xzf "$DEPLOY_BUNDLE" -C "$DEPLOY_PATH" backend scripts deployment.sh
@@ -33,13 +57,7 @@ if [ -f "$DEPLOY_BUNDLE" ]; then
   fi
   chmod +x scripts/*.sh deployment.sh 2>/dev/null || true
 
-  echo "Extracting frontend build to backend/public ..."
-  mkdir -p backend/public/assets
-  tar -xzf "$DEPLOY_BUNDLE" -C backend/public frontend-dist --strip-components=1
-  if [ ! -f backend/public/index.html ]; then
-    echo "ERROR: frontend index.html missing after extract" >&2
-    exit 1
-  fi
+  publish_frontend_from_bundle "$DEPLOY_BUNDLE"
 elif [ -f "$APP_CODE" ]; then
   echo "Extracting application code from CI..."
   tar -xzf "$APP_CODE" -C "$DEPLOY_PATH"
@@ -70,6 +88,14 @@ export SKIP_ROLLBACK=1
 export DEPLOY_PREVIOUS_SHA=none
 
 if bash "$SCRIPT_DIR/deployment.sh"; then
+  # Re-publish frontend last — hPanel/git rollback can restore a stale index.html
+  # while newer hashed chunks remain on disk, leaving users on an old JS bundle.
+  if [ -f "$DEPLOY_BUNDLE" ]; then
+    publish_frontend_from_bundle "$DEPLOY_BUNDLE"
+  elif [ -f "$FRONTEND_DIST" ]; then
+    mkdir -p backend/public/assets
+    tar -xzf "$FRONTEND_DIST" -C backend/public/
+  fi
   rm -f "$DEPLOY_BUNDLE"
   exit 0
 fi

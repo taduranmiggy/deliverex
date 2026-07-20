@@ -110,6 +110,14 @@ if ($deploySha !== '') {
     echo 'deploy=' . substr($deploySha, 0, 7) . "\n";
 }
 
+$indexHtml = $backendRoot . '/public/index.html';
+if (is_readable($indexHtml)) {
+    $html = (string) file_get_contents($indexHtml);
+    if (preg_match('/src="(\/assets\/index-[^"]+\.js)"/', $html, $matches)) {
+        echo 'frontend=' . basename($matches[1]) . "\n";
+    }
+}
+
 $repoRoot = dirname($backendRoot);
 $gitSha = '';
 if (is_dir($repoRoot . '/.git')) {
