@@ -191,6 +191,12 @@ export function fetchInquiries(page = 1, status = 'all') {
   return apiRequest(`/inquiries?page=${page}&status=${status}&per_page=6`)
 }
 export function markInquiryRead(id)        { return apiRequest(`/inquiries/${id}/read`, { method: 'PUT' }) }
+export function replyToInquiry(id, message) {
+  return apiRequest(`/inquiries/${id}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  })
+}
 export function convertInquiry(id)         { return apiRequest(`/inquiries/${id}/convert`, { method: 'POST' }) }
 export function deleteInquiry(id)          { return apiRequest(`/inquiries/${id}`, { method: 'DELETE' }) }
 

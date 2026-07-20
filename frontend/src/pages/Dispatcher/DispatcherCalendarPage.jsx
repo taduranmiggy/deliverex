@@ -141,30 +141,32 @@ function UpcomingPanel({ upcoming, onSelectJob }) {
   return (
     <div className="dx-panel dx-cal-upcoming">
       <h3 className="dx-panel-title">Upcoming Activities</h3>
-      {sections.map(({ key, title, items }) => (
-        <div key={key} className="dx-cal-upcoming__section">
-          <h4 className="dx-cal-upcoming__heading">{title}</h4>
-          {items.length === 0 ? (
-            <p className="dx-muted" style={{ fontSize: '0.8125rem', margin: '0 0 12px' }}>None</p>
-          ) : (
-            items.slice(0, 5).map((item) => (
-              <button
-                key={`${key}-${item.job_order_id}`}
-                type="button"
-                className="dx-cal-upcoming__row"
-                onClick={() => onSelectJob(item.job_order_id)}
-              >
-                <strong>{item.job_number}</strong>
-                <span>{item.customer_name}</span>
-                <span className="dx-muted" style={{ fontSize: '0.75rem' }}>
-                  {formatJobSchedule(item)}
-                  {item.driver_name ? ` · ${item.driver_name}` : ''}
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-      ))}
+      <div className="dx-cal-upcoming__body">
+        {sections.map(({ key, title, items }) => (
+          <div key={key} className="dx-cal-upcoming__section">
+            <h4 className="dx-cal-upcoming__heading">{title}</h4>
+            {items.length === 0 ? (
+              <p className="dx-muted dx-cal-upcoming__empty">None</p>
+            ) : (
+              items.slice(0, 8).map((item) => (
+                <button
+                  key={`${key}-${item.job_order_id}`}
+                  type="button"
+                  className="dx-cal-upcoming__row"
+                  onClick={() => onSelectJob(item.job_order_id)}
+                >
+                  <strong>{item.job_number}</strong>
+                  <span>{item.customer_name}</span>
+                  <span className="dx-muted" style={{ fontSize: '0.75rem' }}>
+                    {formatJobSchedule(item)}
+                    {item.driver_name ? ` · ${item.driver_name}` : ''}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -435,7 +437,7 @@ function DispatcherCalendarPage() {
                 eventPropGetter={eventStyleGetter}
                 popup
                 views={['month', 'week', 'day']}
-                style={{ minHeight: 560 }}
+                style={{ height: '100%' }}
                 tooltipAccessor={(ev) => `${ev.job_number} · ${ev.customer_name}\nDriver: ${ev.driver_name ?? '—'}\nVehicle: ${ev.vehicle_name ?? '—'}`}
               />
             </div>

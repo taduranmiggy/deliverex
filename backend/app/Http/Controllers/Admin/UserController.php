@@ -44,7 +44,8 @@ class UserController extends Controller
             'phone' => 'nullable|string|max:30',
             'company_id' => 'nullable|exists:companies,id',
             'new_company' => 'nullable|array',
-            'new_company.company_name' => 'required_without:company_id|nullable|string|max:180',
+            // Only Customer accounts need a company — enforced below after role is resolved.
+            'new_company.company_name' => 'nullable|string|max:180',
         ]);
 
         $role = Role::query()->findOrFail($data['role_id']);

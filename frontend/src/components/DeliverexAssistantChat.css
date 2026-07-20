@@ -693,6 +693,35 @@
   gap: 12px;
 }
 
+.dx-chat-launcher--draggable {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  width: 56px;
+  height: 56px;
+  transition: left 0.18s ease, top 0.18s ease;
+}
+
+.dx-chat-launcher--draggable .dx-chat-pill {
+  display: none;
+}
+
+.dx-chat-launcher--dragging {
+  cursor: grabbing;
+  transition: none;
+  z-index: 130;
+}
+
+.dx-chat-launcher--dragging .dx-chat-fab {
+  transform: scale(1.08);
+  box-shadow: 0 8px 24px rgba(29, 53, 87, 0.5);
+}
+
+.dx-chat-launcher--draggable .dx-chat-fab {
+  pointer-events: none;
+}
+
 .dx-chat-pill {
   font-size: 0.8125rem;
   font-weight: 600;
@@ -754,6 +783,10 @@
   }
 
   .dx-chat-launcher .dx-chat-fab {
+    transition: none;
+  }
+
+  .dx-chat-launcher--draggable {
     transition: none;
   }
 }

@@ -49,7 +49,7 @@ function LandingPage() {
         className="landing-hero landing-hero--enhanced"
         style={{
           background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 45%, #2563eb 100%)',
-          padding: 'clamp(60px, 10vw, 120px) 24px',
+          padding: 'clamp(60px, 10vw, 120px) 24px clamp(88px, 12vw, 148px)',
           color: '#fff',
         }}
       >
@@ -113,8 +113,8 @@ function LandingPage() {
         </div>
       </section>
 
-      <section className="customer-container" style={{ marginTop: -32, paddingBottom: 80 }}>
-        <div className="dx-feature-cards dx-feature-cards--motion" style={{ marginBottom: 48 }}>
+      <section className="customer-container landing-features-overlap">
+        <div className="dx-feature-cards dx-feature-cards--motion landing-features-overlap__cards">
           {FEATURES.map(({ Icon, title, desc }, index) => (
             <MotionCard key={title} index={index} className="dx-feature-card" style={{ background: 'var(--surface)' }}>
               <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--color-primary-light)', display: 'grid', placeItems: 'center', marginBottom: 16 }}>

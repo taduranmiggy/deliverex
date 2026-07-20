@@ -202,6 +202,7 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/',                        [InquiryController::class, 'index']);
         Route::get('/{inquiry}',               [InquiryController::class, 'show']);
         Route::put('/{inquiry}/read',          [InquiryController::class, 'markRead']);
+        Route::post('/{inquiry}/reply',        [InquiryController::class, 'reply']);
         Route::post('/{inquiry}/convert',      [InquiryController::class, 'convert']);
         Route::delete('/{inquiry}',            [InquiryController::class, 'destroy']);
     });

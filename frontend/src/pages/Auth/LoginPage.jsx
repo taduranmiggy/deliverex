@@ -3,9 +3,10 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { login as loginRequest } from '../../api/auth'
 import AuthMarketingAside from '../../components/auth/AuthMarketingAside'
 import useAuth from '../../hooks/useAuth'
+import CustomerBrandMark from '../../components/customer/CustomerBrandMark'
 import DeliverexSiteFooter from '../../components/customer/DeliverexSiteFooter'
 import { roleHome } from '../../utils/roleUtils'
-import { IconChevronLeft, IconLockOutlined, IconMail } from '../../components/DxIcons'
+import { IconChevronLeft } from '../../components/DxIcons'
 import { MotionButton, MotionPage, MotionStagger, MotionStaggerItem } from '../../motion'
 import './LoginPage.css'
 
@@ -62,7 +63,7 @@ function LoginPage() {
 
             <MotionStaggerItem index={1}>
             <div className="auth-brand-lockup">
-              <span className="auth-brand-logo" aria-hidden />
+              <CustomerBrandMark />
               <span className="auth-brand-text">Deliverex</span>
             </div>
 
@@ -77,9 +78,6 @@ function LoginPage() {
               <div className="auth-field-split">
                 <label htmlFor={emailId}>Email</label>
                 <div className="auth-input-shell">
-                  <span className="auth-input-icon">
-                    <IconMail />
-                  </span>
                   <input
                     id={emailId}
                     name="email"
@@ -95,9 +93,6 @@ function LoginPage() {
               <div className="auth-field-split auth-field-split--password">
                 <label htmlFor={passwordId}>Password</label>
                 <div className="auth-input-shell">
-                  <span className="auth-input-icon">
-                    <IconLockOutlined />
-                  </span>
                   <input
                     id={passwordId}
                     name="password"

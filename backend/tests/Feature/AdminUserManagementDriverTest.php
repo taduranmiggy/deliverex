@@ -92,6 +92,34 @@ class AdminUserManagementDriverTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_create_admin_user_without_company(): void
+    {
+        $admin = $this->makeAdmin();
+        $adminRole = Role::where('name', 'admin')->first();
+
+        $response = $this->actingAs($admin, 'sanctum')->postJson('/api/admin/users', [
+            'role_id' => $adminRole->id,
+            'name' => 'Second Admin',
+            'email' => 'deliverexapp@gmail.com',
+            'phone' => '+639773327624',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('role.name', 'admin')
+            ->assertJsonPath('email', 'deliverexapp@gmail.com')
+            ->assertJsonPath('status', 'pending');
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'deliverexapp@gmail.com',
+            'role_id' => $adminRole->id,
+            'status' => 'pending',
+        ]);
+
+        $this->assertDatabaseMissing('company_users', [
+            'user_id' => $response->json('id'),
+        ]);
+    }
+
     public function test_admin_can_create_customer_user_with_new_company(): void
     {
         $admin = $this->makeAdmin();

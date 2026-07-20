@@ -32,6 +32,8 @@ final class EmailType
 
     public const SUPPORT_INQUIRY = 'support_inquiry';
 
+    public const INQUIRY_REPLY = 'inquiry_reply';
+
     public const ACCOUNT_DISABLED = 'account_disabled';
 
     public const ACTIVATION_EXPIRED = 'activation_expired';
@@ -58,6 +60,7 @@ final class EmailType
             self::POD_AVAILABLE => 'POD Available',
             self::CONTACT_SUPPORT => 'Contact Support',
             self::SUPPORT_INQUIRY => 'Support Inquiry',
+            self::INQUIRY_REPLY => 'Inquiry Reply',
             self::ACCOUNT_DISABLED => 'Account Disabled',
             self::ACTIVATION_EXPIRED => 'Activation Expired',
             self::LOGIN_ALERT => 'Login Alert',

@@ -4,7 +4,7 @@ import { fetchAssignments, fetchJobOrders } from '../../api/dispatcher'
 import AssignmentAuditSection from '../../components/AssignmentAuditSection'
 import IssueReportsSection from '../../components/IssueReportsSection'
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from '../../components/ui'
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock, ListOrdered, MapPin, Truck } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, ListOrdered, Truck } from 'lucide-react'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { buildDisplayName, buildRouteSummary } from '../../utils/jobOrderHelpers'
 import { getDelayReasonLabel } from '../../utils/driverAssignment'
@@ -65,15 +65,13 @@ function DispatcherDashboard() {
     load()
   }, [])
 
-  // ── KPI navigation shortcuts ──────────────────────────────────────────────
   const goJobs = (initialTab) => navigate('/dispatcher/job-orders', { state: { initialTab } })
 
   return (
-    <>
+    <div className="dispatcher-dashboard">
       <PageHeader title="Dashboard" subtitle="Overview of dispatch operations" />
       {error && <p className="notice error">{error}</p>}
 
-      {/* ── Primary KPI row ─────────────────────────────────────────────── */}
       <div className="dx-stat-row">
         <StatCard
           label="Pending Assignment"
@@ -109,8 +107,7 @@ function DispatcherDashboard() {
         />
       </div>
 
-      {/* ── Secondary stat: Total Job Orders ──────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+      <div className="dispatcher-dashboard__meta">
         <StatCard
           label="Total Job Orders"
           value={summary.orders}
@@ -122,9 +119,8 @@ function DispatcherDashboard() {
         />
       </div>
 
-      {/* ── Pending dispatch banner ──────────────────────────────────────── */}
       {summary.pending > 0 && (
-        <div className="notice" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
+        <div className="notice dispatcher-dashboard__banner">
           <span style={{ fontWeight: 600 }}>
             {summary.pending} job{summary.pending > 1 ? 's' : ''} awaiting assignment
           </span>
@@ -134,8 +130,9 @@ function DispatcherDashboard() {
         </div>
       )}
 
-      <div className="dx-grid-sidebar">
-        <SectionCard title="Active Deliveries"
+      <div className="dx-grid-sidebar dispatcher-dashboard__main">
+        <SectionCard
+          title="Active Deliveries"
           action={<Link to="/dispatcher/live-tracking" className="btn-dx-secondary btn-sm">View map →</Link>}
         >
           {deliveries.length === 0 ? (
@@ -143,9 +140,18 @@ function DispatcherDashboard() {
           ) : (
             <div className="dx-data-table-wrap dx-data-table-wrap--dashboard-deliveries">
               <table className="dx-data-table dx-data-table--dashboard-deliveries">
-                <thead><tr>
-                  <th>Job ID</th><th>Client</th><th>Route</th><th>Priority</th><th>Status</th><th>Arrival</th><th>Delay Reason</th><th>Driver</th>
-                </tr></thead>
+                <thead>
+                  <tr>
+                    <th>Job ID</th>
+                    <th>Client</th>
+                    <th>Route</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Arrival</th>
+                    <th>Delay Reason</th>
+                    <th>Driver</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {deliveries.map((item) => {
                     const delay = item.latest_delay_report
@@ -159,26 +165,26 @@ function DispatcherDashboard() {
                         ? 'badge-dx badge-dx--muted'
                         : 'badge-dx badge-dx--prio-medium'
                     return (
-                    <tr key={item.id}>
-                      <td className="dx-dashboard-deliveries__id">{formatJobPublicId(item.job_order_id)}</td>
-                      <td className="dx-dashboard-deliveries__client">{buildDisplayName(item.job_order) || '—'}</td>
-                      <td className="dx-dashboard-deliveries__route" title={routeLabel}>
-                        <span className="dx-table-route">{routeLabel}</span>
-                      </td>
-                      <td>
-                        <span className={priorityCls} style={{ textTransform: 'capitalize' }}>{priority}</span>
-                      </td>
-                      <td className="dx-dashboard-deliveries__status"><StatusBadge status={item.status} /></td>
-                      <td className="dx-dashboard-deliveries__arrival" style={{ color: arrivedLog?.arrival_verified ? '#166534' : 'var(--muted)' }}>
-                        {arrivedLog?.arrival_verified
-                          ? `GPS Verified${formatEventAt(arrivedLog, undefined, { hour: 'numeric', minute: '2-digit' }) ? ` · ${formatEventAt(arrivedLog, undefined, { hour: 'numeric', minute: '2-digit' })}` : ''}`
-                          : item.status === 'arrived' || item.status === 'arrived_at_destination' || item.status === 'completed' ? 'Not verified' : '—'}
-                      </td>
-                      <td className="dx-dashboard-deliveries__delay" style={{ color: delay ? '#991b1b' : isPastDue ? 'var(--color-warning)' : 'var(--muted)' }}>
-                        {delay ? getDelayReasonLabel(delay.delay_reason) : isPastDue ? 'Past due (no reason)' : '—'}
-                      </td>
-                      <td className="dx-dashboard-deliveries__driver">{item.driver?.user?.name ?? '—'}</td>
-                    </tr>
+                      <tr key={item.id}>
+                        <td className="dx-dashboard-deliveries__id">{formatJobPublicId(item.job_order_id)}</td>
+                        <td className="dx-dashboard-deliveries__client">{buildDisplayName(item.job_order) || '—'}</td>
+                        <td className="dx-dashboard-deliveries__route" title={routeLabel}>
+                          <span className="dx-table-route">{routeLabel}</span>
+                        </td>
+                        <td>
+                          <span className={priorityCls} style={{ textTransform: 'capitalize' }}>{priority}</span>
+                        </td>
+                        <td className="dx-dashboard-deliveries__status"><StatusBadge status={item.status} /></td>
+                        <td className="dx-dashboard-deliveries__arrival" style={{ color: arrivedLog?.arrival_verified ? '#166534' : 'var(--muted)' }}>
+                          {arrivedLog?.arrival_verified
+                            ? `GPS Verified${formatEventAt(arrivedLog, undefined, { hour: 'numeric', minute: '2-digit' }) ? ` · ${formatEventAt(arrivedLog, undefined, { hour: 'numeric', minute: '2-digit' })}` : ''}`
+                            : item.status === 'arrived' || item.status === 'arrived_at_destination' || item.status === 'completed' ? 'Not verified' : '—'}
+                        </td>
+                        <td className="dx-dashboard-deliveries__delay" style={{ color: delay ? '#991b1b' : isPastDue ? 'var(--color-warning)' : 'var(--muted)' }}>
+                          {delay ? getDelayReasonLabel(delay.delay_reason) : isPastDue ? 'Past due (no reason)' : '—'}
+                        </td>
+                        <td className="dx-dashboard-deliveries__driver">{item.driver?.user?.name ?? '—'}</td>
+                      </tr>
                     )
                   })}
                 </tbody>
@@ -187,28 +193,28 @@ function DispatcherDashboard() {
           )}
         </SectionCard>
 
-        {/* Quick links */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <SectionCard title="Quick Actions">
+        <SectionCard title="Quick Actions" className="dispatcher-dashboard__actions">
+          <div className="dispatcher-dashboard__action-list">
             {[
-              { label: 'Create Job Order',   to: '/dispatcher/job-orders',        cls: 'btn-dx-primary' },
-              { label: 'Fleet Dispatch',      to: '/dispatcher/dispatch', cls: 'btn-dx-secondary' },
-              { label: 'Calendar',            to: '/dispatcher/calendar',          cls: 'btn-dx-secondary' },
-              { label: 'OCR Review',          to: '/dispatcher/ocr-review',         cls: 'btn-dx-secondary' },
-              { label: 'Tracking',            to: '/dispatcher/live-tracking',      cls: 'btn-dx-secondary' },
+              { label: 'Create Job Order', to: '/dispatcher/job-orders', cls: 'btn-dx-primary' },
+              { label: 'Fleet Dispatch', to: '/dispatcher/dispatch', cls: 'btn-dx-secondary' },
+              { label: 'Calendar', to: '/dispatcher/calendar', cls: 'btn-dx-secondary' },
+              { label: 'OCR Review', to: '/dispatcher/ocr-review', cls: 'btn-dx-secondary' },
+              { label: 'Tracking', to: '/dispatcher/live-tracking', cls: 'btn-dx-secondary' },
             ].map(({ label, to, cls }) => (
-              <Link key={to} to={to} className={`${cls} btn-sm`} style={{ width: '100%', marginBottom: 8, justifyContent: 'flex-start', gap: 8 }}>
+              <Link key={to} to={to} className={`${cls} btn-sm dispatcher-dashboard__action-btn`}>
                 {label}
               </Link>
             ))}
-          </SectionCard>
-        </div>
+          </div>
+        </SectionCard>
       </div>
 
-      <AssignmentAuditSection title="Recent Assignment Decisions" />
-
-      <IssueReportsSection title="Recent Driver Issue Reports" />
-    </>
+      <div className="dispatcher-dashboard__feed">
+        <AssignmentAuditSection title="Recent Assignment Decisions" />
+        <IssueReportsSection title="Recent Driver Issue Reports" />
+      </div>
+    </div>
   )
 }
 

@@ -17,9 +17,16 @@ class Inquiry extends Model
         'pickup_location',
         'dropoff_location',
         'message',
+        'admin_reply',
+        'replied_at',
+        'replied_by',
         'status',
         'job_order_id',
         'customer_user_id',
+    ];
+
+    protected $casts = [
+        'replied_at' => 'datetime',
     ];
 
     public function jobOrder()
@@ -35,5 +42,10 @@ class Inquiry extends Model
     public function customerUser()
     {
         return $this->belongsTo(User::class, 'customer_user_id');
+    }
+
+    public function repliedByUser()
+    {
+        return $this->belongsTo(User::class, 'replied_by');
     }
 }

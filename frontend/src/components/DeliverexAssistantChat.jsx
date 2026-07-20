@@ -9,6 +9,146 @@ import { IconMail, IconPhone } from './DxIcons'
 
 const FAQ_ITEMS = CHAT_FAQ_ITEMS
 
+const FAB_SIZE = 56
+const FAB_EDGE_GAP = 12
+const FAB_NAV_CLEARANCE = 76
+const FAB_DRAG_THRESHOLD = 8
+const FAB_POS_KEY = 'dx-chat-fab-pos'
+
+function fabSafeBottomLimit() {
+  return Math.max(
+    FAB_EDGE_GAP,
+    window.innerHeight - FAB_SIZE - FAB_NAV_CLEARANCE - FAB_EDGE_GAP,
+  )
+}
+
+function clampFabPos(x, y) {
+  const maxX = Math.max(FAB_EDGE_GAP, window.innerWidth - FAB_SIZE - FAB_EDGE_GAP)
+  const maxY = fabSafeBottomLimit()
+  return {
+    x: Math.min(Math.max(FAB_EDGE_GAP, x), maxX),
+    y: Math.min(Math.max(FAB_EDGE_GAP, y), maxY),
+  }
+}
+
+function defaultFabPos() {
+  return clampFabPos(
+    window.innerWidth - FAB_SIZE - FAB_EDGE_GAP,
+    window.innerHeight - FAB_SIZE - FAB_NAV_CLEARANCE - FAB_EDGE_GAP,
+  )
+}
+
+function readStoredFabPos() {
+  try {
+    const raw = localStorage.getItem(FAB_POS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (typeof parsed?.x !== 'number' || typeof parsed?.y !== 'number') return null
+    return clampFabPos(parsed.x, parsed.y)
+  } catch {
+    return null
+  }
+}
+
+function persistFabPos(pos) {
+  try {
+    localStorage.setItem(FAB_POS_KEY, JSON.stringify(pos))
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function snapFabPos(x, y) {
+  const mid = window.innerWidth / 2
+  const snappedX = x + FAB_SIZE / 2 < mid
+    ? FAB_EDGE_GAP
+    : window.innerWidth - FAB_SIZE - FAB_EDGE_GAP
+  return clampFabPos(snappedX, y)
+}
+
+function useDraggableChatFab() {
+  const [pos, setPos] = useState(() => {
+    if (typeof window === 'undefined') return { x: 0, y: 0 }
+    return readStoredFabPos() ?? defaultFabPos()
+  })
+  const [dragging, setDragging] = useState(false)
+  const posRef = useRef(pos)
+  const dragRef = useRef(null)
+
+  useEffect(() => {
+    posRef.current = pos
+  }, [pos])
+
+  useEffect(() => {
+    const onResize = () => {
+      setPos((prev) => {
+        const next = clampFabPos(prev.x, prev.y)
+        persistFabPos(next)
+        return next
+      })
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const onPointerDown = useCallback((event) => {
+    if (event.button != null && event.button !== 0) return
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: posRef.current.x,
+      originY: posRef.current.y,
+      moved: false,
+    }
+  }, [])
+
+  const onPointerMove = useCallback((event) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const dx = event.clientX - drag.startX
+    const dy = event.clientY - drag.startY
+    if (!drag.moved && Math.hypot(dx, dy) < FAB_DRAG_THRESHOLD) return
+    drag.moved = true
+    setDragging(true)
+    const next = clampFabPos(drag.originX + dx, drag.originY + dy)
+    posRef.current = next
+    setPos(next)
+  }, [])
+
+  const endDrag = useCallback((event, { openOnTap }) => {
+    const drag = dragRef.current
+    if (!drag || (event && drag.pointerId !== event.pointerId)) return
+    dragRef.current = null
+    setDragging(false)
+    try {
+      if (event?.currentTarget?.hasPointerCapture?.(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+    } catch {
+      /* ignore */
+    }
+    if (drag.moved) {
+      const snapped = snapFabPos(posRef.current.x, posRef.current.y)
+      posRef.current = snapped
+      setPos(snapped)
+      persistFabPos(snapped)
+      return false
+    }
+    openOnTap?.()
+    return true
+  }, [])
+
+  return {
+    pos,
+    dragging,
+    onPointerDown,
+    onPointerMove,
+    endDrag,
+  }
+}
+
 const STATUS_GUIDE = [
   { label: 'Pending', desc: 'Order received; awaiting dispatch.', tone: '#64748b' },
   { label: 'Dispatched', desc: 'Driver and vehicle assigned.', tone: '#2563eb' },
@@ -79,11 +219,26 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
   const scrollRef = useRef(null)
   const isControlled = openProp !== undefined
   const open = isControlled ? Boolean(openProp) : uncontrolledOpen
+  const { pos, dragging, onPointerDown, onPointerMove, endDrag } = useDraggableChatFab()
 
   const setOpen = useCallback((v) => {
     if (!isControlled) setUncontrolledOpen(v)
     onOpenChange?.(v)
   }, [isControlled, onOpenChange])
+
+  const openChat = useCallback(() => {
+    setMinimized(false)
+    setAssistantExpanded(false)
+    setOpen(true)
+  }, [setOpen])
+
+  const handleFabPointerUp = useCallback((event) => {
+    endDrag(event, { openOnTap: openChat })
+  }, [endDrag, openChat])
+
+  const handleFabPointerCancel = useCallback((event) => {
+    endDrag(event, { openOnTap: undefined })
+  }, [endDrag])
 
   const pushUser = useCallback((content) => {
     setMessages((prev) => [...prev, { id: nid(), role: 'user', content }])
@@ -340,17 +495,21 @@ export default function DeliverexAssistantChat({ open: openProp, onOpenChange })
   const chatUi = (
     <>
       {showFabStrip ? (
-        <div className="dx-chat-launcher">
+        <div
+          className={`dx-chat-launcher dx-chat-launcher--draggable${dragging ? ' dx-chat-launcher--dragging' : ''}`}
+          style={{ left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={handleFabPointerUp}
+          onPointerCancel={handleFabPointerCancel}
+          onContextMenu={(event) => event.preventDefault()}
+        >
           <span className="dx-chat-pill" aria-hidden="true">Chat with Deliverex Assistant</span>
           <button
             type="button"
             className="dx-chat-fab"
             aria-label="Chat with Deliverex Assistant"
-            onClick={() => {
-              setMinimized(false)
-              setAssistantExpanded(false)
-              setOpen(true)
-            }}
+            aria-grabbed={dragging}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
               <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2zm0 14H6l-2 2V4h16v12z" />

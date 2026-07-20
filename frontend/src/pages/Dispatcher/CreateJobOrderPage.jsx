@@ -20,7 +20,7 @@ import {
 import { buildDisplayAddress, buildDisplayName } from '../../utils/jobOrderHelpers'
 import { companyDropoffFields } from '../../utils/companyAddress'
 import { Check, ChevronRight, FileText, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
-import { FilterSelect } from '../../components/ui'
+import { FilterSelect, StatusBadge } from '../../components/ui'
 import JobOrderViewModal from '../../components/JobOrderViewModal'
 import PsgcAddressSelector from '../../components/PsgcAddressSelector'
 import { fromPsgcAddress, getPsgcAddressFieldErrors, getPsgcAddressSummaryError, toPsgcAddress } from '../../utils/psgcAddress'
@@ -1351,11 +1351,12 @@ function CreateJobOrderPage() {
 
           {/* ── Table ── */}
           <div className="dx-data-table-wrap" style={{ overflowY: 'auto', maxHeight: 500 }}>
-            <table className="dx-data-table">
+            <table className="dx-data-table dx-job-orders-table">
               <thead>
                 <tr>
                   <th>Job ID</th>
                   <th>Client</th>
+                  <th className="dx-job-orders-table__status">Status</th>
                   <th className="dx-job-orders-table__actions">Actions</th>
                 </tr>
               </thead>
@@ -1363,13 +1364,13 @@ function CreateJobOrderPage() {
                 {clientsLoading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 3 }).map((_, j) => (
+                      {Array.from({ length: 4 }).map((_, j) => (
                         <td key={j}><div style={{ height: 14, borderRadius: 6, background: 'var(--slate-200)', width: j === 0 ? '70%' : '55%', animation: 'shimmer 1.4s infinite' }} /></td>
                       ))}
                     </tr>
                   ))
                 ) : filteredOrders.length === 0 ? (
-                  <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0' }}>
+                  <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0' }}>
                     {orders.length === 0
                       ? <>No job orders yet.{' '}
                           <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline', padding: 0 }}
@@ -1385,6 +1386,9 @@ function CreateJobOrderPage() {
                     <tr key={order.id}>
                       <td><span className="job-link">{formatJobPublicId(order.id)}</span></td>
                       <td style={{ fontWeight: 500 }}>{order.client?.client_name || order.custom_client_name || buildDisplayName(order)}</td>
+                      <td className="dx-job-orders-table__status">
+                        <StatusBadge status={order.status} />
+                      </td>
                       <td className="dx-job-orders-table__actions">
                         <div className="dx-job-orders-table__actions-group">
                           <button

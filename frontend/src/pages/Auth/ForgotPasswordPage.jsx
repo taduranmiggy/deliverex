@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { forgotPassword } from '../../api/auth'
 import AuthMarketingAside from '../../components/auth/AuthMarketingAside'
 import LoadingOverlay from '../../components/customer/LoadingOverlay'
+import CustomerBrandMark from '../../components/customer/CustomerBrandMark'
 import DeliverexSiteFooter from '../../components/customer/DeliverexSiteFooter'
 import { IconChevronLeft, IconMail } from '../../components/DxIcons'
 import { MotionButton, MotionPage, MotionStagger, MotionStaggerItem } from '../../motion'
@@ -59,7 +60,7 @@ function ForgotPasswordPage() {
 
             <MotionStaggerItem index={1}>
             <div className="auth-brand-lockup">
-              <span className="auth-brand-logo" aria-hidden />
+              <CustomerBrandMark />
               <span className="auth-brand-text">Deliverex</span>
             </div>
 

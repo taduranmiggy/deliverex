@@ -253,6 +253,26 @@ class EmailService
         );
     }
 
+    public function sendInquiryReply(string $recipient, array $payload): EmailLog
+    {
+        $support = config('mail.addresses.support');
+        $reference = $payload['reference_no'] ?? 'Inquiry';
+
+        return $this->send(
+            EmailType::INQUIRY_REPLY,
+            $recipient,
+            'Re: '.$reference.(! empty($payload['subject_line']) ? ' — '.$payload['subject_line'] : ''),
+            'mail.inquiry-reply',
+            array_merge($payload, ['subject' => 'Reply to your concern']),
+            $support,
+            metadata: [
+                'reply_to' => filter_var((string) $support, FILTER_VALIDATE_EMAIL) ? $support : null,
+                'inquiry_id' => $payload['inquiry_id'] ?? null,
+            ],
+            forceSync: true,
+        );
+    }
+
     public function sendSystemAlert(User $user, string $type, string $subject, array $payload): EmailLog
     {
         return $this->send(
@@ -278,7 +298,8 @@ class EmailService
             EmailType::DRIVER_CREDENTIALS,
             EmailType::USER_INVITATION => config('mail.addresses.accounts'),
             EmailType::CONTACT_SUPPORT,
-            EmailType::SUPPORT_INQUIRY => config('mail.addresses.support'),
+            EmailType::SUPPORT_INQUIRY,
+            EmailType::INQUIRY_REPLY => config('mail.addresses.support'),
             default => config('mail.addresses.noreply'),
         };
     }
@@ -289,7 +310,7 @@ class EmailService
             return false;
         }
 
-        if (in_array($type, [EmailType::SUPPORT_INQUIRY, EmailType::CONTACT_SUPPORT], true)) {
+        if (in_array($type, [EmailType::SUPPORT_INQUIRY, EmailType::CONTACT_SUPPORT, EmailType::INQUIRY_REPLY], true)) {
             return false;
         }
 

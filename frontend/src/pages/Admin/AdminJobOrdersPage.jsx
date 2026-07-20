@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchJobOrders } from '../../api/dispatcher'
 import JobOrderViewModal from '../../components/JobOrderViewModal'
-import { EmptyState, FilterSelect, LoadingSpinner, PageHeader, PaginationBar, SearchInput } from '../../components/ui'
+import { EmptyState, FilterSelect, LoadingSpinner, PageHeader, PaginationBar, SearchInput, StatusBadge } from '../../components/ui'
 import { buildDisplayName } from '../../utils/jobOrderHelpers'
 import { formatJobPublicId } from '../../utils/formatPhp'
 import { ClipboardList, Loader2 } from 'lucide-react'
@@ -104,6 +104,7 @@ function AdminJobOrdersPage() {
               <div key={order.id} className="dx-mobile-card">
                 <div className="dx-mobile-card__row">
                   <span className="dx-mobile-card__title">{formatJobPublicId(order.id)}</span>
+                  <StatusBadge status={order.status} />
                 </div>
                 <p className="dx-mobile-card__meta">{clientLabel(order)}</p>
                 <div style={{ marginTop: 10 }}>
@@ -121,11 +122,12 @@ function AdminJobOrdersPage() {
         </div>
 
         <div className="dx-data-table-wrap dx-data-table-wrap--stack dx-data-table-wrap--cards-mobile">
-          <table className="dx-data-table">
+          <table className="dx-data-table dx-job-orders-table">
             <thead>
               <tr>
                 <th>Job ID</th>
                 <th>Client</th>
+                <th className="dx-job-orders-table__status">Status</th>
                 <th className="dx-job-orders-table__actions">Actions</th>
               </tr>
             </thead>
@@ -133,7 +135,7 @@ function AdminJobOrdersPage() {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 3 }).map((_, j) => (
+                    {Array.from({ length: 4 }).map((_, j) => (
                       <td key={j}>
                         <div style={{ height: 14, borderRadius: 6, background: 'var(--slate-200)', width: j === 0 ? '70%' : '55%', animation: 'shimmer 1.4s infinite' }} />
                       </td>
@@ -142,7 +144,7 @@ function AdminJobOrdersPage() {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={3}>
+                  <td colSpan={4}>
                     <EmptyState
                       icon={ClipboardList}
                       title="No job orders found"
@@ -158,6 +160,9 @@ function AdminJobOrdersPage() {
                     </td>
                     <td data-label="Client" style={{ fontWeight: 500 }}>
                       {clientLabel(order)}
+                    </td>
+                    <td className="dx-job-orders-table__status" data-label="Status">
+                      <StatusBadge status={order.status} />
                     </td>
                     <td className="dx-job-orders-table__actions" data-label="Actions">
                       <button

@@ -6,13 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Models\Inquiry;
 use App\Models\JobOrder;
 use App\Support\AuditLogger;
+use App\Services\Email\EmailService;
 use App\Services\Inquiry\InquiryNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Throwable;
 
 class InquiryController extends Controller
 {
-    public function __construct(private readonly InquiryNotificationService $notifications) {}
+    public function __construct(
+        private readonly InquiryNotificationService $notifications,
+        private readonly EmailService $email,
+    ) {}
 
     /** Public: customer submits a contact / delivery inquiry. */
     public function store(Request $request)
@@ -180,7 +185,11 @@ class InquiryController extends Controller
     {
         $status = $request->query('status'); // new | read | converted | all
 
-        $query = Inquiry::with(['jobOrder:id,tracking_code', 'referenceJobOrder:id,tracking_code'])
+        $query = Inquiry::with([
+            'jobOrder:id,tracking_code',
+            'referenceJobOrder:id,tracking_code',
+            'repliedByUser:id,name',
+        ])
             ->orderByDesc('created_at');
 
         if ($status && $status !== 'all') {
@@ -195,7 +204,67 @@ class InquiryController extends Controller
     /** Admin/Dispatcher: view single inquiry. */
     public function show(Inquiry $inquiry)
     {
-        return response()->json($inquiry->load('jobOrder:id,tracking_code', 'referenceJobOrder:id,tracking_code'));
+        return response()->json($inquiry->load(
+            'jobOrder:id,tracking_code',
+            'referenceJobOrder:id,tracking_code',
+            'repliedByUser:id,name',
+        ));
+    }
+
+    /** Admin: email a reply to the inquirer. */
+    public function reply(Request $request, Inquiry $inquiry)
+    {
+        $data = $request->validate([
+            'message' => 'required|string|min:5|max:5000',
+        ]);
+
+        $recipient = strtolower(trim((string) $inquiry->email));
+        if ($recipient === '' || ! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            return response()->json([
+                'message' => 'This inquiry has no valid email address to reply to.',
+            ], 422);
+        }
+
+        $replyBody = trim($data['message']);
+        $admin = $request->user();
+
+        try {
+            $log = $this->email->sendInquiryReply($recipient, [
+                'inquiry_id' => $inquiry->id,
+                'reference_no' => $inquiry->reference_no ?? $this->buildReferenceNo($inquiry->id),
+                'name' => $inquiry->name,
+                'subject_line' => $inquiry->subject,
+                'original_message' => $inquiry->message,
+                'reply_body' => $replyBody,
+                'replied_by_name' => $admin?->name,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => 'Failed to send reply email: '.$e->getMessage(),
+            ], 502);
+        }
+
+        $inquiry->update([
+            'admin_reply' => $replyBody,
+            'replied_at' => now(),
+            'replied_by' => $admin?->id,
+            'status' => $inquiry->status === 'converted' ? 'converted' : 'replied',
+        ]);
+
+        AuditLogger::record($admin, 'inquiry.replied', Inquiry::class, $inquiry->id, [
+            'email_log_id' => $log->id,
+            'recipient' => $recipient,
+        ], $request);
+
+        return response()->json([
+            'message' => 'Reply sent to '.$recipient.'.',
+            'inquiry' => $inquiry->fresh()->load(
+                'jobOrder:id,tracking_code',
+                'referenceJobOrder:id,tracking_code',
+                'repliedByUser:id,name',
+            ),
+            'email_log_id' => $log->id,
+        ]);
     }
 
     /** Admin/Dispatcher: mark inquiry as read. */

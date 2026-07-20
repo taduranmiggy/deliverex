@@ -2308,6 +2308,25 @@
   align-items: stretch;
 }
 
+/* Float feature row onto the blue hero */
+.landing-features-overlap {
+  position: relative;
+  z-index: 2;
+  margin-top: clamp(-56px, -7vw, -80px);
+  padding-bottom: 80px;
+}
+
+.landing-features-overlap__cards {
+  margin-top: 0;
+  margin-bottom: 48px;
+}
+
+.landing-features-overlap .dx-feature-card {
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.12),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
 .dx-feature-card {
   background: var(--surface);
   border: 1px solid var(--stroke);
@@ -3489,12 +3508,60 @@
 /* Enhanced dispatcher calendar (React Big Calendar) */
 .dx-cal-layout {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
   gap: 20px;
-  align-items: flex-start;
+  align-items: start;
 }
-.dx-cal-main { min-width: 0; }
-.dx-cal-sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+.dx-cal-main {
+  min-width: 0;
+  min-height: 560px;
+}
+
+.dx-cal-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 96px);
+  align-self: start;
+  min-height: 0;
+}
+
+.dx-cal-summary {
+  flex-shrink: 0;
+}
+
+.dx-cal-upcoming {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.dx-cal-upcoming .dx-panel-title {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.dx-cal-upcoming__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(420px, calc(100vh - 360px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  margin-right: -4px;
+}
+
+.dx-cal-upcoming__empty {
+  font-size: 0.8125rem;
+  margin: 0 0 12px;
+}
+
 .dx-cal-filters { margin-bottom: 16px; }
 .dx-cal-filters__row {
   display: grid;
@@ -3544,7 +3611,18 @@
   gap: 12px;
   margin-bottom: 16px;
 }
-.dx-cal-rbc-wrap { padding: 12px; overflow: hidden; }
+.dx-cal-rbc-wrap {
+  padding: 12px;
+  overflow: hidden;
+  height: 560px;
+  display: flex;
+  flex-direction: column;
+}
+
+.dx-cal-rbc-wrap .rbc-calendar {
+  flex: 1;
+  min-height: 0;
+}
 .dx-cal-rbc-wrap .rbc-toolbar { flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .dx-cal-rbc-wrap .rbc-toolbar button {
   font: inherit;
@@ -3608,6 +3686,11 @@
   letter-spacing: 0.04em;
   color: var(--muted);
   margin: 0 0 8px;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  padding: 2px 0 6px;
+  z-index: 1;
 }
 .dx-cal-upcoming__row {
   display: flex;
@@ -3624,7 +3707,26 @@
   font: inherit;
 }
 .dx-cal-upcoming__row:hover strong { color: var(--color-primary); }
-.dx-cal-upcoming__row:last-child { border-bottom: none; }
+.dx-cal-upcoming__section .dx-cal-upcoming__row:last-child { border-bottom: none; }
+
+@media (max-width: 1100px) {
+  .dx-cal-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dx-cal-sidebar {
+    position: static;
+    max-height: none;
+  }
+
+  .dx-cal-upcoming__body {
+    max-height: 320px;
+  }
+
+  .dx-cal-rbc-wrap {
+    height: min(70vh, 560px);
+  }
+}
 .dx-cal-loading { padding: 48px; text-align: center; color: var(--muted); }
 .dx-cal-loading-toast {
   position: fixed;
@@ -4920,7 +5022,7 @@
 /* ── Filter toolbar — search + status dropdown + refresh + count ─ */
 .dx-filter-toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
   flex-wrap: wrap;
   padding-bottom: 14px;
@@ -5578,6 +5680,92 @@
 
 .admin-dashboard-page .page-header {
   margin-bottom: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DISPATCHER DASHBOARD LAYOUT
+═══════════════════════════════════════════════════════════ */
+
+.dispatcher-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.dispatcher-dashboard .page-header {
+  margin-bottom: 0;
+}
+
+.dispatcher-dashboard .dx-stat-row {
+  margin-bottom: 0;
+}
+
+.dispatcher-dashboard .dx-panel {
+  margin-bottom: 0;
+  border-color: #d8e0ee;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+.dispatcher-dashboard .dx-panel:hover {
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.05),
+    0 10px 24px rgba(15, 23, 42, 0.07);
+}
+
+.dispatcher-dashboard__meta {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dispatcher-dashboard__banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+}
+
+.dispatcher-dashboard__main {
+  gap: 24px;
+  margin: 0;
+}
+
+.dispatcher-dashboard__action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dispatcher-dashboard__action-btn {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.dispatcher-dashboard__feed {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.dispatcher-dashboard__feed .dx-panel {
+  margin-bottom: 0;
+}
+
+.dispatcher-dashboard__feed .dx-data-table-wrap {
+  border-radius: 10px;
+}
+
+@media (max-width: 900px) {
+  .dispatcher-dashboard {
+    gap: 22px;
+  }
+
+  .dispatcher-dashboard__feed {
+    gap: 20px;
+  }
 }
 
 .admin-dashboard-stats {
@@ -6457,6 +6645,29 @@
 
 .dx-job-view-modal__delete:hover {
   background: rgba(220, 38, 38, 0.06);
+}
+
+.dx-job-orders-table {
+  table-layout: fixed;
+}
+
+.dx-job-orders-table thead th:nth-child(1),
+.dx-job-orders-table tbody td:nth-child(1) {
+  width: 140px;
+}
+
+.dx-job-orders-table__status {
+  width: 140px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.dx-job-orders-table__status .badge-dx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  text-align: center;
 }
 
 .dx-job-orders-table__actions {
