@@ -33,7 +33,7 @@ class AddressGeocoder
             return null;
         }
 
-        $cacheKey = 'deliverex.geocode.v6.'.md5($query.$anchor->cacheKeySuffix());
+        $cacheKey = 'deliverex.geocode.v7.'.md5($query.$anchor->cacheKeySuffix());
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['lat'], $cached['lng'])) {
             return $cached;
@@ -54,10 +54,15 @@ class AddressGeocoder
      * @param  array{city?: string|null, province?: string|null, region?: string|null}|GeocodeAnchor|null  $anchor
      * @return array{lat: float, lng: float}|null
      */
-    public function geocodeFirst(array $queries, GeocodeAnchor|array|null $anchor = null): ?array
-    {
+    public function geocodeFirst(
+        array $queries,
+        GeocodeAnchor|array|null $anchor = null,
+        bool $streetStrict = false,
+    ): ?array {
         $anchor = $this->normalizeAnchor($anchor);
-        $queries = array_merge($queries, $anchor->geocodeFallbackQueries());
+        if (! $streetStrict) {
+            $queries = array_merge($queries, $anchor->geocodeFallbackQueries());
+        }
         $attempted = false;
 
         foreach ($queries as $query) {

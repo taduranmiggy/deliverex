@@ -397,4 +397,79 @@ class JobOrderMapTest extends TestCase
         $this->assertSame(14.604, round((float) $jobOrder->dropoff_latitude, 3));
         $this->assertSame(120.989, round((float) $jobOrder->dropoff_longitude, 3));
     }
+
+    public function test_map_reconciles_pickup_from_blumentritt_to_p_paredes_street(): void
+    {
+        Http::preventStrayRequests();
+        config()->set('gps.routing.openrouteservice_api_key', 'test-ors-key');
+
+        Http::fake([
+            'https://api.openrouteservice.org/geocode/search*' => function ($request) {
+                $text = strtoupper($request->data()['text'] ?? '');
+
+                if (str_contains($text, 'BLUMENTRITT') || (str_contains($text, 'SAMPALOC') && ! str_contains($text, 'PAREDES'))) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [120.987, 14.611]],
+                            'properties' => ['name' => 'Blumentritt Road', 'street' => 'Blumentritt Road', 'locality' => 'Manila'],
+                        ]],
+                    ]);
+                }
+
+                if (str_contains($text, 'PAREDES')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [120.989, 14.609]],
+                            'properties' => ['name' => 'Paredes Street', 'street' => 'Paredes Street', 'locality' => 'Manila'],
+                        ]],
+                    ]);
+                }
+
+                return Http::response(['features' => []]);
+            },
+            'https://nominatim.openstreetmap.org/*' => Http::response([
+                [
+                    'lat' => '14.6090',
+                    'lon' => '120.9890',
+                    'display_name' => 'Paredes Street, Sampaloc, Manila, Metro Manila, Philippines',
+                    'address' => ['road' => 'Paredes Street', 'suburb' => 'Sampaloc', 'city' => 'Manila', 'state' => 'Metro Manila'],
+                ],
+            ]),
+        ]);
+
+        $jobOrder = JobOrder::create([
+            'created_by' => $this->dispatcher->id,
+            'tracking_code' => 'MAPTEST008',
+            'customer_name' => 'Paredes Pickup Client',
+            'pickup_street' => 'P.PAREDES STREET',
+            'pickup_barangay' => '395',
+            'pickup_city' => 'Sampaloc',
+            'pickup_region' => 'NATIONAL CAPITAL REGION (NCR)',
+            'pickup_region_code' => '1300000000',
+            'pickup_location' => 'P.PAREDES STREET, SAMPALOC, MANILA, BARANGAY 395, SAMPALOC, NCR, PHILIPPINES',
+            'pickup_latitude' => 14.611,
+            'pickup_longitude' => 120.987,
+            'pickup_geocode_attempted_at' => now()->subDay(),
+            'dropoff_street' => '#43 NINANG LYDIA ST. B.F HOMES PH.2 CALOOCAN CITY',
+            'dropoff_barangay' => '169',
+            'dropoff_city' => 'City of Caloocan',
+            'dropoff_region' => 'NATIONAL CAPITAL REGION (NCR)',
+            'dropoff_region_code' => '1300000000',
+            'dropoff_latitude' => 14.70,
+            'dropoff_longitude' => 121.02,
+            'status' => 'pending',
+            'scheduled_start' => now()->addHour(),
+            'scheduled_end' => now()->addHours(3),
+        ]);
+
+        $response = $this->apiAs($this->dispatcher)->getJson("/api/job-orders/{$jobOrder->id}/map");
+
+        $response->assertOk()
+            ->assertJsonPath('data.pickup.lat', 14.609)
+            ->assertJsonPath('data.pickup.lng', 120.989);
+
+        $jobOrder->refresh();
+        $this->assertSame(14.609, round((float) $jobOrder->pickup_latitude, 3));
+        $this->assertSame(120.989, round((float) $jobOrder->pickup_longitude, 3));
+    }
 }

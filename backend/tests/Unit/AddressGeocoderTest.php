@@ -176,4 +176,52 @@ class AddressGeocoderTest extends TestCase
         $this->assertSame(14.604, $coords['lat']);
         $this->assertSame(120.989, $coords['lng']);
     }
+
+    public function test_geocode_rejects_blumentritt_when_query_is_p_paredes_street(): void
+    {
+        config()->set('gps.routing.openrouteservice_api_key', 'test-ors-key');
+
+        Http::fake([
+            'https://api.openrouteservice.org/geocode/search*' => function ($request) {
+                $text = strtoupper($request->data()['text'] ?? '');
+
+                if (str_contains($text, 'PAREDES') && ! str_contains($text, 'PAREDES STREET, BARANGAY')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [120.987, 14.611]],
+                            'properties' => ['name' => 'Blumentritt Road', 'street' => 'Blumentritt Road', 'locality' => 'Manila'],
+                        ]],
+                    ]);
+                }
+
+                if (str_contains($text, 'PAREDES STREET')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [120.989, 14.609]],
+                            'properties' => ['name' => 'Paredes Street', 'street' => 'Paredes Street', 'locality' => 'Manila'],
+                        ]],
+                    ]);
+                }
+
+                return Http::response(['features' => []]);
+            },
+        ]);
+
+        $coords = app(AddressGeocoder::class)->geocodeFirst(
+            [
+                'P.PAREDES STREET, Barangay 395, Sampaloc, Manila, Philippines',
+                'Paredes Street, Barangay 395, Sampaloc, Manila, Philippines',
+            ],
+            [
+                'city' => 'SAMPALOC',
+                'region' => 'NATIONAL CAPITAL REGION (NCR)',
+                'region_code' => '1300000000',
+                'barangay' => '395',
+            ],
+            true,
+        );
+
+        $this->assertSame(14.609, $coords['lat']);
+        $this->assertSame(120.989, $coords['lng']);
+    }
 }

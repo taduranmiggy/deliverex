@@ -18,14 +18,33 @@ final class StreetGeocodeHelper
             return '';
         }
 
+        $street = self::normalizeCompactPrefixes($street);
+
         // 865 P. Paredes St. → 865 Paredes Street
         $expanded = preg_replace(
-            '/^(\d+\s+)?P\.\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\-\']*)\.?(?:\s+(ST\.?|STREET))?/iu',
+            '/^(\d+\s+)?P\.\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\-\']*)\.?(?:\s+(?:STREET|ST\.|ST))?$/iu',
             '$1$2 Street',
             $street,
         );
 
         return trim((string) ($expanded ?? $street));
+    }
+
+    public static function hasCompactPersonPrefix(string $street): bool
+    {
+        return preg_match('/(?:^|\d+\s+)P\.(?=[A-Za-zÀ-ÿ])/iu', trim($street)) === 1;
+    }
+
+    public static function needsStreetReconcile(string $street): bool
+    {
+        $street = trim($street);
+        if ($street === '') {
+            return false;
+        }
+
+        return self::expandForGeocode($street) !== $street
+            || self::hasCompactPersonPrefix($street)
+            || preg_match('/\bP\.\s+[A-Za-zÀ-ÿ]/iu', $street) === 1;
     }
 
     /**
@@ -40,6 +59,11 @@ final class StreetGeocodeHelper
 
         $expanded = self::expandForGeocode($street);
         $variants = [$street];
+
+        $normalizedCompact = self::normalizeCompactPrefixes($street);
+        if ($normalizedCompact !== '' && ! self::sameStreet($normalizedCompact, $street)) {
+            $variants[] = $normalizedCompact;
+        }
 
         if ($expanded !== '' && ! self::sameStreet($street, $expanded)) {
             $variants[] = $expanded;
@@ -99,12 +123,12 @@ final class StreetGeocodeHelper
         }
 
         foreach ($expectedTokens as $expected) {
-            if (self::isPrefixMismatch($expected, $resultStreet)) {
-                return true;
+            if (! self::isWrongStreetName($expected, $resultStreet)) {
+                return false;
             }
         }
 
-        return false;
+        return true;
     }
 
     public static function queryLooksLikeStreetAddress(string $query): bool
@@ -115,6 +139,10 @@ final class StreetGeocodeHelper
         }
 
         if (preg_match('/^\d+\s+/', $street) === 1) {
+            return true;
+        }
+
+        if (preg_match('/\bP\.(?=[A-Za-zÀ-ÿ])/iu', $street) === 1) {
             return true;
         }
 
@@ -144,14 +172,14 @@ final class StreetGeocodeHelper
             }
         }
 
-        foreach ($labels as $label) {
-            $normalized = self::normalizeStreetName($label);
-            if ($normalized !== '' && mb_strlen($normalized) <= 40) {
-                return $normalized;
-            }
-        }
-
         return '';
+    }
+
+    private static function normalizeCompactPrefixes(string $street): string
+    {
+        $street = preg_replace('/(\d+\s+)?P\.(?=[A-Za-zÀ-ÿ])/iu', '$1P. ', $street) ?? $street;
+
+        return trim($street);
     }
 
     private static function extractStreetSegment(string $query): string
@@ -170,6 +198,25 @@ final class StreetGeocodeHelper
         $value = preg_replace('/\s+/', ' ', $value) ?? $value;
 
         return trim($value);
+    }
+
+    private static function isWrongStreetName(string $expected, string $actual): bool
+    {
+        if ($expected === '' || $actual === '' || $expected === $actual) {
+            return false;
+        }
+
+        if (self::isPrefixMismatch($expected, $actual)) {
+            return true;
+        }
+
+        similar_text($expected, $actual, $percent);
+
+        if ($percent >= 85.0) {
+            return false;
+        }
+
+        return mb_strlen($expected) >= 4 && mb_strlen($actual) >= 4;
     }
 
     private static function isPrefixMismatch(string $expected, string $actual): bool
