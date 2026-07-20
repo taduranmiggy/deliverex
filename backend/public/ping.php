@@ -52,6 +52,21 @@ if (file_exists($backendRoot . '/vendor/autoload.php') && $envExists) {
 }
 echo 'db=' . $db . "\n";
 
+$geocoding = 'no';
+if ($db === 'yes' && isset($app)) {
+    try {
+        foreach ($app->make('router')->getRoutes() as $route) {
+            if (str_contains((string) $route->uri(), 'geocoding/autocomplete')) {
+                $geocoding = 'yes';
+                break;
+            }
+        }
+    } catch (Throwable) {
+        $geocoding = 'no';
+    }
+}
+echo 'geocoding=' . $geocoding . "\n";
+
 $currentShaFile = $sharedRoot . '/deploy-state/current-sha';
 $deploySha = '';
 if (is_readable($currentShaFile)) {

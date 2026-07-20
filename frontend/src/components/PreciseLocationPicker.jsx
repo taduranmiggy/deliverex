@@ -90,7 +90,13 @@ export default function PreciseLocationPicker({
       } catch (err) {
         if (sequence === searchSequence.current) {
           setSuggestions([])
-          setSearchError(err.message || 'Address suggestions are temporarily unavailable.')
+          if (err.status === 404) {
+            setSearchError(
+              'Location search is not available on this server yet. The latest backend deploy may still be pending — refresh in a few minutes or ask an admin to confirm deploy finished (ping.php should show geocoding=yes).',
+            )
+          } else {
+            setSearchError(err.message || 'Address suggestions are temporarily unavailable.')
+          }
         }
       } finally {
         if (sequence === searchSequence.current) setLoading(false)
