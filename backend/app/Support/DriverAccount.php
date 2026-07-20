@@ -40,11 +40,12 @@ class DriverAccount
             }
 
             $driver = Driver::query()->create([
-                'user_id'      => $user->id,
-                'full_name'    => $user->name,
-                'license_no'   => 'PENDING-'.$user->id,
-                'availability' => 'available',
-                'status'       => 'available',
+                'user_id'        => $user->id,
+                'full_name'      => $user->name,
+                'license_no'     => PhilippineDriverLicenseGenerator::generateForDriver($user->id),
+                'license_expiry' => now()->addYears(5)->toDateString(),
+                'availability'   => 'available',
+                'status'         => 'available',
             ]);
         } else {
             $needsUpdate = false;
@@ -62,6 +63,16 @@ class DriverAccount
 
             if (empty($driver->availability)) {
                 $patch['availability'] = 'available';
+                $needsUpdate = true;
+            }
+
+            if (PhilippineDriverLicenseGenerator::isMissingOrPlaceholder($driver->license_no)) {
+                $patch['license_no'] = PhilippineDriverLicenseGenerator::generateForDriver($driver->id);
+                $needsUpdate = true;
+            }
+
+            if ($driver->license_expiry === null && ! PhilippineDriverLicenseGenerator::isMissingOrPlaceholder($patch['license_no'] ?? $driver->license_no)) {
+                $patch['license_expiry'] = now()->addYears(5)->toDateString();
                 $needsUpdate = true;
             }
 
@@ -86,11 +97,9 @@ class DriverAccount
 
         $driver = self::resolve($user);
 
-        if ($driver && str_starts_with($driver->license_no ?? '', 'PENDING-')) {
-            if ($driver->full_name !== $user->name) {
-                $driver->update(['full_name' => $user->name]);
-                $driver->refresh();
-            }
+        if ($driver && $driver->full_name !== $user->name) {
+            $driver->update(['full_name' => $user->name]);
+            $driver->refresh();
         }
 
         return $driver;
