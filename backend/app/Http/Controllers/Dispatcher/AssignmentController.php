@@ -105,7 +105,10 @@ class AssignmentController extends Controller
             ], 422);
         }
 
-        if (! DriverLicenseValidator::isEligible($driver)) {
+        $overrideReason = trim((string) ($data['override_reason'] ?? ''));
+        $isManualOverride = $overrideReason !== '';
+
+        if (! $isManualOverride && ! DriverLicenseValidator::isEligible($driver)) {
             return response()->json(['message' => DriverLicenseValidator::INELIGIBILITY_MESSAGE], 422);
         }
 
@@ -119,11 +122,11 @@ class AssignmentController extends Controller
 
         $recommendations = $this->bestFitAssignmentService->recommend($jobOrder);
         $recommended     = $recommendations[0] ?? null;
-        $isOverride      = $recommended
+        $isOverride      = $isManualOverride || ($recommended
             ? ($recommended['driver_id'] !== $driver->id || $recommended['vehicle_id'] !== $vehicle->id)
-            : false;
+            : false);
 
-        if ($isOverride && ! trim((string) ($data['override_reason'] ?? ''))) {
+        if ($isOverride && $overrideReason === '') {
             return response()->json([
                 'message' => 'Override reason is required when assignment differs from the Best-Fit recommendation.',
             ], 422);
@@ -194,6 +197,7 @@ class AssignmentController extends Controller
             'recommended'       => $recommended,
             'override'          => $isOverride,
             'override_reason'   => $auditTrail->override_reason,
+            'license_override'  => $isManualOverride && ! DriverLicenseValidator::isEligible($driver),
             'audit_trail_id'    => $auditTrail->id,
         ], $request);
 

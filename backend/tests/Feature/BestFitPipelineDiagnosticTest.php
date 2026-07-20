@@ -285,4 +285,80 @@ class BestFitPipelineDiagnosticTest extends TestCase
                 ],
             ]);
     }
+
+    public function test_override_options_include_drivers_without_license_and_mismatched_vehicles(): void
+    {
+        $driverRole = Role::create(['name' => 'driver']);
+        $requiredType = VehicleType::create([
+            'name' => 'Mini Dump',
+            'wheel_type' => '6 Wheeler',
+            'min_cbm' => 30,
+            'max_cbm' => 40,
+            'status' => 'active',
+        ]);
+        $otherType = VehicleType::create([
+            'name' => '10 Wheeler',
+            'wheel_type' => '10 Wheeler',
+            'min_cbm' => 10,
+            'max_cbm' => 15,
+            'status' => 'active',
+        ]);
+
+        $licensedUser = User::factory()->create(['role_id' => $driverRole->id, 'email_verified_at' => now()]);
+        Driver::create([
+            'user_id' => $licensedUser->id,
+            'full_name' => 'Licensed Driver',
+            'license_no' => 'LIC-OK-1',
+            'license_expiry' => now()->addYear(),
+            'availability' => 'available',
+            'status' => 'available',
+        ]);
+
+        $unlicensedUser = User::factory()->create(['role_id' => $driverRole->id, 'email_verified_at' => now()]);
+        Driver::create([
+            'user_id' => $unlicensedUser->id,
+            'full_name' => 'Unlicensed Driver',
+            'license_no' => null,
+            'availability' => 'available',
+            'status' => 'available',
+        ]);
+
+        Vehicle::create([
+            'plate_no' => 'MINI-35',
+            'type' => 'Mini Dump',
+            'vehicle_type_id' => $requiredType->id,
+            'cbm_capacity' => 35,
+            'status' => 'available',
+        ]);
+
+        Vehicle::create([
+            'plate_no' => 'BIG-10',
+            'type' => '10 Wheeler',
+            'vehicle_type_id' => $otherType->id,
+            'cbm_capacity' => 12,
+            'status' => 'available',
+        ]);
+
+        $jobOrder = JobOrder::factory()->create([
+            'created_by' => $this->dispatcher->id,
+            'preferred_vehicle_type_id' => $requiredType->id,
+            'vehicle_type_required' => 'Mini Dump',
+            'load_volume_m3' => 35,
+            'status' => 'pending',
+        ]);
+
+        $options = app(BestFitAssignmentService::class)->overrideOptions($jobOrder);
+
+        $this->assertCount(2, $options['drivers']);
+        $this->assertCount(2, $options['vehicles']);
+
+        $unlicensed = collect($options['drivers'])->firstWhere('name', 'Unlicensed Driver');
+        $this->assertTrue($unlicensed['override_selectable']);
+        $this->assertFalse($unlicensed['eligible']);
+
+        $mismatchVehicle = collect($options['vehicles'])->firstWhere('plate_no', 'BIG-10');
+        $this->assertTrue($mismatchVehicle['override_selectable']);
+        $this->assertFalse($mismatchVehicle['meets_type']);
+        $this->assertFalse($mismatchVehicle['meets_capacity']);
+    }
 }

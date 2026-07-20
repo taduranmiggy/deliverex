@@ -152,33 +152,136 @@ class BestFitAssignmentService
 
     public function overrideOptions(JobOrder $jobOrder): array
     {
+        $jobOrder->loadMissing('preferredVehicleType');
+
         $requiredVolume = $this->requiredVolume($jobOrder);
         $requiredTypeNormalized = $this->normalizeVehicleTypeName(
             $jobOrder->preferredVehicleType?->name ?? $jobOrder->vehicle_type_required
         );
 
-        $drivers = $this->eligibleDrivers($jobOrder)->map(fn (Driver $driver) => [
-            'id'                => $driver->id,
-            'user_id'           => $driver->user_id,
-            'has_login_account' => (bool) $driver->user_id,
-            'name'              => $driver->full_name ?: $driver->user?->name ?: ('Driver #'.$driver->id),
-            'availability'      => $driver->availability ?? 'available',
-            'status'            => $driver->status ?? 'active',
-            ...DriverLicenseValidator::summary($driver),
-        ])->values()->all();
+        $drivers = Driver::query()
+            ->with('user')
+            ->where(function ($query) {
+                $query->where('status', '!=', 'inactive')
+                    ->orWhereNull('status');
+            })
+            ->orderBy('full_name')
+            ->get()
+            ->map(fn (Driver $driver) => $this->formatOverrideDriver($driver, $jobOrder))
+            ->sortByDesc('override_selectable')
+            ->values()
+            ->all();
 
-        $vehicles = $this->eligibleVehicles($jobOrder, $requiredTypeNormalized, $requiredVolume)
-            ->map(fn (Vehicle $vehicle) => [
-                'id'           => $vehicle->id,
-                'plate_no'     => $vehicle->plate_no,
-                'status'       => $vehicle->status ?? 'available',
-                'vehicle_type' => $vehicle->vehicleType?->name ?? $vehicle->type,
-                'cbm_capacity' => $this->vehicleVolumeCapacity($vehicle),
-            ])->values()->all();
+        $vehicles = Vehicle::query()
+            ->with('vehicleType')
+            ->whereNotIn('status', ['maintenance', 'unavailable', 'inactive'])
+            ->orderBy('plate_no')
+            ->get()
+            ->map(fn (Vehicle $vehicle) => $this->formatOverrideVehicle(
+                $vehicle,
+                $jobOrder,
+                $requiredTypeNormalized,
+                $requiredVolume,
+            ))
+            ->sortByDesc('override_selectable')
+            ->values()
+            ->all();
 
         return [
             'drivers'  => $drivers,
             'vehicles' => $vehicles,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function formatOverrideDriver(Driver $driver, JobOrder $jobOrder): array
+    {
+        $license = DriverLicenseValidator::summary($driver);
+        $blockers = [];
+
+        if (! $driver->user_id) {
+            $blockers[] = 'no_login_account';
+        }
+        if ($this->driverAvailability->isAdminUnavailable($driver)) {
+            $blockers[] = 'admin_offline';
+        }
+        if (! $this->driverAvailability->isAssignable($driver)) {
+            $blockers[] = 'active_assignment';
+        }
+        if (AssignmentScheduleConflict::hasDriverConflict($driver->id, $jobOrder)) {
+            $blockers[] = 'schedule_conflict';
+        }
+
+        $warnings = [];
+        if (! $license['eligible']) {
+            $warnings[] = $license['message'] ?? DriverLicenseValidator::INELIGIBILITY_MESSAGE;
+        }
+
+        $overrideSelectable = $driver->user_id
+            && ! $this->driverAvailability->isAdminUnavailable($driver)
+            && $this->driverAvailability->isAssignable($driver)
+            && ! AssignmentScheduleConflict::hasDriverConflict($driver->id, $jobOrder);
+
+        return [
+            'id'                  => $driver->id,
+            'user_id'             => $driver->user_id,
+            'has_login_account'   => (bool) $driver->user_id,
+            'name'                => $driver->full_name ?: $driver->user?->name ?: ('Driver #'.$driver->id),
+            'availability'        => $driver->availability ?? 'available',
+            'status'              => $driver->status ?? 'active',
+            'override_selectable' => $overrideSelectable,
+            'override_warnings'   => $warnings,
+            'blockers'            => $blockers,
+            'eligible'            => $license['eligible'],
+            'license_status'      => $license['license_status'],
+            'license_no'          => $license['license_no'],
+            'license_expiry'      => $license['license_expiry'],
+            'message'             => $license['message'],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function formatOverrideVehicle(
+        Vehicle $vehicle,
+        JobOrder $jobOrder,
+        ?string $requiredTypeNormalized,
+        ?float $requiredVolume,
+    ): array {
+        $blockers = [];
+        $warnings = [];
+
+        if (! $this->vehicleAvailability->isAssignable($vehicle)) {
+            $blockers[] = 'active_assignment';
+        }
+        if (AssignmentScheduleConflict::hasVehicleConflict($vehicle->id, $jobOrder)) {
+            $blockers[] = 'schedule_conflict';
+        }
+
+        $meetsCapacity = $this->vehicleMeetsCapacity($vehicle, $requiredVolume);
+        $meetsType = $requiredTypeNormalized === null
+            || $this->vehicleMatchesRequiredType($vehicle, $requiredTypeNormalized, $jobOrder);
+
+        if (! $meetsCapacity) {
+            $warnings[] = 'Vehicle capacity is below the job load requirement.';
+        }
+        if (! $meetsType) {
+            $warnings[] = 'Vehicle type does not match the job requirement.';
+        }
+
+        $overrideSelectable = $this->vehicleAvailability->isAssignable($vehicle)
+            && ! AssignmentScheduleConflict::hasVehicleConflict($vehicle->id, $jobOrder);
+
+        return [
+            'id'                  => $vehicle->id,
+            'plate_no'            => $vehicle->plate_no,
+            'status'              => $vehicle->status ?? 'available',
+            'vehicle_type'        => $vehicle->vehicleType?->name ?? $vehicle->type,
+            'cbm_capacity'        => $this->vehicleVolumeCapacity($vehicle),
+            'meets_capacity'      => $meetsCapacity,
+            'meets_type'          => $meetsType,
+            'override_selectable' => $overrideSelectable,
+            'override_warnings'   => $warnings,
+            'blockers'            => $blockers,
         ];
     }
 

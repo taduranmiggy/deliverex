@@ -11,7 +11,23 @@ import { PaginationBar } from '../../components/ui'
 import { AlertTriangle, CheckCircle2, Loader2, Truck, User, Zap } from 'lucide-react'
 
 // ─── Priority helpers ──────────────────────────────────────────────────────────
-const LICENSE_WARNING = "This driver cannot be assigned because the driver's license information is incomplete or expired."
+function formatOverrideDriverLabel(driver) {
+  const parts = [driver.name]
+  if (!driver.has_login_account) parts.push('no account')
+  if (driver.override_warnings?.length) parts.push('license incomplete')
+  if (driver.blockers?.includes('active_assignment')) parts.push('busy')
+  if (driver.blockers?.includes('schedule_conflict')) parts.push('schedule conflict')
+  return parts.join(' · ')
+}
+
+function formatOverrideVehicleLabel(vehicle) {
+  const parts = [vehicle.plate_no]
+  if (vehicle.vehicle_type) parts.push(vehicle.vehicle_type)
+  if (vehicle.cbm_capacity != null) parts.push(`${vehicle.cbm_capacity} m³`)
+  if (vehicle.override_warnings?.length) parts.push('type/capacity mismatch')
+  if (vehicle.blockers?.includes('active_assignment')) parts.push('busy')
+  return parts.join(' · ')
+}
 
 const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 }
 
@@ -418,8 +434,13 @@ function AssignDriverVehiclePage() {
       return
     }
 
-    if (driver.eligible === false) {
-      setError(driver.message || LICENSE_WARNING)
+    if (driver.override_selectable === false) {
+      setError('Selected driver is not available for override (busy, offline, or missing login account).')
+      return
+    }
+
+    if (vehicle.override_selectable === false) {
+      setError('Selected vehicle is not available for override (busy or schedule conflict).')
       return
     }
 
@@ -431,7 +452,11 @@ function AssignDriverVehiclePage() {
       vehicle_type: vehicle.vehicle_type,
       vehicle_cbm_capacity: vehicle.cbm_capacity,
       factors: [],
-      reasons: ['Manual override selection from currently available resources'],
+      reasons: [
+        'Manual override selection',
+        ...(driver.override_warnings ?? []),
+        ...(vehicle.override_warnings ?? []),
+      ].filter(Boolean),
     }
 
     openModal(candidate, true)
@@ -440,10 +465,6 @@ function AssignDriverVehiclePage() {
   const top = recommended || recommendations[0]
   const alternatives = recommendations.filter((r) =>
     !(top && r.driver_id === top.driver_id && r.vehicle_id === top.vehicle_id)
-  )
-  const uniqueRecommendedDrivers = useMemo(
-    () => new Set(recommendations.map((r) => r.driver_id)).size,
-    [recommendations],
   )
 
   const altTotalPages = Math.max(1, Math.ceil(alternatives.length / altPerPage))
@@ -586,11 +607,11 @@ function AssignDriverVehiclePage() {
             </p>
             {fleetMeta && (
               <p className="dx-dispatch-col-header__meta">
-                {fleetMeta.eligible_drivers} of {fleetMeta.total_drivers} drivers eligible
+                {fleetMeta.eligible_drivers} of {fleetMeta.total_drivers} drivers Best-Fit eligible
                 {' · '}
-                {uniqueRecommendedDrivers} shown in Best-Fit
-                {' · '}
-                {fleetMeta.override_driver_count ?? overrideOptions.drivers.length} in All Drivers
+                {fleetMeta.override_selectable_driver_count ?? overrideOptions.drivers.filter((d) => d.override_selectable).length}
+                {' of '}
+                {fleetMeta.override_driver_count ?? overrideOptions.drivers.length} selectable in All Drivers
               </p>
             )}
             {alternatives.length > 0 && (
@@ -627,7 +648,7 @@ function AssignDriverVehiclePage() {
             <div className="dx-dispatch-manual">
               <p className="dx-dispatch-manual__title">All Available Drivers</p>
               <p className="dx-dispatch-manual__hint">
-                Select from all available drivers and feasible vehicles, then confirm override.
+                Pick any driver and vehicle that are not busy. Type, capacity, and license gaps are allowed with an override reason.
               </p>
               <div className="dx-dispatch-manual__fields">
                 <select
@@ -635,12 +656,10 @@ function AssignDriverVehiclePage() {
                   onChange={(e) => setManualDriverId(e.target.value)}
                   style={{ padding: '8px 10px', borderRadius: 9, border: '1.5px solid var(--stroke)', fontSize: '0.8125rem' }}
                 >
-                  <option value="">Select available driver…</option>
+                  <option value="">Select driver…</option>
                   {overrideOptions.drivers.map((d) => (
-                    <option key={d.id} value={d.id} disabled={!d.has_login_account || d.eligible === false}>
-                      {d.name}
-                      {!d.has_login_account ? ' (no account)' : ''}
-                      {d.eligible === false ? ' (license ineligible)' : ''}
+                    <option key={d.id} value={d.id} disabled={d.override_selectable === false}>
+                      {formatOverrideDriverLabel(d)}
                     </option>
                   ))}
                 </select>
@@ -649,10 +668,10 @@ function AssignDriverVehiclePage() {
                   onChange={(e) => setManualVehicleId(e.target.value)}
                   style={{ padding: '8px 10px', borderRadius: 9, border: '1.5px solid var(--stroke)', fontSize: '0.8125rem' }}
                 >
-                  <option value="">Select available vehicle…</option>
+                  <option value="">Select vehicle…</option>
                   {overrideOptions.vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.plate_no}{v.vehicle_type ? ` · ${v.vehicle_type}` : ''}
+                    <option key={v.id} value={v.id} disabled={v.override_selectable === false}>
+                      {formatOverrideVehicleLabel(v)}
                     </option>
                   ))}
                 </select>
