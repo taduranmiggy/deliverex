@@ -296,17 +296,22 @@ class EmailService
         );
     }
 
-    /** Customer-facing From address (must be on a Resend-verified domain). */
+    /** Customer-facing From address (must be on a Resend-verified domain — never Gmail/Yahoo/etc.). */
     private function supportFromAddress(): string
     {
-        $from = strtolower(trim((string) config('mail.addresses.support_from', '')));
-        if ($from !== '' && filter_var($from, FILTER_VALIDATE_EMAIL) && ! $this->isPublicMailboxDomain($from)) {
-            return $from;
-        }
-
-        $noreply = strtolower(trim((string) config('mail.addresses.noreply', '')));
-        if ($noreply !== '' && filter_var($noreply, FILTER_VALIDATE_EMAIL)) {
-            return $noreply;
+        foreach ([
+            config('mail.addresses.support_from'),
+            config('mail.addresses.noreply'),
+            config('mail.from.address'),
+            'noreply@deliverexapp.com',
+        ] as $candidate) {
+            $email = strtolower(trim((string) $candidate));
+            if ($email !== ''
+                && filter_var($email, FILTER_VALIDATE_EMAIL)
+                && ! $this->isPublicMailboxDomain($email)
+            ) {
+                return $email;
+            }
         }
 
         return 'noreply@deliverexapp.com';

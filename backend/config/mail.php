@@ -123,7 +123,8 @@ return [
         // Inbox for staff (can be Gmail). Not used as Resend "From".
         'support' => env('MAIL_SUPPORT_ADDRESS', 'deliverexapp@gmail.com'),
         // Verified-domain sender for customer-facing support emails (Resend From).
-        'support_from' => env('MAIL_SUPPORT_FROM', env('MAIL_FROM_ADDRESS', 'noreply@deliverexapp.com')),
+        // Do not nest env() — keep a fixed default so public inboxes never become From.
+        'support_from' => env('MAIL_SUPPORT_FROM', 'noreply@deliverexapp.com'),
     ],
 
     'inquiry' => [

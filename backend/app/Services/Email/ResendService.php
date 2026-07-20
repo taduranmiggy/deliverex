@@ -19,10 +19,12 @@ class ResendService
         $log->increment('attempts');
 
         try {
+            $fromAddress = $this->verifiedFromAddress($log->from_address);
+
             Mail::to($log->recipient)->send(new TemplateMail(
                 mailSubject: $log->subject,
                 htmlContent: $html,
-                fromAddress: $log->from_address,
+                fromAddress: $fromAddress,
                 fromName: config('mail.from.name'),
                 replyToAddress: $log->metadata['reply_to'] ?? null,
                 replyToName: config('mail.from.name'),
@@ -50,5 +52,58 @@ class ResendService
 
             throw $e;
         }
+    }
+
+    /**
+     * Resend only allows From addresses on verified domains.
+     * Never send as Gmail/Yahoo/etc. even if misconfigured in .env.
+     */
+    private function verifiedFromAddress(?string $from): string
+    {
+        $email = strtolower(trim((string) $from));
+        $publicDomains = [
+            'gmail.com',
+            'googlemail.com',
+            'yahoo.com',
+            'yahoo.com.ph',
+            'outlook.com',
+            'hotmail.com',
+            'live.com',
+            'icloud.com',
+            'me.com',
+            'aol.com',
+            'proton.me',
+            'protonmail.com',
+        ];
+
+        $domain = $email !== '' && str_contains($email, '@')
+            ? substr(strrchr($email, '@'), 1)
+            : '';
+
+        if ($email !== ''
+            && filter_var($email, FILTER_VALIDATE_EMAIL)
+            && $domain !== ''
+            && ! in_array($domain, $publicDomains, true)
+        ) {
+            return $email;
+        }
+
+        $fallback = strtolower(trim((string) (
+            config('mail.addresses.support_from')
+            ?: config('mail.addresses.noreply')
+            ?: config('mail.from.address')
+            ?: 'noreply@deliverexapp.com'
+        )));
+
+        $fallbackDomain = str_contains($fallback, '@') ? substr(strrchr($fallback, '@'), 1) : '';
+        if ($fallback !== ''
+            && filter_var($fallback, FILTER_VALIDATE_EMAIL)
+            && $fallbackDomain !== ''
+            && ! in_array($fallbackDomain, $publicDomains, true)
+        ) {
+            return $fallback;
+        }
+
+        return 'noreply@deliverexapp.com';
     }
 }
