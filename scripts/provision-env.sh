@@ -77,6 +77,8 @@ DOCUMENT_AI_LOCATION=${DOCUMENT_AI_LOCATION:-us}
 DOCUMENT_AI_PROCESSOR_ID=${DOCUMENT_AI_PROCESSOR_ID:-}
 DOCUMENT_AI_TIMEOUT=${DOCUMENT_AI_TIMEOUT:-30}
 DOCUMENT_AI_RETRIES=${DOCUMENT_AI_RETRIES:-1}
+GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY:-}
 EOF
   chmod 600 "$target" 2>/dev/null || true
 }
@@ -121,6 +123,14 @@ merge_secret_keys_into_env() {
   merge_env_var "DOCUMENT_AI_PROCESSOR_ID" "${DOCUMENT_AI_PROCESSOR_ID:-}"
   merge_env_var "DOCUMENT_AI_TIMEOUT" "${DOCUMENT_AI_TIMEOUT:-30}"
   merge_env_var "DOCUMENT_AI_RETRIES" "${DOCUMENT_AI_RETRIES:-1}"
+  if [ -n "${GOOGLE_MAPS_API_KEY:-}" ]; then
+    merge_env_var "GOOGLE_MAPS_API_KEY" "$GOOGLE_MAPS_API_KEY"
+    log "Merged GOOGLE_MAPS_API_KEY from secrets"
+  fi
+  if [ -n "${OPENROUTESERVICE_API_KEY:-}" ]; then
+    merge_env_var "OPENROUTESERVICE_API_KEY" "$OPENROUTESERVICE_API_KEY"
+    log "Merged OPENROUTESERVICE_API_KEY from secrets"
+  fi
   if [ -n "${RESEND_API_KEY:-}" ]; then
     merge_env_var "RESEND_API_KEY" "$RESEND_API_KEY"
     log "Merged RESEND_API_KEY from secrets"

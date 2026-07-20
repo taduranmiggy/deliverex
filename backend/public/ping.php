@@ -67,6 +67,17 @@ if ($db === 'yes' && isset($app)) {
 }
 echo 'geocoding=' . $geocoding . "\n";
 
+$googleMaps = 'no';
+if ($db === 'yes' && isset($app)) {
+    try {
+        $key = trim((string) config('gps.geocoding.google_maps_api_key', ''));
+        $googleMaps = $key !== '' ? 'yes' : 'no';
+    } catch (Throwable) {
+        $googleMaps = 'no';
+    }
+}
+echo 'google_maps=' . $googleMaps . "\n";
+
 $currentShaFile = $sharedRoot . '/deploy-state/current-sha';
 $deploySha = '';
 if (is_readable($currentShaFile)) {
