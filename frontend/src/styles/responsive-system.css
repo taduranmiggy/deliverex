@@ -301,7 +301,7 @@ body.dx-nav-locked {
 
 .dx-dispatch-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 300px) minmax(340px, 1fr) minmax(300px, 400px);
+  grid-template-columns: minmax(240px, 280px) minmax(300px, 1fr) minmax(320px, 440px);
   gap: 22px;
   align-items: stretch;
   min-width: 0;
@@ -328,10 +328,9 @@ body.dx-nav-locked {
     min-height: 0;
     min-width: 0;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: clip;
     overscroll-behavior: contain;
-    padding: 6px 10px 14px 4px;
-    margin-right: -2px;
+    padding: 4px 6px 14px 2px;
     scrollbar-gutter: stable;
   }
 

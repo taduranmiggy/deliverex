@@ -20,7 +20,22 @@ function formatOverrideDriverLabel(driver) {
   return parts.join(' · ')
 }
 
-function formatOverrideVehicleLabel(vehicle) {
+function formatOverrideVehicleLabel(vehicle, compact = false) {
+  if (compact) {
+    const typeShort = vehicle.vehicle_type
+      ? vehicle.vehicle_type.replace(/articulated/i, 'Art.').replace(/dump truck/i, 'Dump').split(' ').slice(0, 2).join(' ')
+      : null
+    const parts = [
+      vehicle.plate_no,
+      typeShort,
+      vehicle.cbm_capacity != null ? `${vehicle.cbm_capacity} m³` : null,
+    ].filter(Boolean)
+    let label = parts.join(' · ')
+    if (vehicle.override_warnings?.length) label += ' · mismatch'
+    if (vehicle.blockers?.includes('active_assignment')) label += ' · busy'
+    return label.length > 52 ? `${label.slice(0, 49)}…` : label
+  }
+
   const parts = [vehicle.plate_no]
   if (vehicle.vehicle_type) parts.push(vehicle.vehicle_type)
   if (vehicle.cbm_capacity != null) parts.push(`${vehicle.cbm_capacity} m³`)
@@ -94,8 +109,8 @@ function OverridePairingCard({ pairing, onOverride }) {
         </p>
       )}
       <div className="dx-dispatch-candidate__actions">
-        <button type="button" className="btn-dx-secondary" style={{ flex: 1, justifyContent: 'center', fontSize: '0.875rem' }} onClick={onOverride}>
-          <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} /> Override &amp; Assign
+        <button type="button" className="btn-dx-secondary dx-dispatch-candidate__btn" onClick={onOverride}>
+          <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} aria-hidden /> Override &amp; Assign
         </button>
       </div>
     </div>
@@ -264,12 +279,12 @@ function CandidateCard({ item, isTop, onAssign, onOverride }) {
 
       <div className="dx-dispatch-candidate__actions">
         {isTop ? (
-          <button type="button" className="btn-dx-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={onAssign} disabled={noAccount}>
-            <CheckCircle2 size={15} /> {noAccount ? 'Generate account first' : 'Assign Recommended'}
+          <button type="button" className="btn-dx-primary dx-dispatch-candidate__btn" onClick={onAssign} disabled={noAccount}>
+            <CheckCircle2 size={15} aria-hidden /> {noAccount ? 'Generate account first' : 'Assign Recommended'}
           </button>
         ) : (
-          <button type="button" className="btn-dx-secondary" style={{ flex: 1, justifyContent: 'center', fontSize: '0.875rem' }} onClick={onOverride}>
-            <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} /> Override &amp; Assign
+          <button type="button" className="btn-dx-secondary dx-dispatch-candidate__btn" onClick={onOverride}>
+            <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} aria-hidden /> Override &amp; Assign
           </button>
         )}
       </div>
@@ -725,11 +740,14 @@ function AssignDriverVehiclePage() {
           <div className="dx-dispatch-grid__scroll">
           {/* Safe manual override selector (uses same assignment endpoint) */}
           {!!selected && !loading && overrideTab === 'all' && (
-            <div className="dx-dispatch-manual">
-              <p className="dx-dispatch-manual__title">Manual Override Pairings</p>
-              <p className="dx-dispatch-manual__hint">
-                Best-Fit stays strict (type + capacity). Override allows any driver/vehicle pair that is not offline or schedule-conflicted — including 14 m³ trucks on a 35 m³ job with a documented reason.
-              </p>
+            <div className="dx-dispatch-override-section">
+              <div className="dx-dispatch-override-section__header">
+                <p className="dx-dispatch-manual__title">Manual Override Pairings</p>
+                <p className="dx-dispatch-manual__hint">
+                  Best-Fit stays strict (type + capacity). Override allows any driver/vehicle pair that is not offline or schedule-conflicted — including 14 m³ trucks on a 35 m³ job with a documented reason.
+                </p>
+              </div>
+
               {overridePairings.length === 0 ? (
                 <div className="dx-dispatch-empty" style={{ padding: '20px 12px' }}>
                   No override pairings available. Check diagnostics — drivers may be offline or all vehicles on active jobs.
@@ -745,7 +763,8 @@ function AssignDriverVehiclePage() {
                   ))}
                 </div>
               )}
-              <details className="dx-dispatch-manual__advanced">
+
+              <details className="dx-dispatch-manual">
                 <summary className="dx-dispatch-manual__advanced-summary">Advanced: pick driver and vehicle separately</summary>
                 <div className="dx-dispatch-manual__fields">
                   <select
@@ -765,7 +784,9 @@ function AssignDriverVehiclePage() {
                   >
                     <option value="">Select vehicle…</option>
                     {overrideOptions.vehicles.filter((v) => v.override_selectable).map((v) => (
-                      <option key={v.id} value={v.id}>{formatOverrideVehicleLabel(v)}</option>
+                      <option key={v.id} value={v.id} title={formatOverrideVehicleLabel(v)}>
+                        {formatOverrideVehicleLabel(v, true)}
+                      </option>
                     ))}
                   </select>
                   <button
@@ -774,7 +795,7 @@ function AssignDriverVehiclePage() {
                     onClick={openManualOverride}
                     disabled={!manualDriverId || !manualVehicleId}
                   >
-                    <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} /> Review Manual Override
+                    <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} aria-hidden /> Review Manual Override
                   </button>
                 </div>
               </details>

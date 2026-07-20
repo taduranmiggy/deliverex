@@ -6553,6 +6553,9 @@
   flex-direction: column;
   gap: 14px;
   position: relative;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .dx-dispatch-candidate--top {
@@ -6596,6 +6599,7 @@
   font-weight: 700;
   font-size: 1rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .dx-dispatch-candidate__field-sub {
@@ -6603,6 +6607,7 @@
   font-size: 0.8125rem;
   line-height: 1.4;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .dx-dispatch-candidate__score-row {
@@ -6630,6 +6635,29 @@
 .dx-dispatch-candidate__actions {
   display: flex;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.dx-dispatch-candidate__btn {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+  padding: 10px 12px;
+  font-size: 0.8125rem;
+}
+
+.dx-dispatch-alt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .dx-dispatch-empty {
@@ -6645,22 +6673,28 @@
   border-style: dashed;
 }
 
-.dx-dispatch-alt-list {
+.dx-dispatch-tabs {
+  margin-bottom: 12px;
+}
+
+.dx-dispatch-override-section {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
-.dx-dispatch-tabs {
-  margin-bottom: 12px;
+.dx-dispatch-override-section__header {
+  min-width: 0;
 }
 
 .dx-dispatch-manual {
   background: #fff;
   border: 1px solid #fde68a;
   border-radius: 14px;
-  padding: 16px;
-  margin-bottom: 12px;
+  padding: 14px;
+  margin-bottom: 0;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
@@ -6680,15 +6714,22 @@
   color: var(--muted);
 }
 
-.dx-dispatch-manual__advanced {
-  margin-top: 12px;
-  font-size: 0.8125rem;
-  min-width: 0;
+.dx-dispatch-override-section__header .dx-dispatch-manual__hint {
+  margin-bottom: 0;
 }
 
 .dx-dispatch-manual__advanced-summary {
   cursor: pointer;
   font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.dx-dispatch-manual > .dx-dispatch-manual__advanced-summary {
+  list-style: none;
+}
+
+.dx-dispatch-candidate__btn.btn-dx-primary {
+  white-space: normal;
 }
 
 .dx-dispatch-manual__fields {
@@ -6701,6 +6742,7 @@
 }
 
 .dx-dispatch-manual__select {
+  display: block;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -6710,15 +6752,23 @@
   border: 1.5px solid var(--stroke);
   font-size: 0.8125rem;
   background: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dx-dispatch-manual__fields .btn-dx-secondary {
+  display: flex;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
   justify-content: center;
   font-size: 0.8125rem;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+  padding: 10px 12px;
 }
 
 .dx-dispatch-loading {
