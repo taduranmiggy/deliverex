@@ -6,13 +6,14 @@ import { buildDisplayName } from '../utils/jobOrderHelpers'
 import { formatJobSchedule } from '../utils/driverAssignment'
 import { formatJobPublicId } from '../utils/formatPhp'
 import { formatJobStatus, jobStatusBadgeClass } from '../utils/statusLabels'
-import { Loader2 } from 'lucide-react'
+import { Info, Loader2 } from 'lucide-react'
 
 export default function JobOrderViewModal({
   order,
   onClose,
   onEdit,
   onDelete,
+  readOnly = false,
 }) {
   const [detail, setDetail] = useState(order)
   const [loading, setLoading] = useState(true)
@@ -78,6 +79,13 @@ export default function JobOrderViewModal({
             </div>
           ) : (
             <>
+              {readOnly && (
+                <div className="dx-readonly-notice" style={{ marginBottom: 12 }}>
+                  <Info size={14} aria-hidden />
+                  Admin view only — dispatch and assignment actions are handled by the Dispatcher.
+                </div>
+              )}
+
               <JobOrderRouteMap
                 key={detail?.id ?? order.id}
                 jobOrderId={detail?.id ?? order.id}
@@ -114,7 +122,7 @@ export default function JobOrderViewModal({
           )}
         </div>
 
-        {!loading && (
+        {!loading && !readOnly && (
           <div className="dx-job-view-modal__footer">
             <button
               type="button"

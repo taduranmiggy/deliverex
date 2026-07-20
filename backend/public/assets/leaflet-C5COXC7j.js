@@ -1,0 +1,1 @@
+import{s as e}from"./jsx-runtime-CnSBKPes.js";import{H as t,U as n,V as r,W as i}from"./index-w0pfWqRO.js";var a=e(n(),1),o=r(function({positions:e,...n},r){let o=new a.Polyline(e,n);return t(o,i(r,{overlayContainer:o}))},function(e,t,n){t.positions!==n.positions&&e.setLatLngs(t.positions)});export{o as t};

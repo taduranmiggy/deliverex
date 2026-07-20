@@ -1,1 +1,0 @@
-import{t as e}from"./client-wX4TsO9e.js";function t(t={}){let n=new URLSearchParams(Object.fromEntries(Object.entries(t).filter(([,e])=>e!=null&&e!==``))).toString();return e(`/assignment-audit${n?`?`+n:``}`)}export{t};
