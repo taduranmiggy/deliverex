@@ -46,6 +46,7 @@ use App\Http\Controllers\Driver\DocumentController as DriverDocumentController;
 use App\Http\Controllers\Driver\StatusController as DriverStatusController;
 use App\Http\Controllers\Driver\TrackingController as DriverTrackingController;
 use App\Http\Controllers\Gps\TrackingController as GpsTrackingController;
+use App\Http\Controllers\GeocodingController;
 use App\Http\Controllers\Manager\AnalyticsController;
 use App\Http\Controllers\Manager\DashboardController;
 use App\Http\Controllers\Manager\FleetController;
@@ -105,6 +106,12 @@ Route::middleware(['auth.api.optional', 'throttle:30,1'])->prefix('chatbot')->gr
 // ─── Authenticated ────────────────────────────────────────────────────────────
 Route::middleware('auth.api')->group(function () {
 
+    Route::middleware('throttle:60,1')->prefix('geocoding')->group(function () {
+        Route::post('/autocomplete', [GeocodingController::class, 'autocomplete']);
+        Route::post('/traces/{trace}/confirm', [GeocodingController::class, 'confirm']);
+        Route::post('/traces/{trace}/rendered', [GeocodingController::class, 'rendered']);
+    });
+
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/revoke', [AuthController::class, 'revoke']);
     Route::get('/auth/session', [AuthController::class, 'session']);
@@ -139,6 +146,8 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/roles',                [RolesController::class, 'index']);
         Route::get('/audit-logs',           [AuditLogsController::class, 'index']);
         Route::get('/audit-logs/export',    [AuditLogsController::class, 'export']);
+        Route::get('/geocoding-traces',     [GeocodingController::class, 'index']);
+        Route::get('/geocoding-traces/{trace}', [GeocodingController::class, 'showTrace']);
         Route::get('/email-logs',           [EmailLogController::class, 'index']);
         Route::get('/email-logs/types',     [EmailLogController::class, 'types']);
         Route::get('/email-logs/stats',    [EmailLogController::class, 'stats']);

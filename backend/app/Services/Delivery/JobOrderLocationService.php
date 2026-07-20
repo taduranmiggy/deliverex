@@ -8,6 +8,7 @@ use App\Support\GeocodeAnchor;
 use App\Support\GpsCoordinateValidator;
 use App\Support\JobOrderAddressFormatter;
 use App\Support\LocationPipelineLogger;
+use App\Support\LocationTraceRecorder;
 use App\Support\StreetGeocodeHelper;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -188,8 +189,6 @@ class JobOrderLocationService
     /** @return array<string, mixed> */
     public function mapPayload(JobOrder $jobOrder): array
     {
-        $jobOrder = $this->ensureCoordinates($jobOrder);
-
         $pickupAddress = $this->resolvePickupAddress($jobOrder);
         $destinationAddress = $this->resolveDropoffAddress($jobOrder);
 
@@ -206,6 +205,15 @@ class JobOrderLocationService
             $destinationAddress,
             'destination',
         );
+
+        if ($pickup) {
+            $pickup['trace_id'] = $jobOrder->pickup_geocoding_trace_id;
+        }
+        if ($destination) {
+            $destination['trace_id'] = $jobOrder->dropoff_geocoding_trace_id;
+        }
+        LocationTraceRecorder::apiDelivered($jobOrder->pickup_geocoding_trace_id, $pickup);
+        LocationTraceRecorder::apiDelivered($jobOrder->dropoff_geocoding_trace_id, $destination);
 
         $this->warnIfDuplicateLocations($jobOrder->id, $pickup, $destination);
 
@@ -617,10 +625,10 @@ class JobOrderLocationService
         $cacheKey = sprintf(
             'deliverex.job_route.%s',
             md5(implode(':', [
-                round($fromLat, 5),
-                round($fromLng, 5),
-                round($toLat, 5),
-                round($toLng, 5),
+                round($fromLat, 7),
+                round($fromLng, 7),
+                round($toLat, 7),
+                round($toLng, 7),
             ])),
         );
 

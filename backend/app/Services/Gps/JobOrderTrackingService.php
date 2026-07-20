@@ -7,17 +7,16 @@ use App\Models\JobOrder;
 use App\Models\TrackingLog;
 use App\Models\User;
 use App\Services\Delivery\EtaEstimationService;
-use App\Services\Delivery\JobOrderLocationService;
 use App\Support\DeliveryStatus;
 use App\Support\DriverAccount;
 use App\Support\GpsCoordinateValidator;
+use App\Support\LocationTraceRecorder;
 
 class JobOrderTrackingService
 {
     public function __construct(
         private TrackingService $trackingService,
         private DriverLocationService $driverLocationService,
-        private JobOrderLocationService $locationService,
         private RouteDirectionsService $directions,
         private EtaEstimationService $etaEstimation,
     ) {
@@ -53,8 +52,6 @@ class JobOrderTrackingService
     /** @return array<string, mixed> */
     public function payload(JobOrder $jobOrder, bool $customerView = false, bool $includeHistory = false): array
     {
-        $jobOrder = $this->locationService->ensureCoordinates($jobOrder);
-
         $assignment = $jobOrder->assignments()
             ->latest('assigned_at')
             ->with(['driver.user', 'vehicle'])
@@ -72,6 +69,14 @@ class JobOrderTrackingService
 
         $pickup = $this->point($jobOrder->pickup_latitude, $jobOrder->pickup_longitude, $jobOrder->display_pickup ?? '');
         $destination = $this->point($jobOrder->dropoff_latitude, $jobOrder->dropoff_longitude, $jobOrder->display_dropoff ?? '');
+        if ($pickup) {
+            $pickup['trace_id'] = $jobOrder->pickup_geocoding_trace_id;
+        }
+        if ($destination) {
+            $destination['trace_id'] = $jobOrder->dropoff_geocoding_trace_id;
+        }
+        LocationTraceRecorder::apiDelivered($jobOrder->pickup_geocoding_trace_id, $pickup);
+        LocationTraceRecorder::apiDelivered($jobOrder->dropoff_geocoding_trace_id, $destination);
 
         $route = null;
         if ($latest && $destination) {

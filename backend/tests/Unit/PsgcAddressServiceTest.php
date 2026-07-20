@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Services\Address\PsgcClient;
 use App\Services\Address\StandardizedAddressService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Tests\TestCase;
@@ -86,7 +87,12 @@ class PsgcAddressServiceTest extends TestCase
                 ['code' => '0314100001', 'name' => 'Guinhawa'],
             ]),
             'https://nominatim.openstreetmap.org/*' => Http::response([
-                ['lat' => '14.8527', 'lon' => '120.8156'],
+                [
+                    'lat' => '14.8527',
+                    'lon' => '120.8156',
+                    'display_name' => 'Rizal Avenue, Guinhawa, City of Malolos, Bulacan, Philippines',
+                    'address' => ['road' => 'Rizal Avenue', 'city' => 'City of Malolos', 'state' => 'Bulacan'],
+                ],
             ]),
         ]);
 
@@ -143,6 +149,51 @@ class PsgcAddressServiceTest extends TestCase
         $this->assertNull($normalized['pickup_longitude']);
         $this->assertNull($normalized['pickup_geocode_attempted_at']);
         $this->assertSame('123 RIZAL AVENUE', $normalized['pickup_street']);
+    }
+
+    public function test_confirmed_coordinates_are_reused_without_a_second_geocode_request(): void
+    {
+        config()->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
+        Http::fake([
+            'https://psgc.test/api/v2/regions' => Http::response([
+                ['code' => '0300000000', 'name' => 'Central Luzon'],
+            ]),
+            'https://psgc.test/api/v2/regions/0300000000/provinces' => Http::response([
+                ['code' => '0314000000', 'name' => 'Bulacan'],
+            ]),
+            'https://psgc.test/api/v2/regions/0300000000/provinces/0314000000/cities-municipalities' => Http::response([
+                ['code' => '0314100000', 'name' => 'City of Malolos'],
+            ]),
+            'https://psgc.test/api/v2/regions/0300000000/provinces/0314000000/cities-municipalities/0314100000/barangays' => Http::response([
+                ['code' => '0314100001', 'name' => 'Guinhawa'],
+            ]),
+        ]);
+        $token = Crypt::encryptString(json_encode([
+            'trace_id' => null,
+            'user_id' => null,
+            'context' => 'pickup',
+            'lat' => 14.8527123,
+            'lng' => 120.8156456,
+            'source' => 'autocomplete_selection',
+            'provider' => 'geoapify',
+            'place_id' => 'place-123',
+            'label' => '123 Rizal Avenue, Malolos',
+            'expires_at' => now()->addHour()->timestamp,
+        ], JSON_THROW_ON_ERROR));
+
+        $normalized = app(StandardizedAddressService::class)->normalize([
+            'pickup_region_code' => '0300000000',
+            'pickup_province_code' => '0314000000',
+            'pickup_city_code' => '0314100000',
+            'pickup_barangay_code' => '0314100001',
+            'pickup_street' => '123 Rizal Avenue',
+            'pickup_coordinate_confirmation_token' => $token,
+        ], 'pickup', false, true);
+
+        $this->assertSame(14.8527123, $normalized['pickup_latitude']);
+        $this->assertSame(120.8156456, $normalized['pickup_longitude']);
+        $this->assertSame('geoapify', $normalized['pickup_coordinate_provider']);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'nominatim') || str_contains($request->url(), '/geocode/'));
     }
 
     public function test_ncr_city_list_hides_city_of_manila_when_districts_exist(): void

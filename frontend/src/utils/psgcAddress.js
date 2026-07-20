@@ -2,6 +2,10 @@ export function emptyPsgcAddress() {
   return {
     region_code: '', region: '', province_code: '', province: '',
     city_code: '', city: '', barangay_code: '', barangay: '', street: '',
+    latitude: null, longitude: null, geocoding_trace_id: '',
+    coordinate_confirmation_token: '', coordinate_source: '',
+    coordinate_provider: '', coordinate_place_id: '', coordinate_label: '',
+    coordinate_confirmed_at: '',
   }
 }
 
@@ -17,6 +21,15 @@ export function toPsgcAddress(source = {}, prefix = 'address') {
     barangay_code: key('barangay_code'),
     barangay: key('barangay'),
     street: key('street'),
+    latitude: source[`${prefix}_latitude`] ?? null,
+    longitude: source[`${prefix}_longitude`] ?? null,
+    geocoding_trace_id: key('geocoding_trace_id'),
+    coordinate_confirmation_token: key('coordinate_confirmation_token'),
+    coordinate_source: key('coordinate_source'),
+    coordinate_provider: key('coordinate_provider'),
+    coordinate_place_id: key('coordinate_place_id'),
+    coordinate_label: key('coordinate_label'),
+    coordinate_confirmed_at: key('coordinate_confirmed_at'),
   }
 }
 
@@ -31,6 +44,15 @@ export function fromPsgcAddress(address, prefix = 'address') {
     [`${prefix}_barangay_code`]: address.barangay_code || null,
     [`${prefix}_barangay`]: address.barangay || null,
     [`${prefix}_street`]: address.street || null,
+    [`${prefix}_latitude`]: address.latitude ?? null,
+    [`${prefix}_longitude`]: address.longitude ?? null,
+    [`${prefix}_geocoding_trace_id`]: address.geocoding_trace_id || null,
+    [`${prefix}_coordinate_confirmation_token`]: address.coordinate_confirmation_token || null,
+    [`${prefix}_coordinate_source`]: address.coordinate_source || null,
+    [`${prefix}_coordinate_provider`]: address.coordinate_provider || null,
+    [`${prefix}_coordinate_place_id`]: address.coordinate_place_id || null,
+    [`${prefix}_coordinate_label`]: address.coordinate_label || null,
+    [`${prefix}_coordinate_confirmed_at`]: address.coordinate_confirmed_at || null,
   }
 }
 
@@ -40,10 +62,10 @@ export function isCompletePsgcAddress(address) {
 
 /**
  * @param {ReturnType<typeof emptyPsgcAddress>} address
- * @param {{ requiresProvince?: boolean }} [options]
+ * @param {{ requiresProvince?: boolean, requirePreciseLocation?: boolean }} [options]
  */
 export function getPsgcAddressFieldErrors(address, options = {}) {
-  const { requiresProvince = false } = options
+  const { requiresProvince = false, requirePreciseLocation = false } = options
   const errors = {}
 
   if (!address?.region_code) {
@@ -60,6 +82,9 @@ export function getPsgcAddressFieldErrors(address, options = {}) {
   }
   if (!address?.street?.trim()) {
     errors.street = 'Street / building / house no. is required.'
+  }
+  if (requirePreciseLocation && !address?.coordinate_confirmation_token) {
+    errors.coordinates = 'Select a suggestion or place the marker, then confirm the exact pin.'
   }
 
   return errors

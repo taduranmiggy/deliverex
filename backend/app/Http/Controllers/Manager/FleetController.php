@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
 use App\Models\DispatchAssignment;
-use App\Services\Delivery\JobOrderLocationService;
 use App\Services\Gps\DriverLocationService;
 use App\Services\Gps\RouteDirectionsService;
 use App\Services\Gps\TrackingService;
@@ -15,7 +14,6 @@ class FleetController extends Controller
     public function __construct(
         private TrackingService $trackingService,
         private DriverLocationService $driverLocationService,
-        private JobOrderLocationService $locationService,
         private RouteDirectionsService $directions,
     ) {
     }
@@ -46,9 +44,6 @@ class FleetController extends Controller
             }
 
             $jobOrder = $a->jobOrder;
-            if ($jobOrder) {
-                $jobOrder = $this->locationService->ensureCoordinates($jobOrder);
-            }
 
             $pickup = $jobOrder
                 ? GpsCoordinateValidator::pair($jobOrder->pickup_latitude, $jobOrder->pickup_longitude, 'manager_fleet_pickup')

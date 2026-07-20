@@ -89,6 +89,7 @@ class RouteDirectionsService
                     $polyline[] = [(float) $coord[1], (float) $coord[0]];
                 }
             }
+            $polyline = $this->anchorPolyline($polyline, $fromLat, $fromLng, $toLat, $toLng);
 
             $summary = $feature['properties']['summary'] ?? [];
             $distanceM = (float) ($summary['distance'] ?? 0);
@@ -145,6 +146,7 @@ class RouteDirectionsService
                     $polyline[] = [(float) $coord[1], (float) $coord[0]];
                 }
             }
+            $polyline = $this->anchorPolyline($polyline, $fromLat, $fromLng, $toLat, $toLng);
 
             $distanceM = (float) ($route['distance'] ?? 0);
             $durationSec = (float) ($route['duration'] ?? 0);
@@ -186,6 +188,47 @@ class RouteDirectionsService
             'duration_label' => $this->formatDuration($durationMin),
             'source' => 'straight_line',
         ];
+    }
+
+    /**
+     * Routing engines may snap endpoints to a nearby road. Keep that road
+     * geometry, but make the visible line begin and end at the persisted pins.
+     *
+     * @param  list<array{0: float, 1: float}>  $polyline
+     * @return list<array{0: float, 1: float}>
+     */
+    private function anchorPolyline(
+        array $polyline,
+        float $fromLat,
+        float $fromLng,
+        float $toLat,
+        float $toLng,
+    ): array {
+        $start = [$fromLat, $fromLng];
+        $end = [$toLat, $toLng];
+        if ($polyline === []) {
+            return [$start, $end];
+        }
+
+        if (GpsCoordinateValidator::distanceMeters(
+            $fromLat,
+            $fromLng,
+            $polyline[0][0],
+            $polyline[0][1],
+        ) > 0.05) {
+            array_unshift($polyline, $start);
+        } else {
+            $polyline[0] = $start;
+        }
+
+        $last = $polyline[array_key_last($polyline)];
+        if (GpsCoordinateValidator::distanceMeters($toLat, $toLng, $last[0], $last[1]) > 0.05) {
+            $polyline[] = $end;
+        } else {
+            $polyline[array_key_last($polyline)] = $end;
+        }
+
+        return $polyline;
     }
 
     private function estimateDurationMinutes(float $distanceMeters): int

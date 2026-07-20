@@ -66,6 +66,12 @@ class JobOrder extends Model
         'pickup_latitude',
         'pickup_longitude',
         'pickup_geocode_attempted_at',
+        'pickup_geocoding_trace_id',
+        'pickup_coordinate_source',
+        'pickup_coordinate_provider',
+        'pickup_coordinate_place_id',
+        'pickup_coordinate_label',
+        'pickup_coordinate_confirmed_at',
         // structured drop-off address
         'dropoff_region_code',
         'dropoff_region',
@@ -81,6 +87,12 @@ class JobOrder extends Model
         'dropoff_latitude',
         'dropoff_longitude',
         'dropoff_geocode_attempted_at',
+        'dropoff_geocoding_trace_id',
+        'dropoff_coordinate_source',
+        'dropoff_coordinate_provider',
+        'dropoff_coordinate_place_id',
+        'dropoff_coordinate_label',
+        'dropoff_coordinate_confirmed_at',
         'quarry_id',
         'preferred_vehicle_type_id',
         'delivery_type',
@@ -182,6 +194,8 @@ class JobOrder extends Model
         'dropoff_longitude' => 'float',
         'pickup_geocode_attempted_at' => 'datetime',
         'dropoff_geocode_attempted_at' => 'datetime',
+        'pickup_coordinate_confirmed_at' => 'datetime',
+        'dropoff_coordinate_confirmed_at' => 'datetime',
     ];
 
     /** @deprecated Use company_id */

@@ -12,6 +12,7 @@ import {
   normalizeSearchKey,
   sanitizePsgcName,
 } from '../utils/textNormalize'
+import PreciseLocationPicker from './PreciseLocationPicker'
 
 const EMPTY_DOWNSTREAM = {
   province_code: '', province: '', city_code: '', city: '', barangay_code: '', barangay: '',
@@ -182,6 +183,7 @@ export default function PsgcAddressSelector({
   legacyAddress = '',
   fieldErrors = {},
   idPrefix = 'psgc',
+  preciseLocation = false,
 }) {
   const address = value || emptyPsgcAddress()
   const [regions, setRegions] = useState([])
@@ -286,6 +288,17 @@ export default function PsgcAddressSelector({
   }, [address])
 
   const patch = (changes) => onChange({ ...address, ...changes })
+  const resetPreciseLocation = preciseLocation ? {
+    latitude: null,
+    longitude: null,
+    geocoding_trace_id: '',
+    coordinate_confirmation_token: '',
+    coordinate_source: '',
+    coordinate_provider: '',
+    coordinate_place_id: '',
+    coordinate_label: '',
+    coordinate_confirmed_at: '',
+  } : {}
 
   const selectRegion = (option) => {
     setProvinces([])
@@ -295,6 +308,7 @@ export default function PsgcAddressSelector({
       region_code: option.code,
       region: sanitizePsgcName(option.name),
       ...EMPTY_DOWNSTREAM,
+      ...resetPreciseLocation,
     })
   }
 
@@ -308,6 +322,7 @@ export default function PsgcAddressSelector({
       city: '',
       barangay_code: '',
       barangay: '',
+      ...resetPreciseLocation,
     })
   }
 
@@ -318,6 +333,7 @@ export default function PsgcAddressSelector({
       city: sanitizePsgcName(option.name),
       barangay_code: '',
       barangay: '',
+      ...resetPreciseLocation,
     })
   }
 
@@ -325,6 +341,7 @@ export default function PsgcAddressSelector({
     patch({
       barangay_code: option.code,
       barangay: sanitizePsgcName(option.name),
+      ...resetPreciseLocation,
     })
   }
 
@@ -390,21 +407,32 @@ export default function PsgcAddressSelector({
           error={fieldErrors.barangay}
           onSelect={selectBarangay}
         />
-        <label className="dx-psgc-address__field dx-psgc-address__field--full">
-          <span className="dx-wiz-label-text">Street / Building / House No.{required ? ' *' : ''}</span>
-          <input
-            id={`${idPrefix}-street`}
-            className={`dx-wiz-input dx-psgc-address__input${fieldErrors.street ? ' dx-wiz-input--error' : ''}`}
+        {preciseLocation ? (
+          <PreciseLocationPicker
+            value={address}
+            onChange={onChange}
+            idPrefix={idPrefix}
+            context={idPrefix}
+            error={fieldErrors.street || fieldErrors.coordinates}
             required={required}
-            aria-invalid={fieldErrors.street ? 'true' : undefined}
-            value={address.street || ''}
-            onChange={(event) => patch({ street: event.target.value })}
-            placeholder="e.g. 123 Rizal Avenue, Building A"
           />
-          {fieldErrors.street && (
-            <span className="dx-psgc-address__field-error" role="alert">{fieldErrors.street}</span>
-          )}
-        </label>
+        ) : (
+          <label className="dx-psgc-address__field dx-psgc-address__field--full">
+            <span className="dx-wiz-label-text">Street / Building / House No.{required ? ' *' : ''}</span>
+            <input
+              id={`${idPrefix}-street`}
+              className={`dx-wiz-input dx-psgc-address__input${fieldErrors.street ? ' dx-wiz-input--error' : ''}`}
+              required={required}
+              aria-invalid={fieldErrors.street ? 'true' : undefined}
+              value={address.street || ''}
+              onChange={(event) => patch({ street: event.target.value })}
+              placeholder="e.g. 123 Rizal Avenue, Building A"
+            />
+            {fieldErrors.street && (
+              <span className="dx-psgc-address__field-error" role="alert">{fieldErrors.street}</span>
+            )}
+          </label>
+        )}
       </div>
       {legacyAddress && !address.region_code && (
         <p className="dx-psgc-address__legacy">

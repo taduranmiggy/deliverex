@@ -36,8 +36,14 @@ const BLANK = {
   pickup_location: '', dropoff_location: '',
   pickup_region_code: '', pickup_region: '', pickup_province_code: '', pickup_province: '',
   pickup_city_code: '', pickup_city: '', pickup_barangay_code: '', pickup_barangay: '', pickup_street: '', pickup_landmark: '',
+  pickup_latitude: null, pickup_longitude: null, pickup_geocoding_trace_id: '',
+  pickup_coordinate_confirmation_token: '', pickup_coordinate_source: '', pickup_coordinate_provider: '',
+  pickup_coordinate_place_id: '', pickup_coordinate_label: '', pickup_coordinate_confirmed_at: '',
   dropoff_region_code: '', dropoff_region: '', dropoff_province_code: '', dropoff_province: '',
   dropoff_city_code: '', dropoff_city: '', dropoff_barangay_code: '', dropoff_barangay: '', dropoff_street: '', dropoff_landmark: '',
+  dropoff_latitude: null, dropoff_longitude: null, dropoff_geocoding_trace_id: '',
+  dropoff_coordinate_confirmation_token: '', dropoff_coordinate_source: '', dropoff_coordinate_provider: '',
+  dropoff_coordinate_place_id: '', dropoff_coordinate_label: '', dropoff_coordinate_confirmed_at: '',
   material_type_id: '', material_specification_id: '', load_volume_m3: '',
   scheduled_start: '', scheduled_end: '',
   priority: 'normal', special_handling_instructions: '', notes: '',
@@ -358,6 +364,14 @@ const JobOrderForm = forwardRef(function JobOrderForm(
       pickup_barangay: initial.pickup_barangay ?? '',
       pickup_street: initial.pickup_street ?? '',
       pickup_landmark: initial.pickup_landmark ?? '',
+      pickup_latitude: initial.pickup_latitude ?? null,
+      pickup_longitude: initial.pickup_longitude ?? null,
+      pickup_geocoding_trace_id: initial.pickup_geocoding_trace_id ?? '',
+      pickup_coordinate_source: initial.pickup_coordinate_source ?? '',
+      pickup_coordinate_provider: initial.pickup_coordinate_provider ?? '',
+      pickup_coordinate_place_id: initial.pickup_coordinate_place_id ?? '',
+      pickup_coordinate_label: initial.pickup_coordinate_label ?? '',
+      pickup_coordinate_confirmed_at: initial.pickup_coordinate_confirmed_at ?? '',
       dropoff_region_code: initial.dropoff_region_code ?? '',
       dropoff_region: initial.dropoff_region ?? '',
       dropoff_province_code: initial.dropoff_province_code ?? '',
@@ -368,6 +382,14 @@ const JobOrderForm = forwardRef(function JobOrderForm(
       dropoff_barangay: initial.dropoff_barangay ?? '',
       dropoff_street: initial.dropoff_street ?? '',
       dropoff_landmark: initial.dropoff_landmark ?? '',
+      dropoff_latitude: initial.dropoff_latitude ?? null,
+      dropoff_longitude: initial.dropoff_longitude ?? null,
+      dropoff_geocoding_trace_id: initial.dropoff_geocoding_trace_id ?? '',
+      dropoff_coordinate_source: initial.dropoff_coordinate_source ?? '',
+      dropoff_coordinate_provider: initial.dropoff_coordinate_provider ?? '',
+      dropoff_coordinate_place_id: initial.dropoff_coordinate_place_id ?? '',
+      dropoff_coordinate_label: initial.dropoff_coordinate_label ?? '',
+      dropoff_coordinate_confirmed_at: initial.dropoff_coordinate_confirmed_at ?? '',
       material_type_id: String(initialMaterialTypeId),
       material_specification_id: String(initialSpecificationId),
       load_volume_m3: initial.load_volume_m3 ?? initial.volume_m3 ?? '',
@@ -594,14 +616,14 @@ const JobOrderForm = forwardRef(function JobOrderForm(
     }
     if (step === 3) {
       const pickupAddress = toPsgcAddress(form, 'pickup')
-      const pickupFieldErrors = getPsgcAddressFieldErrors(pickupAddress)
+      const pickupFieldErrors = getPsgcAddressFieldErrors(pickupAddress, { requirePreciseLocation: true })
       if (Object.keys(pickupFieldErrors).length > 0) {
         errs.pickup_address = getPsgcAddressSummaryError(pickupFieldErrors)
         errs.pickup_address_fields = pickupFieldErrors
       }
 
       const dropoffAddress = toPsgcAddress(form, 'dropoff')
-      const dropoffFieldErrors = getPsgcAddressFieldErrors(dropoffAddress)
+      const dropoffFieldErrors = getPsgcAddressFieldErrors(dropoffAddress, { requirePreciseLocation: true })
       if (Object.keys(dropoffFieldErrors).length > 0) {
         errs.dropoff_address = getPsgcAddressSummaryError(dropoffFieldErrors)
         errs.dropoff_address_fields = dropoffFieldErrors
@@ -884,6 +906,7 @@ const JobOrderForm = forwardRef(function JobOrderForm(
               <PsgcAddressSelector
                 title="Pickup address"
                 idPrefix="pickup"
+                preciseLocation
                 value={toPsgcAddress(form, 'pickup')}
                 fieldErrors={fieldErrors.pickup_address_fields || {}}
                 onChange={(address) => {
@@ -902,6 +925,7 @@ const JobOrderForm = forwardRef(function JobOrderForm(
               <PsgcAddressSelector
                 title="Destination address"
                 idPrefix="dropoff"
+                preciseLocation
                 value={toPsgcAddress(form, 'dropoff')}
                 fieldErrors={fieldErrors.dropoff_address_fields || {}}
                 onChange={(address) => {

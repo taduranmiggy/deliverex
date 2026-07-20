@@ -77,6 +77,21 @@ return [
             'OPENROUTESERVICE_GEOCODE_URL',
             'https://api.openrouteservice.org/geocode/search',
         ),
+        'openrouteservice_autocomplete_url' => env(
+            'OPENROUTESERVICE_AUTOCOMPLETE_URL',
+            'https://api.openrouteservice.org/geocode/autocomplete',
+        ),
+        'geoapify_api_key' => env('GEOAPIFY_API_KEY'),
+        'geoapify_autocomplete_url' => env(
+            'GEOAPIFY_AUTOCOMPLETE_URL',
+            'https://api.geoapify.com/v1/geocode/autocomplete',
+        ),
+        'photon_url' => env('PHOTON_URL', 'https://photon.komoot.io/api/'),
+        'autocomplete_providers' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', env('GEOCODING_AUTOCOMPLETE_PROVIDERS', 'geoapify,openrouteservice,photon')),
+        ))),
+        'user_agent' => env('GEOCODING_USER_AGENT', 'Deliverex/1.0 (location autocomplete)'),
     ],
 
     /** Log geocode, GPS, routing stages when true (debug only). */

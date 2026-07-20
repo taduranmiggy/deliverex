@@ -7,17 +7,11 @@ use App\Support\GpsCoordinateValidator;
 
 class ArrivalVerificationService
 {
-    public function __construct(private JobOrderLocationService $locations)
-    {
-    }
-
     /**
      * @return array{lat: float, lng: float}|null
      */
     public function resolveDestination(JobOrder $job): ?array
     {
-        $job = $this->locations->ensureCoordinates($job);
-
         return GpsCoordinateValidator::pair(
             $job->dropoff_latitude,
             $job->dropoff_longitude,

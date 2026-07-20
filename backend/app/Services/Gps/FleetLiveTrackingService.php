@@ -4,16 +4,15 @@ namespace App\Services\Gps;
 
 use App\Models\DispatchAssignment;
 use App\Models\TrackingLog;
-use App\Services\Delivery\JobOrderLocationService;
 use App\Support\DeliveryStatus;
 use App\Support\GpsCoordinateValidator;
 use App\Support\LocationPipelineLogger;
+use App\Support\LocationTraceRecorder;
 
 class FleetLiveTrackingService
 {
     public function __construct(
         private TrackingService $trackingService,
-        private JobOrderLocationService $locationService,
         private RouteDirectionsService $directions,
         private DriverLocationService $driverLocationService,
     ) {
@@ -54,9 +53,6 @@ class FleetLiveTrackingService
         $location = $this->trackingService->formatForFleet($latest);
 
         $jobOrder = $assignment->jobOrder;
-        if ($jobOrder) {
-            $jobOrder = $this->locationService->ensureCoordinates($jobOrder);
-        }
 
         $pickup = $jobOrder
             ? GpsCoordinateValidator::pair(
@@ -73,6 +69,9 @@ class FleetLiveTrackingService
                 'fleet_destination_'.$assignment->id,
             )
             : null;
+
+        LocationTraceRecorder::apiDelivered($jobOrder?->pickup_geocoding_trace_id, $pickup);
+        LocationTraceRecorder::apiDelivered($jobOrder?->dropoff_geocoding_trace_id, $destination);
 
         $route = null;
         $deliveryRoute = null;

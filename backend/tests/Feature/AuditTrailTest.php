@@ -16,6 +16,7 @@ use App\Models\Vehicle;
 use App\Support\DeliveryStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -36,6 +37,7 @@ class AuditTrailTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config()->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
 
         $adminRole = Role::create(['name' => 'admin']);
         $dispatcherRole = Role::create(['name' => 'dispatcher']);
@@ -125,10 +127,12 @@ class AuditTrailTest extends TestCase
             'pickup_city_code' => '1374040000',
             'pickup_barangay_code' => '1374040001',
             'pickup_street' => 'Quarry Gate 1',
+            'pickup_coordinate_confirmation_token' => $this->confirmedLocationToken('pickup', 14.6760, 121.0437),
             'dropoff_region_code' => '1300000000',
             'dropoff_city_code' => '1374030000',
             'dropoff_barangay_code' => '1374030001',
             'dropoff_street' => 'Construction Site Alpha',
+            'dropoff_coordinate_confirmation_token' => $this->confirmedLocationToken('dropoff', 14.5764, 121.0851),
             'load_volume_m3' => 12,
             'custom_material_type_name' => 'Gravel',
             'custom_specification_name' => '3/4 inch',
@@ -143,6 +147,22 @@ class AuditTrailTest extends TestCase
             'action' => 'job_order.created',
             'role_name' => 'dispatcher',
         ]);
+    }
+
+    private function confirmedLocationToken(string $context, float $lat, float $lng): string
+    {
+        return Crypt::encryptString(json_encode([
+            'trace_id' => null,
+            'user_id' => $this->dispatcher->id,
+            'context' => $context,
+            'lat' => $lat,
+            'lng' => $lng,
+            'source' => 'manual_pin',
+            'provider' => null,
+            'place_id' => null,
+            'label' => 'Test-confirmed location',
+            'expires_at' => now()->addHour()->timestamp,
+        ], JSON_THROW_ON_ERROR));
     }
 
     public function test_scenario_c_driver_delivery_completion_is_recorded(): void

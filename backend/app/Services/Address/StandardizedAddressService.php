@@ -3,6 +3,7 @@
 namespace App\Services\Address;
 
 use App\Services\Delivery\AddressGeocoder;
+use App\Services\Geocoding\ConfirmedLocationService;
 use App\Support\JobOrderAddressFormatter;
 use App\Support\StreetGeocodeHelper;
 use Illuminate\Validation\ValidationException;
@@ -13,6 +14,7 @@ class StandardizedAddressService
     public function __construct(
         private PsgcClient $psgc,
         private AddressGeocoder $geocoder,
+        private ConfirmedLocationService $confirmedLocations,
     ) {
     }
 
@@ -22,7 +24,12 @@ class StandardizedAddressService
      *
      * @return array<string, mixed>
      */
-    public function normalize(array $data, string $prefix, bool $requireGeocode = true): array
+    public function normalize(
+        array $data,
+        string $prefix,
+        bool $requireGeocode = true,
+        bool $requireConfirmedCoordinates = false,
+    ): array
     {
         $regionCode = trim((string) ($data["{$prefix}_region_code"] ?? ''));
         $provinceCode = trim((string) ($data["{$prefix}_province_code"] ?? '')) ?: null;
@@ -55,7 +62,13 @@ class StandardizedAddressService
         $city = mb_strtoupper(trim((string) $resolved['city']['name']), 'UTF-8');
         $barangay = mb_strtoupper(trim((string) $resolved['barangay']['name']), 'UTF-8');
         $formatted = $this->format($street, $barangay, $city, $province, $region);
-        $coordinates = $this->geocoder->geocodeFirst(
+        $confirmed = $this->confirmedLocations->fromPayload(
+            $data,
+            $prefix,
+            $requireConfirmedCoordinates,
+            $street,
+        );
+        $coordinates = $confirmed ?: $this->geocoder->geocodeFirst(
             $this->geocodeCandidates($street, $barangay, $city, $province, $region, $formatted),
             [
                 'city' => $city,
@@ -72,7 +85,7 @@ class StandardizedAddressService
             ]);
         }
 
-        return [
+        $normalized = [
             "{$prefix}_region_code" => (string) $resolved['region']['code'],
             "{$prefix}_region" => $region,
             "{$prefix}_province_code" => $resolved['province']['code'] ?? null,
@@ -88,6 +101,19 @@ class StandardizedAddressService
             "{$prefix}_longitude" => $coordinates['lng'] ?? null,
             "{$prefix}_geocode_attempted_at" => $coordinates ? now() : null,
         ];
+
+        if ($confirmed) {
+            $normalized = array_merge($normalized, [
+                "{$prefix}_geocoding_trace_id" => $confirmed['trace_id'],
+                "{$prefix}_coordinate_source" => $confirmed['source'],
+                "{$prefix}_coordinate_provider" => $confirmed['provider'],
+                "{$prefix}_coordinate_place_id" => $confirmed['place_id'],
+                "{$prefix}_coordinate_label" => $confirmed['label'],
+                "{$prefix}_coordinate_confirmed_at" => $confirmed['confirmed_at'],
+            ]);
+        }
+
+        return $normalized;
     }
 
     /** @return array<string, mixed> */

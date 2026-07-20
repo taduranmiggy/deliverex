@@ -7,6 +7,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import '../components/LiveFleetMap.css'
 import { fetchJobOrderMap } from '../api/jobOrders'
+import { reportRenderedLocation } from '../api/geocoding'
 import useAuth from '../hooks/useAuth'
 import { AlertTriangle, Loader2, MapPin, Navigation } from 'lucide-react'
 
@@ -20,12 +21,6 @@ const ROUTE_SOURCE_LABELS = {
   openrouteservice: 'Road route (OpenRouteService)',
   osrm: 'Road route (OSRM)',
   straight_line: 'Direct estimate (routing unavailable)',
-}
-
-const RETRY_DELAYS_MS = [1500, 2500]
-
-function sleep(ms) {
-  return new Promise((resolve) => { setTimeout(resolve, ms) })
 }
 
 function FitBounds({ points, polyline }) {
@@ -96,7 +91,7 @@ function makePinIcon(color, label) {
 
 function formatCoords(point) {
   if (point?.lat == null || point?.lng == null) return '—'
-  return `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`
+  return `${point.lat.toFixed(7)}, ${point.lng.toFixed(7)}`
 }
 
 function buildWarningMessage(geocode, mapUnavailable, partialGeocode) {
@@ -173,20 +168,9 @@ function RouteInfoPanel({ data, showCoordinates, showWarning, warningMessage, wa
   )
 }
 
-async function loadMapPayload(jobOrderId, attempt = 0) {
+async function loadMapPayload(jobOrderId) {
   const res = await fetchJobOrderMap(jobOrderId)
-  const payload = res?.data ?? res
-
-  const geocode = payload?.geocode ?? {}
-  const hasBothAddresses = Boolean(geocode.pickup_address && geocode.destination_address)
-  const fullyResolved = geocode.pickup_resolved && geocode.destination_resolved
-
-  if (hasBothAddresses && !fullyResolved && attempt < RETRY_DELAYS_MS.length) {
-    await sleep(RETRY_DELAYS_MS[attempt])
-    return loadMapPayload(jobOrderId, attempt + 1)
-  }
-
-  return payload
+  return res?.data ?? res
 }
 
 export default function JobOrderRouteMap({
@@ -221,6 +205,16 @@ export default function JobOrderRouteMap({
 
     return () => { cancelled = true }
   }, [jobOrderId])
+
+  useEffect(() => {
+    const pointsToReport = [data?.pickup, data?.destination].filter(
+      (point) => point?.trace_id && point?.lat != null && point?.lng != null,
+    )
+    if (pointsToReport.length === 0) return
+    void Promise.allSettled(pointsToReport.map((point) => (
+      reportRenderedLocation(point.trace_id, point.lat, point.lng)
+    )))
+  }, [data?.pickup, data?.destination])
 
   const points = useMemo(() => {
     const items = []

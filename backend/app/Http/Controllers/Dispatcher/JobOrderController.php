@@ -15,7 +15,7 @@ use App\Models\MaterialSpecification;
 use App\Models\MaterialType;
 use App\Models\User;
 use App\Services\Address\StandardizedAddressService;
-use App\Services\Delivery\JobOrderLocationService;
+use App\Services\Geocoding\ConfirmedLocationService;
 use App\Services\MasterData\MaterialMasterDataService;
 use App\Support\AuditChangeTracker;
 use App\Support\AuditLogger;
@@ -34,8 +34,8 @@ class JobOrderController extends Controller
         private CompanyService $companyService,
         private DriverAvailabilityService $driverAvailability,
         private AssignmentResourceSyncService $resourceSync,
-        private JobOrderLocationService $locationService,
         private StandardizedAddressService $addresses,
+        private ConfirmedLocationService $confirmedLocations,
     ) {
     }
 
@@ -100,6 +100,7 @@ class JobOrderController extends Controller
             'pickup_street'              => 'required|string|max:255',
             'pickup_landmark'            => 'nullable|string|max:255',
             'pickup_location'            => 'nullable|string',
+            'pickup_coordinate_confirmation_token' => 'required|string',
             'dropoff_region_code'        => 'required|string|size:10',
             'dropoff_province_code'      => 'nullable|string|size:10',
             'dropoff_city_code'          => 'required|string|size:10',
@@ -110,6 +111,7 @@ class JobOrderController extends Controller
             'dropoff_street'             => 'required|string|max:255',
             'dropoff_landmark'           => 'nullable|string|max:255',
             'dropoff_location'           => 'nullable|string',
+            'dropoff_coordinate_confirmation_token' => 'required|string',
             'quarry_id'                  => 'nullable|exists:quarries,id',
             'preferred_vehicle_type_id'  => 'nullable|exists:vehicle_types,id',
             'material_type_id'           => 'nullable|exists:material_types,id',
@@ -179,8 +181,8 @@ class JobOrderController extends Controller
 
         // Official PSGC labels replace client-supplied labels. Coordinates are
         // always resolved and persisted by the server before the job is created.
-        $data = array_merge($data, $this->addresses->normalize($data, 'pickup', false));
-        $data = array_merge($data, $this->addresses->normalize($data, 'dropoff', false));
+        $data = array_merge($data, $this->addresses->normalize($data, 'pickup', false, true));
+        $data = array_merge($data, $this->addresses->normalize($data, 'dropoff', false, true));
 
         JobOrderAddressValidator::validatePayload($data);
 
@@ -193,10 +195,18 @@ class JobOrderController extends Controller
         $data['priority']           = $data['priority'] ?? 'normal';
 
         // Strip non-column helper fields before persisting.
-        unset($data['client_mode'], $data['save_as_client'], $data['contact_person'], $data['client_id']);
+        unset(
+            $data['client_mode'],
+            $data['save_as_client'],
+            $data['contact_person'],
+            $data['client_id'],
+            $data['pickup_coordinate_confirmation_token'],
+            $data['dropoff_coordinate_confirmation_token'],
+        );
 
         $jobOrder = JobOrder::create($data);
-        $this->locationService->ensureCoordinates($jobOrder);
+        $this->confirmedLocations->recordStored($jobOrder->pickup_geocoding_trace_id, $jobOrder, 'pickup');
+        $this->confirmedLocations->recordStored($jobOrder->dropoff_geocoding_trace_id, $jobOrder, 'dropoff');
 
         AuditLogger::record($request->user(), 'job_order.created', JobOrder::class, $jobOrder->id, [
             'tracking_code' => $jobOrder->tracking_code,
@@ -283,6 +293,7 @@ class JobOrderController extends Controller
             'pickup_landmark'            => 'nullable|string|max:255',
             // legacy fallback
             'pickup_location'            => 'sometimes|nullable|string',
+            'pickup_coordinate_confirmation_token' => 'sometimes|nullable|string',
             // structured drop-off
             'dropoff_region_code'        => 'sometimes|nullable|string|size:10',
             'dropoff_province_code'      => 'sometimes|nullable|string|size:10',
@@ -295,6 +306,7 @@ class JobOrderController extends Controller
             'dropoff_landmark'           => 'nullable|string|max:255',
             // legacy fallback
             'dropoff_location'           => 'sometimes|nullable|string',
+            'dropoff_coordinate_confirmation_token' => 'sometimes|nullable|string',
             'quarry_id'                  => 'nullable|exists:quarries,id',
             'preferred_vehicle_type_id'  => 'nullable|exists:vehicle_types,id',
             'material_type_id'           => 'sometimes|nullable|exists:material_types,id',
@@ -353,7 +365,7 @@ class JobOrderController extends Controller
 
             if ($pickupChanged) {
                 if (! empty($merged['pickup_region_code'])) {
-                    $data = array_merge($data, $this->addresses->normalize($merged, 'pickup', false));
+                    $data = array_merge($data, $this->addresses->normalize($merged, 'pickup', false, true));
                 } elseif ($this->addressActuallyChanged($jobOrder, $data, $pickupFields)) {
                     throw ValidationException::withMessages([
                         'pickup_address' => ['Select the pickup address from the PSGC geographic directory.'],
@@ -363,7 +375,7 @@ class JobOrderController extends Controller
 
             if ($dropoffChanged) {
                 if (! empty($merged['dropoff_region_code'])) {
-                    $data = array_merge($data, $this->addresses->normalize($merged, 'dropoff', false));
+                    $data = array_merge($data, $this->addresses->normalize($merged, 'dropoff', false, true));
                 } elseif ($this->addressActuallyChanged($jobOrder, $data, $dropoffFields)) {
                     throw ValidationException::withMessages([
                         'dropoff_address' => ['Select the destination address from the PSGC geographic directory.'],
@@ -404,6 +416,7 @@ class JobOrderController extends Controller
         $before = $jobOrder->only($trackFields);
 
         $previousStatus = $jobOrder->status;
+        unset($data['pickup_coordinate_confirmation_token'], $data['dropoff_coordinate_confirmation_token']);
         $jobOrder->update($data);
 
         if (($data['status'] ?? null) === 'cancelled' && $previousStatus !== 'cancelled') {
@@ -414,16 +427,14 @@ class JobOrderController extends Controller
             );
         }
 
-        if ($pickupChanged) {
-            $jobOrder->update(['pickup_latitude' => null, 'pickup_longitude' => null]);
-        }
-
-        if ($dropoffChanged) {
-            $jobOrder->update(['dropoff_latitude' => null, 'dropoff_longitude' => null]);
-        }
-
         if ($pickupChanged || $dropoffChanged) {
-            $this->locationService->ensureCoordinates($jobOrder->fresh());
+            $stored = $jobOrder->fresh();
+            if ($pickupChanged) {
+                $this->confirmedLocations->recordStored($stored->pickup_geocoding_trace_id, $stored, 'pickup');
+            }
+            if ($dropoffChanged) {
+                $this->confirmedLocations->recordStored($stored->dropoff_geocoding_trace_id, $stored, 'dropoff');
+            }
         }
 
         $after = $jobOrder->fresh()->only($trackFields);
