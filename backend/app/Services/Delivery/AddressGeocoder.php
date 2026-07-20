@@ -33,7 +33,7 @@ class AddressGeocoder
             return null;
         }
 
-        $cacheKey = 'deliverex.geocode.v4.'.md5($query.$anchor->cacheKeySuffix());
+        $cacheKey = 'deliverex.geocode.v5.'.md5($query.$anchor->cacheKeySuffix());
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['lat'], $cached['lng'])) {
             return $cached;
@@ -57,6 +57,7 @@ class AddressGeocoder
     public function geocodeFirst(array $queries, GeocodeAnchor|array|null $anchor = null): ?array
     {
         $anchor = $this->normalizeAnchor($anchor);
+        $queries = array_merge($queries, $anchor->geocodeFallbackQueries());
         $attempted = false;
 
         foreach ($queries as $query) {
@@ -157,6 +158,10 @@ class AddressGeocoder
     /** @return array{lat: float, lng: float}|null */
     private function resolveAnchorCentroid(GeocodeAnchor $anchor): ?array
     {
+        if ($preset = $anchor->fallbackCentroid()) {
+            return $preset;
+        }
+
         $localityQuery = $anchor->localityQuery();
         if ($localityQuery === null) {
             return null;
@@ -165,13 +170,18 @@ class AddressGeocoder
         return Cache::remember(
             $anchor->centroidCacheKey(),
             now()->addDays(60),
-            function () use ($localityQuery): ?array {
-                $openRoute = $this->performOpenRouteServiceLookup($localityQuery, new GeocodeAnchor, null);
-                if ($openRoute) {
+            function () use ($localityQuery, $anchor): ?array {
+                $openRoute = $this->performOpenRouteServiceLookup($localityQuery, $anchor, null);
+                if ($openRoute && $this->scorer->coordsWithinExpectedArea($anchor, $openRoute)) {
                     return $openRoute;
                 }
 
-                return $this->performNominatimLookup($localityQuery, new GeocodeAnchor, null);
+                $nominatim = $this->performNominatimLookup($localityQuery, $anchor, null);
+                if ($nominatim && $this->scorer->coordsWithinExpectedArea($anchor, $nominatim)) {
+                    return $nominatim;
+                }
+
+                return $anchor->fallbackCentroid();
             },
         );
     }
@@ -194,13 +204,21 @@ class AddressGeocoder
                 'https://api.openrouteservice.org/geocode/search',
             );
 
+            $params = [
+                'text' => $query,
+                'size' => 5,
+                'boundary.country' => 'PH',
+            ];
+
+            if ($anchor->isNcr()) {
+                $focus = $anchor->focusPoint();
+                $params['focus.point.lat'] = $focus['lat'];
+                $params['focus.point.lon'] = $focus['lng'];
+            }
+
             $response = Http::timeout(12)
                 ->withHeaders($authHeader)
-                ->get($url, [
-                    'text' => $query,
-                    'size' => 5,
-                    'boundary.country' => 'PH',
-                ]);
+                ->get($url, $params);
 
             if (! $response->successful()) {
                 Log::warning('OpenRouteService geocoding HTTP failure', [
@@ -236,17 +254,24 @@ class AddressGeocoder
         ?array $centroid,
     ): ?array {
         try {
+            $params = [
+                'q' => $query,
+                'format' => 'json',
+                'limit' => 5,
+                'countrycodes' => 'ph',
+                'addressdetails' => 1,
+            ];
+
+            if ($anchor->isNcr()) {
+                $params['viewbox'] = '120.90,14.78,121.10,14.42';
+                $params['bounded'] = 1;
+            }
+
             $response = Http::withHeaders([
                 'User-Agent' => 'Deliverex/1.0 (logistics capstone)',
             ])
                 ->timeout(10)
-                ->get('https://nominatim.openstreetmap.org/search', [
-                    'q' => $query,
-                    'format' => 'json',
-                    'limit' => 5,
-                    'countrycodes' => 'ph',
-                    'addressdetails' => 1,
-                ]);
+                ->get('https://nominatim.openstreetmap.org/search', $params);
 
             if (! $response->successful()) {
                 Log::warning('Address geocoding HTTP failure', [

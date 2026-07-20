@@ -61,6 +61,7 @@ class StandardizedAddressService
                 'province' => $province,
                 'region' => $region,
                 'barangay' => $barangay,
+                'region_code' => (string) ($resolved['region']['code'] ?? ''),
             ],
         );
 

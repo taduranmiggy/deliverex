@@ -54,6 +54,7 @@ class GeocodeResultScorerTest extends TestCase
         $centroid = ['lat' => 14.604, 'lng' => 120.989];
         $tanayCoords = ['lat' => 14.498, 'lng' => 121.364];
 
+        $this->assertFalse($this->scorer->coordsWithinExpectedArea($anchor, $tanayCoords));
         $this->assertFalse($this->scorer->storedCoordinatesMatch($anchor, $tanayCoords, $centroid));
         $this->assertFalse($this->scorer->accepts(
             $anchor,
@@ -61,6 +62,14 @@ class GeocodeResultScorerTest extends TestCase
             ['Tanay', 'Rizal'],
             $centroid,
         ));
+    }
+
+    public function test_detects_ncr_from_city_name_when_region_is_missing(): void
+    {
+        $anchor = new GeocodeAnchor(city: 'SAMPALOC');
+
+        $this->assertTrue($anchor->isNcr());
+        $this->assertSame(14.6042, $anchor->fallbackCentroid()['lat']);
     }
 
     public function test_accepts_quezon_city_for_ncr_anchor(): void

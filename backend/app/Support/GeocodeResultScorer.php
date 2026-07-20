@@ -6,7 +6,15 @@ final class GeocodeResultScorer
 {
     private const DEFAULT_MAX_DISTANCE_KM = 35.0;
 
-    private const NCR_MAX_DISTANCE_KM = 15.0;
+    private const NCR_MAX_DISTANCE_KM = 12.0;
+
+    /** @var array{min_lat: float, max_lat: float, min_lng: float, max_lng: float} */
+    private const NCR_BOUNDS = [
+        'min_lat' => 14.42,
+        'max_lat' => 14.78,
+        'min_lng' => 120.90,
+        'max_lng' => 121.10,
+    ];
 
     /** @var list<string> */
     private const NCR_CONFLICT_PROVINCES = [
@@ -20,8 +28,6 @@ final class GeocodeResultScorer
     ];
 
     /**
-     * Validate a fresh geocoder result against the PSGC anchor.
-     *
      * @param  array{lat: float, lng: float}  $coords
      * @param  list<string>  $labels
      */
@@ -29,6 +35,10 @@ final class GeocodeResultScorer
     {
         if (! $anchor->hasLocality()) {
             return true;
+        }
+
+        if (! $this->coordsWithinExpectedArea($anchor, $coords)) {
+            return false;
         }
 
         if ($this->conflictsWithAnchor($anchor, $labels)) {
@@ -44,7 +54,7 @@ final class GeocodeResultScorer
             return false;
         }
 
-        if ($distanceKm <= 8.0) {
+        if ($distanceKm <= 5.0) {
             return true;
         }
 
@@ -52,8 +62,6 @@ final class GeocodeResultScorer
     }
 
     /**
-     * Validate already stored coordinates using distance from the anchor centroid only.
-     *
      * @param  array{lat: float, lng: float}  $coords
      */
     public function storedCoordinatesMatch(GeocodeAnchor $anchor, array $coords, ?array $centroid): bool
@@ -62,11 +70,27 @@ final class GeocodeResultScorer
             return true;
         }
 
+        if (! $this->coordsWithinExpectedArea($anchor, $coords)) {
+            return false;
+        }
+
         if (! $centroid) {
             return false;
         }
 
         return $this->distanceKm($coords, $centroid) <= $this->maxAllowedDistanceKm($anchor);
+    }
+
+    /**
+     * @param  array{lat: float, lng: float}  $coords
+     */
+    public function coordsWithinExpectedArea(GeocodeAnchor $anchor, array $coords): bool
+    {
+        if ($anchor->isNcr()) {
+            return $this->isWithinNcrBounds($coords);
+        }
+
+        return true;
     }
 
     public function maxAllowedDistanceKm(GeocodeAnchor $anchor): float
@@ -135,6 +159,15 @@ final class GeocodeResultScorer
         }
 
         return false;
+    }
+
+    /** @param  array{lat: float, lng: float}  $coords */
+    private function isWithinNcrBounds(array $coords): bool
+    {
+        return $coords['lat'] >= self::NCR_BOUNDS['min_lat']
+            && $coords['lat'] <= self::NCR_BOUNDS['max_lat']
+            && $coords['lng'] >= self::NCR_BOUNDS['min_lng']
+            && $coords['lng'] <= self::NCR_BOUNDS['max_lng'];
     }
 
     /** @param  list<string>  $labels */

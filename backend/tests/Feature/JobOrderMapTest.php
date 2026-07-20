@@ -359,6 +359,7 @@ class JobOrderMapTest extends TestCase
             'dropoff_barangay' => '396',
             'dropoff_city' => 'Sampaloc',
             'dropoff_region' => 'NATIONAL CAPITAL REGION (NCR)',
+            'dropoff_region_code' => '1300000000',
             'dropoff_location' => '865 P. Paredes St., Barangay 396, Sampaloc, Manila',
             'dropoff_latitude' => 14.498,
             'dropoff_longitude' => 121.364,
