@@ -62,6 +62,7 @@ MAIL_FROM_ADDRESS=noreply@deliverexapp.com
 MAIL_FROM_NAME=Deliverex
 MAIL_ACCOUNTS_ADDRESS=accounts@deliverexapp.com
 MAIL_SUPPORT_ADDRESS=deliverexapp@gmail.com
+MAIL_SUPPORT_FROM=noreply@deliverexapp.com
 MAIL_QUEUE=false
 RESEND_API_KEY=${RESEND_API_KEY:-}
 FRONTEND_URL=${app_url}
@@ -114,6 +115,7 @@ merge_secret_keys_into_env() {
   merge_env_var "MAIL_FROM_NAME" "Deliverex"
   merge_env_var "MAIL_ACCOUNTS_ADDRESS" "${MAIL_ACCOUNTS_ADDRESS:-accounts@deliverexapp.com}"
   merge_env_var "MAIL_SUPPORT_ADDRESS" "${MAIL_SUPPORT_ADDRESS:-deliverexapp@gmail.com}"
+  merge_env_var "MAIL_SUPPORT_FROM" "${MAIL_SUPPORT_FROM:-noreply@deliverexapp.com}"
   merge_env_var "MAIL_QUEUE" "false"
   merge_env_var "FRONTEND_URL" "${APP_URL:-https://deliverexapp.com}"
   merge_env_var "OCR_PROVIDER" "${OCR_PROVIDER:-document_ai}"

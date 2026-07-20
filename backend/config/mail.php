@@ -120,7 +120,10 @@ return [
     'addresses' => [
         'noreply' => env('MAIL_FROM_ADDRESS', 'noreply@deliverexapp.com'),
         'accounts' => env('MAIL_ACCOUNTS_ADDRESS', 'accounts@deliverexapp.com'),
+        // Inbox for staff (can be Gmail). Not used as Resend "From".
         'support' => env('MAIL_SUPPORT_ADDRESS', 'deliverexapp@gmail.com'),
+        // Verified-domain sender for customer-facing support emails (Resend From).
+        'support_from' => env('MAIL_SUPPORT_FROM', env('MAIL_FROM_ADDRESS', 'noreply@deliverexapp.com')),
     ],
 
     'inquiry' => [

@@ -243,20 +243,25 @@ class EmailService
 
     public function sendContactConfirmation(string $recipient, array $payload): EmailLog
     {
+        $supportInbox = $this->supportInbox();
+
         return $this->send(
             EmailType::CONTACT_SUPPORT,
             $recipient,
             'We received your concern — '.$payload['reference_no'],
             'mail.contact-confirmation',
             array_merge($payload, ['subject' => 'We received your concern']),
-            config('mail.addresses.support'),
+            $this->supportFromAddress(),
+            metadata: [
+                'reply_to' => $supportInbox,
+            ],
             forceSync: true,
         );
     }
 
     public function sendInquiryReply(string $recipient, array $payload): EmailLog
     {
-        $support = config('mail.addresses.support');
+        $supportInbox = $this->supportInbox();
         $reference = $payload['reference_no'] ?? 'Inquiry';
 
         return $this->send(
@@ -265,9 +270,9 @@ class EmailService
             'Re: '.$reference.(! empty($payload['subject_line']) ? ' — '.$payload['subject_line'] : ''),
             'mail.inquiry-reply',
             array_merge($payload, ['subject' => 'Reply to your concern']),
-            $support,
+            $this->supportFromAddress(),
             metadata: [
-                'reply_to' => filter_var((string) $support, FILTER_VALIDATE_EMAIL) ? $support : null,
+                'reply_to' => $supportInbox,
                 'inquiry_id' => $payload['inquiry_id'] ?? null,
             ],
             forceSync: true,
@@ -291,6 +296,53 @@ class EmailService
         );
     }
 
+    /** Customer-facing From address (must be on a Resend-verified domain). */
+    private function supportFromAddress(): string
+    {
+        $from = strtolower(trim((string) config('mail.addresses.support_from', '')));
+        if ($from !== '' && filter_var($from, FILTER_VALIDATE_EMAIL) && ! $this->isPublicMailboxDomain($from)) {
+            return $from;
+        }
+
+        $noreply = strtolower(trim((string) config('mail.addresses.noreply', '')));
+        if ($noreply !== '' && filter_var($noreply, FILTER_VALIDATE_EMAIL)) {
+            return $noreply;
+        }
+
+        return 'noreply@deliverexapp.com';
+    }
+
+    /** Staff inbox (may be Gmail) — used as Reply-To / notification recipient only. */
+    private function supportInbox(): ?string
+    {
+        $support = strtolower(trim((string) config('mail.addresses.support', '')));
+
+        return filter_var($support, FILTER_VALIDATE_EMAIL) ? $support : null;
+    }
+
+    private function isPublicMailboxDomain(string $email): bool
+    {
+        $domain = substr(strrchr($email, '@') ?: '', 1);
+        if ($domain === '') {
+            return true;
+        }
+
+        return in_array($domain, [
+            'gmail.com',
+            'googlemail.com',
+            'yahoo.com',
+            'yahoo.com.ph',
+            'outlook.com',
+            'hotmail.com',
+            'live.com',
+            'icloud.com',
+            'me.com',
+            'aol.com',
+            'proton.me',
+            'protonmail.com',
+        ], true);
+    }
+
     private function fromForType(string $type): string
     {
         return match ($type) {
@@ -299,8 +351,8 @@ class EmailService
             EmailType::DRIVER_CREDENTIALS,
             EmailType::USER_INVITATION => config('mail.addresses.accounts'),
             EmailType::CONTACT_SUPPORT,
-            EmailType::SUPPORT_INQUIRY,
-            EmailType::INQUIRY_REPLY => config('mail.addresses.support'),
+            EmailType::INQUIRY_REPLY => $this->supportFromAddress(),
+            EmailType::SUPPORT_INQUIRY => config('mail.addresses.noreply'),
             default => config('mail.addresses.noreply'),
         };
     }

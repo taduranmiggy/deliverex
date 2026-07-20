@@ -14,10 +14,13 @@ MAIL_FROM_ADDRESS=noreply@deliverexapp.com
 MAIL_FROM_NAME=Deliverex
 MAIL_ACCOUNTS_ADDRESS=accounts@deliverexapp.com
 MAIL_SUPPORT_ADDRESS=deliverexapp@gmail.com
+MAIL_SUPPORT_FROM=noreply@deliverexapp.com
 RESEND_API_KEY=re_xxxxxxxx
 FRONTEND_URL=https://deliverexapp.com
 MAIL_QUEUE=false
 ```
+
+**Important:** Resend cannot send *from* `@gmail.com`. Keep `MAIL_SUPPORT_ADDRESS` as your Gmail inbox for receiving replies, and set `MAIL_SUPPORT_FROM` to an address on your verified domain (`deliverexapp.com`).
 
 For production, add `RESEND_API_KEY` to `~/.deploy.secrets` on Hostinger:
 
@@ -31,9 +34,9 @@ Then re-run: `bash scripts/hostinger-hpanel-git-deploy.sh`
 
 Verify `deliverexapp.com` and configure sender addresses:
 
-- `noreply@deliverexapp.com` — transactional (password reset, delivery updates)
+- `noreply@deliverexapp.com` — transactional (password reset, delivery updates, inquiry replies From)
 - `accounts@deliverexapp.com` — company activation, driver credentials
-- `deliverexapp@gmail.com` — customer inquiries and feedback
+- `deliverexapp@gmail.com` — staff inbox / Reply-To for customer concerns (not used as Resend From)
 
 ## Architecture
 
