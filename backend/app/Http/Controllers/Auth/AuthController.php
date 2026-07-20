@@ -309,7 +309,7 @@ class AuthController extends Controller
 
     public function passwordResetContext(Request $request)
     {
-        $user = $this->resolvePasswordBrokerUser($request);
+        $user = $this->resolvePasswordBrokerUser($request, brokers: ['users']);
 
         return response()->json([
             'email' => $user->email,
@@ -318,7 +318,7 @@ class AuthController extends Controller
 
     public function accountActivationContext(Request $request)
     {
-        $user = $this->resolvePasswordBrokerUser($request);
+        $user = $this->resolvePasswordBrokerUser($request, brokers: ['invitations', 'users']);
         $user->load(['role', 'companyUser.company']);
         $company = $user->companyUser?->company;
 
@@ -331,21 +331,35 @@ class AuthController extends Controller
         ]);
     }
 
-    private function resolvePasswordBrokerUser(Request $request): User
+    /**
+     * @param  list<string>  $brokers
+     */
+    private function resolvePasswordBrokerUser(Request $request, array $brokers = ['users']): User
     {
         $payload = $request->validate([
             'email' => 'required|email',
             'token' => 'required|string',
         ]);
 
-        $user = User::query()->where('email', $payload['email'])->first();
-        if (! $user || ! Password::broker()->tokenExists($user, $payload['token'])) {
+        $email = strtolower(trim((string) $payload['email']));
+        $token = trim((string) $payload['token']);
+
+        $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+        if (! $user) {
             throw ValidationException::withMessages([
-                'token' => ['Invalid or expired reset link.'],
+                'token' => ['Invalid or expired activation link. Ask your administrator to resend the invite.'],
             ]);
         }
 
-        return $user;
+        foreach ($brokers as $broker) {
+            if (Password::broker($broker)->tokenExists($user, $token)) {
+                return $user;
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'token' => ['Invalid or expired activation link. Ask your administrator to resend the invite from User Management.'],
+        ]);
     }
 
     public function resetPassword(Request $request)
@@ -367,6 +381,10 @@ class AuthController extends Controller
             'company_address.street' => 'required_with:company_address|nullable|string|max:255',
         ]);
 
+        $email = strtolower(trim((string) $request->input('email')));
+        $token = trim((string) $request->input('token'));
+        $request->merge(['email' => $email, 'token' => $token]);
+
         $companyAddress = $request->input('company_address');
         $normalizedCompanyAddress = null;
         if (is_array($companyAddress)) {
@@ -379,28 +397,39 @@ class AuthController extends Controller
             ]);
         }
 
-        $status = Password::reset(
-            $request->only('email', 'password', 'password_confirmation', 'token'),
-            function (User $user, string $password) use ($normalizedCompanyAddress) {
-                $user->forceFill([
-                    'password' => $password,
-                    'must_change_password' => false,
-                    'password_changed_at' => now(),
-                    'status' => 'active',
-                    'invitation_accepted_at' => now(),
-                ])->save();
+        $credentials = $request->only('email', 'password', 'password_confirmation', 'token');
+        $resetCallback = function (User $user, string $password) use ($normalizedCompanyAddress) {
+            $user->forceFill([
+                'password' => $password,
+                'must_change_password' => false,
+                'password_changed_at' => now(),
+                'status' => 'active',
+                'invitation_accepted_at' => now(),
+            ])->save();
 
-                if (is_array($normalizedCompanyAddress)) {
-                    $user->load(['role', 'companyUser.company']);
-                    if ($user->role?->name === 'customer' && $user->companyUser?->company) {
-                        $user->companyUser->company->update($normalizedCompanyAddress);
-                    }
+            if (is_array($normalizedCompanyAddress)) {
+                $user->load(['role', 'companyUser.company']);
+                if ($user->role?->name === 'customer' && $user->companyUser?->company) {
+                    $user->companyUser->company->update($normalizedCompanyAddress);
                 }
             }
-        );
+        };
+
+        $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+        $status = Password::INVALID_TOKEN;
+
+        if ($user) {
+            foreach (['invitations', 'users'] as $broker) {
+                if (! Password::broker($broker)->tokenExists($user, $token)) {
+                    continue;
+                }
+                $status = Password::broker($broker)->reset($credentials, $resetCallback);
+                break;
+            }
+        }
 
         if ($status === Password::PASSWORD_RESET) {
-            $user = User::query()->where('email', $request->input('email'))->first();
+            $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
             if ($user) {
                 AuditLogger::record($user, 'auth.password_reset', User::class, $user->id, [
                     'email' => $user->email,
@@ -411,7 +440,7 @@ class AuthController extends Controller
         }
 
         throw ValidationException::withMessages([
-            'email' => [__($status)],
+            'token' => ['Invalid or expired activation link. Ask your administrator to resend the invite.'],
         ]);
     }
 

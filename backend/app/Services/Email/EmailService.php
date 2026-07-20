@@ -151,6 +151,7 @@ class EmailService
             ],
             config('mail.addresses.accounts'),
             userId: $user->id,
+            forceSync: true,
         );
     }
 

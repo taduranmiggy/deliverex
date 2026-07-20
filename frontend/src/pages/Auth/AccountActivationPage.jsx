@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { fetchAccountActivationContext, resetPassword } from '../../api/auth'
 import PasswordFieldsForm, { allPasswordRulesPassed } from '../../components/auth/PasswordFieldsForm'
 import PsgcAddressSelector from '../../components/PsgcAddressSelector'
@@ -9,9 +9,10 @@ import './LoginPage.css'
 
 function AccountActivationPage() {
   const [searchParams] = useSearchParams()
+  const { token: tokenParam } = useParams()
   const navigate = useNavigate()
-  const token = searchParams.get('token') ?? ''
-  const email = searchParams.get('email') ?? ''
+  const token = String(tokenParam || searchParams.get('token') || '').trim()
+  const email = String(searchParams.get('email') || '').trim().toLowerCase()
 
   const loginPath = useMemo(
     () => (isStandalonePwa() ? '/customer/login' : '/login'),
@@ -130,7 +131,10 @@ function AccountActivationPage() {
           <h1>Activation unavailable</h1>
           <p className="auth-error-dx">{error}</p>
           <p className="auth-alt-link" style={{ marginTop: 16 }}>
-            Need help? Contact your administrator to request a new activation link.
+            Ask your administrator to open <strong>User Management</strong> and click <strong>Resend invite</strong> for this account, then use the newest email.
+          </p>
+          <p className="auth-alt-link">
+            <Link to={loginPath}>Back to sign in</Link>
           </p>
         </div>
       </div>

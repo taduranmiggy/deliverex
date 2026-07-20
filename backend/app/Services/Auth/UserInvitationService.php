@@ -5,6 +5,7 @@ namespace App\Services\Auth;
 use App\Models\User;
 use App\Services\Email\EmailService;
 use Illuminate\Support\Facades\Password;
+use RuntimeException;
 
 class UserInvitationService
 {
@@ -12,12 +13,28 @@ class UserInvitationService
 
     public function sendInvitation(User $user): void
     {
-        $token = Password::broker()->createToken($user);
-        $activationUrl = rtrim(config('app.frontend_url', config('app.url')), '/')
-            .'/activate-account?token='.urlencode($token)
-            .'&email='.urlencode($user->email);
+        $email = strtolower(trim((string) $user->email));
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('Cannot send invitation without a valid user email.');
+        }
 
-        $this->email->sendUserInvitation($user, $activationUrl);
+        if ($user->email !== $email) {
+            $user->forceFill(['email' => $email])->save();
+        }
+
+        $token = Password::broker('invitations')->createToken($user);
+
+        if (! Password::broker('invitations')->tokenExists($user->fresh(), $token)) {
+            throw new RuntimeException('Invitation token could not be verified immediately after creation.');
+        }
+
+        $frontend = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+        // Prefer path-style token so email clients are less likely to break query strings.
+        $activationUrl = $frontend
+            .'/activate-account/'.$token
+            .'?email='.rawurlencode($email);
+
+        $this->email->sendUserInvitation($user->fresh(), $activationUrl);
 
         $user->forceFill([
             'invited_at' => now(),
@@ -25,4 +42,3 @@ class UserInvitationService
         ])->save();
     }
 }
-

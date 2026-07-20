@@ -43,6 +43,7 @@ function AppRouter() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/activate-account" element={<AccountActivationPage />} />
+          <Route path="/activate-account/:token" element={<AccountActivationPage />} />
           <Route path="/activate-company/:token" element={<CompanyActivationPage />} />
           <Route path="/driver/login" element={<DriverLoginPage />} />
           <Route
