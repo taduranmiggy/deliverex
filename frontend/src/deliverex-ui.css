@@ -6261,6 +6261,7 @@
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   gap: 14px;
   align-items: stretch;
+  min-width: 0;
 }
 
 .dx-job-route-map__map-col {
@@ -6298,7 +6299,29 @@
 }
 
 .dx-job-route-map--detail .dx-job-route-map__stage {
-  height: clamp(200px, 42vh, 340px);
+  height: clamp(180px, 28vh, 260px);
+}
+
+.dx-job-route-map--detail .dx-job-route-map__layout {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.dx-job-route-map--detail .dx-job-route-map__info-metrics {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dx-job-route-map--detail .dx-job-route-map__metric strong {
+  overflow-wrap: anywhere;
+}
+
+.dx-detail-panel .dx-job-route-map {
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.dx-detail-panel__body .dx-job-route-map__info {
+  padding: 12px 14px;
 }
 
 .dx-job-route-map--dispatch {
@@ -6760,7 +6783,7 @@
 
 .dx-job-route-map__info-metrics {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 2px;
 }
@@ -6775,6 +6798,7 @@
   border: 1px solid var(--stroke);
   font-size: var(--text-xs, 0.8125rem);
   color: var(--muted);
+  min-width: 0;
 }
 
 .dx-job-route-map__metric strong {

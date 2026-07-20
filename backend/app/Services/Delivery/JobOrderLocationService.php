@@ -4,6 +4,7 @@ namespace App\Services\Delivery;
 
 use App\Models\JobOrder;
 use App\Services\Gps\RouteDirectionsService;
+use App\Support\GeocodeAnchor;
 use App\Support\GpsCoordinateValidator;
 use App\Support\JobOrderAddressFormatter;
 use App\Support\LocationPipelineLogger;
@@ -24,6 +25,25 @@ class JobOrderLocationService
         $updates = [];
         $geocodedPickup = false;
 
+        $pickupAnchor = GeocodeAnchor::fromJobOrder($jobOrder, 'pickup');
+        $validatedPickup = $this->geocoder->validateStoredCoordinates(
+            $jobOrder->pickup_latitude,
+            $jobOrder->pickup_longitude,
+            $pickupAnchor,
+        );
+
+        if ($validatedPickup === null
+            && GpsCoordinateValidator::isUsable($jobOrder->pickup_latitude, $jobOrder->pickup_longitude)) {
+            $updates = array_merge($updates, [
+                'pickup_latitude' => null,
+                'pickup_longitude' => null,
+                'pickup_geocode_attempted_at' => null,
+            ]);
+            $jobOrder->pickup_latitude = null;
+            $jobOrder->pickup_longitude = null;
+            $jobOrder->pickup_geocode_attempted_at = null;
+        }
+
         if (! GpsCoordinateValidator::isUsable($jobOrder->pickup_latitude, $jobOrder->pickup_longitude)
             && $jobOrder->pickup_geocode_attempted_at === null) {
             $updates['pickup_geocode_attempted_at'] = now();
@@ -35,7 +55,7 @@ class JobOrderLocationService
                     'job_order_id' => $jobOrder->id,
                     'candidates' => $pickupCandidates,
                 ]);
-                $pickupCoords = $this->geocoder->geocodeFirst($pickupCandidates);
+                $pickupCoords = $this->geocoder->geocodeFirst($pickupCandidates, $pickupAnchor);
                 if ($pickupCoords) {
                     $updates['pickup_latitude'] = $pickupCoords['lat'];
                     $updates['pickup_longitude'] = $pickupCoords['lng'];
@@ -62,6 +82,25 @@ class JobOrderLocationService
             }
         }
 
+        $dropoffAnchor = GeocodeAnchor::fromJobOrder($jobOrder, 'dropoff');
+        $validatedDropoff = $this->geocoder->validateStoredCoordinates(
+            $jobOrder->dropoff_latitude,
+            $jobOrder->dropoff_longitude,
+            $dropoffAnchor,
+        );
+
+        if ($validatedDropoff === null
+            && GpsCoordinateValidator::isUsable($jobOrder->dropoff_latitude, $jobOrder->dropoff_longitude)) {
+            $updates = array_merge($updates, [
+                'dropoff_latitude' => null,
+                'dropoff_longitude' => null,
+                'dropoff_geocode_attempted_at' => null,
+            ]);
+            $jobOrder->dropoff_latitude = null;
+            $jobOrder->dropoff_longitude = null;
+            $jobOrder->dropoff_geocode_attempted_at = null;
+        }
+
         if (! GpsCoordinateValidator::isUsable($jobOrder->dropoff_latitude, $jobOrder->dropoff_longitude)
             && $jobOrder->dropoff_geocode_attempted_at === null) {
             $updates['dropoff_geocode_attempted_at'] = now();
@@ -77,7 +116,7 @@ class JobOrderLocationService
                     'job_order_id' => $jobOrder->id,
                     'candidates' => $dropoffCandidates,
                 ]);
-                $dropoffCoords = $this->geocoder->geocodeFirst($dropoffCandidates);
+                $dropoffCoords = $this->geocoder->geocodeFirst($dropoffCandidates, $dropoffAnchor);
                 if ($dropoffCoords) {
                     $updates['dropoff_latitude'] = $dropoffCoords['lat'];
                     $updates['dropoff_longitude'] = $dropoffCoords['lng'];
@@ -170,6 +209,17 @@ class JobOrderLocationService
     {
         $candidates = [];
 
+        $structured = JobOrderAddressFormatter::formatParts([
+            $jobOrder->pickup_street,
+            $jobOrder->pickup_barangay,
+            $jobOrder->pickup_city,
+            $jobOrder->pickup_province,
+            $jobOrder->pickup_region,
+        ]);
+        if ($structured !== '') {
+            $candidates[] = $this->appendLandmark($structured, $jobOrder->pickup_landmark);
+        }
+
         if ($jobOrder->quarry) {
             $quarryAddress = trim((string) ($jobOrder->quarry->address ?? ''));
             $quarryName = trim((string) ($jobOrder->quarry->quarry_name ?? ''));
@@ -185,16 +235,6 @@ class JobOrderLocationService
         $display = trim($jobOrder->display_pickup);
         if ($display !== '') {
             $candidates[] = $this->appendLandmark($display, $jobOrder->pickup_landmark);
-        }
-
-        $structured = JobOrderAddressFormatter::formatParts([
-            $jobOrder->pickup_street,
-            $jobOrder->pickup_barangay,
-            $jobOrder->pickup_city,
-            $jobOrder->pickup_province,
-        ]);
-        if ($structured !== '') {
-            $candidates[] = $this->appendLandmark($structured, $jobOrder->pickup_landmark);
         }
 
         $legacy = trim((string) ($jobOrder->pickup_location ?? ''));
@@ -217,19 +257,20 @@ class JobOrderLocationService
     {
         $candidates = [];
 
-        $display = trim($jobOrder->display_dropoff);
-        if ($display !== '') {
-            $candidates[] = $this->appendLandmark($display, $jobOrder->dropoff_landmark);
-        }
-
         $structured = JobOrderAddressFormatter::formatParts([
             $jobOrder->dropoff_street,
             $jobOrder->dropoff_barangay,
             $jobOrder->dropoff_city,
             $jobOrder->dropoff_province,
+            $jobOrder->dropoff_region,
         ]);
         if ($structured !== '') {
             $candidates[] = $this->appendLandmark($structured, $jobOrder->dropoff_landmark);
+        }
+
+        $display = trim($jobOrder->display_dropoff);
+        if ($display !== '') {
+            $candidates[] = $this->appendLandmark($display, $jobOrder->dropoff_landmark);
         }
 
         $legacy = trim((string) ($jobOrder->dropoff_location ?? ''));

@@ -2,6 +2,8 @@
 
 namespace App\Services\Delivery;
 
+use App\Support\GeocodeAnchor;
+use App\Support\GeocodeResultScorer;
 use App\Support\GpsCoordinateValidator;
 use App\Support\LocationPipelineLogger;
 use App\Support\OpenRouteServiceAuth;
@@ -11,26 +13,33 @@ use Illuminate\Support\Facades\Log;
 
 class AddressGeocoder
 {
+    public function __construct(
+        private GeocodeResultScorer $scorer,
+    ) {
+    }
+
     /**
      * Resolve latitude/longitude for an address.
      * Uses OpenRouteService when configured, then falls back to Nominatim.
      *
+     * @param  array{city?: string|null, province?: string|null, region?: string|null}|GeocodeAnchor|null  $anchor
      * @return array{lat: float, lng: float}|null
      */
-    public function geocode(string $address): ?array
+    public function geocode(string $address, GeocodeAnchor|array|null $anchor = null): ?array
     {
+        $anchor = $this->normalizeAnchor($anchor);
         $query = $this->normalizeQuery($address);
         if ($query === '') {
             return null;
         }
 
-        $cacheKey = 'deliverex.geocode.v2.'.md5($query);
+        $cacheKey = 'deliverex.geocode.v3.'.md5($query.$anchor->cacheKeySuffix());
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['lat'], $cached['lng'])) {
             return $cached;
         }
 
-        $result = $this->performLookup($query);
+        $result = $this->performLookup($query, $anchor);
         if ($result) {
             Cache::put($cacheKey, $result, now()->addDays(30));
         }
@@ -42,10 +51,12 @@ class AddressGeocoder
      * Try multiple address strings in order until one geocodes successfully.
      *
      * @param  list<string>  $queries
+     * @param  array{city?: string|null, province?: string|null, region?: string|null}|GeocodeAnchor|null  $anchor
      * @return array{lat: float, lng: float}|null
      */
-    public function geocodeFirst(array $queries): ?array
+    public function geocodeFirst(array $queries, GeocodeAnchor|array|null $anchor = null): ?array
     {
+        $anchor = $this->normalizeAnchor($anchor);
         $attempted = false;
 
         foreach ($queries as $query) {
@@ -59,13 +70,62 @@ class AddressGeocoder
             }
 
             $attempted = true;
-            $result = $this->geocode($query);
+            $result = $this->geocode($query, $anchor);
             if ($result) {
                 return $result;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Validate stored coordinates against the PSGC locality anchor.
+     *
+     * @return array{lat: float, lng: float}|null
+     */
+    public function validateStoredCoordinates(
+        mixed $latitude,
+        mixed $longitude,
+        GeocodeAnchor|array|null $anchor = null,
+    ): ?array {
+        $pair = GpsCoordinateValidator::pair($latitude, $longitude, 'stored_geocode');
+        $anchor = $this->normalizeAnchor($anchor);
+
+        if (! $pair || ! $anchor->hasLocality()) {
+            return $pair;
+        }
+
+        $centroid = $this->resolveAnchorCentroid($anchor);
+        $labels = [$anchor->city ?? '', $anchor->province ?? '', $anchor->region ?? ''];
+
+        if ($this->scorer->accepts($anchor, $pair, $labels, $centroid)) {
+            return $pair;
+        }
+
+        LocationPipelineLogger::log('geocode_stored_rejected', [
+            'lat' => $pair['lat'],
+            'lng' => $pair['lng'],
+            'anchor_city' => $anchor->city,
+            'anchor_province' => $anchor->province,
+            'centroid' => $centroid,
+        ]);
+
+        return null;
+    }
+
+    /** @param  array{city?: string|null, province?: string|null, region?: string|null}|GeocodeAnchor|null  $anchor */
+    private function normalizeAnchor(GeocodeAnchor|array|null $anchor): GeocodeAnchor
+    {
+        if ($anchor instanceof GeocodeAnchor) {
+            return $anchor;
+        }
+
+        if (is_array($anchor)) {
+            return GeocodeAnchor::fromArray($anchor);
+        }
+
+        return new GeocodeAnchor;
     }
 
     private function normalizeQuery(string $address): string
@@ -83,19 +143,46 @@ class AddressGeocoder
     }
 
     /** @return array{lat: float, lng: float}|null */
-    private function performLookup(string $query): ?array
+    private function performLookup(string $query, GeocodeAnchor $anchor): ?array
     {
-        $openRoute = $this->performOpenRouteServiceLookup($query);
+        $centroid = $anchor->hasLocality() ? $this->resolveAnchorCentroid($anchor) : null;
+
+        $openRoute = $this->performOpenRouteServiceLookup($query, $anchor, $centroid);
         if ($openRoute) {
             return $openRoute;
         }
 
-        return $this->performNominatimLookup($query);
+        return $this->performNominatimLookup($query, $anchor, $centroid);
     }
 
     /** @return array{lat: float, lng: float}|null */
-    private function performOpenRouteServiceLookup(string $query): ?array
+    private function resolveAnchorCentroid(GeocodeAnchor $anchor): ?array
     {
+        $localityQuery = $anchor->localityQuery();
+        if ($localityQuery === null) {
+            return null;
+        }
+
+        return Cache::remember(
+            $anchor->centroidCacheKey(),
+            now()->addDays(60),
+            function () use ($localityQuery): ?array {
+                $openRoute = $this->performOpenRouteServiceLookup($localityQuery, new GeocodeAnchor, null);
+                if ($openRoute) {
+                    return $openRoute;
+                }
+
+                return $this->performNominatimLookup($localityQuery, new GeocodeAnchor, null);
+            },
+        );
+    }
+
+    /** @return array{lat: float, lng: float}|null */
+    private function performOpenRouteServiceLookup(
+        string $query,
+        GeocodeAnchor $anchor,
+        ?array $centroid,
+    ): ?array {
         $apiKey = config('gps.routing.openrouteservice_api_key');
         $authHeader = OpenRouteServiceAuth::authorizationHeader(is_string($apiKey) ? $apiKey : null);
         if (! $authHeader) {
@@ -112,7 +199,7 @@ class AddressGeocoder
                 ->withHeaders($authHeader)
                 ->get($url, [
                     'text' => $query,
-                    'size' => 1,
+                    'size' => 5,
                     'boundary.country' => 'PH',
                 ]);
 
@@ -126,17 +213,12 @@ class AddressGeocoder
                 return null;
             }
 
-            $feature = $response->json()['features'][0] ?? null;
-            $coordinates = is_array($feature) ? ($feature['geometry']['coordinates'] ?? null) : null;
-            if (! is_array($coordinates) || count($coordinates) < 2) {
-                return null;
-            }
-
-            return $this->validateCoordinates(
-                (float) $coordinates[1],
-                (float) $coordinates[0],
+            return $this->pickBestFeature(
+                $response->json()['features'] ?? [],
                 $query,
                 'openrouteservice',
+                $anchor,
+                $centroid,
             );
         } catch (\Throwable $e) {
             Log::warning('OpenRouteService geocoding failed', [
@@ -149,8 +231,11 @@ class AddressGeocoder
     }
 
     /** @return array{lat: float, lng: float}|null */
-    private function performNominatimLookup(string $query): ?array
-    {
+    private function performNominatimLookup(
+        string $query,
+        GeocodeAnchor $anchor,
+        ?array $centroid,
+    ): ?array {
         try {
             $response = Http::withHeaders([
                 'User-Agent' => 'Deliverex/1.0 (logistics capstone)',
@@ -159,9 +244,9 @@ class AddressGeocoder
                 ->get('https://nominatim.openstreetmap.org/search', [
                     'q' => $query,
                     'format' => 'json',
-                    'limit' => 1,
+                    'limit' => 5,
                     'countrycodes' => 'ph',
-                    'addressdetails' => 0,
+                    'addressdetails' => 1,
                 ]);
 
             if (! $response->successful()) {
@@ -174,16 +259,49 @@ class AddressGeocoder
             }
 
             $results = $response->json();
-            if (! is_array($results) || empty($results[0]['lat']) || empty($results[0]['lon'])) {
+            if (! is_array($results)) {
                 return null;
             }
 
-            return $this->validateCoordinates(
-                (float) $results[0]['lat'],
-                (float) $results[0]['lon'],
-                $query,
-                'nominatim',
-            );
+            $best = null;
+            $bestScore = -1.0;
+
+            foreach ($results as $result) {
+                if (! is_array($result) || empty($result['lat']) || empty($result['lon'])) {
+                    continue;
+                }
+
+                $coords = $this->validateCoordinates(
+                    (float) $result['lat'],
+                    (float) $result['lon'],
+                    $query,
+                    'nominatim',
+                    false,
+                );
+
+                if (! $coords) {
+                    continue;
+                }
+
+                $labels = $this->extractNominatimLabels($result);
+                $score = $this->scorer->score($anchor, $coords, $labels, $centroid);
+                if ($score > $bestScore) {
+                    $bestScore = $score;
+                    $best = $coords;
+                }
+            }
+
+            if ($best) {
+                LocationPipelineLogger::log('geocode_success', [
+                    'address' => $query,
+                    'source' => 'nominatim',
+                    'lat' => $best['lat'],
+                    'lng' => $best['lng'],
+                    'score' => $bestScore,
+                ]);
+            }
+
+            return $best;
         } catch (\Throwable $e) {
             Log::warning('Address geocoding failed', [
                 'address' => $query,
@@ -194,9 +312,111 @@ class AddressGeocoder
         }
     }
 
-    /** @return array{lat: float, lng: float}|null */
-    private function validateCoordinates(float $lat, float $lng, string $query, string $source): ?array
+    /**
+     * @param  list<mixed>  $features
+     * @return array{lat: float, lng: float}|null
+     */
+    private function pickBestFeature(
+        array $features,
+        string $query,
+        string $source,
+        GeocodeAnchor $anchor,
+        ?array $centroid,
+    ): ?array {
+        $best = null;
+        $bestScore = -1.0;
+
+        foreach ($features as $feature) {
+            if (! is_array($feature)) {
+                continue;
+            }
+
+            $coordinates = $feature['geometry']['coordinates'] ?? null;
+            if (! is_array($coordinates) || count($coordinates) < 2) {
+                continue;
+            }
+
+            $coords = $this->validateCoordinates(
+                (float) $coordinates[1],
+                (float) $coordinates[0],
+                $query,
+                $source,
+                false,
+            );
+
+            if (! $coords) {
+                continue;
+            }
+
+            $properties = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
+            $labels = $this->extractOpenRouteLabels($properties);
+            $score = $this->scorer->score($anchor, $coords, $labels, $centroid);
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $best = $coords;
+            }
+        }
+
+        if ($best) {
+            LocationPipelineLogger::log('geocode_success', [
+                'address' => $query,
+                'source' => $source,
+                'lat' => $best['lat'],
+                'lng' => $best['lng'],
+                'score' => $bestScore,
+            ]);
+        }
+
+        return $best;
+    }
+
+    /** @param  array<string, mixed>  $properties
+     * @return list<string>
+     */
+    private function extractOpenRouteLabels(array $properties): array
     {
+        $labels = [];
+
+        foreach (['name', 'street', 'locality', 'localadmin', 'county', 'macrocounty', 'region', 'label'] as $field) {
+            $value = trim((string) ($properties[$field] ?? ''));
+            if ($value !== '') {
+                $labels[] = $value;
+            }
+        }
+
+        return $labels;
+    }
+
+    /** @param  array<string, mixed>  $result
+     * @return list<string>
+     */
+    private function extractNominatimLabels(array $result): array
+    {
+        $labels = [];
+        $display = trim((string) ($result['display_name'] ?? ''));
+        if ($display !== '') {
+            $labels[] = $display;
+        }
+
+        $address = is_array($result['address'] ?? null) ? $result['address'] : [];
+        foreach (['road', 'suburb', 'city', 'town', 'municipality', 'county', 'state', 'region'] as $field) {
+            $value = trim((string) ($address[$field] ?? ''));
+            if ($value !== '') {
+                $labels[] = $value;
+            }
+        }
+
+        return $labels;
+    }
+
+    /** @return array{lat: float, lng: float}|null */
+    private function validateCoordinates(
+        float $lat,
+        float $lng,
+        string $query,
+        string $source,
+        bool $logSuccess = true,
+    ): ?array {
         $coords = ['lat' => $lat, 'lng' => $lng];
 
         if (! GpsCoordinateValidator::isUsable($coords['lat'], $coords['lng'])) {
@@ -210,12 +430,14 @@ class AddressGeocoder
             return null;
         }
 
-        LocationPipelineLogger::log('geocode_success', [
-            'address' => $query,
-            'source' => $source,
-            'lat' => $coords['lat'],
-            'lng' => $coords['lng'],
-        ]);
+        if ($logSuccess) {
+            LocationPipelineLogger::log('geocode_success', [
+                'address' => $query,
+                'source' => $source,
+                'lat' => $coords['lat'],
+                'lng' => $coords['lng'],
+            ]);
+        }
 
         return $coords;
     }

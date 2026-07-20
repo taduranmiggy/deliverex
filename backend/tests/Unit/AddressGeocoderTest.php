@@ -24,6 +24,11 @@ class AddressGeocoderTest extends TestCase
             'https://api.openrouteservice.org/geocode/search*' => Http::response([
                 'features' => [[
                     'geometry' => ['coordinates' => [121.0437, 14.6760]],
+                    'properties' => [
+                        'name' => 'Quezon City',
+                        'locality' => 'Quezon City',
+                        'region' => 'Metro Manila',
+                    ],
                 ]],
             ]),
             'https://nominatim.openstreetmap.org/*' => Http::response([
@@ -81,5 +86,47 @@ class AddressGeocoderTest extends TestCase
         $this->assertSame(14.676, $coords['lat']);
         $this->assertSame(121.0437, $coords['lng']);
         Http::assertSentCount(2);
+    }
+
+    public function test_geocode_rejects_mismatched_anchor_and_tries_next_candidate(): void
+    {
+        config()->set('gps.routing.openrouteservice_api_key', 'test-ors-key');
+
+        Http::fake([
+            'https://api.openrouteservice.org/geocode/search*' => function ($request) {
+                $text = strtoupper($request->data()['text'] ?? '');
+
+                if (str_contains($text, 'RODRIGUEZ') && str_contains($text, 'RIZAL') && ! str_contains($text, '9009')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [121.20, 14.76]],
+                            'properties' => ['name' => 'Rodriguez', 'county' => 'Rizal'],
+                        ]],
+                    ]);
+                }
+
+                if (str_contains($text, '9009')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [121.88, 17.15]],
+                            'properties' => ['name' => 'P. Rodriguez', 'county' => 'Isabela'],
+                        ]],
+                    ]);
+                }
+
+                return Http::response(['features' => []]);
+            },
+        ]);
+
+        $coords = app(AddressGeocoder::class)->geocodeFirst(
+            [
+                '9009 P. Rodriguez St., Barangay San Rafael, Rodriguez, Rizal, Philippines',
+                'Rodriguez, Rizal, Philippines',
+            ],
+            ['city' => 'RODRIGUEZ', 'province' => 'RIZAL'],
+        );
+
+        $this->assertSame(14.76, $coords['lat']);
+        $this->assertSame(121.20, $coords['lng']);
     }
 }

@@ -68,9 +68,21 @@ class JobOrderMapTest extends TestCase
     public function test_map_returns_geocode_warnings_when_pickup_fails_but_destination_resolves(): void
     {
         Http::fake([
-            'nominatim.openstreetmap.org/*' => Http::sequence()
-                ->push([])
-                ->push([['lat' => '14.6760', 'lon' => '121.0437']]),
+            'nominatim.openstreetmap.org/*' => function ($request) {
+                $query = strtolower($request->data()['q'] ?? '');
+                if (str_contains($query, 'name only quarry')) {
+                    return Http::response([]);
+                }
+
+                return Http::response([
+                    [
+                        'lat' => '14.6760',
+                        'lon' => '121.0437',
+                        'display_name' => 'Quezon City, Metro Manila, Philippines',
+                        'address' => ['city' => 'Quezon City', 'state' => 'Metro Manila'],
+                    ],
+                ]);
+            },
         ]);
 
         $quarry = Quarry::create([
@@ -236,5 +248,71 @@ class JobOrderMapTest extends TestCase
 
         $jobOrder->refresh();
         $this->assertSame(14.5995, (float) $jobOrder->pickup_latitude);
+    }
+
+    public function test_map_regeocodes_pickup_when_stored_coordinates_mismatch_psgc_city(): void
+    {
+        Http::preventStrayRequests();
+        config()->set('gps.routing.openrouteservice_api_key', 'test-ors-key');
+
+        Http::fake([
+            'https://api.openrouteservice.org/geocode/search*' => function ($request) {
+                $text = strtoupper($request->data()['text'] ?? '');
+
+                if (str_contains($text, 'RODRIGUEZ') && str_contains($text, 'RIZAL')) {
+                    return Http::response([
+                        'features' => [[
+                            'geometry' => ['coordinates' => [121.20, 14.76]],
+                            'properties' => ['name' => 'Rodriguez', 'county' => 'Rizal'],
+                        ]],
+                    ]);
+                }
+
+                return Http::response(['features' => []]);
+            },
+            'https://nominatim.openstreetmap.org/*' => Http::response([
+                [
+                    'lat' => '14.7600',
+                    'lon' => '121.2000',
+                    'display_name' => 'Rodriguez, Rizal, Philippines',
+                    'address' => ['town' => 'Rodriguez', 'state' => 'Rizal'],
+                ],
+            ]),
+        ]);
+
+        $jobOrder = JobOrder::create([
+            'created_by' => $this->dispatcher->id,
+            'tracking_code' => 'MAPTEST006',
+            'customer_name' => 'Rodriguez Client',
+            'pickup_street' => '9009 P. Rodriguez St.',
+            'pickup_barangay' => 'San Rafael',
+            'pickup_city' => 'Rodriguez',
+            'pickup_province' => 'Rizal',
+            'pickup_region' => 'CALABARZON',
+            'pickup_location' => '9009 P. Rodriguez St., Barangay San Rafael, Rodriguez, Rizal',
+            'pickup_latitude' => 17.15,
+            'pickup_longitude' => 121.88,
+            'pickup_geocode_attempted_at' => now()->subDay(),
+            'dropoff_street' => '865 P. Paredes St.',
+            'dropoff_barangay' => '396',
+            'dropoff_city' => 'Manila',
+            'dropoff_province' => 'Metro Manila',
+            'dropoff_location' => '865 P. Paredes St., Sampaloc, Manila',
+            'dropoff_latitude' => 14.61,
+            'dropoff_longitude' => 120.99,
+            'status' => 'pending',
+            'scheduled_start' => now()->addHour(),
+            'scheduled_end' => now()->addHours(3),
+        ]);
+
+        $response = $this->apiAs($this->dispatcher)->getJson("/api/job-orders/{$jobOrder->id}/map");
+
+        $response->assertOk()
+            ->assertJsonPath('data.pickup.lat', 14.76)
+            ->assertJsonPath('data.pickup.lng', 121.20);
+
+        $jobOrder->refresh();
+        $this->assertSame(14.76, round((float) $jobOrder->pickup_latitude, 2));
+        $this->assertSame(121.20, round((float) $jobOrder->pickup_longitude, 2));
     }
 }
