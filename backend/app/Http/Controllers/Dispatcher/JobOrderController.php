@@ -42,21 +42,29 @@ class JobOrderController extends Controller
     public function index(Request $request)
     {
         $perPage = max(1, min(100, (int) $request->query('per_page', 6)));
+        $includeArchived = filter_var($request->query('include_archived', false), FILTER_VALIDATE_BOOLEAN);
+        $archivedOnly = filter_var($request->query('archived', false), FILTER_VALIDATE_BOOLEAN);
 
-        return response()->json(
-            JobOrder::with([
-                'creator',
-                'company',
-                'client',
-                'quarry',
-                'preferredVehicleType',
-                'materialTypeRef',
-                'materialSpecification',
-                'assignments.driver.user',
-                'assignments.vehicle.vehicleType',
-                'assignments.deliveryDocuments' => fn ($q) => $q->where('type', 'departure'),
-            ])->where('is_archived', false)->latest()->paginate($perPage)
-        );
+        $query = JobOrder::with([
+            'creator',
+            'company',
+            'client',
+            'quarry',
+            'preferredVehicleType',
+            'materialTypeRef',
+            'materialSpecification',
+            'assignments.driver.user',
+            'assignments.vehicle.vehicleType',
+            'assignments.deliveryDocuments' => fn ($q) => $q->where('type', 'departure'),
+        ])->latest();
+
+        if ($archivedOnly) {
+            $query->where('is_archived', true);
+        } elseif (! $includeArchived) {
+            $query->where('is_archived', false);
+        }
+
+        return response()->json($query->paginate($perPage));
     }
 
     public function show(JobOrder $jobOrder)

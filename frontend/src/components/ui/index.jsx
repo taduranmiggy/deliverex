@@ -75,6 +75,8 @@ const BADGE_MAP = {
   completed_with_pod: 'badge-dx badge-dx--completed',
   cancelled:   'badge-dx badge-dx--cancelled',
   delayed:     'badge-dx badge-dx--pending',
+  archive:     'badge-dx badge-dx--muted',
+  archived:    'badge-dx badge-dx--muted',
   // User/driver
   active:      'badge-dx badge-dx--user-active',
   inactive:    'badge-dx badge-dx--user-inactive',

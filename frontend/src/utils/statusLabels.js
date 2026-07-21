@@ -9,6 +9,7 @@ export function formatJobStatus(status) {
   if (s === 'completed' || s === 'completed_with_pod') return 'Completed'
   if (s === 'cancelled') return 'Cancelled'
   if (s === 'delayed') return 'Delayed'
+  if (s === 'archive' || s === 'archived') return 'Archive'
   return status ? String(status).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—'
 }
 
@@ -28,6 +29,7 @@ export function jobStatusBadgeClass(status) {
   if (s === 'completed' || s === 'completed_with_pod')   return 'badge-dx badge-dx--completed'
   if (s === 'cancelled')   return 'badge-dx badge-dx--cancelled'
   if (s === 'delayed')     return 'badge-dx badge-dx--pending'
+  if (s === 'archive' || s === 'archived') return 'badge-dx badge-dx--muted'
   return 'badge-dx badge-dx--muted'
 }
 

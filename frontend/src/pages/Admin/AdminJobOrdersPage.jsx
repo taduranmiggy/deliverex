@@ -20,6 +20,7 @@ const STATUS_OPTIONS = [
   { value: 'arrived',     label: 'Arrived' },
   { value: 'completed',   label: 'Completed' },
   { value: 'cancelled',   label: 'Cancelled' },
+  { value: 'archive',     label: 'Archive' },
 ]
 
 function AdminJobOrdersPage() {
@@ -36,7 +37,7 @@ function AdminJobOrdersPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetchJobOrders(1)
+      const res = await fetchJobOrders(1, 500, { includeArchived: true })
       setOrders(res.data || [])
     } catch (err) {
       setError(err.message)
@@ -48,7 +49,9 @@ function AdminJobOrdersPage() {
   useEffect(() => { load() }, [load])
 
   const filtered = useMemo(() => orders.filter((o) => {
-    const matchStatus = status === 'all' || o.status === status
+    const matchStatus = status === 'all'
+      || (status === 'archive' && o.is_archived)
+      || (status !== 'archive' && !o.is_archived && o.status === status)
     const q = search.toLowerCase()
     const matchSearch = !q || [
       o.tracking_code,
@@ -162,7 +165,7 @@ function AdminJobOrdersPage() {
                       {clientLabel(order)}
                     </td>
                     <td className="dx-job-orders-table__status" data-label="Status">
-                      <StatusBadge status={order.status} />
+                      <StatusBadge status={order.is_archived ? 'archive' : order.status} />
                     </td>
                     <td className="dx-job-orders-table__actions" data-label="Actions">
                       <button

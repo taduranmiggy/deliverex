@@ -1,7 +1,12 @@
 import { apiRequest } from './client'
 import { curateBestFitResponse } from '../utils/bestFitResponse'
 
-export function fetchJobOrders(page = 1, perPage = 500)   { return apiRequest(`/dispatch/job-orders?page=${page}&per_page=${perPage}`) }
+export function fetchJobOrders(page = 1, perPage = 500, options = {}) {
+  const params = new URLSearchParams({ page, per_page: perPage })
+  if (options.includeArchived) params.set('include_archived', '1')
+  if (options.archived) params.set('archived', '1')
+  return apiRequest(`/dispatch/job-orders?${params.toString()}`)
+}
 export function fetchJobOrder(id)          { return apiRequest(`/dispatch/job-orders/${id}`) }
 
 export function fetchCalendarEvents(startIso, endIso) {

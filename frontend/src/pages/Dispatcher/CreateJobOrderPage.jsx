@@ -103,6 +103,7 @@ const TABS = [
   { id: 'all',       label: 'All' },
   { id: 'active',    label: 'Active Deliveries' },
   { id: 'completed', label: 'Completed' },
+  { id: 'archived',  label: 'Archived' },
 ]
 
 const STATUS_OPTIONS_ALL = [
@@ -113,6 +114,7 @@ const STATUS_OPTIONS_ALL = [
   { value: 'arrived',     label: 'Arrived' },
   { value: 'completed',   label: 'Completed' },
   { value: 'cancelled',   label: 'Cancelled' },
+  { value: 'archived',    label: 'Archived' },
 ]
 const STATUS_OPTIONS_ACTIVE = [
   { value: 'all',         label: 'All Active' },
@@ -124,6 +126,9 @@ const STATUS_OPTIONS_ACTIVE = [
 const STATUS_OPTIONS_COMPLETED = [
   { value: 'all',       label: 'All Completed' },
   { value: 'completed', label: 'Completed' },
+]
+const STATUS_OPTIONS_ARCHIVED = [
+  { value: 'all',       label: 'All Archived' },
 ]
 
 const PAGE_SIZE = 6
@@ -1099,7 +1104,10 @@ function CreateJobOrderPage() {
   const load = useCallback(async () => {
     setClientsLoading(true)
     try {
-      const [jobsRes, optionsRes] = await Promise.all([fetchJobOrders(1), fetchMasterDataOptions()])
+      const [jobsRes, optionsRes] = await Promise.all([
+        fetchJobOrders(1, 500, { includeArchived: true }),
+        fetchMasterDataOptions(),
+      ])
       setOrders(jobsRes.data || [])
       setMasterData({
         clients:            optionsRes.clients            || [],
@@ -1127,23 +1135,32 @@ function CreateJobOrderPage() {
   // ── Tab counts ────────────────────────────────────────────────────────────
   const counts = useMemo(() => ({
     all:       orders.length,
-    active:    orders.filter((o) => ACTIVE_STATUSES.includes(o.status)).length,
-    completed: orders.filter((o) => COMPLETED_STATUSES.includes(o.status)).length,
+    active:    orders.filter((o) => !o.is_archived && ACTIVE_STATUSES.includes(o.status)).length,
+    completed: orders.filter((o) => !o.is_archived && COMPLETED_STATUSES.includes(o.status)).length,
+    archived:  orders.filter((o) => o.is_archived).length,
   }), [orders])
 
   // ── Status options scoped to current tab ─────────────────────────────────
   const statusOptions = useMemo(() => {
     if (activeTab === 'active')    return STATUS_OPTIONS_ACTIVE
     if (activeTab === 'completed') return STATUS_OPTIONS_COMPLETED
+    if (activeTab === 'archived')  return STATUS_OPTIONS_ARCHIVED
     return STATUS_OPTIONS_ALL
   }, [activeTab])
 
   // ── Filtered + searched rows ───────────────────────────────────────────────
   const filteredOrders = useMemo(() => {
     let list = orders
-    if (activeTab === 'active')    list = list.filter((o) => ACTIVE_STATUSES.includes(o.status))
-    if (activeTab === 'completed') list = list.filter((o) => COMPLETED_STATUSES.includes(o.status))
-    if (statusFilter !== 'all')    list = list.filter((o) => o.status === statusFilter)
+    if (activeTab === 'active')    list = list.filter((o) => !o.is_archived && ACTIVE_STATUSES.includes(o.status))
+    if (activeTab === 'completed') list = list.filter((o) => !o.is_archived && COMPLETED_STATUSES.includes(o.status))
+    if (activeTab === 'archived')  list = list.filter((o) => o.is_archived)
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'archived') {
+        list = list.filter((o) => o.is_archived)
+      } else {
+        list = list.filter((o) => o.status === statusFilter)
+      }
+    }
     const q = search.trim().toLowerCase()
     if (q) {
       list = list.filter((o) => {
@@ -1179,8 +1196,9 @@ function CreateJobOrderPage() {
     // Deselect if the current selection is no longer in the new tab's results
     if (viewOrder) {
       const inTab = tab === 'all'       ? true
-        : tab === 'active'    ? ACTIVE_STATUSES.includes(viewOrder.status)
-        : tab === 'completed' ? COMPLETED_STATUSES.includes(viewOrder.status)
+        : tab === 'active'    ? !viewOrder.is_archived && ACTIVE_STATUSES.includes(viewOrder.status)
+        : tab === 'completed' ? !viewOrder.is_archived && COMPLETED_STATUSES.includes(viewOrder.status)
+        : tab === 'archived'  ? viewOrder.is_archived
         : true
       if (!inTab) setViewOrder(null)
     }
@@ -1387,7 +1405,7 @@ function CreateJobOrderPage() {
                       <td><span className="job-link">{formatJobPublicId(order.id)}</span></td>
                       <td style={{ fontWeight: 500 }}>{order.client?.client_name || order.custom_client_name || buildDisplayName(order)}</td>
                       <td className="dx-job-orders-table__status">
-                        <StatusBadge status={order.status} />
+                        <StatusBadge status={order.is_archived ? 'archive' : order.status} />
                       </td>
                       <td className="dx-job-orders-table__actions">
                         <div className="dx-job-orders-table__actions-group">
