@@ -95,7 +95,17 @@ npx vite --host 127.0.0.1 --port 5173
 
 ## Fallback
 
-If neither `VITE_PUSHER_APP_KEY` nor `VITE_REVERB_APP_KEY` is set at build time, the panel keeps HTTP polling. With `BROADCAST_CONNECTION=log`, the backend only logs broadcasts.
+If neither `VITE_PUSHER_APP_KEY` nor `VITE_REVERB_APP_KEY` is set at build time, the panel keeps HTTP polling (~10s). With `BROADCAST_CONNECTION=log`, the backend only logs broadcasts.
+
+## GPS ingest filters
+
+Driver pings (~15s) are accepted when they clear:
+
+- impossible jump (> `GPS_MAX_SPEED_KMH`)
+- duplicate (same spot within `GPS_DUPLICATE_WINDOW_SECONDS` / radius)
+- insignificant movement — **unless** at least `GPS_HEARTBEAT_SECONDS` have passed (keeps last-seen fresh while parked)
+
+`force=true` bypasses the movement filters. Defaults target near-realtime without waiting for a 5-minute force ping.
 
 ## Event / channels
 

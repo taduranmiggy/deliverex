@@ -127,6 +127,46 @@ class GpsTrackingTest extends TestCase
         $this->assertSame(1, TrackingLog::query()->where('assignment_id', $this->assignment->id)->count());
     }
 
+    public function test_heartbeat_accepts_same_coordinates_after_window(): void
+    {
+        $this->apiAs($this->driverUser)->postJson('/api/driver/tracking', [
+            'assignment_id' => $this->assignment->id,
+            'latitude' => 14.5995,
+            'longitude' => 120.9842,
+            'captured_at' => now()->subSeconds(20)->toIso8601String(),
+        ])->assertCreated();
+
+        $second = $this->apiAs($this->driverUser)->postJson('/api/driver/tracking', [
+            'assignment_id' => $this->assignment->id,
+            'latitude' => 14.5995,
+            'longitude' => 120.9842,
+            'captured_at' => now()->toIso8601String(),
+        ]);
+
+        $second->assertCreated()->assertJsonPath('skipped', false);
+        $this->assertSame(2, TrackingLog::query()->where('assignment_id', $this->assignment->id)->count());
+    }
+
+    public function test_force_bypasses_duplicate_filter(): void
+    {
+        $payload = [
+            'assignment_id' => $this->assignment->id,
+            'latitude' => 14.5995,
+            'longitude' => 120.9842,
+            'captured_at' => now()->toIso8601String(),
+        ];
+
+        $this->apiAs($this->driverUser)->postJson('/api/driver/tracking', $payload)->assertCreated();
+
+        $forced = $this->apiAs($this->driverUser)->postJson('/api/driver/tracking', [
+            ...$payload,
+            'force' => true,
+        ]);
+
+        $forced->assertCreated()->assertJsonPath('skipped', false);
+        $this->assertSame(2, TrackingLog::query()->where('assignment_id', $this->assignment->id)->count());
+    }
+
     public function test_scenario_d_customer_tracking_includes_location_timestamp(): void
     {
         TrackingLog::create([

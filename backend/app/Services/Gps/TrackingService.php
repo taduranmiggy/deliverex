@@ -70,7 +70,7 @@ class TrackingService
                 return ['log' => $lastLog, 'skipped' => true, 'reason' => 'duplicate_coordinate'];
             }
 
-            if ($this->isInsignificantMovement($lastLog, $lat, $lng)) {
+            if ($this->isInsignificantMovement($lastLog, $lat, $lng, $capturedAt)) {
                 return ['log' => $lastLog, 'skipped' => true, 'reason' => 'insignificant_movement'];
             }
         }
@@ -197,12 +197,12 @@ class TrackingService
             return false;
         }
 
-        $window = (int) config('gps.duplicate_window_seconds', 30);
-        if ($at->diffInSeconds($last->captured_at) > $window) {
+        $window = (int) config('gps.duplicate_window_seconds', 12);
+        if (abs($at->diffInSeconds($last->captured_at)) > $window) {
             return false;
         }
 
-        $radius = (float) config('gps.duplicate_radius_meters', 10);
+        $radius = (float) config('gps.duplicate_radius_meters', 5);
         $distance = GpsCoordinateValidator::distanceMeters(
             (float) $last->latitude,
             (float) $last->longitude,
@@ -213,13 +213,22 @@ class TrackingService
         return $distance <= $radius;
     }
 
-    public function isInsignificantMovement(?TrackingLog $last, float $lat, float $lng): bool
+    public function isInsignificantMovement(?TrackingLog $last, float $lat, float $lng, ?Carbon $at = null): bool
     {
         if (! $last) {
             return false;
         }
 
-        $minMovement = (float) config('gps.min_movement_meters', 15);
+        // Heartbeat: keep last-seen fresh for realtime maps even when parked.
+        $at ??= now();
+        if ($last->captured_at) {
+            $heartbeat = (int) config('gps.heartbeat_seconds', 12);
+            if (abs($at->diffInSeconds($last->captured_at)) >= $heartbeat) {
+                return false;
+            }
+        }
+
+        $minMovement = (float) config('gps.min_movement_meters', 5);
         $distance = GpsCoordinateValidator::distanceMeters(
             (float) $last->latitude,
             (float) $last->longitude,

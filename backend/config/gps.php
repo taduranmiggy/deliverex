@@ -19,14 +19,25 @@ return [
     |--------------------------------------------------------------------------
     | Deduplication & movement filters
     |--------------------------------------------------------------------------
+    |
+    | Tuned for native/PWA drivers that ping about every 15s. Duplicate checks
+    | only suppress near-identical spam inside a short window; after
+    | heartbeat_seconds the same spot is accepted so "last seen" stays fresh
+    | and WebSocket/poll clients see near-realtime updates without force=true.
     */
     /** Skip writes when the driver has not moved at least this many meters. */
-    'min_movement_meters' => (float) env('GPS_MIN_MOVEMENT_METERS', 15),
+    'min_movement_meters' => (float) env('GPS_MIN_MOVEMENT_METERS', 5),
 
     /** Treat coordinates within this radius as duplicates within the time window. */
-    'duplicate_radius_meters' => (float) env('GPS_DUPLICATE_RADIUS_METERS', 10),
+    'duplicate_radius_meters' => (float) env('GPS_DUPLICATE_RADIUS_METERS', 5),
 
-    'duplicate_window_seconds' => (int) env('GPS_DUPLICATE_WINDOW_SECONDS', 30),
+    'duplicate_window_seconds' => (int) env('GPS_DUPLICATE_WINDOW_SECONDS', 12),
+
+    /**
+     * Accept a ping even with insignificant movement once this many seconds
+     * have elapsed since the last stored point (location heartbeat).
+     */
+    'heartbeat_seconds' => (int) env('GPS_HEARTBEAT_SECONDS', 12),
 
     /*
     |--------------------------------------------------------------------------
@@ -51,15 +62,15 @@ return [
     'gps_lost_after_seconds' => (int) env('GPS_LOST_AFTER_SECONDS', 300),
 
     /** Recommended polling interval for dispatcher/customer maps (seconds). */
-    'poll_interval_seconds' => (int) env('GPS_POLL_INTERVAL_SECONDS', 30),
+    'poll_interval_seconds' => (int) env('GPS_POLL_INTERVAL_SECONDS', 10),
 
     /*
     |--------------------------------------------------------------------------
     | Driver PWA update intervals (seconds) — used by frontend hook
     |--------------------------------------------------------------------------
     */
-    'interval_moving_seconds' => (int) env('GPS_INTERVAL_MOVING_SECONDS', 60),
-    'interval_stopped_seconds' => (int) env('GPS_INTERVAL_STOPPED_SECONDS', 60),
+    'interval_moving_seconds' => (int) env('GPS_INTERVAL_MOVING_SECONDS', 15),
+    'interval_stopped_seconds' => (int) env('GPS_INTERVAL_STOPPED_SECONDS', 15),
     'moving_speed_threshold_kmh' => (float) env('GPS_MOVING_SPEED_THRESHOLD_KMH', 3),
 
     /*

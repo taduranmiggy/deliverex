@@ -13,8 +13,8 @@ const GPS_ACTIVE = new Set([
   'arrived',
 ])
 
-const MOVING_INTERVAL_MS = Number(import.meta.env.VITE_GPS_INTERVAL_MOVING_SECONDS || 60) * 1000
-const STOPPED_INTERVAL_MS = Number(import.meta.env.VITE_GPS_INTERVAL_STOPPED_SECONDS || 60) * 1000
+const MOVING_INTERVAL_MS = Number(import.meta.env.VITE_GPS_INTERVAL_MOVING_SECONDS || 15) * 1000
+const STOPPED_INTERVAL_MS = Number(import.meta.env.VITE_GPS_INTERVAL_STOPPED_SECONDS || 15) * 1000
 const MOVING_SPEED_KMH = Number(import.meta.env.VITE_GPS_MOVING_SPEED_THRESHOLD_KMH || 3)
 
 function buildPayload(assignment, pos) {

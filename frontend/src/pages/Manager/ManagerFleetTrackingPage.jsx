@@ -115,7 +115,7 @@ function ManagerFleetTrackingPage() {
       if (!document.hidden) {
         load()
       }
-    }, 30000)
+    }, 10000)
     return () => clearInterval(timer)
   }, [load])
 
