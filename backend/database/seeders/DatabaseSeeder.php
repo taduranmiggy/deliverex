@@ -97,6 +97,7 @@ class DatabaseSeeder extends Seeder
             DriverMasterSeeder::class,
             DriverVehicleAssignmentSeeder::class,
             DispatchDemoSeeder::class,
+            ManagerAnalyticsMockDataSeeder::class,
             ChatbotIntentSeeder::class,
         ]);
 

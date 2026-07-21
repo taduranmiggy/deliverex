@@ -147,7 +147,7 @@ export default function JobOrderViewModal({
                 className="dx-job-view-modal__delete"
                 onClick={() => onDelete?.(detail ?? order)}
               >
-                Delete
+                Archive
               </button>
             )}
           </div>

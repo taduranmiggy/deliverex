@@ -55,7 +55,7 @@ class JobOrderController extends Controller
                 'assignments.driver.user',
                 'assignments.vehicle.vehicleType',
                 'assignments.deliveryDocuments' => fn ($q) => $q->where('type', 'departure'),
-            ])->latest()->paginate($perPage)
+            ])->where('is_archived', false)->latest()->paginate($perPage)
         );
     }
 
@@ -472,7 +472,10 @@ class JobOrderController extends Controller
 
     public function destroy(Request $request, JobOrder $jobOrder)
     {
-        // Only allow deleting jobs that aren't actively in progress
+        if ($jobOrder->is_archived) {
+            return response()->json(['message' => 'Job order is already archived.'], 409);
+        }
+
         if (in_array($jobOrder->status, [
             'in_progress',
             DeliveryStatus::EN_ROUTE_TO_PICKUP,
@@ -480,27 +483,29 @@ class JobOrderController extends Controller
             DeliveryStatus::EN_ROUTE_TO_DESTINATION,
             DeliveryStatus::ARRIVED,
         ], true)) {
-            return response()->json(['message' => 'Cannot delete a job that is currently in progress.'], 422);
+            return response()->json(['message' => 'Cannot archive a job that is currently in progress.'], 422);
         }
 
-        // Free any driver/vehicle that was assigned to this job order
         foreach ($jobOrder->assignments()->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())->get() as $assignment) {
             $assignment->update(['status' => DeliveryStatus::CANCELLED]);
             $this->resourceSync->syncForAssignment(
                 $assignment,
-                'job_order_deleted',
+                'job_order_archived',
                 $request->user()?->id,
             );
         }
 
-        AuditLogger::record($request->user(), 'job_order.deleted', JobOrder::class, $jobOrder->id, [
+        $jobOrder->update([
+            'is_archived' => true,
+            'archived_at' => now(),
+        ]);
+
+        AuditLogger::record($request->user(), 'job_order.archived', JobOrder::class, $jobOrder->id, [
             'tracking_code' => $jobOrder->tracking_code,
             'status'        => $jobOrder->status,
         ], $request);
 
-        $jobOrder->delete();
-
-        return response()->json(['message' => 'Job order deleted.']);
+        return response()->json(['message' => 'Job order archived.']);
     }
 
     /**

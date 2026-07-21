@@ -112,6 +112,8 @@ class JobOrder extends Model
         'scheduled_end',
         'priority',
         'status',
+        'is_archived',
+        'archived_at',
     ];
 
     /**
@@ -196,6 +198,7 @@ class JobOrder extends Model
         'dropoff_geocode_attempted_at' => 'datetime',
         'pickup_coordinate_confirmed_at' => 'datetime',
         'dropoff_coordinate_confirmed_at' => 'datetime',
+        'archived_at' => 'datetime',
     ];
 
     /** @deprecated Use company_id */

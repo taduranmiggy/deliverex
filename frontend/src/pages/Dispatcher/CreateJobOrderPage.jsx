@@ -1202,20 +1202,20 @@ function CreateJobOrderPage() {
   const handleDelete = (order) => {
     const publicId = formatJobPublicId(order.id)
     requestConfirmation({
-      title: 'Delete Job Order',
-      message: `Are you sure you want to delete job order ${publicId}?`,
-      detail: 'This action cannot be undone.',
-      confirmLabel: 'Delete',
-      variant: 'danger',
+      title: 'Archive Job Order',
+      message: `Are you sure you want to archive job order ${publicId}?`,
+      detail: 'Archived records remain saved and can be restored later.',
+      confirmLabel: 'Archive',
+      variant: 'archive',
       onConfirm: async () => {
         setError('')
         try {
           await deleteJobOrder(order.id)
-          toast(`Job order ${publicId} deleted.`, 'warning')
+          toast(`Job order ${publicId} archived.`, 'success')
           setViewOrder(null)
           load()
         } catch (err) {
-          toast(err.message || 'Failed to delete job order.', 'error')
+          toast(err.message || 'Failed to archive job order.', 'error')
           throw err
         }
       },
@@ -1403,7 +1403,7 @@ function CreateJobOrderPage() {
                             className="dx-job-orders-table__delete btn-sm"
                             onClick={() => handleDelete(order)}
                           >
-                            Delete
+                            Archive
                           </button>
                         </div>
                       </td>
