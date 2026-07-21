@@ -131,7 +131,7 @@ export default function JobOrderViewModal({
             >
               Edit
             </button>
-            {(detail?.status ?? order.status) === 'pending' && (
+            {(detail?.status ?? order.status) === 'pending' && !order.is_archived && (
               <Link
                 to="/dispatcher/dispatch"
                 state={{ jobOrderId: detail?.id ?? order.id }}
@@ -141,7 +141,7 @@ export default function JobOrderViewModal({
                 Dispatch
               </Link>
             )}
-            {(detail?.status ?? order.status) === 'pending' && (
+            {(detail?.status ?? order.status) === 'pending' && !order.is_archived && (
               <button
                 type="button"
                 className="dx-job-view-modal__delete"
