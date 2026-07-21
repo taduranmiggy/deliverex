@@ -25,7 +25,7 @@ class ClientPreferenceSeeder extends Seeder
         ];
 
         foreach ($mappings as $map) {
-            $client = Client::query()->where('client_name', $map['client'])->first();
+            $client = Client::query()->where('company_name', $map['client'])->first();
             $quarry = Quarry::query()->where('quarry_name', $map['quarry'])->first();
             if (! $client || ! $quarry) {
                 continue;
