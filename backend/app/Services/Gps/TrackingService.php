@@ -287,8 +287,10 @@ class TrackingService
         $offline = $this->offlineStatus($log);
 
         return [
-            'lat' => round((float) $log->latitude, 2),
-            'lng' => round((float) $log->longitude, 2),
+            // 5 decimals ≈ 1.1m — live map must move with each ping.
+            // (2 decimals ≈ 1.1km made the marker look ~1 min delayed in city traffic.)
+            'lat' => round((float) $log->latitude, 5),
+            'lng' => round((float) $log->longitude, 5),
             'at' => $log->captured_at?->toIso8601String(),
             'is_stale' => in_array($offline['state'], ['temporarily_offline', 'gps_lost'], true),
             'offline' => $offline,

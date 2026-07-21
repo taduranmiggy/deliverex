@@ -92,7 +92,7 @@ function TrackingPage() {
 
   useEffect(() => {
     if (!pollKey) return
-    const iv = setInterval(() => loadTrack(pollKey).catch(() => {}), 10000)
+    const iv = setInterval(() => loadTrack(pollKey).catch(() => {}), 5000)
     return () => clearInterval(iv)
   }, [pollKey, loadTrack])
 

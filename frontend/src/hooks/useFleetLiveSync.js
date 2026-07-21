@@ -18,13 +18,12 @@ const LOCATION_EVENT = '.driver.location.updated'
 /**
  * Real-time fleet sync for the dispatcher tracking map.
  *
- * WebSocket-first (Laravel Reverb): one HTTP snapshot bootstraps routes and
+ * WebSocket-first (Laravel Reverb/Pusher): one HTTP snapshot bootstraps routes and
  * static markers, then every driver GPS ping arrives as a pushed
- * DriverLocationUpdated event — no polling loop. The snapshot is refetched
- * only on reconnect or when an unknown trip appears (both event-driven).
+ * DriverLocationUpdated event. A short HTTP poll still runs as a safety net when
+ * the socket is quiet or BROADCAST_CONNECTION is not wired in production.
  *
- * Falls back to the legacy 60s poll ONLY when no Reverb key is configured at
- * build time, so environments without a WebSocket server keep working.
+ * Falls back to poll-only when no Reverb/Pusher key is configured at build time.
  */
 export default function useFleetLiveSync() {
   const [deliveries, setDeliveries] = useState([])
@@ -97,53 +96,47 @@ export default function useFleetLiveSync() {
   useEffect(() => {
     sync()
 
-    // ── WebSocket mode (Reverb) ──────────────────────────────────────────
-    if (isRealtimeConfigured()) {
-      const echo = getEcho()
-      const channel = echo.private(FLEET_CHANNEL)
-      channel.listen(LOCATION_EVENT, applyLocationEvent)
-
-      let wasDisconnected = false
-      const unbindConnection = onConnectionStateChange((state) => {
-        setConnectionState(state)
-        if (state === CONNECTION_STATES.CONNECTED && wasDisconnected) {
-          // Catch up on anything missed while the socket was down.
-          sync()
-          wasDisconnected = false
-        }
-        if (
-          state === CONNECTION_STATES.UNAVAILABLE ||
-          state === CONNECTION_STATES.DISCONNECTED
-        ) {
-          wasDisconnected = true
-        }
-      })
-
-      const onVisibility = () => {
-        if (!document.hidden) sync()
-      }
-      document.addEventListener('visibilitychange', onVisibility)
-
-      return () => {
-        channel.stopListening(LOCATION_EVENT)
-        echo.leave(FLEET_CHANNEL)
-        unbindConnection()
-        document.removeEventListener('visibilitychange', onVisibility)
-      }
-    }
-
-    // ── Legacy fallback (no Reverb key at build time) ────────────────────
-    const interval = window.setInterval(() => {
-      if (!document.hidden) sync()
-    }, FLEET_SYNC_INTERVAL_MS)
-
     const onVisibility = () => {
       if (!document.hidden) sync()
     }
     document.addEventListener('visibilitychange', onVisibility)
 
+    // Safety-net poll even with WebSockets — covers silent socket / log driver.
+    const interval = window.setInterval(() => {
+      if (!document.hidden) sync()
+    }, FLEET_SYNC_INTERVAL_MS)
+
+    if (!isRealtimeConfigured()) {
+      return () => {
+        window.clearInterval(interval)
+        document.removeEventListener('visibilitychange', onVisibility)
+      }
+    }
+
+    const echo = getEcho()
+    const channel = echo.private(FLEET_CHANNEL)
+    channel.listen(LOCATION_EVENT, applyLocationEvent)
+
+    let wasDisconnected = false
+    const unbindConnection = onConnectionStateChange((state) => {
+      setConnectionState(state)
+      if (state === CONNECTION_STATES.CONNECTED && wasDisconnected) {
+        sync()
+        wasDisconnected = false
+      }
+      if (
+        state === CONNECTION_STATES.UNAVAILABLE ||
+        state === CONNECTION_STATES.DISCONNECTED
+      ) {
+        wasDisconnected = true
+      }
+    })
+
     return () => {
       window.clearInterval(interval)
+      channel.stopListening(LOCATION_EVENT)
+      echo.leave(FLEET_CHANNEL)
+      unbindConnection()
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [sync, applyLocationEvent])

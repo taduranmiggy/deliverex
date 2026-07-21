@@ -181,8 +181,8 @@ class GpsTrackingTest extends TestCase
         $response = $this->getJson('/api/customer/track/'.$jobOrder->tracking_code);
 
         $response->assertOk()
-            ->assertJsonPath('approximate_location.lat', 14.6)
-            ->assertJsonPath('approximate_location.lng', 120.98)
+            ->assertJsonPath('approximate_location.lat', 14.5995)
+            ->assertJsonPath('approximate_location.lng', 120.9842)
             ->assertJsonPath('approximate_location.is_stale', false);
 
         $this->assertNotNull($response->json('approximate_location.at'));

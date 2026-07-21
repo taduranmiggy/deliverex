@@ -1,4 +1,4 @@
-export const FLEET_SYNC_INTERVAL_MS = 10_000
+export const FLEET_SYNC_INTERVAL_MS = 5_000
 export const DRIVER_OFFLINE_THRESHOLD_SEC = 120
 
 /** Philippines service-area bounds (matches backend gps.philippines_bounds). */

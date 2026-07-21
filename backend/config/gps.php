@@ -62,7 +62,7 @@ return [
     'gps_lost_after_seconds' => (int) env('GPS_LOST_AFTER_SECONDS', 300),
 
     /** Recommended polling interval for dispatcher/customer maps (seconds). */
-    'poll_interval_seconds' => (int) env('GPS_POLL_INTERVAL_SECONDS', 10),
+    'poll_interval_seconds' => (int) env('GPS_POLL_INTERVAL_SECONDS', 5),
 
     /*
     |--------------------------------------------------------------------------
