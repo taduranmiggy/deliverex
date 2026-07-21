@@ -103,9 +103,11 @@ class DriverLocationBroadcastTest extends TestCase
 
         Event::assertDispatched(DriverLocationUpdated::class, function (DriverLocationUpdated $event) {
             $channels = array_map(fn ($c) => $c->name, $event->broadcastOn());
+            $code = strtoupper((string) $this->assignment->jobOrder->tracking_code);
 
             return in_array('private-fleet.live', $channels, true)
                 && in_array('private-trip.'.$this->assignment->id, $channels, true)
+                && in_array('tracking.'.$code, $channels, true)
                 && $event->broadcastAs() === 'driver.location.updated';
         });
     }

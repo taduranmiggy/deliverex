@@ -113,6 +113,12 @@ class GpsTrackingTest extends TestCase
 
     public function test_scenario_c_duplicate_coordinates_are_skipped(): void
     {
+        config([
+            'gps.duplicate_window_seconds' => 30,
+            'gps.min_movement_meters' => 15,
+            'gps.heartbeat_seconds' => 60,
+        ]);
+
         $payload = [
             'assignment_id' => $this->assignment->id,
             'latitude' => 14.5995,
@@ -125,6 +131,27 @@ class GpsTrackingTest extends TestCase
 
         $second->assertOk()->assertJsonPath('skipped', true);
         $this->assertSame(1, TrackingLog::query()->where('assignment_id', $this->assignment->id)->count());
+    }
+
+    public function test_zero_duplicate_window_stores_every_ping(): void
+    {
+        config([
+            'gps.duplicate_window_seconds' => 0,
+            'gps.min_movement_meters' => 0,
+            'gps.heartbeat_seconds' => 0,
+        ]);
+
+        $payload = [
+            'assignment_id' => $this->assignment->id,
+            'latitude' => 14.5995,
+            'longitude' => 120.9842,
+            'captured_at' => now()->toIso8601String(),
+        ];
+
+        $this->apiAs($this->driverUser)->postJson('/api/driver/tracking', $payload)->assertCreated();
+        $this->apiAs($this->driverUser)->postJson('/api/driver/tracking', $payload)->assertCreated();
+
+        $this->assertSame(2, TrackingLog::query()->where('assignment_id', $this->assignment->id)->count());
     }
 
     public function test_heartbeat_accepts_same_coordinates_after_window(): void

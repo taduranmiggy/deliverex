@@ -105,10 +105,13 @@ class TrackingService
     private function broadcastLocationUpdate(TrackingLog $log, DispatchAssignment $assignment): void
     {
         try {
+            $assignment->loadMissing('jobOrder:id,tracking_code');
+
             broadcast(new DriverLocationUpdated(
                 $log,
                 $assignment->job_order_id,
                 $this->formatForFleet($log),
+                $assignment->jobOrder?->tracking_code,
             ));
         } catch (\Throwable $e) {
             Log::warning('Driver location broadcast failed', [
@@ -197,7 +200,11 @@ class TrackingService
             return false;
         }
 
-        $window = (int) config('gps.duplicate_window_seconds', 12);
+        $window = (int) config('gps.duplicate_window_seconds', 0);
+        if ($window <= 0) {
+            return false;
+        }
+
         if (abs($at->diffInSeconds($last->captured_at)) > $window) {
             return false;
         }
@@ -219,16 +226,20 @@ class TrackingService
             return false;
         }
 
+        $minMovement = (float) config('gps.min_movement_meters', 0);
+        if ($minMovement <= 0) {
+            return false;
+        }
+
         // Heartbeat: keep last-seen fresh for realtime maps even when parked.
         $at ??= now();
         if ($last->captured_at) {
-            $heartbeat = (int) config('gps.heartbeat_seconds', 12);
-            if (abs($at->diffInSeconds($last->captured_at)) >= $heartbeat) {
+            $heartbeat = (int) config('gps.heartbeat_seconds', 0);
+            if ($heartbeat <= 0 || abs($at->diffInSeconds($last->captured_at)) >= $heartbeat) {
                 return false;
             }
         }
 
-        $minMovement = (float) config('gps.min_movement_meters', 5);
         $distance = GpsCoordinateValidator::distanceMeters(
             (float) $last->latitude,
             (float) $last->longitude,

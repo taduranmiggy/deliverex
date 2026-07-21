@@ -14,6 +14,8 @@ import { useCustomerSurface } from '../../context/CustomerSurfaceContext'
 import { StatusBadge } from '../../components/ui'
 import { formatEventAt, formatOfflineSyncLabel, getEventAt } from '../../utils/deliveryTimestamps'
 import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, MessageSquare, RefreshCw, Search } from 'lucide-react'
+import useCustomerTrackingLive from '../../hooks/useCustomerTrackingLive'
+import { isRealtimeConfigured } from '../../services/realtime/echo'
 
 function TrackingPage() {
   const location = useLocation()
@@ -36,6 +38,23 @@ function TrackingPage() {
     setResult(res)
     return res
   }, [])
+
+  const applyLiveLocation = useCallback((liveLocation) => {
+    setResult((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        approximate_location: {
+          ...(prev.approximate_location || {}),
+          ...liveLocation,
+        },
+        last_updated: liveLocation.at ?? prev.last_updated,
+        offline: liveLocation.offline ?? prev.offline,
+      }
+    })
+  }, [])
+
+  useCustomerTrackingLive(pollKey, applyLiveLocation)
 
   const queryCode = searchParams.get('code') ?? ''
 
@@ -92,7 +111,9 @@ function TrackingPage() {
 
   useEffect(() => {
     if (!pollKey) return
-    const iv = setInterval(() => loadTrack(pollKey).catch(() => {}), 5000)
+    // Keep a slow safety-net poll; WebSocket pushes update the marker instantly.
+    const intervalMs = isRealtimeConfigured() ? 30000 : 5000
+    const iv = setInterval(() => loadTrack(pollKey).catch(() => {}), intervalMs)
     return () => clearInterval(iv)
   }, [pollKey, loadTrack])
 

@@ -20,24 +20,26 @@ return [
     | Deduplication & movement filters
     |--------------------------------------------------------------------------
     |
-    | Tuned for native/PWA drivers that ping about every 15s. Duplicate checks
-    | only suppress near-identical spam inside a short window; after
-    | heartbeat_seconds the same spot is accepted so "last seen" stays fresh
-    | and WebSocket/poll clients see near-realtime updates without force=true.
+    | Defaults store every ~15s driver ping (window/movement = 0) so WebSocket
+    | clients see near-realtime updates. Raise these only if write volume hurts.
     */
-    /** Skip writes when the driver has not moved at least this many meters. */
-    'min_movement_meters' => (float) env('GPS_MIN_MOVEMENT_METERS', 5),
-
-    /** Treat coordinates within this radius as duplicates within the time window. */
+    /**
+     * Treat coordinates within this radius as duplicates within the time window.
+     * Set GPS_DUPLICATE_WINDOW_SECONDS=0 to store every driver ping (near-realtime).
+     */
     'duplicate_radius_meters' => (float) env('GPS_DUPLICATE_RADIUS_METERS', 5),
 
-    'duplicate_window_seconds' => (int) env('GPS_DUPLICATE_WINDOW_SECONDS', 12),
+    'duplicate_window_seconds' => (int) env('GPS_DUPLICATE_WINDOW_SECONDS', 0),
 
     /**
      * Accept a ping even with insignificant movement once this many seconds
      * have elapsed since the last stored point (location heartbeat).
+     * 0 = always accept (pair with duplicate_window_seconds=0 for every ping).
      */
-    'heartbeat_seconds' => (int) env('GPS_HEARTBEAT_SECONDS', 12),
+    'heartbeat_seconds' => (int) env('GPS_HEARTBEAT_SECONDS', 0),
+
+    /** Skip writes when the driver has not moved at least this many meters. */
+    'min_movement_meters' => (float) env('GPS_MIN_MOVEMENT_METERS', 0),
 
     /*
     |--------------------------------------------------------------------------

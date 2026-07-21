@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\TrackingLog;
+use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -24,16 +25,25 @@ class DriverLocationUpdated implements ShouldBroadcastNow
         public ?int $jobOrderId = null,
         /** @var array<string, mixed>|null Pre-formatted fleet location payload. */
         public ?array $fleetLocation = null,
+        public ?string $trackingCode = null,
     ) {
     }
 
-    /** @return array<int, PrivateChannel> */
+    /** @return array<int, Channel|PrivateChannel> */
     public function broadcastOn(): array
     {
-        return [
+        $channels = [
             new PrivateChannel('fleet.live'),
             new PrivateChannel('trip.'.$this->log->assignment_id),
         ];
+
+        $code = $this->normalizedTrackingCode();
+        if ($code !== null) {
+            // Public channel — same secret as the public tracking URL (no login).
+            $channels[] = new Channel('tracking.'.$code);
+        }
+
+        return $channels;
     }
 
     public function broadcastAs(): string
@@ -49,6 +59,7 @@ class DriverLocationUpdated implements ShouldBroadcastNow
             'trip_id' => $this->log->assignment_id,
             'assignment_id' => $this->log->assignment_id,
             'job_order_id' => $this->jobOrderId,
+            'tracking_code' => $this->normalizedTrackingCode(),
             'latitude' => (float) $this->log->latitude,
             'longitude' => (float) $this->log->longitude,
             'timestamp' => $this->log->captured_at?->toIso8601String(),
@@ -59,5 +70,14 @@ class DriverLocationUpdated implements ShouldBroadcastNow
             'battery_level' => $this->log->battery_level,
             'location' => $this->fleetLocation,
         ];
+    }
+
+    private function normalizedTrackingCode(): ?string
+    {
+        if (! is_string($this->trackingCode) || trim($this->trackingCode) === '') {
+            return null;
+        }
+
+        return strtoupper(trim($this->trackingCode));
     }
 }
