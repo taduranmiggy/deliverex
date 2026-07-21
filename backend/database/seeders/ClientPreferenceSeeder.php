@@ -44,7 +44,7 @@ class ClientPreferenceSeeder extends Seeder
 
             ClientQuarryVehiclePreference::updateOrCreate(
                 [
-                    'client_id' => $client->id,
+                    'company_id' => $client->id,
                     'quarry_id' => $quarry->id,
                     'vehicle_type_id' => $vehicleTypeId,
                 ],
