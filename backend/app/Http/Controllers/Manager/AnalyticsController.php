@@ -25,7 +25,7 @@ class AnalyticsController extends Controller
         $to     = $request->query('to');
         $status = $request->query('status');
 
-        $fromDate = $from ? Carbon::parse($from)->startOfDay() : now()->subDays(30)->startOfDay();
+        $fromDate = $from ? Carbon::parse($from)->startOfDay() : now()->subDays(90)->startOfDay();
         $toDate   = $to   ? Carbon::parse($to)->endOfDay()     : now()->endOfDay();
 
         $driversPage = max(1, (int) $request->query('drivers_page', 1));

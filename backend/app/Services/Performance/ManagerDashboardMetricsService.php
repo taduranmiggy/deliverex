@@ -33,7 +33,7 @@ class ManagerDashboardMetricsService
      */
     public function compute(?Carbon $from = null, ?Carbon $to = null): array
     {
-        $fromDate = ($from ?? now()->subDays(30))->copy()->startOfDay();
+        $fromDate = ($from ?? now()->subDays(90))->copy()->startOfDay();
         $toDate   = ($to ?? now())->copy()->endOfDay();
 
         $current = $this->computeSnapshot($fromDate, $toDate);

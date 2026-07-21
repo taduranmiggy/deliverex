@@ -110,6 +110,21 @@ class ManagerDashboardTest extends TestCase
         $this->assertIsArray($response->json('on_time_pct_trend'));
     }
 
+    public function test_manager_dashboard_defaults_to_ninety_day_period(): void
+    {
+        $managerRole = Role::create(['name' => 'manager']);
+        $manager = User::factory()->create([
+            'role_id' => $managerRole->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $response = $this->apiAs($manager)
+            ->getJson('/api/manager/dashboard');
+
+        $response->assertOk();
+        $this->assertSame(now()->subDays(90)->startOfDay()->toDateString(), $response->json('period.from'));
+    }
+
     public function test_manager_can_read_ocr_review_queue(): void
     {
         $managerRole = Role::create(['name' => 'manager']);

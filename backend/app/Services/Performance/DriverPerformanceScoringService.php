@@ -17,7 +17,7 @@ class DriverPerformanceScoringService
      */
     public function scoreAll(?Carbon $from = null, ?Carbon $to = null, int $rankLimit = 5): array
     {
-        $fromDate = $from ?? now()->subDays(30)->startOfDay();
+        $fromDate = $from ?? now()->subDays(90)->startOfDay();
         $toDate   = $to   ?? now()->endOfDay();
 
         $drivers = Driver::with('user')->get();

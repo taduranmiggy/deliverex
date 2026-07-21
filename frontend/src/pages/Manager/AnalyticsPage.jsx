@@ -50,7 +50,9 @@ function DriverRankCard({ driver, rank }) {
 
 function AnalyticsPage() {
   const today = new Date()
-  const [from, setFrom] = useState(new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10))
+  const ninetyDaysAgo = new Date(today)
+  ninetyDaysAgo.setDate(today.getDate() - 90)
+  const [from, setFrom] = useState(ninetyDaysAgo.toISOString().slice(0, 10))
   const [to, setTo] = useState(today.toISOString().slice(0, 10))
   const [status, setStatus] = useState('')
   const [driversPage, setDriversPage] = useState(1)

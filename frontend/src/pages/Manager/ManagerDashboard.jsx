@@ -122,8 +122,8 @@ function ManagerDashboard() {
 
   const s = stats ?? {}
   const periodLabel = s.period
-    ? `Last 30 days (${s.period.from} – ${s.period.to})`
-    : 'Last 30 days'
+    ? `Last 90 days (${s.period.from} – ${s.period.to})`
+    : 'Last 90 days'
 
   const exceptionVariant = s.exception_rate_pct > 10 ? 'red' : 'yellow'
 
