@@ -1416,7 +1416,7 @@ function CreateJobOrderPage() {
                           >
                             View
                           </button>
-                          {order.status === 'pending' && (
+                          {!order.is_archived && order.status === 'pending' && (
                             <button
                               type="button"
                               className="dx-job-orders-table__delete btn-sm"
