@@ -476,14 +476,21 @@ class JobOrderController extends Controller
             return response()->json(['message' => 'Job order is already archived.'], 409);
         }
 
-        if (in_array($jobOrder->status, [
+        $startedDeliveryStatuses = [
             'in_progress',
             DeliveryStatus::EN_ROUTE_TO_PICKUP,
             DeliveryStatus::ARRIVED_AT_PICKUP,
             DeliveryStatus::EN_ROUTE_TO_DESTINATION,
+            DeliveryStatus::ARRIVED_AT_DESTINATION,
             DeliveryStatus::ARRIVED,
-        ], true)) {
-            return response()->json(['message' => 'Cannot archive a job that is currently in progress.'], 422);
+            DeliveryStatus::COMPLETED,
+        ];
+
+        $canonicalStatus = DeliveryStatus::canonicalize($jobOrder->status) ?? $jobOrder->status;
+        if (in_array($canonicalStatus, $startedDeliveryStatuses, true)) {
+            return response()->json([
+                'message' => 'This Job Order cannot be archived because the delivery has already started.',
+            ], 422);
         }
 
         foreach ($jobOrder->assignments()->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())->get() as $assignment) {
