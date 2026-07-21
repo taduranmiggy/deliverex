@@ -141,7 +141,7 @@ export default function JobOrderViewModal({
                 Dispatch
               </Link>
             )}
-            {['pending', 'cancelled'].includes(detail?.status ?? order.status) && (
+            {(detail?.status ?? order.status) === 'pending' && (
               <button
                 type="button"
                 className="dx-job-view-modal__delete"

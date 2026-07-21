@@ -1398,13 +1398,15 @@ function CreateJobOrderPage() {
                           >
                             View
                           </button>
-                          <button
-                            type="button"
-                            className="dx-job-orders-table__delete btn-sm"
-                            onClick={() => handleDelete(order)}
-                          >
-                            Archive
-                          </button>
+                          {order.status === 'pending' && (
+                            <button
+                              type="button"
+                              className="dx-job-orders-table__delete btn-sm"
+                              onClick={() => handleDelete(order)}
+                            >
+                              Archive
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

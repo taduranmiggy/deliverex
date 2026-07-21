@@ -121,9 +121,13 @@ class AnalyticsController extends Controller
                 'count'  => (int) $row->count,
             ]);
 
+        $monthGroup = DB::connection()->getDriverName() === 'sqlite'
+            ? "strftime('%Y-%m', created_at)"
+            : "DATE_FORMAT(created_at, '%Y-%m')";
+
         $monthlyDelayTrends = (clone $delayBase)
-            ->select(DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"), DB::raw('COUNT(*) as count'))
-            ->groupBy(DB::raw("DATE_FORMAT(created_at, '%Y-%m')"))
+            ->select(DB::raw("{$monthGroup} as month"), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw($monthGroup))
             ->orderBy('month')
             ->get()
             ->map(fn ($row) => ['month' => $row->month, 'count' => (int) $row->count]);

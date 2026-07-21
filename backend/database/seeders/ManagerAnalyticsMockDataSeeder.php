@@ -73,8 +73,17 @@ class ManagerAnalyticsMockDataSeeder extends Seeder
         try {
             for ($i = 0; $i < 1200; $i++) {
                 $createdAt = $now->copy()->subDays(rand(1, 90))->subHours(rand(0, 23))->subMinutes(rand(0, 59));
-                $scheduledStart = $now->copy()->addDays(rand(1, 45))->addHours(rand(1, 18));
+                $scheduledStart = $createdAt->copy()->addHours(rand(1, 24));
+                if ($scheduledStart->isFuture()) {
+                    $scheduledStart = now()->subHours(rand(0, 6));
+                }
                 $scheduledEnd = $scheduledStart->copy()->addHours(rand(2, 8));
+                if ($scheduledEnd->isFuture()) {
+                    $scheduledEnd = now()->copy()->subMinutes(rand(0, 120));
+                    if ($scheduledEnd->lte($scheduledStart)) {
+                        $scheduledEnd = $scheduledStart->copy()->addHours(1);
+                    }
+                }
                 $status = $this->pickStatus($i, $createdAt);
                 $priority = Arr::random(array_keys($priorityWeights));
                 $company = $companies->random();
@@ -106,12 +115,18 @@ class ManagerAnalyticsMockDataSeeder extends Seeder
                     $driver = $drivers->random();
                     $vehicle = $vehicles->random();
                     $assignedAt = $createdAt->copy()->addHours(rand(1, 6));
+                    $assignedAt = $this->clampPastDate($assignedAt);
+
                     $startedAt = $assignedAt->copy()->addMinutes(rand(10, 90));
+                    $startedAt = $this->clampDateAfter($startedAt, $assignedAt);
+
                     $completedAt = null;
                     $assignmentStatus = 'assigned';
 
                     if ($status === 'completed') {
-                        $completedAt = $scheduledEnd->copy()->addMinutes(rand(5, 90));
+                        $completedAt = $scheduledEnd->copy()->addMinutes(rand(-20, 30));
+                        $completedAt = $this->clampPastDate($completedAt);
+                        $completedAt = $this->clampDateAfter($completedAt, $startedAt);
                         $assignmentStatus = 'completed';
                     } elseif ($status === 'arrived') {
                         $assignmentStatus = 'arrived';
@@ -133,18 +148,24 @@ class ManagerAnalyticsMockDataSeeder extends Seeder
                     ]);
 
                     if ($status === 'completed' || ($status !== 'pending' && rand(1, 10) <= 3)) {
+                        $issueAt = $completedAt ?? $scheduledEnd->copy()->addMinutes(rand(-30, 90));
+                        $issueAt = $this->clampPastDate($issueAt, $assignedAt);
+
                         DeliveryIssueReport::create([
                             'assignment_id' => $assignment->id,
                             'driver_id' => $driver->id,
                             'reported_by' => $manager?->id ?? $dispatcher->id,
                             'issue_type' => $issueTypes[array_rand($issueTypes)],
                             'notes' => 'Synthetic issue report for analytics testing.',
-                            'created_at' => $completedAt ?? $scheduledEnd->copy()->addMinutes(rand(10, 60)),
-                            'updated_at' => $completedAt ?? $scheduledEnd->copy()->addMinutes(rand(10, 60)),
+                            'created_at' => $issueAt,
+                            'updated_at' => $issueAt,
                         ]);
                     }
 
                     if ($status === 'completed' || ($status !== 'pending' && rand(1, 10) <= 2)) {
+                        $delayAt = $completedAt ?? $scheduledEnd->copy()->addMinutes(rand(-30, 90));
+                        $delayAt = $this->clampPastDate($delayAt, $assignedAt);
+
                         DeliveryDelayReport::create([
                             'job_order_id' => $jobOrder->id,
                             'assignment_id' => $assignment->id,
@@ -152,8 +173,8 @@ class ManagerAnalyticsMockDataSeeder extends Seeder
                             'reported_by' => $manager?->id ?? $dispatcher->id,
                             'delay_reason' => $delayReasons[array_rand($delayReasons)],
                             'delay_notes' => 'Synthetic delay log used for manager analytics.',
-                            'created_at' => $scheduledEnd->copy()->addMinutes(rand(10, 120)),
-                            'updated_at' => $scheduledEnd->copy()->addMinutes(rand(10, 120)),
+                            'created_at' => $delayAt,
+                            'updated_at' => $delayAt,
                         ]);
                     }
                 }
@@ -216,5 +237,35 @@ class ManagerAnalyticsMockDataSeeder extends Seeder
         $suffixes = ['Block 3', 'Lot 8', 'Warehouse B', 'Gate 2', 'North Wing', 'South Yard', 'Terminal 1'];
 
         return $suffixes[array_rand($suffixes)];
+    }
+
+    private function clampPastDate(
+        \Illuminate\Support\Carbon $date,
+        ?\Illuminate\Support\Carbon $minDate = null
+    ): \Illuminate\Support\Carbon {
+        $now = now();
+        if ($date->gt($now)) {
+            $date = $now->copy()->subMinutes(rand(5, 45));
+        }
+
+        if ($minDate && $date->lt($minDate)) {
+            $date = $minDate->copy()->addMinutes(rand(10, 90));
+            if ($date->gt($now)) {
+                $date = $now->copy()->subMinutes(rand(5, 45));
+            }
+        }
+
+        return $date;
+    }
+
+    private function clampDateAfter(
+        \Illuminate\Support\Carbon $date,
+        \Illuminate\Support\Carbon $after
+    ): \Illuminate\Support\Carbon {
+        if ($date->lt($after)) {
+            $date = $after->copy()->addMinutes(rand(10, 90));
+        }
+
+        return $date;
     }
 }
