@@ -11,6 +11,8 @@ use App\Models\JobOrder;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Fleet\AssignmentResourceSyncService;
+use App\Support\DeliveryStatus;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +20,17 @@ use Illuminate\Support\Str;
 
 class ManagerAnalyticsMockDataSeeder extends Seeder
 {
+    private const MAX_ACTIVE_MOCK_ASSIGNMENTS = 6;
+
+    private const ACTIVE_STATUSES = ['assigned', 'in_progress', 'arrived'];
+
+    private const RESERVED_DRIVER_EMAILS = [
+        'driver@deliverex.ph',
+        'driver2@deliverex.ph',
+        'driver3@deliverex.ph',
+        'driver4@deliverex.ph',
+    ];
+
     public function run(): void
     {
         $dispatcher = User::query()->where('email', 'dispatcher@deliverex.com')->first();
@@ -33,14 +46,23 @@ class ManagerAnalyticsMockDataSeeder extends Seeder
             return;
         }
 
-        $existingCount = JobOrder::query()->count();
-        if ($existingCount >= 1200) {
-            $this->command->info('Analytics mock data already present; skipping generation.');
+        $existingMockCount = JobOrder::query()
+            ->where('tracking_code', 'like', 'MOCK-%')
+            ->count();
+
+        if ($existingMockCount > 0) {
+            $normalized = $this->normalizeExistingMockData();
+            $this->command->info(
+                "Analytics mock data already present; normalized {$normalized['completed']} stale assignment(s), "
+                ."kept {$normalized['active']} uniquely resourced active assignment(s), and rescheduled "
+                ."{$normalized['pending']} pending job(s)."
+            );
 
             return;
         }
 
-        $statuses = ['pending', 'assigned', 'in_progress', 'arrived', 'completed', 'cancelled'];
+        [$activeDrivers, $activeVehicles] = $this->selectActiveResources($drivers, $vehicles);
+        $activeLimit = min($activeDrivers->count(), $activeVehicles->count());
         $priorityWeights = ['low' => 0.15, 'normal' => 0.45, 'high' => 0.25, 'urgent' => 0.15];
         $vehicleTypes = ['Dump Truck', 'Flatbed', 'Cargo Van', 'Mixer Truck', 'Box Truck'];
         $vehicleCaps = ['5T', '8T', '10T', '12T', '15T'];
@@ -73,24 +95,14 @@ class ManagerAnalyticsMockDataSeeder extends Seeder
         try {
             for ($i = 0; $i < 1200; $i++) {
                 $createdAt = $now->copy()->subDays(rand(1, 90))->subHours(rand(0, 23))->subMinutes(rand(0, 59));
-                $scheduledStart = $createdAt->copy()->addHours(rand(1, 24));
-                if ($scheduledStart->isFuture()) {
-                    $scheduledStart = now()->subHours(rand(0, 6));
-                }
-                $scheduledEnd = $scheduledStart->copy()->addHours(rand(2, 8));
-                if ($scheduledEnd->isFuture()) {
-                    $scheduledEnd = now()->copy()->subMinutes(rand(0, 120));
-                    if ($scheduledEnd->lte($scheduledStart)) {
-                        $scheduledEnd = $scheduledStart->copy()->addHours(1);
-                    }
-                }
-                $status = $this->pickStatus($i, $createdAt);
+                $status = $this->pickStatus($i, $activeLimit);
+                [$scheduledStart, $scheduledEnd] = $this->scheduleForStatus($status, $createdAt, $i);
                 $priority = Arr::random(array_keys($priorityWeights));
                 $company = $companies->random();
                 $customerName = $customers[array_rand($customers)] . ' ' . ($i % 7 + 1);
                 $trackingCode = 'MOCK-' . str_pad((string) ($i + 1), 5, '0', STR_PAD_LEFT);
 
-                $jobOrder = JobOrder::create([
+                $jobOrder = JobOrder::withoutEvents(fn () => JobOrder::create([
                     'created_by' => $dispatcher->id,
                     'customer_user_id' => $customer?->id,
                     'company_id' => $company->id,
@@ -109,45 +121,33 @@ class ManagerAnalyticsMockDataSeeder extends Seeder
                     'scheduled_end' => $scheduledEnd,
                     'created_at' => $createdAt,
                     'updated_at' => $createdAt->copy()->addHours(rand(1, 12)),
-                ]);
+                ]));
 
-                if (in_array($status, ['assigned', 'in_progress', 'arrived', 'completed'])) {
-                    $driver = $drivers->random();
-                    $vehicle = $vehicles->random();
-                    $assignedAt = $createdAt->copy()->addHours(rand(1, 6));
-                    $assignedAt = $this->clampPastDate($assignedAt);
-
-                    $startedAt = $assignedAt->copy()->addMinutes(rand(10, 90));
-                    $startedAt = $this->clampDateAfter($startedAt, $assignedAt);
-
-                    $completedAt = null;
-                    $assignmentStatus = 'assigned';
-
-                    if ($status === 'completed') {
-                        $completedAt = $scheduledEnd->copy()->addMinutes(rand(-20, 30));
-                        $completedAt = $this->clampPastDate($completedAt);
-                        $completedAt = $this->clampDateAfter($completedAt, $startedAt);
-                        $assignmentStatus = 'completed';
-                    } elseif ($status === 'arrived') {
-                        $assignmentStatus = 'arrived';
-                    } elseif ($status === 'in_progress') {
-                        $assignmentStatus = 'in_progress';
-                    }
+                if ($status !== 'pending') {
+                    $isActive = in_array($status, self::ACTIVE_STATUSES, true);
+                    $driver = $isActive ? $activeDrivers[$i] : $drivers->random();
+                    $vehicle = $isActive ? $activeVehicles[$i] : $vehicles->random();
+                    [$assignedAt, $startedAt, $completedAt] = $this->assignmentTimes(
+                        $status,
+                        $createdAt,
+                        $scheduledStart,
+                        $scheduledEnd,
+                    );
 
                     $assignment = DispatchAssignment::create([
                         'job_order_id' => $jobOrder->id,
                         'driver_id' => $driver->id,
                         'vehicle_id' => $vehicle->id,
                         'assigned_by' => $dispatcher->id,
-                        'status' => $assignmentStatus,
+                        'status' => $status,
                         'assigned_at' => $assignedAt,
                         'started_at' => $startedAt,
                         'completed_at' => $completedAt,
                         'created_at' => $assignedAt,
-                        'updated_at' => $completedAt ?? $startedAt,
+                        'updated_at' => $completedAt ?? $startedAt ?? $assignedAt,
                     ]);
 
-                    if ($status === 'completed' || ($status !== 'pending' && rand(1, 10) <= 3)) {
+                    if ($status === 'completed' || ($isActive && rand(1, 10) <= 3)) {
                         $issueAt = $completedAt ?? $scheduledEnd->copy()->addMinutes(rand(-30, 90));
                         $issueAt = $this->clampPastDate($issueAt, $assignedAt);
 
@@ -162,7 +162,7 @@ class ManagerAnalyticsMockDataSeeder extends Seeder
                         ]);
                     }
 
-                    if ($status === 'completed' || ($status !== 'pending' && rand(1, 10) <= 2)) {
+                    if ($status === 'completed' || ($isActive && rand(1, 10) <= 2)) {
                         $delayAt = $completedAt ?? $scheduledEnd->copy()->addMinutes(rand(-30, 90));
                         $delayAt = $this->clampPastDate($delayAt, $assignedAt);
 
@@ -188,34 +188,297 @@ class ManagerAnalyticsMockDataSeeder extends Seeder
             throw $e;
         }
 
-        $this->command->info("Generated {$createdCount} mock job orders for analytics testing.");
+        $reconcile = app(AssignmentResourceSyncService::class)->reconcileAll('analytics_mock_seed');
+
+        $this->command->info(
+            "Generated {$createdCount} mock job orders for analytics testing with {$activeLimit} active assignment(s). "
+            ."Fleet reconciliation applied {$reconcile['driver_changes']} driver and {$reconcile['vehicle_changes']} vehicle change(s)."
+        );
     }
 
-    private function pickStatus(int $index, $createdAt): string
+    private function pickStatus(int $index, int $activeLimit): string
     {
-        $roll = rand(1, 100);
-
-        if ($createdAt->lt(now()->subDays(90)) && $roll <= 45) {
-            return 'completed';
+        if ($index < $activeLimit) {
+            return self::ACTIVE_STATUSES[$index % count(self::ACTIVE_STATUSES)];
         }
+
+        $roll = rand(1, 100);
 
         if ($roll <= 20) {
             return 'pending';
         }
 
-        if ($roll <= 45) {
-            return 'assigned';
-        }
-
-        if ($roll <= 70) {
-            return 'in_progress';
-        }
-
         if ($roll <= 85) {
-            return 'arrived';
+            return 'completed';
         }
 
         return 'cancelled';
+    }
+
+    private function selectActiveResources($drivers, $vehicles): array
+    {
+        $blockingStatuses = DeliveryStatus::availabilityBlockingRawValues();
+
+        $eligibleDrivers = $drivers
+            ->filter(function (Driver $driver) use ($blockingStatuses): bool {
+                if ($this->isReservedDriver($driver)
+                    || in_array($driver->status, ['inactive', 'suspended', 'archived'], true)
+                    || $driver->availability === 'offline') {
+                    return false;
+                }
+
+                return ! $driver->assignments()
+                    ->whereIn('status', $blockingStatuses)
+                    ->exists();
+            })
+            ->shuffle()
+            ->values();
+
+        $eligibleVehicles = $vehicles
+            ->filter(function (Vehicle $vehicle) use ($blockingStatuses): bool {
+                if ($this->isReservedVehicle($vehicle)
+                    || in_array($vehicle->status, ['maintenance', 'unavailable', 'inactive', 'archived'], true)) {
+                    return false;
+                }
+
+                return ! $vehicle->assignments()
+                    ->whereIn('status', $blockingStatuses)
+                    ->exists();
+            })
+            ->shuffle()
+            ->values();
+
+        // Always leave at least one ordinary resource free in addition to the
+        // dedicated DX-DEMO fleet used by the dispatcher exhibit.
+        $activeLimit = min(
+            self::MAX_ACTIVE_MOCK_ASSIGNMENTS,
+            max(0, $eligibleDrivers->count() - 1),
+            max(0, $eligibleVehicles->count() - 1),
+        );
+
+        return [
+            $eligibleDrivers->take($activeLimit)->values(),
+            $eligibleVehicles->take($activeLimit)->values(),
+        ];
+    }
+
+    /** @return array{0: \Illuminate\Support\Carbon, 1: \Illuminate\Support\Carbon} */
+    private function scheduleForStatus(string $status, \Illuminate\Support\Carbon $createdAt, int $index): array
+    {
+        if ($status === 'assigned') {
+            $start = now()->addHours(2 + $index);
+
+            return [$start, $start->copy()->addHours(4)];
+        }
+
+        if ($status === 'in_progress') {
+            return [now()->subHour(), now()->addHours(3)];
+        }
+
+        if ($status === 'arrived') {
+            return [now()->subHours(4), now()->addHour()];
+        }
+
+        if ($status === 'pending') {
+            $start = now()
+                ->addDays(1 + ($index % 21))
+                ->addHours($index % 8);
+
+            return [$start, $start->copy()->addHours(rand(2, 8))];
+        }
+
+        // Completed/cancelled analytics history must be entirely in the past.
+        $start = $createdAt->copy()->addHours(rand(1, 12));
+
+        return [$start, $start->copy()->addHours(rand(2, 8))];
+    }
+
+    /** @return array{0: \Illuminate\Support\Carbon, 1: ?\Illuminate\Support\Carbon, 2: ?\Illuminate\Support\Carbon} */
+    private function assignmentTimes(
+        string $status,
+        \Illuminate\Support\Carbon $createdAt,
+        \Illuminate\Support\Carbon $scheduledStart,
+        \Illuminate\Support\Carbon $scheduledEnd,
+    ): array {
+        if ($status === 'assigned') {
+            return [now()->subMinutes(30), null, null];
+        }
+
+        if (in_array($status, ['in_progress', 'arrived'], true)) {
+            return [
+                $scheduledStart->copy()->subHour(),
+                $scheduledStart->copy(),
+                null,
+            ];
+        }
+
+        $assignedAt = $this->clampPastDate($createdAt->copy()->addHours(rand(1, 6)));
+
+        if ($status === 'cancelled') {
+            return [$assignedAt, null, null];
+        }
+
+        $startedAt = $this->clampDateAfter(
+            $assignedAt->copy()->addMinutes(rand(10, 90)),
+            $assignedAt,
+        );
+        $completedAt = $this->clampDateAfter(
+            $this->clampPastDate($scheduledEnd->copy()->addMinutes(rand(-20, 30))),
+            $startedAt,
+        );
+
+        return [$assignedAt, $startedAt, $completedAt];
+    }
+
+    /** @return array{active:int,completed:int,pending:int} */
+    private function normalizeExistingMockData(): array
+    {
+        $blockingStatuses = DeliveryStatus::availabilityBlockingRawValues();
+        $externalDriverIds = DispatchAssignment::query()
+            ->whereIn('status', $blockingStatuses)
+            ->whereDoesntHave('jobOrder', fn ($q) => $q->where('tracking_code', 'like', 'MOCK-%'))
+            ->whereNotNull('driver_id')
+            ->pluck('driver_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $externalVehicleIds = DispatchAssignment::query()
+            ->whereIn('status', $blockingStatuses)
+            ->whereDoesntHave('jobOrder', fn ($q) => $q->where('tracking_code', 'like', 'MOCK-%'))
+            ->whereNotNull('vehicle_id')
+            ->pluck('vehicle_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $activeAssignments = DispatchAssignment::query()
+            ->with(['jobOrder', 'driver.user', 'vehicle'])
+            ->whereIn('status', $blockingStatuses)
+            ->whereHas('jobOrder', fn ($q) => $q->where('tracking_code', 'like', 'MOCK-%'))
+            ->orderByDesc('id')
+            ->get();
+
+        $usedDriverIds = [];
+        $usedVehicleIds = [];
+        $keptActive = 0;
+        $completed = 0;
+
+        foreach ($activeAssignments as $assignment) {
+            $driverId = (int) $assignment->driver_id;
+            $vehicleId = (int) $assignment->vehicle_id;
+            $driver = $assignment->driver;
+            $vehicle = $assignment->vehicle;
+            $jobOrder = $assignment->jobOrder;
+
+            $canRemainActive = $keptActive < self::MAX_ACTIVE_MOCK_ASSIGNMENTS
+                && $driver
+                && $vehicle
+                && $jobOrder
+                && ! isset($usedDriverIds[$driverId])
+                && ! isset($usedVehicleIds[$vehicleId])
+                && ! in_array($driverId, $externalDriverIds, true)
+                && ! in_array($vehicleId, $externalVehicleIds, true)
+                && ! $this->isReservedDriver($driver)
+                && ! $this->isReservedVehicle($vehicle)
+                && ! in_array($driver->status, ['inactive', 'suspended', 'archived'], true)
+                && $driver->availability !== 'offline'
+                && ! in_array($vehicle->status, ['maintenance', 'unavailable', 'inactive', 'archived'], true);
+
+            if ($canRemainActive) {
+                $status = self::ACTIVE_STATUSES[$keptActive % count(self::ACTIVE_STATUSES)];
+                [$scheduledStart, $scheduledEnd] = $this->scheduleForStatus($status, now()->subDay(), $keptActive);
+                [$assignedAt, $startedAt] = $this->assignmentTimes(
+                    $status,
+                    now()->subDay(),
+                    $scheduledStart,
+                    $scheduledEnd,
+                );
+
+                JobOrder::withoutEvents(fn () => $jobOrder->update([
+                    'status' => $status,
+                    'scheduled_start' => $scheduledStart,
+                    'scheduled_end' => $scheduledEnd,
+                ]));
+                $assignment->update([
+                    'status' => $status,
+                    'assigned_at' => $assignedAt,
+                    'started_at' => $startedAt,
+                    'completed_at' => null,
+                ]);
+
+                $usedDriverIds[$driverId] = true;
+                $usedVehicleIds[$vehicleId] = true;
+                $keptActive++;
+
+                continue;
+            }
+
+            $completedAt = $jobOrder?->scheduled_end;
+            if (! $completedAt || $completedAt->isFuture()) {
+                $completedAt = now()->subMinutes(5);
+            }
+
+            $assignment->update([
+                'status' => DeliveryStatus::COMPLETED,
+                'completed_at' => $completedAt,
+            ]);
+
+            if ($jobOrder && ! $jobOrder->assignments()->whereIn('status', $blockingStatuses)->exists()) {
+                JobOrder::withoutEvents(fn () => $jobOrder->update(['status' => DeliveryStatus::COMPLETED]));
+            }
+
+            $completed++;
+        }
+
+        JobOrder::query()
+            ->where('tracking_code', 'like', 'MOCK-%')
+            ->whereIn('status', self::ACTIVE_STATUSES)
+            ->whereDoesntHave('assignments', fn ($q) => $q->whereIn('status', $blockingStatuses))
+            ->update(['status' => DeliveryStatus::COMPLETED]);
+
+        $pendingRescheduled = 0;
+        JobOrder::query()
+            ->where('tracking_code', 'like', 'MOCK-%')
+            ->where('status', 'pending')
+            ->orderBy('id')
+            ->each(function (JobOrder $jobOrder) use (&$pendingRescheduled) {
+                if ($jobOrder->scheduled_start
+                    && $jobOrder->scheduled_end
+                    && $jobOrder->scheduled_start->isFuture()
+                    && $jobOrder->scheduled_end->isFuture()) {
+                    return;
+                }
+
+                [$scheduledStart, $scheduledEnd] = $this->scheduleForStatus(
+                    'pending',
+                    now()->subDay(),
+                    $pendingRescheduled,
+                );
+
+                JobOrder::withoutEvents(fn () => $jobOrder->update([
+                    'scheduled_start' => $scheduledStart,
+                    'scheduled_end' => $scheduledEnd,
+                ]));
+                $pendingRescheduled++;
+            });
+
+        app(AssignmentResourceSyncService::class)->reconcileAll('analytics_mock_seed_normalization');
+
+        return [
+            'active' => $keptActive,
+            'completed' => $completed,
+            'pending' => $pendingRescheduled,
+        ];
+    }
+
+    private function isReservedDriver(Driver $driver): bool
+    {
+        $email = strtolower((string) $driver->user?->email);
+
+        return in_array($email, self::RESERVED_DRIVER_EMAILS, true);
+    }
+
+    private function isReservedVehicle(Vehicle $vehicle): bool
+    {
+        return str_starts_with((string) $vehicle->plate_no, 'DX-DEMO-');
     }
 
     private function randomRequirement(string $priority): string

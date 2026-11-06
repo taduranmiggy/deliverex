@@ -4,6 +4,7 @@ namespace App\Services\Fleet;
 
 use App\Models\DispatchAssignment;
 use App\Models\Driver;
+use App\Models\JobOrder;
 use App\Models\Vehicle;
 use App\Services\Driver\DriverAvailabilityService;
 use App\Support\DeliveryStatus;
@@ -126,7 +127,7 @@ class AssignmentResourceSyncService
      */
     public function repairStaleBlockingAssignments(string $reason = 'stale_assignment_cleanup'): int
     {
-        $repaired = 0;
+        $repaired = $this->repairStaleAnalyticsMockData($reason);
 
         DispatchAssignment::query()
             ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
@@ -148,6 +149,55 @@ class AssignmentResourceSyncService
                 $this->syncForAssignment($assignment, $reason);
                 $repaired++;
             });
+
+        return $repaired;
+    }
+
+    /**
+     * Close expired synthetic analytics records without weakening the availability
+     * rules for real deliveries. Older versions of ManagerAnalyticsMockDataSeeder
+     * created hundreds of historical MOCK-* jobs in blocking statuses and reused
+     * the same fleet resources, which made every driver and vehicle look busy.
+     */
+    public function repairStaleAnalyticsMockData(string $reason = 'analytics_mock_cleanup'): int
+    {
+        $repaired = 0;
+
+        DispatchAssignment::query()
+            ->whereIn('status', DeliveryStatus::availabilityBlockingRawValues())
+            ->whereHas('jobOrder', function ($query) {
+                $query->where('tracking_code', 'like', 'MOCK-%')
+                    ->whereNotNull('scheduled_end')
+                    ->where('scheduled_end', '<', now());
+            })
+            ->with('jobOrder')
+            ->eachById(function (DispatchAssignment $assignment) use (&$repaired, $reason) {
+                $completedAt = $assignment->jobOrder?->scheduled_end
+                    ?? $assignment->updated_at
+                    ?? now();
+
+                $assignment->update([
+                    'status'       => DeliveryStatus::COMPLETED,
+                    'completed_at' => $assignment->completed_at ?? $completedAt,
+                ]);
+
+                if ($assignment->jobOrder
+                    && ! in_array($assignment->jobOrder->status, [DeliveryStatus::COMPLETED, DeliveryStatus::CANCELLED], true)) {
+                    $assignment->jobOrder->update(['status' => DeliveryStatus::COMPLETED]);
+                }
+
+                $this->syncForAssignment($assignment, $reason);
+                $repaired++;
+            });
+
+        // Expired synthetic pending jobs cannot pass dispatch schedule validation.
+        // Remove only MOCK-* rows from the pending queue; real overdue work is left alone.
+        JobOrder::query()
+            ->where('tracking_code', 'like', 'MOCK-%')
+            ->where('status', 'pending')
+            ->whereNotNull('scheduled_end')
+            ->where('scheduled_end', '<', now())
+            ->update(['status' => DeliveryStatus::CANCELLED]);
 
         return $repaired;
     }

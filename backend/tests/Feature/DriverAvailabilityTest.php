@@ -281,6 +281,139 @@ class DriverAvailabilityTest extends TestCase
         $this->assertSame('available', $this->vehicle->fresh()->status);
     }
 
+    public function test_repair_closes_expired_analytics_mock_assignment_and_releases_resources(): void
+    {
+        $jobOrder = $this->createPendingJobOrder();
+        \Illuminate\Support\Facades\DB::table('job_orders')
+            ->where('id', $jobOrder->id)
+            ->update([
+                'tracking_code'   => 'MOCK-REPAIR-001',
+                'status'          => 'in_progress',
+                'scheduled_start' => now()->subDays(2),
+                'scheduled_end'   => now()->subDay(),
+            ]);
+        $jobOrder->refresh();
+
+        $assignment = DispatchAssignment::create([
+            'job_order_id' => $jobOrder->id,
+            'driver_id' => $this->driver->id,
+            'vehicle_id' => $this->vehicle->id,
+            'assigned_by' => $this->dispatcher->id,
+            'status' => 'in_progress',
+            'assigned_at' => now()->subDays(2),
+            'started_at' => now()->subDays(2),
+        ]);
+
+        $this->driver->update([
+            'availability' => 'busy',
+            'status' => 'on_delivery',
+            'current_assignment_id' => $assignment->id,
+        ]);
+        $this->vehicle->update(['status' => 'in_operation']);
+
+        $repaired = app(\App\Services\Fleet\AssignmentResourceSyncService::class)
+            ->repairStaleBlockingAssignments('test_analytics_cleanup');
+
+        $this->assertSame(1, $repaired);
+        $this->assertSame(DeliveryStatus::COMPLETED, $assignment->fresh()->status);
+        $this->assertNotNull($assignment->fresh()->completed_at);
+        $this->assertSame(DeliveryStatus::COMPLETED, $jobOrder->fresh()->status);
+        $this->assertSame('available', $this->driver->fresh()->availability);
+        $this->assertNull($this->driver->fresh()->current_assignment_id);
+        $this->assertSame('available', $this->vehicle->fresh()->status);
+    }
+
+    public function test_repair_cancels_only_expired_pending_analytics_mock_jobs(): void
+    {
+        $mockJob = $this->createPendingJobOrder();
+        $realJob = $this->createPendingJobOrder();
+
+        \Illuminate\Support\Facades\DB::table('job_orders')
+            ->whereIn('id', [$mockJob->id, $realJob->id])
+            ->update([
+                'scheduled_start' => now()->subDays(2),
+                'scheduled_end' => now()->subDay(),
+            ]);
+        \Illuminate\Support\Facades\DB::table('job_orders')
+            ->where('id', $mockJob->id)
+            ->update(['tracking_code' => 'MOCK-PENDING-001']);
+
+        app(\App\Services\Fleet\AssignmentResourceSyncService::class)
+            ->repairStaleBlockingAssignments('test_analytics_cleanup');
+
+        $this->assertSame(DeliveryStatus::CANCELLED, $mockJob->fresh()->status);
+        $this->assertSame('pending', $realJob->fresh()->status);
+    }
+
+    public function test_repair_does_not_close_expired_real_active_assignment(): void
+    {
+        $jobOrder = $this->createPendingJobOrder();
+        \Illuminate\Support\Facades\DB::table('job_orders')
+            ->where('id', $jobOrder->id)
+            ->update([
+                'tracking_code'   => 'REAL-ACTIVE-001',
+                'status'          => 'in_progress',
+                'scheduled_start' => now()->subDays(2),
+                'scheduled_end'   => now()->subDay(),
+            ]);
+
+        $assignment = DispatchAssignment::create([
+            'job_order_id' => $jobOrder->id,
+            'driver_id' => $this->driver->id,
+            'vehicle_id' => $this->vehicle->id,
+            'assigned_by' => $this->dispatcher->id,
+            'status' => 'in_progress',
+            'assigned_at' => now()->subDays(2),
+            'started_at' => now()->subDays(2),
+        ]);
+
+        $repaired = app(\App\Services\Fleet\AssignmentResourceSyncService::class)
+            ->repairStaleBlockingAssignments('test_analytics_cleanup');
+
+        $this->assertSame(0, $repaired);
+        $this->assertSame('in_progress', $assignment->fresh()->status);
+        $this->assertNull($assignment->fresh()->completed_at);
+    }
+
+    public function test_best_fit_request_repairs_expired_mock_history_and_returns_recommendations(): void
+    {
+        $mockJob = $this->createPendingJobOrder();
+        \Illuminate\Support\Facades\DB::table('job_orders')
+            ->where('id', $mockJob->id)
+            ->update([
+                'tracking_code'   => 'MOCK-BEST-FIT-001',
+                'status'          => 'in_progress',
+                'scheduled_start' => now()->subDays(2),
+                'scheduled_end'   => now()->subDay(),
+            ]);
+
+        $staleAssignment = DispatchAssignment::create([
+            'job_order_id' => $mockJob->id,
+            'driver_id' => $this->driver->id,
+            'vehicle_id' => $this->vehicle->id,
+            'assigned_by' => $this->dispatcher->id,
+            'status' => 'in_progress',
+            'assigned_at' => now()->subDays(2),
+            'started_at' => now()->subDays(2),
+        ]);
+
+        $this->vehicle->update(['cbm_capacity' => 15]);
+        $targetJob = $this->createPendingJobOrder(now()->addDay(), now()->addDay()->addHours(4));
+        $targetJob->update([
+            'vehicle_type_required' => 'Dump Truck',
+            'load_volume_m3' => 10,
+        ]);
+
+        $this->apiAs($this->dispatcher)
+            ->getJson("/api/dispatch/best-fit/{$targetJob->id}")
+            ->assertOk()
+            ->assertJsonPath('meta.eligible_drivers', 1)
+            ->assertJsonPath('meta.eligible_vehicles', 1)
+            ->assertJsonPath('meta.recommendation_count', 1);
+
+        $this->assertSame(DeliveryStatus::COMPLETED, $staleAssignment->fresh()->status);
+    }
+
     public function test_future_scheduled_assignment_marks_driver_busy(): void
     {
         $jobOrder = $this->createPendingJobOrder(now()->addDays(2), now()->addDays(2)->addHours(4));
