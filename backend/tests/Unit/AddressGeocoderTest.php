@@ -42,6 +42,34 @@ class AddressGeocoderTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), 'maps.googleapis.com/maps/api/geocode/json'));
     }
 
+    public function test_geocodes_paredes_barangay_address_with_philippine_bias(): void
+    {
+        Http::fake([
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
+                'status' => 'OK',
+                'results' => [[
+                    'place_id' => 'ChIJ_paredes_barangay_396',
+                    'formatted_address' => 'P. Paredes Street, Sampaloc, Manila, Philippines',
+                    'geometry' => ['location' => ['lat' => 14.6046, 'lng' => 120.9898]],
+                ]],
+            ]),
+        ]);
+
+        $coords = app(AddressGeocoder::class)->geocode(
+            'P. Paredes St., Barangay 396, Sampaloc, Manila, Philippines',
+        );
+
+        $this->assertSame(14.6046, $coords['lat']);
+        $this->assertSame(120.9898, $coords['lng']);
+        $this->assertSame('ChIJ_paredes_barangay_396', $coords['place_id']);
+        Http::assertSent(function ($request): bool {
+            $data = $request->data();
+
+            return ($data['components'] ?? null) === 'country:PH'
+                && ($data['region'] ?? null) === 'ph';
+        });
+    }
+
     public function test_geocode_first_tries_multiple_candidates(): void
     {
         Http::fake([

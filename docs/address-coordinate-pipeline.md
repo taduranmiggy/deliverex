@@ -46,6 +46,17 @@ Changing any PSGC division or the place text invalidates the confirmation. A pic
 | Address autocomplete | Google Places Autocomplete | Primary search-as-you-type for pickup, destination, company, and driver addresses. |
 | Geocoding | Google Geocoding API | Server-side fallback for manual entry and legacy backfill. |
 | Reverse geocoding | Google Geocoding API | Available when a coordinate needs a formatted label. |
+
+Manual Philippine address fallback requests the Google Geocoding API with
+`components=country:PH` and `region=ph`. A selected suggestion's latitude,
+longitude, and `place_id` are submitted with the booking and reused by the
+server, so the final review step does not geocode the same address again.
+
+The backend reads `GOOGLE_MAPS_API_KEY` from `backend/.env` (or the deployment
+shared environment) and must be restarted or have its Laravel configuration
+cache refreshed after changing it. The key is used server-side, so it must not
+be restricted only to browser HTTP referrers; enable Geocoding API and Places
+API and ensure billing is active in the associated Google Cloud project.
 | Road routing | OpenRouteService / OSRM | Uses stored coordinates only; does not resolve addresses. |
 
 Configure Google Maps in `.env`:

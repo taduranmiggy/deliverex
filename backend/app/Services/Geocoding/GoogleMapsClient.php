@@ -24,6 +24,10 @@ class GoogleMapsClient
     {
         $key = trim((string) config('gps.geocoding.google_maps_api_key', ''));
         if ($key === '') {
+            Log::warning('[google-geocode-pipeline] Google Maps API key is missing', [
+                'key_present' => false,
+                'env_var' => 'GOOGLE_MAPS_API_KEY',
+            ]);
             throw new RuntimeException('Google Maps API key is not configured. Set GOOGLE_MAPS_API_KEY in the environment.');
         }
 
@@ -71,6 +75,7 @@ class GoogleMapsClient
         $params = array_merge([
             'address' => $address,
             'key' => $this->apiKey(),
+            'components' => 'country:PH',
             'region' => 'ph',
             'language' => 'en',
         ], $options);
@@ -127,6 +132,7 @@ class GoogleMapsClient
         Log::info('[google-geocode-pipeline] request', [
             'operation' => $operation,
             'url' => $url,
+            'key_present' => isset($params['key']) && trim((string) $params['key']) !== '',
             'params' => $safeParams,
         ]);
 

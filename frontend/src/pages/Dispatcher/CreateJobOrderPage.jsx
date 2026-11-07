@@ -700,7 +700,7 @@ const JobOrderForm = forwardRef(function JobOrderForm(
     for (let s = 1; s <= 4; s++) {
       if (!validateStep(s)) {
         setError('Some required fields are incomplete. Please review each step.')
-        goToStep(s)
+        setStep(s)
         scrollJobOrderFormIntoView(stepPanelRef.current)
         return
       }

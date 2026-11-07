@@ -4,6 +4,7 @@ namespace App\Services\Address;
 
 use App\Services\Delivery\AddressGeocoder;
 use App\Services\Geocoding\ConfirmedLocationService;
+use App\Services\Geocoding\GoogleMapsClient;
 use App\Support\GpsCoordinateValidator;
 use App\Support\JobOrderAddressFormatter;
 use App\Support\StreetGeocodeHelper;
@@ -16,6 +17,7 @@ class StandardizedAddressService
         private PsgcClient $psgc,
         private AddressGeocoder $geocoder,
         private ConfirmedLocationService $confirmedLocations,
+        private GoogleMapsClient $googleMaps,
     ) {
     }
 
@@ -79,8 +81,11 @@ class StandardizedAddressService
         }
 
         if (! $coordinates && $requireGeocode) {
+            $message = $this->googleMaps->isConfigured()
+                ? 'Address not found. Pick a Google suggestion or adjust the address details.'
+                : 'Maps service is not configured. Please contact support.';
             throw ValidationException::withMessages([
-                "{$prefix}_address" => ['Could not resolve map coordinates for this address. Pick a Google suggestion, or confirm GOOGLE_MAPS_API_KEY is set on the server. Zip codes are not required in the Philippines.'],
+                "{$prefix}_address" => [$message],
             ]);
         }
 
